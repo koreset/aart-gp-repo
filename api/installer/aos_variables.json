@@ -1,0 +1,138 @@
+[
+  {
+    "name": "B/F_Current",
+    "description": "Opening Balance at Current Rates",
+    "time": "31-Dec-00",
+    "insurance_service": "Current",
+    "notes": "IF(B/F) at the start of the reporting period(Current)",
+    "assumption_basis": "basis B/F at current rates"
+  },
+  {
+    "name": "B/F_Lockedin",
+    "description": "Opening Balance at Lockedin Rates",
+    "time": "31-Dec-00",
+    "insurance_service": "Current",
+    "notes": "IF(B/F) at the start of the reporting period(GMM-Lockedin, VFA-Current)",
+    "assumption_basis": "previous step basis at lockedin rates"
+  },
+  {
+    "name": "Initial_Recog",
+    "description": "New Business Recognition ",
+    "time": "1-Jan-01",
+    "insurance_service": "Current",
+    "notes": "NB in the current reporting period(GMM-Lockedin, VFA-Current)",
+    "assumption_basis": "previous step basis"
+  },
+  {
+    "name": "Exp_RA_Release",
+    "description": "Expected Risk Adjustment Release ",
+    "time": "31-Dec-00",
+    "insurance_service": "Current",
+    "notes": "NB + IF(B/F) at the start of the reporting period(GMM-Lockedin, VFA-Current)",
+    "assumption_basis": "previous step basis"
+  },
+  {
+    "name": "Exp_Mort",
+    "description": "Expected Mortality Claims",
+    "time": "31-Dec-00",
+    "insurance_service": "Current",
+    "notes": "NB + IF(B/F) at the start of the reporting period(GMM-Lockedin, VFA-Current)",
+    "assumption_basis": "previous step basis"
+  },
+  {
+    "name": "Exp_Exp",
+    "description": "Expected Expenses",
+    "time": "31-Dec-00",
+    "insurance_service": "Current",
+    "notes": "NB + IF(B/F) at the start of the reporting period(GMM-Lockedin, VFA-Current)",
+    "assumption_basis": "previous step basis"
+  },
+  {
+    "name": "Exp_Retrenchment",
+    "description": "Expected Retrenchment Claims ",
+    "time": "31-Dec-00",
+    "insurance_service": "Current",
+    "notes": "NB + IF(B/F) at the start of the reporting period(GMM-Lockedin, VFA-Current)",
+    "assumption_basis": "previous step basis"
+  },
+  {
+    "name": "Exp_Morbidity",
+    "description": "Expected Morbidity Claims",
+    "time": "31-Dec-00",
+    "insurance_service": "Current",
+    "notes": "NB + IF(B/F) at the start of the reporting period(GMM-Lockedin, VFA-Current)",
+    "assumption_basis": "previous step basis"
+  },
+  {
+    "name": "Interest_Accretion",
+    "description": "Investment Income at Lockedin Rates ",
+    "time": "31-Dec-00",
+    "insurance_service": "Current",
+    "notes": "NB + IF(B/F) at the start of the reporting period(GMM-Lockedin, VFA-Current)",
+    "assumption_basis": "previous step basis"
+  },
+  {
+    "name": "Data_Change",
+    "description": "Actual Data vs. Expected Data",
+    "time": "31-Dec-01",
+    "insurance_service": "Future",
+    "notes": "NB + IF(B/F) at the end of reporting period(GMM-Lockedin, VFA-Current:Change in Entity's Share)",
+    "assumption_basis": "previous step basis"
+  },
+  {
+    "name": "NFA_Mort",
+    "description": "Mortality Assumption Change ",
+    "time": "31-Dec-01",
+    "insurance_service": "Future",
+    "notes": "NB + IF(B/F) at the end of reporting period(GMM-Lockedin, VFA-Current)",
+    "assumption_basis": "previous step basis plus mortality change"
+  },
+  {
+    "name": "NFA_Exp",
+    "description": "Expense Assumption Change ",
+    "time": "31-Dec-01",
+    "insurance_service": "Future",
+    "notes": "NB + IF(B/F) at the end of reporting period(GMM-Lockedin, VFA-Current)",
+    "assumption_basis": "previous step basis plus expense change"
+  },
+  {
+    "name": "NFA_Retrenchment",
+    "description": "Retrenchment Assumption Change ",
+    "time": "31-Dec-01",
+    "insurance_service": "Future",
+    "notes": "NB + IF(B/F) at the end of reporting period(GMM-Lockedin, VFA-Current)",
+    "assumption_basis": "previous step basis plus retrenchment change"
+  },
+  {
+    "name": "NFA_Morbidity",
+    "description": "Morbidity Assumption Change ",
+    "time": "31-Dec-01",
+    "insurance_service": "Future",
+    "notes": "NB + IF(B/F) at the end of reporting period(GMM-Lockedin, VFA-Current)",
+    "assumption_basis": "previous step basis plus morbidity change"
+  },
+  {
+    "name": "FA",
+    "description": "Financial Assumption Change ",
+    "time": "31-Dec-01",
+    "insurance_service": "Current",
+    "notes": "NB + IF(B/F) at the end of reporting period(GMM-Lockedin, VFA-Current)",
+    "assumption_basis": "previous step basis plus financial assumption change"
+  },
+  {
+    "name": "C/F_Lockedin",
+    "description": "Closing at Lockedin Rates ",
+    "time": "31-Dec-01",
+    "insurance_service": "Current",
+    "notes": "NB + IF(B/F) at the end of reporting period(GMM-Lockedin, VFA-Current)",
+    "assumption_basis": "same as above"
+  },
+  {
+    "name": "C/F_Current",
+    "description": "Closing at Current Rates ",
+    "time": "31-Dec-01",
+    "insurance_service": "Current",
+    "notes": "NB + IF(B/F) at the end of reporting period(Current)",
+    "assumption_basis": "previous step basis at current rates"
+  }
+]

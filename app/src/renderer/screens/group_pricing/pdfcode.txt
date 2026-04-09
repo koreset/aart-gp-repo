@@ -1,0 +1,282 @@
+// Group Risk Acceptance Form - PDF Generator
+// Uses jsPDF library (https://github.com/parallax/jsPDF)
+// Include: <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+const { jsPDF } = window.jspdf;
+
+function generateGroupRiskAcceptanceForm() {
+    // Initialize PDF (A4 size)
+    const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 15;
+    const contentWidth = pageWidth - (margin * 2);
+
+    // Colors
+    const navyBlue = [30, 58, 95]; // #1e3a5f
+    const darkGray = [26, 26, 26];
+    const mediumGray = [88, 96, 105];
+    const lightGray = [225, 228, 232];
+    const orange = [212, 118, 0]; // #d47600
+    const lightOrange = [255, 248, 240];
+    const lightBlue = [241, 248, 255];
+
+    // Helper functions
+    function drawRect(x, y, w, h, fillColor, borderColor, borderWidth = 0.2) {
+        if (fillColor) {
+            doc.setFillColor(fillColor[0], fillColor[1], fillColor[2]);
+            doc.rect(x, y, w, h, 'F');
+        }
+        if (borderColor) {
+            doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
+            doc.setLineWidth(borderWidth);
+            doc.rect(x, y, w, h, 'S');
+        }
+    }
+
+    function drawLine(x1, y1, x2, y2, color = mediumGray, width = 0.3) {
+        doc.setDrawColor(color[0], color[1], color[2]);
+        doc.setLineWidth(width);
+        doc.line(x1, y1, x2, y2);
+    }
+
+    function setFont(size, style = 'normal', color = darkGray) {
+        doc.setFont('helvetica', style);
+        doc.setFontSize(size);
+        doc.setTextColor(color[0], color[1], color[2]);
+    }
+
+    // ===== HEADER SECTION =====
+    const headerHeight = 25;
+    drawRect(0, 0, pageWidth, headerHeight, navyBlue, null);
+    
+    // Title
+    setFont(16, 'bold', [255, 255, 255]);
+    doc.text('ACCEPTANCE OF QUOTATION', margin, 12);
+    
+    // Subtitle
+    setFont(8, 'normal', [230, 230, 230]);
+    doc.text('POPIA Compliant', margin, 18);
+    
+    // Logo placeholder
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(255, 255, 255);
+    doc.setLineWidth(0.3);
+    doc.setDashPattern([1, 1], 0);
+    doc.roundedRect(pageWidth - margin - 25, 5, 20, 12, 2, 2, 'D');
+    setFont(7, 'normal', [255, 255, 255]);
+    doc.text('[LOGO]', pageWidth - margin - 22, 12);
+    doc.setDashPattern([], 0);
+
+    let currentY = headerHeight + 8;
+
+    // ===== POLICY DETAILS SECTION =====
+    const sectionHeight = 28;
+    drawRect(margin, currentY, contentWidth, sectionHeight, [250, 251, 252], lightGray);
+    
+    // Section title
+    setFont(7, 'bold', navyBlue);
+    doc.text('POLICY DETAILS', margin + 3, currentY + 5);
+    drawLine(margin + 3, currentY + 7, margin + 35, currentY + 7, navyBlue, 1);
+    
+    // Labels and input lines
+    setFont(6, 'normal', mediumGray);
+    
+    // Row 1
+    doc.text('EMPLOYER / SCHEME NAME', margin + 3, currentY + 13);
+    doc.text('QUOTE NUMBER', margin + 105, currentY + 13);
+    
+    drawLine(margin + 3, currentY + 19, margin + 100, currentY + 19);
+    drawLine(margin + 105, currentY + 19, margin + 140, currentY + 19);
+    
+    // Row 2
+    doc.text('DATE OF QUOTE', margin + 3, currentY + 24);
+    doc.text('COMMENCEMENT DATE', margin + 55, currentY + 24);
+    
+    drawLine(margin + 3, currentY + 27, margin + 45, currentY + 27);
+    drawLine(margin + 55, currentY + 27, margin + 97, currentY + 27);
+    
+    // Placeholder text
+    setFont(7, 'normal', [180, 180, 180]);
+    doc.text('DD/MM/YYYY', margin + 3, currentY + 26);
+    doc.text('DD/MM/YYYY', margin + 55, currentY + 26);
+
+    currentY += sectionHeight + 5;
+
+    // ===== EMPLOYER AUTHORISATION SECTION =====
+    const empSectionHeight = 38;
+    drawRect(margin, currentY, contentWidth, empSectionHeight, [250, 251, 252], lightGray);
+    
+    setFont(7, 'bold', navyBlue);
+    doc.text('EMPLOYER AUTHORISATION', margin + 3, currentY + 5);
+    drawLine(margin + 3, currentY + 7, margin + 50, currentY + 7, navyBlue, 1);
+    
+    // Signature box
+    const sigBoxHeight = 22;
+    drawRect(margin + 3, currentY + 10, contentWidth - 6, sigBoxHeight, [255, 255, 255], mediumGray);
+    
+    setFont(7, 'bold', navyBlue);
+    doc.text('Duly Authorised Signatory', margin + 5, currentY + 15);
+    
+    // Signature line area
+    setFont(6, 'normal', [150, 150, 150]);
+    doc.text('Sign here', margin + 5, currentY + 25);
+    drawLine(margin + 5, currentY + 28, margin + 80, currentY + 28, [200, 200, 200], 0.5);
+    
+    // Clear signature text
+    setFont(6, 'normal', [200, 100, 100]);
+    doc.text('Clear Signature', margin + 5, currentY + 32);
+    
+    // Input fields below signature
+    const inputY = currentY + 35;
+    setFont(6, 'normal', mediumGray);
+    
+    doc.text('FULL NAME', margin + 3, inputY);
+    doc.text('CAPACITY', margin + 85, inputY);
+    doc.text('DATE', margin + 130, inputY);
+    
+    drawLine(margin + 3, inputY + 2, margin + 80, inputY + 2);
+    drawLine(margin + 85, inputY + 2, margin + 125, inputY + 2);
+    drawLine(margin + 130, inputY + 2, margin + 170, inputY + 2);
+    
+    // Placeholders
+    setFont(6, 'normal', [180, 180, 180]);
+    doc.text('e.g., Director', margin + 85, inputY + 1);
+    doc.text('DD/MM/YYYY', margin + 130, inputY + 1);
+
+    currentY += empSectionHeight + 5;
+
+    // ===== INTERMEDIARY DETAILS SECTION =====
+    const intSectionHeight = 38;
+    drawRect(margin, currentY, contentWidth, intSectionHeight, [250, 251, 252], lightGray);
+    
+    setFont(7, 'bold', navyBlue);
+    doc.text('INTERMEDIARY DETAILS', margin + 3, currentY + 5);
+    drawLine(margin + 3, currentY + 7, margin + 45, currentY + 7, navyBlue, 1);
+    
+    // Signature box
+    drawRect(margin + 3, currentY + 10, contentWidth - 6, sigBoxHeight, [255, 255, 255], mediumGray);
+    
+    setFont(7, 'bold', navyBlue);
+    doc.text('Intermediary / FAIS Representative', margin + 5, currentY + 15);
+    
+    // Signature line area
+    setFont(6, 'normal', [150, 150, 150]);
+    doc.text('Sign here', margin + 5, currentY + 25);
+    drawLine(margin + 5, currentY + 28, margin + 80, currentY + 28, [200, 200, 200], 0.5);
+    
+    // Clear signature text
+    setFont(6, 'normal', [200, 100, 100]);
+    doc.text('Clear Signature', margin + 5, currentY + 32);
+    
+    // Input fields
+    const intInputY = currentY + 35;
+    setFont(6, 'normal', mediumGray);
+    
+    doc.text('FULL NAME', margin + 3, intInputY);
+    doc.text('FAIS REG NO.', margin + 85, intInputY);
+    doc.text('DATE', margin + 130, intInputY);
+    
+    drawLine(margin + 3, intInputY + 2, margin + 80, intInputY + 2);
+    drawLine(margin + 85, intInputY + 2, margin + 125, intInputY + 2);
+    drawLine(margin + 130, intInputY + 2, margin + 170, intInputY + 2);
+    
+    // Placeholder
+    setFont(6, 'normal', [180, 180, 180]);
+    doc.text('DD/MM/YYYY', margin + 130, intInputY + 1);
+
+    currentY += intSectionHeight + 5;
+
+    // ===== POPIA SECTION =====
+    const popiaHeight = 32;
+    drawRect(margin, currentY, contentWidth, popiaHeight, lightBlue, [200, 225, 255]);
+    
+    setFont(7, 'bold', [3, 102, 214]); // Blue color
+    doc.text('POPIA Consent & Data Protection', margin + 3, currentY + 5);
+    
+    // POPIA text
+    setFont(7, 'normal', darkGray);
+    const popiaText = `In terms of the Protection of Personal Information Act 4 of 2013 (POPIA), the Employer consents to the processing of personal information of employees and scheme members for the purpose of underwriting, administering, and processing claims under this Group Risk policy. Information will be processed lawfully, minimally, and only for the specific purpose stated.`;
+    
+    const splitPopia = doc.splitTextToSize(popiaText, contentWidth - 6);
+    doc.text(splitPopia, margin + 3, currentY + 11);
+    
+    // Checkbox
+    const checkboxY = currentY + 22;
+    drawRect(margin + 3, checkboxY - 3, 4, 4, [255, 255, 255], mediumGray, 0.3);
+    
+    setFont(6.5, 'normal', darkGray);
+    const consentText = `I confirm that the Employer has obtained necessary consent from data subjects (employees/members) for the processing of their personal information as required by POPIA, and warrants that all information provided is true and complete.`;
+    
+    const splitConsent = doc.splitTextToSize(consentText, contentWidth - 12);
+    doc.text(splitConsent, margin + 9, checkboxY);
+
+    currentY += popiaHeight + 5;
+
+    // ===== FOR OFFICE USE ONLY SECTION =====
+    const officeHeight = 25;
+    drawRect(margin, currentY, contentWidth, officeHeight, lightOrange, [255, 209, 168]);
+    
+    // Lock icon and title
+    setFont(9, 'normal', orange);
+    doc.text('🔒', margin + 3, currentY + 6);
+    
+    setFont(7, 'bold', orange);
+    doc.text('FOR OFFICE USE ONLY', margin + 10, currentY + 6);
+    
+    // Table grid
+    const tableY = currentY + 10;
+    const colWidth = contentWidth / 3;
+    
+    // Horizontal lines
+    drawLine(margin, tableY, margin + contentWidth, tableY, [255, 180, 120], 0.3);
+    drawLine(margin, tableY + 7, margin + contentWidth, tableY + 7, [255, 180, 120], 0.3);
+    
+    // Vertical lines
+    for (let i = 0; i <= 3; i++) {
+        drawLine(margin + (colWidth * i), tableY, margin + (colWidth * i), tableY + 14, [255, 180, 120], 0.3);
+    }
+    
+    // Headers
+    setFont(6, 'normal', mediumGray);
+    doc.text('RECEIVED BY', margin + 3, tableY + 4);
+    doc.text('DATE RECEIVED', margin + colWidth + 3, tableY + 4);
+    doc.text('POLICY NUMBER', margin + (colWidth * 2) + 3, tableY + 4);
+    
+    doc.text('UNDERWRITER', margin + 3, tableY + 11);
+    doc.text('APPROVED BY', margin + colWidth + 3, tableY + 11);
+    doc.text('DATE APPROVED', margin + (colWidth * 2) + 3, tableY + 11);
+
+    // ===== FOOTER =====
+    const footerY = pageHeight - 12;
+    drawRect(0, footerY - 5, pageWidth, 17, [246, 248, 250], [225, 228, 232]);
+    
+    setFont(6.5, 'normal', mediumGray);
+    doc.text('Doc Ref: GRA-SA-2024', margin, footerY);
+    doc.text('Page 1 of 1', margin + 40, footerY);
+    
+    setFont(6.5, 'normal', mediumGray);
+    const footerText = 'This acceptance is subject to the terms and conditions of the Group Risk Policy';
+    const textWidth = doc.getTextWidth(footerText);
+    doc.text(footerText, pageWidth - margin - textWidth, footerY);
+
+    // Save PDF
+    doc.save('Group_Risk_Acceptance_Form.pdf');
+    
+    return doc;
+}
+
+// Auto-generate on load if in browser
+if (typeof window !== 'undefined') {
+    window.generateGroupRiskPDF = generateGroupRiskAcceptanceForm;
+}
+
+// Node.js export
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = generateGroupRiskAcceptanceForm;
+}

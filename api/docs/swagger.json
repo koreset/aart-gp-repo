@@ -1,0 +1,679 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "ADS API.",
+        "title": "ADSolutions API",
+        "contact": {},
+        "license": {},
+        "version": "1.0"
+    },
+    "host": "localhost:9090",
+    "basePath": "/api/v1/",
+    "paths": {
+        "/getproducts": {
+            "get": {
+                "description": "Get available product family types",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Get a list of available product family types",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.ProductFamily"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/markovstates": {
+            "get": {
+                "description": "Get available Transition (Markov) states",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Get a list of available transition states",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.MarkovState"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/modelpointvariables": {
+            "get": {
+                "description": "get all model point variables",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Get a list of available model point variables",
+                "operationId": "getAllModelPointvariables",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.ModelPointVariable"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/modelpointvariables/{prodId}": {
+            "get": {
+                "description": "get all applicable model point variables for a product",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Get a list of model point variables for product",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product Code",
+                        "name": "prodId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.ModelPointVariable"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/products/assumptions/variables": {
+            "get": {
+                "description": "This will return all assumption variables available for product configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "products"
+                ],
+                "summary": "Get all available assumption variables",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.BaseAssumptionVariable"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/products/features": {
+            "get": {
+                "description": "This will return all benefit features available for product configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "products"
+                ],
+                "summary": "Get all available benefit features",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.BaseFeature"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/upload": {
+            "post": {
+                "description": "Use this endpoint to upload a completed product configuration",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Upload a valid product configuration",
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.Product"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "models.BaseAssumptionVariable": {
+            "type": "object",
+            "properties": {
+                "data_type": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
+        "models.BaseFeature": {
+            "type": "object",
+            "properties": {
+                "data_type": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.Fds": {
+            "type": "object",
+            "properties": {
+                "dimension": {
+                    "type": "string"
+                },
+                "factor": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "product_rating_factor_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.GlobalTable": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.MarkovState": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "state": {
+                    "type": "string",
+                    "example": "Healthy"
+                }
+            }
+        },
+        "models.ModelPointVariable": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "POLICY_NUMBER"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Policy Number"
+                },
+                "type": {
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "models.Product": {
+            "type": "object",
+            "properties": {
+                "assumption_code": {
+                    "type": "string"
+                },
+                "global_tables": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.GlobalTable"
+                    }
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "parameters_array": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "product_code": {
+                    "type": "string"
+                },
+                "product_family": {
+                    "type": "integer"
+                },
+                "product_features": {
+                    "type": "object",
+                    "$ref": "#/definitions/models.ProductFeatures"
+                },
+                "product_modelpoint_variables": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ProductModelpointVariable"
+                    }
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "product_parameters": {
+                    "description": "This we fetch separately",
+                    "type": "object",
+                    "$ref": "#/definitions/models.ProductParameters"
+                },
+                "product_rating_factors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ProductRatingFactor"
+                    }
+                },
+                "product_state": {
+                    "type": "string"
+                },
+                "product_tables": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ProductTable"
+                    }
+                },
+                "product_transition_states": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ProductTransitionState"
+                    }
+                },
+                "product_transitions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ProductTransition"
+                    }
+                }
+            }
+        },
+        "models.ProductFamily": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "HEAL"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Health"
+                },
+                "products": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Product"
+                    }
+                }
+            }
+        },
+        "models.ProductFeatures": {
+            "type": "object",
+            "properties": {
+                "additional_indicator": {
+                    "type": "boolean"
+                },
+                "annuity_income": {
+                    "type": "boolean"
+                },
+                "credit_life": {
+                    "type": "boolean"
+                },
+                "credit_life_funeral_option": {
+                    "type": "boolean"
+                },
+                "critical_illness_benefit": {
+                    "type": "boolean"
+                },
+                "death_benefit": {
+                    "type": "boolean"
+                },
+                "disability_benefit_indicator": {
+                    "type": "boolean"
+                },
+                "double_accidental_benefit": {
+                    "type": "boolean"
+                },
+                "full_paidup": {
+                    "type": "boolean"
+                },
+                "funeral_cover": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "joint_life": {
+                    "type": "boolean"
+                },
+                "lapse_dependent_on_cp_death": {
+                    "type": "boolean"
+                },
+                "original_loan": {
+                    "type": "boolean"
+                },
+                "premium_disability_benefit": {
+                    "type": "boolean"
+                },
+                "premium_waiver_on_death": {
+                    "type": "boolean"
+                },
+                "premium_waiver_on_disability": {
+                    "type": "boolean"
+                },
+                "product_code": {
+                    "type": "string"
+                },
+                "reduced_paid_up": {
+                    "type": "boolean"
+                },
+                "retrenchment_benefit_indicator": {
+                    "type": "boolean"
+                },
+                "rider_benefit": {
+                    "type": "boolean"
+                },
+                "sterling": {
+                    "type": "boolean"
+                },
+                "surrender_benefit": {
+                    "type": "boolean"
+                },
+                "unit_fund": {
+                    "type": "boolean"
+                },
+                "with_profit": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "models.ProductModelpointVariable": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ProductParameters": {
+            "type": "object",
+            "properties": {
+                "accidental_benefit_multiplier": {
+                    "type": "number"
+                },
+                "additional_benefits": {
+                    "type": "number"
+                },
+                "calculated_instalment": {
+                    "type": "number"
+                },
+                "calculated_term": {
+                    "type": "integer"
+                },
+                "cashback_period": {
+                    "type": "number"
+                },
+                "cashback_ratio": {
+                    "type": "number"
+                },
+                "cashback_term": {
+                    "type": "number"
+                },
+                "child_exit_age": {
+                    "type": "integer"
+                },
+                "death_benefit_factor": {
+                    "type": "number"
+                },
+                "funeral_maximum_benefit": {
+                    "type": "number"
+                },
+                "funeral_minimum_benefit": {
+                    "type": "number"
+                },
+                "funeral_service_non_child": {
+                    "type": "integer"
+                },
+                "grocery_benefit": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "initial_commission_percentage1": {
+                    "type": "number"
+                },
+                "initial_commission_percentage2": {
+                    "type": "number"
+                },
+                "initial_commission_rand": {
+                    "type": "number"
+                },
+                "initial_expense_percentage": {
+                    "type": "number"
+                },
+                "initial_expense_rand": {
+                    "type": "number"
+                },
+                "main_member_indicator": {
+                    "type": "boolean"
+                },
+                "number_retrenchment_instalments": {
+                    "type": "integer"
+                },
+                "original_sum_assured": {
+                    "type": "integer"
+                },
+                "other_lives_indicator": {
+                    "type": "boolean"
+                },
+                "paidup_effective_age": {
+                    "type": "integer"
+                },
+                "paidup_effective_duration": {
+                    "type": "number"
+                },
+                "premium_waiver_benefit_payout_adjusted": {
+                    "type": "number"
+                },
+                "premium_waiver_sum_adjusted_term": {
+                    "type": "number"
+                },
+                "premium_waiver_waiting_period": {
+                    "type": "number"
+                },
+                "product_code": {
+                    "type": "string"
+                },
+                "projection_results": {
+                    "type": "boolean"
+                },
+                "renewal_commission_percentage": {
+                    "type": "number"
+                },
+                "renewal_commission_rand": {
+                    "type": "number"
+                },
+                "renewal_expense_percentage": {
+                    "type": "number"
+                },
+                "renewal_expense_rand": {
+                    "type": "number"
+                },
+                "repatriation_assumption": {
+                    "type": "number"
+                },
+                "retrenchment_qualification_factor": {
+                    "type": "number"
+                },
+                "rider_benefits": {
+                    "type": "number"
+                },
+                "timing": {
+                    "type": "number"
+                },
+                "valuation_model": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "models.ProductRatingFactor": {
+            "type": "object",
+            "properties": {
+                "fds": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Fds"
+                    }
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "table": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ProductTable": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "table": {
+                    "type": "string"
+                },
+                "table_class": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ProductTransition": {
+            "type": "object",
+            "properties": {
+                "absorbing": {
+                    "type": "boolean"
+                },
+                "associated_table": {
+                    "type": "string"
+                },
+                "end_state": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "start_state": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ProductTransitionState": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

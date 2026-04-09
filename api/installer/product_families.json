@@ -1,0 +1,8 @@
+[{"name":"Risk UW", "code":"RSK_UW"},
+ {"name":"Risk NonUW", "code":"RSK_NUW"},
+ {"name":"Endowment", "code":"ENDOW"},
+ {"name":"Investment", "code":"INV"},
+ {"name":"Credit Life", "code":"CRED"},
+ {"name":"Pension", "code":"PEN"},
+ {"name":"Health", "code":"HEAL"},
+ {"name":"Annuity", "code":"ANN"}]

@@ -1,0 +1,2 @@
+product_code;mortality_margin;morbidity_margin;expense_margin;year1_lapse_margin;year2_lapse_margin;year3_lapse_margin;year4_lapse_margin;year5_lapse_margin;year6_plus_margin;retrenchment_margin;inflation_margin;investment_margin
+COMP_01;0.075;0.15;0.1;-0.25;-0.25;-0.25;-0.25;-0.25;-0.25;0.1;0.1;-0.0025

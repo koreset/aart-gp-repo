@@ -1,0 +1,457 @@
+[
+  {
+    "slug": "navigation:view_gp_dashboard",
+    "name": "GR Dashboard",
+    "description": "Can view the dashboard."
+  },
+  {
+    "slug": "navigation:view_quotes",
+    "name": "GR Quotes View Access",
+    "description": "Can view quotes."
+  },
+  {
+    "slug": "navigation:group_tables",
+    "name": "GR Tables",
+    "description": "Can view group risk tables."
+  },
+  {
+    "slug": "navigation:view_schemes",
+    "name": "GR Schemes",
+    "description": "Can view schemes."
+  },
+  {
+    "slug": "quote:access_new_business",
+    "name": "Generate GR New Business Quote",
+    "description": "Can generate new business quote."
+  },
+  {
+    "slug": "quote:access_renewal",
+    "name": "Generate GR Renewal Quote",
+    "description": "Can generate renewal quote."
+  },
+  {
+    "slug": "navigation:results",
+    "name": "GR Summary Results Access",
+    "description": "Can view summarised results."
+  },
+  {
+    "slug": "quote:approve",
+    "name": "GR Quote Approval",
+    "description": "Can approve a quote."
+  },
+  {
+    "slug": "quote:accept",
+    "name": "GR Quote Acceptance",
+    "description": "Authorized to accept quotes."
+  },
+  {
+    "slug": "scheme:access",
+    "name": "GR Scheme Maintenance",
+    "description": "Can maintain a scheme."
+  },
+  {
+    "slug": "scheme:maintain",
+    "name": "Scheme Maintenance",
+    "description": "Can access and manage and maintain schemes."
+  },
+  {
+    "slug": "metadata:access",
+    "name": "GR Metadata",
+    "description": "Can edit Metadata."
+  },
+  {
+    "slug": "claims:access",
+    "name": "Claims Access",
+    "description": "Can view and manage claims."
+  },
+  {
+    "slug": "claims:approve",
+    "name": "GR Claims Approve",
+    "description": "Can approve lodged claims."
+  },
+  {
+    "slug": "system:admin",
+    "name": "Administrator",
+    "description": "Has full access to all system functions and features."
+  },
+  {
+    "slug": "quote:experience_rating",
+    "name": "GR Experience Rating",
+    "description": "Can perform experience rating on quotes."
+  },
+
+  {
+    "slug": "navigation:view_metadata",
+    "name": "View Metadata Navigation",
+    "description": "Can navigate to the metadata screen."
+  },
+  {
+    "slug": "navigation:manage_members",
+    "name": "Manage Members Navigation",
+    "description": "Can navigate to member management."
+  },
+  {
+    "slug": "navigation:manage_beneficiaries",
+    "name": "Manage Beneficiaries Navigation",
+    "description": "Can navigate to beneficiary management."
+  },
+  {
+    "slug": "navigation:view_claims",
+    "name": "View Claims Navigation",
+    "description": "Can navigate to view claims."
+  },
+  {
+    "slug": "navigation:manage_claims",
+    "name": "Manage Claims Navigation",
+    "description": "Can navigate to claims management."
+  },
+  {
+    "slug": "navigation:manage_bordereaux",
+    "name": "Manage Bordereaux Navigation",
+    "description": "Can navigate to bordereaux management."
+  },
+  {
+    "slug": "navigation:manage_users",
+    "name": "Manage Users Navigation",
+    "description": "Can navigate to user management."
+  },
+  {
+    "slug": "navigation:view_premium_dashboard",
+    "name": "View Premium Dashboard Navigation",
+    "description": "Can navigate to premium dashboard."
+  },
+  {
+    "slug": "navigation:manage_premium_schedules",
+    "name": "Manage Premium Schedules Navigation",
+    "description": "Can navigate to premium schedules."
+  },
+  {
+    "slug": "navigation:manage_invoices",
+    "name": "Manage Invoices Navigation",
+    "description": "Can navigate to invoices."
+  },
+  {
+    "slug": "navigation:manage_payments",
+    "name": "Manage Payments Navigation",
+    "description": "Can navigate to payments."
+  },
+  {
+    "slug": "navigation:manage_premium_reconciliation",
+    "name": "Manage Premium Reconciliation Navigation",
+    "description": "Can navigate to premium reconciliation."
+  },
+  {
+    "slug": "navigation:manage_arrears",
+    "name": "Manage Arrears Navigation",
+    "description": "Can navigate to arrears management."
+  },
+  {
+    "slug": "navigation:view_statements",
+    "name": "View Statements Navigation",
+    "description": "Can navigate to statements."
+  },
+  {
+    "slug": "navigation:view_claims_analytics",
+    "name": "View Claims Analytics Navigation",
+    "description": "Can navigate to claims analytics."
+  },
+
+  {
+    "slug": "members:view",
+    "name": "View Members",
+    "description": "Can view member records."
+  },
+  {
+    "slug": "members:create",
+    "name": "Create Members",
+    "description": "Can create new members."
+  },
+  {
+    "slug": "members:edit",
+    "name": "Edit Members",
+    "description": "Can edit member details."
+  },
+  {
+    "slug": "members:delete",
+    "name": "Delete Members",
+    "description": "Can delete members."
+  },
+
+  {
+    "slug": "claims:lodge",
+    "name": "Lodge Claims",
+    "description": "Can lodge new claims."
+  },
+  {
+    "slug": "claims:assess",
+    "name": "Assess Claims",
+    "description": "Can assess and request information on claims."
+  },
+  {
+    "slug": "claims:pay",
+    "name": "Pay Claims",
+    "description": "Can authorise claim payments."
+  },
+  {
+    "slug": "claims:reject",
+    "name": "Reject Claims",
+    "description": "Can reject/decline claims."
+  },
+  {
+    "slug": "claims:reopen",
+    "name": "Reopen Claims",
+    "description": "Can reopen closed or rejected claims."
+  },
+  {
+    "slug": "claims:view_medical",
+    "name": "View Medical Info",
+    "description": "Can view medical information on claims."
+  },
+  {
+    "slug": "claims:refer_committee",
+    "name": "Refer to Committee",
+    "description": "Can refer claims to the claims committee."
+  },
+  {
+    "slug": "claims:committee_decide",
+    "name": "Committee Decision",
+    "description": "Can record claims committee decisions."
+  },
+  {
+    "slug": "claims:view_analytics",
+    "name": "View Claims Analytics",
+    "description": "Can view claims analytics dashboards."
+  },
+
+  {
+    "slug": "claims_pay:create_schedule",
+    "name": "Create Payment Schedule",
+    "description": "Can create claims payment schedules."
+  },
+  {
+    "slug": "claims_pay:generate_acb",
+    "name": "Generate ACB File",
+    "description": "Can generate ACB payment files."
+  },
+  {
+    "slug": "claims_pay:authorise_payment",
+    "name": "Authorise Payment",
+    "description": "Can authorise claims payments."
+  },
+  {
+    "slug": "claims_pay:upload_response",
+    "name": "Upload Payment Response",
+    "description": "Can upload bank payment response files."
+  },
+  {
+    "slug": "claims_pay:reconcile",
+    "name": "Reconcile Payments",
+    "description": "Can reconcile claims payments."
+  },
+  {
+    "slug": "claims_pay:retry_failed",
+    "name": "Retry Failed Payments",
+    "description": "Can retry failed payment transactions."
+  },
+  {
+    "slug": "claims_pay:manage_bank_profiles",
+    "name": "Manage Bank Profiles",
+    "description": "Can manage bank payment profiles."
+  },
+
+  {
+    "slug": "premiums:view",
+    "name": "View Premiums",
+    "description": "Can view premium data and dashboards."
+  },
+  {
+    "slug": "premiums:generate_schedule",
+    "name": "Generate Premium Schedule",
+    "description": "Can generate premium schedules."
+  },
+  {
+    "slug": "premiums:finalize_schedule",
+    "name": "Finalize Premium Schedule",
+    "description": "Can finalize premium schedules."
+  },
+  {
+    "slug": "premiums:generate_invoice",
+    "name": "Generate Invoice",
+    "description": "Can generate invoices from schedules."
+  },
+  {
+    "slug": "premiums:record_payment",
+    "name": "Record Payment",
+    "description": "Can record premium payments."
+  },
+  {
+    "slug": "premiums:void_payment",
+    "name": "Void Payment",
+    "description": "Can void premium payments."
+  },
+  {
+    "slug": "premiums:reconcile",
+    "name": "Reconcile Premiums",
+    "description": "Can perform premium reconciliation."
+  },
+  {
+    "slug": "premiums:manage_arrears",
+    "name": "Manage Arrears",
+    "description": "Can manage premium arrears and take actions."
+  },
+  {
+    "slug": "premiums:approve_suspension",
+    "name": "Approve Suspension",
+    "description": "Can approve scheme suspensions for arrears."
+  },
+  {
+    "slug": "premiums:generate_statement",
+    "name": "Generate Statement",
+    "description": "Can generate premium statements."
+  },
+
+  {
+    "slug": "bordereaux:view",
+    "name": "View Bordereaux",
+    "description": "Can view bordereaux data."
+  },
+  {
+    "slug": "bordereaux:submit_inbound",
+    "name": "Submit Inbound Bordereaux",
+    "description": "Can submit inbound bordereaux."
+  },
+  {
+    "slug": "bordereaux:process_inbound",
+    "name": "Process Inbound Bordereaux",
+    "description": "Can process inbound bordereaux submissions."
+  },
+  {
+    "slug": "bordereaux:approve_inbound",
+    "name": "Approve Inbound Bordereaux",
+    "description": "Can approve inbound bordereaux."
+  },
+  {
+    "slug": "bordereaux:generate_outbound",
+    "name": "Generate Outbound Bordereaux",
+    "description": "Can generate outbound bordereaux."
+  },
+  {
+    "slug": "bordereaux:approve_outbound",
+    "name": "Approve Outbound Bordereaux",
+    "description": "Can approve outbound bordereaux for submission."
+  },
+  {
+    "slug": "bordereaux:submit_outbound",
+    "name": "Submit Outbound Bordereaux",
+    "description": "Can submit outbound bordereaux to insurers."
+  },
+  {
+    "slug": "bordereaux:manage_templates",
+    "name": "Manage Bordereaux Templates",
+    "description": "Can manage bordereaux templates."
+  },
+  {
+    "slug": "bordereaux:manage_deadlines",
+    "name": "Manage Bordereaux Deadlines",
+    "description": "Can manage bordereaux deadlines."
+  },
+
+  {
+    "slug": "reinsurance:view",
+    "name": "View Reinsurance",
+    "description": "Can view reinsurance data."
+  },
+  {
+    "slug": "reinsurance:manage_treaties",
+    "name": "Manage Treaties",
+    "description": "Can manage reinsurance treaties."
+  },
+  {
+    "slug": "reinsurance:manage_cessions",
+    "name": "Manage Cessions",
+    "description": "Can manage reinsurance cessions."
+  },
+  {
+    "slug": "reinsurance:manage_recoveries",
+    "name": "Manage Recoveries",
+    "description": "Can manage reinsurance recoveries."
+  },
+  {
+    "slug": "reinsurance:manage_settlement",
+    "name": "Manage Settlement",
+    "description": "Can manage reinsurance settlements."
+  },
+  {
+    "slug": "reinsurance:approve_settlement",
+    "name": "Approve Settlement",
+    "description": "Can approve reinsurance settlements."
+  },
+  {
+    "slug": "reinsurance:generate_ri_bordereaux",
+    "name": "Generate RI Bordereaux",
+    "description": "Can generate reinsurance bordereaux."
+  },
+
+  {
+    "slug": "reports:view",
+    "name": "View Reports",
+    "description": "Can view reports."
+  },
+  {
+    "slug": "reports:generate",
+    "name": "Generate Reports",
+    "description": "Can generate reports."
+  },
+  {
+    "slug": "reports:export",
+    "name": "Export Reports",
+    "description": "Can export data and reports."
+  },
+  {
+    "slug": "reports:run_ibnr",
+    "name": "Run IBNR",
+    "description": "Can run IBNR projections."
+  },
+  {
+    "slug": "reports:run_experience",
+    "name": "Run Experience Analysis",
+    "description": "Can run experience analysis."
+  },
+
+  {
+    "slug": "system:manage_roles",
+    "name": "Manage Roles",
+    "description": "Can create, edit, and delete user roles."
+  },
+  {
+    "slug": "system:manage_users",
+    "name": "Manage Users",
+    "description": "Can manage user accounts and role assignments."
+  },
+  {
+    "slug": "admin:view_audit_logs",
+    "name": "View Audit Logs",
+    "description": "Can view system audit logs."
+  },
+  {
+    "slug": "admin:system_config",
+    "name": "System Configuration",
+    "description": "Can modify system configuration."
+  },
+
+  {
+    "slug": "scheme:create",
+    "name": "Create Scheme",
+    "description": "Can create new schemes."
+  },
+  {
+    "slug": "scheme:delete",
+    "name": "Delete Scheme",
+    "description": "Can delete schemes."
+  },
+  {
+    "slug": "scheme:approve_changes",
+    "name": "Approve Scheme Changes",
+    "description": "Can approve scheme changes."
+  }
+]

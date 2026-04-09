@@ -1,0 +1,451 @@
+basePath: /api/v1/
+definitions:
+  models.BaseAssumptionVariable:
+    properties:
+      data_type:
+        type: integer
+      id:
+        type: integer
+      name:
+        type: string
+      value:
+        type: number
+    type: object
+  models.BaseFeature:
+    properties:
+      data_type:
+        type: integer
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  models.Fds:
+    properties:
+      dimension:
+        type: string
+      factor:
+        type: string
+      id:
+        type: integer
+      product_rating_factor_id:
+        type: integer
+    type: object
+  models.GlobalTable:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+      product_id:
+        type: integer
+    type: object
+  models.MarkovState:
+    properties:
+      id:
+        example: 1
+        type: integer
+      state:
+        example: Healthy
+        type: string
+    type: object
+  models.ModelPointVariable:
+    properties:
+      code:
+        example: POLICY_NUMBER
+        type: string
+      id:
+        example: 1
+        type: integer
+      name:
+        example: Policy Number
+        type: string
+      type:
+        example: 1
+        type: integer
+    type: object
+  models.Product:
+    properties:
+      assumption_code:
+        type: string
+      global_tables:
+        items:
+          $ref: '#/definitions/models.GlobalTable'
+        type: array
+      id:
+        type: integer
+      parameters_array:
+        items:
+          type: string
+        type: array
+      product_code:
+        type: string
+      product_family:
+        type: integer
+      product_features:
+        $ref: '#/definitions/models.ProductFeatures'
+        type: object
+      product_modelpoint_variables:
+        items:
+          $ref: '#/definitions/models.ProductModelpointVariable'
+        type: array
+      product_name:
+        type: string
+      product_parameters:
+        $ref: '#/definitions/models.ProductParameters'
+        description: This we fetch separately
+        type: object
+      product_rating_factors:
+        items:
+          $ref: '#/definitions/models.ProductRatingFactor'
+        type: array
+      product_state:
+        type: string
+      product_tables:
+        items:
+          $ref: '#/definitions/models.ProductTable'
+        type: array
+      product_transition_states:
+        items:
+          $ref: '#/definitions/models.ProductTransitionState'
+        type: array
+      product_transitions:
+        items:
+          $ref: '#/definitions/models.ProductTransition'
+        type: array
+    type: object
+  models.ProductFamily:
+    properties:
+      code:
+        example: HEAL
+        type: string
+      id:
+        example: 1
+        type: integer
+      name:
+        example: Health
+        type: string
+      products:
+        items:
+          $ref: '#/definitions/models.Product'
+        type: array
+    type: object
+  models.ProductFeatures:
+    properties:
+      additional_indicator:
+        type: boolean
+      annuity_income:
+        type: boolean
+      credit_life:
+        type: boolean
+      credit_life_funeral_option:
+        type: boolean
+      critical_illness_benefit:
+        type: boolean
+      death_benefit:
+        type: boolean
+      disability_benefit_indicator:
+        type: boolean
+      double_accidental_benefit:
+        type: boolean
+      full_paidup:
+        type: boolean
+      funeral_cover:
+        type: boolean
+      id:
+        type: integer
+      joint_life:
+        type: boolean
+      lapse_dependent_on_cp_death:
+        type: boolean
+      original_loan:
+        type: boolean
+      premium_disability_benefit:
+        type: boolean
+      premium_waiver_on_death:
+        type: boolean
+      premium_waiver_on_disability:
+        type: boolean
+      product_code:
+        type: string
+      reduced_paid_up:
+        type: boolean
+      retrenchment_benefit_indicator:
+        type: boolean
+      rider_benefit:
+        type: boolean
+      sterling:
+        type: boolean
+      surrender_benefit:
+        type: boolean
+      unit_fund:
+        type: boolean
+      with_profit:
+        type: boolean
+    type: object
+  models.ProductModelpointVariable:
+    properties:
+      code:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      product_id:
+        type: integer
+      type:
+        type: string
+    type: object
+  models.ProductParameters:
+    properties:
+      accidental_benefit_multiplier:
+        type: number
+      additional_benefits:
+        type: number
+      calculated_instalment:
+        type: number
+      calculated_term:
+        type: integer
+      cashback_period:
+        type: number
+      cashback_ratio:
+        type: number
+      cashback_term:
+        type: number
+      child_exit_age:
+        type: integer
+      death_benefit_factor:
+        type: number
+      funeral_maximum_benefit:
+        type: number
+      funeral_minimum_benefit:
+        type: number
+      funeral_service_non_child:
+        type: integer
+      grocery_benefit:
+        type: integer
+      id:
+        type: integer
+      initial_commission_percentage1:
+        type: number
+      initial_commission_percentage2:
+        type: number
+      initial_commission_rand:
+        type: number
+      initial_expense_percentage:
+        type: number
+      initial_expense_rand:
+        type: number
+      main_member_indicator:
+        type: boolean
+      number_retrenchment_instalments:
+        type: integer
+      original_sum_assured:
+        type: integer
+      other_lives_indicator:
+        type: boolean
+      paidup_effective_age:
+        type: integer
+      paidup_effective_duration:
+        type: number
+      premium_waiver_benefit_payout_adjusted:
+        type: number
+      premium_waiver_sum_adjusted_term:
+        type: number
+      premium_waiver_waiting_period:
+        type: number
+      product_code:
+        type: string
+      projection_results:
+        type: boolean
+      renewal_commission_percentage:
+        type: number
+      renewal_commission_rand:
+        type: number
+      renewal_expense_percentage:
+        type: number
+      renewal_expense_rand:
+        type: number
+      repatriation_assumption:
+        type: number
+      retrenchment_qualification_factor:
+        type: number
+      rider_benefits:
+        type: number
+      timing:
+        type: number
+      valuation_model:
+        type: boolean
+    type: object
+  models.ProductRatingFactor:
+    properties:
+      fds:
+        items:
+          $ref: '#/definitions/models.Fds'
+        type: array
+      id:
+        type: integer
+      product_id:
+        type: integer
+      table:
+        type: string
+    type: object
+  models.ProductTable:
+    properties:
+      id:
+        type: integer
+      product_id:
+        type: integer
+      table:
+        type: string
+      table_class:
+        type: string
+    type: object
+  models.ProductTransition:
+    properties:
+      absorbing:
+        type: boolean
+      associated_table:
+        type: string
+      end_state:
+        type: string
+      id:
+        type: integer
+      product_id:
+        type: integer
+      start_state:
+        type: string
+    type: object
+  models.ProductTransitionState:
+    properties:
+      id:
+        type: integer
+      product_id:
+        type: integer
+      state:
+        type: string
+    type: object
+host: localhost:9090
+info:
+  contact: {}
+  description: ADS API.
+  license: {}
+  title: ADSolutions API
+  version: "1.0"
+paths:
+  /getproducts:
+    get:
+      consumes:
+      - application/json
+      description: Get available product family types
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.ProductFamily'
+            type: array
+      summary: Get a list of available product family types
+  /markovstates:
+    get:
+      consumes:
+      - application/json
+      description: Get available Transition (Markov) states
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.MarkovState'
+            type: array
+      summary: Get a list of available transition states
+  /modelpointvariables:
+    get:
+      consumes:
+      - application/json
+      description: get all model point variables
+      operationId: getAllModelPointvariables
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.ModelPointVariable'
+            type: array
+      summary: Get a list of available model point variables
+  /modelpointvariables/{prodId}:
+    get:
+      consumes:
+      - application/json
+      description: get all applicable model point variables for a product
+      parameters:
+      - description: Product Code
+        in: path
+        name: prodId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.ModelPointVariable'
+            type: array
+      summary: Get a list of model point variables for product
+  /products/assumptions/variables:
+    get:
+      consumes:
+      - application/json
+      description: This will return all assumption variables available for product
+        configuration
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.BaseAssumptionVariable'
+            type: array
+      summary: Get all available assumption variables
+      tags:
+      - products
+  /products/features:
+    get:
+      consumes:
+      - application/json
+      description: This will return all benefit features available for product configuration
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.BaseFeature'
+            type: array
+      summary: Get all available benefit features
+      tags:
+      - products
+  /upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Use this endpoint to upload a completed product configuration
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Product'
+      summary: Upload a valid product configuration
+swagger: "2.0"

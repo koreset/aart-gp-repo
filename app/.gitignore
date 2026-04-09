@@ -1,0 +1,9 @@
+node_modules/
+dist/
+release/
+.env
+.env.local
+*.log
+package-lock.json
+*.docx
+.DS_Store

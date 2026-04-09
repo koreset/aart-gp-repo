@@ -1,0 +1,5 @@
+product_code,treaty_year,flat_annual_reins_prem_rate,level1_ceded_proportion,level1_lowerbound,level1_upperbound ,level2_ceded_proportion,level2_lowerbound,level2_upperbound ,level3_ceded_proportion,level3_lowerbound,level3_upperbound ,ceding_commission
+FE_001,2022,0.005,0.5,0,100000,1,100000,200000,0,200000,300000,0.1
+CRED_01,2022,0.005,0.5,0,9999999,0,10000000,10000000,0,10000001,10000001,0.1
+LC_001,2022,0.005,0.5,0,9999999,0,10000000,10000000,0,10000001,10000001,0.1
+FUN_01,2022,0.005,0.5,0,100000,1,100000,200000,0,200000,300000,0.1

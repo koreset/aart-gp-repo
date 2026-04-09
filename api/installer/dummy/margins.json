@@ -1,0 +1,1 @@
+{"year":2020, "product_code":"COMP_01", "mortality_margin":0.075, "morbidity_margin":0.15, "expense_margin":0.1, "year_1_lapse_margin":-0.25, "year_2_lapse_margin":-0.25, "year_3_lapse_margin":-0.25, "year_4_lapse_margin":-0.25, "year_5_lapse_margin":-0.25, "year_6_plus_margin":-0.25, "retrenchment_margin":0.1, "inflation_margin":0.1, "investment_margin":-0.0025}

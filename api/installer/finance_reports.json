@@ -1,0 +1,282 @@
+[
+  {
+    "line_item": "Release of CSM (net of acquisition cost)",
+    "index": 1,
+    "current_year": 56,
+    "past_year": 0,
+    "notes": "Release of CSM at time 1",
+    "reference": "106(a)iii,B121(a)iii,B224©"
+  },
+  {
+    "line_item": "Recovery of Acquisition Cost (DAC Release)",
+    "index": 2,
+    "current_year": 40,
+    "past_year": 0,
+    "notes": "Recovery of Acqusition Cost",
+    "reference": "B1221(b),B125"
+  },
+  {
+    "line_item": "Change in RA",
+    "index": 3,
+    "current_year": 40,
+    "past_year": 0,
+    "notes": "Release of Risk Adjustment",
+    "reference": "106(a)iii,B121(a)iii,B224©"
+  },
+  {
+    "line_item": "Expected Claims and Benefits",
+    "index": 4,
+    "current_year": 600,
+    "past_year": 0,
+    "notes": "Release of Expected Benefits",
+    "reference": "106(a)iii,B121(a)iii,B224©"
+  },
+  {
+    "line_item": "Expected Expenses",
+    "index": 5,
+    "current_year": 120,
+    "past_year": 0,
+    "notes": "Release of Expected Expenses",
+    "reference": "106(a)iii,B121(a)iii,B224©"
+  },
+  {
+    "line_item": "PAA: Expected Premium",
+    "index": 6,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Expected Premium for PAA",
+    "reference": "B126"
+  },
+  {
+    "line_item": "Experience Adjustments not related to future service",
+    "index": 7,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "eg. Expected Premium vs. Actual Premium",
+    "reference": "B124(d)"
+  },
+  {
+    "line_item": "Loss Component  Unwind",
+    "index": 8,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Release of the Loss Component",
+    "reference": ""
+  },
+  {
+    "line_item": "Claims Incurred",
+    "index": 9,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Actual Claims Less (Expected Claims and RA allocated to LC  for the period in question)",
+    "reference": "84,103(b)i"
+  },
+  {
+    "line_item": "Expenses Incurred",
+    "index": 10,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Actual Expenses Less (Expected Expenses allocated to LC  for the period in question )",
+    "reference": "84,103(b)i"
+  },
+  {
+    "line_item": "Amortisation of Acquisition Cash flows",
+    "index": 11,
+    "current_year": 40,
+    "past_year": 0,
+    "notes": "",
+    "reference": "103(b)iii"
+  },
+  {
+    "line_item": "Changes in LIC FCFs estimates",
+    "index": 12,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "",
+    "reference": ""
+  },
+  {
+    "line_item": "Exeperience Adjustments (Claims and Expenses) LIC",
+    "index": 13,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "",
+    "reference": ""
+  },
+  {
+    "line_item": "LC: Changes in estimates of future cashflows and other current period variances(if not offset against CSM)(Losses and reversal on onerous contracts)",
+    "index": 14,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Further Losses or Reversal of Losses already recognised in previous reporting periods. Includes interest on BEL & RA that is allocated to LC. (BEL_INT+RA_INT)*LC_SAR",
+    "reference": ""
+  },
+  {
+    "line_item": "PAA: Adjustment for Loss Component",
+    "index": 15,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "PAA Loss Component and Loss Component Reversals",
+    "reference": ""
+  },
+  {
+    "line_item": "LC: Losses on Initial Recognition of Insurance Contracts",
+    "index": 16,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Loss Component Recognised at PoS",
+    "reference": "47"
+  },
+  {
+    "line_item": "Loss Component Unwind",
+    "index": 17,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Release of the Loss Component",
+    "reference": "47"
+  },
+  {
+    "line_item": "Expected Claims and Other Expenses Recovery",
+    "index": 18,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "GMM Expected Recoveries",
+    "reference": ""
+  },
+  {
+    "line_item": "Changes in the Risk Adjustment",
+    "index": 19,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Changes in the Risk Adjustment Recognised for the Risk Expired",
+    "reference": ""
+  },
+  {
+    "line_item": "CSM Release",
+    "index": 20,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "CSM Recognised for the Services Provided",
+    "reference": ""
+  },
+  {
+    "line_item": "Allocated Reinsurance Premium",
+    "index": 21,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Earned or Incurred Reinsurance Premium",
+    "reference": ""
+  },
+  {
+    "line_item": "Allocated Ceding Commission",
+    "index": 22,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Ceding Commission independent of Claims Experience",
+    "reference": ""
+  },
+  {
+    "line_item": "Other Incurred Directly Attributable Expenses",
+    "index": 23,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Directly Attributable Expenses",
+    "reference": ""
+  },
+  {
+    "line_item": "Change in Reinsurer's Non-Performance",
+    "index": 24,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Change in Credit Score",
+    "reference": ""
+  },
+  {
+    "line_item": "Actual Claims Recoveries",
+    "index": 25,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Recoveries before Adjustments",
+    "reference": ""
+  },
+  {
+    "line_item": "Other",
+    "index": 26,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Profit & Sliding Commission, Premium Reinstatements, less Investment Component",
+    "reference": ""
+  },
+  {
+    "line_item": "Non-CSM Changes in FCF",
+    "index": 27,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Changes in FCF that do not adjust underlying contracts CSM",
+    "reference": ""
+  },
+  {
+    "line_item": "Incurred Claims Adjustments",
+    "index": 28,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Changes that Relate to Past Service",
+    "reference": ""
+  },
+  {
+    "line_item": "Loss Recovery at Initial Recognition",
+    "index": 29,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Loss Recovery at Initial Recognition",
+    "reference": ""
+  },
+  {
+    "line_item": "Loss Recovery Component",
+    "index": 30,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Subsequent Recognition and Recovery of Loss Recovery Component",
+    "reference": ""
+  },
+  {
+    "line_item": "Reversal of Loss Recovery Component",
+    "index": 31,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "Reversal of Loss Recovery Component",
+    "reference": ""
+  },
+  {
+    "line_item": "Investment Income",
+    "index": 32,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "",
+    "reference": ""
+  },
+  {
+    "line_item": "Insurance Finance Income or Expense",
+    "index": 33,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "",
+    "reference": ""
+  },
+  {
+    "line_item": "Other Finance Costs",
+    "index": 34,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "",
+    "reference": ""
+  },
+  {
+    "line_item": "Other Operating Expenses",
+    "index": 35,
+    "current_year": 0,
+    "past_year": 0,
+    "notes": "",
+    "reference": ""
+  }
+]

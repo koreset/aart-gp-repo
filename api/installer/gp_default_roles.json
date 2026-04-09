@@ -1,0 +1,189 @@
+[
+  {
+    "role_name": "System Administrator",
+    "description": "Full access to all system functions and features.",
+    "permissions": ["system:admin"]
+  },
+  {
+    "role_name": "Scheme Administrator",
+    "description": "Manages schemes, members, lodges claims, and handles inbound bordereaux.",
+    "permissions": [
+      "navigation:view_gp_dashboard", "navigation:view_schemes", "navigation:manage_members",
+      "navigation:manage_beneficiaries", "navigation:view_claims", "navigation:manage_claims",
+      "navigation:manage_bordereaux",
+      "scheme:access", "scheme:maintain",
+      "members:view", "members:create", "members:edit",
+      "claims:access", "claims:lodge",
+      "bordereaux:view", "bordereaux:submit_inbound"
+    ]
+  },
+  {
+    "role_name": "Senior Scheme Administrator",
+    "description": "Scheme Administrator with approval and creation/deletion authority.",
+    "permissions": [
+      "navigation:view_gp_dashboard", "navigation:view_schemes", "navigation:manage_members",
+      "navigation:manage_beneficiaries", "navigation:view_claims", "navigation:manage_claims",
+      "navigation:manage_bordereaux",
+      "scheme:access", "scheme:maintain", "scheme:create", "scheme:delete", "scheme:approve_changes",
+      "members:view", "members:create", "members:edit", "members:delete",
+      "claims:access", "claims:lodge",
+      "bordereaux:view", "bordereaux:submit_inbound", "bordereaux:process_inbound"
+    ]
+  },
+  {
+    "role_name": "Underwriter",
+    "description": "Creates and manages quotes, views schemes and reports.",
+    "permissions": [
+      "navigation:view_gp_dashboard", "navigation:view_quotes", "navigation:view_schemes",
+      "navigation:group_tables", "navigation:results",
+      "quote:access_new_business", "quote:access_renewal", "quote:approve", "quote:accept",
+      "quote:experience_rating",
+      "scheme:access",
+      "reports:view", "reports:generate", "reports:export"
+    ]
+  },
+  {
+    "role_name": "Junior Underwriter",
+    "description": "Creates and manages quotes, views schemes and reports.",
+    "permissions": [
+      "navigation:view_gp_dashboard", "navigation:view_quotes", "navigation:view_schemes",
+      "navigation:group_tables", "navigation:results",
+      "quote:access_new_business", "quote:access_renewal", "quote:approve", "quote:accept",
+      "scheme:access",
+      "reports:view", "reports:generate", "reports:export"
+    ]
+  },
+  {
+    "role_name": "Actuarial Analyst",
+    "description": "Read-only quotes access, tables, metadata, reports, and experience analysis.",
+    "permissions": [
+      "navigation:view_gp_dashboard", "navigation:view_quotes", "navigation:group_tables",
+      "navigation:view_metadata", "navigation:results",
+      "metadata:access",
+      "quote:experience_rating",
+      "reports:view", "reports:generate", "reports:export",
+      "reports:run_ibnr", "reports:run_experience"
+    ]
+  },
+  {
+    "role_name": "Claims Registrar",
+    "description": "Can lodge claims only.",
+    "permissions": [
+      "navigation:view_gp_dashboard", "navigation:view_claims", "navigation:manage_claims",
+      "claims:access", "claims:lodge"
+    ]
+  },
+  {
+    "role_name": "Claims Assessor (Junior)",
+    "description": "Can lodge and assess claims, view medical information.",
+    "permissions": [
+      "navigation:view_gp_dashboard", "navigation:view_claims", "navigation:manage_claims",
+      "claims:access", "claims:lodge", "claims:assess", "claims:view_medical"
+    ]
+  },
+  {
+    "role_name": "Senior Claims Assessor",
+    "description": "Junior assessor plus approve, reject, and refer to committee.",
+    "permissions": [
+      "navigation:view_gp_dashboard", "navigation:view_claims", "navigation:manage_claims",
+      "claims:access", "claims:lodge", "claims:assess", "claims:approve", "claims:reject",
+      "claims:view_medical", "claims:refer_committee"
+    ]
+  },
+  {
+    "role_name": "Claims Manager",
+    "description": "Full claims authority including payments, analytics, and committee decisions.",
+    "permissions": [
+      "navigation:view_gp_dashboard", "navigation:view_claims", "navigation:manage_claims",
+      "navigation:view_claims_analytics",
+      "claims:access", "claims:lodge", "claims:assess", "claims:approve", "claims:reject",
+      "claims:pay", "claims:reopen", "claims:view_medical",
+      "claims:refer_committee", "claims:committee_decide",
+      "claims:view_analytics",
+      "claims_pay:create_schedule", "claims_pay:generate_acb", "claims_pay:authorise_payment",
+      "claims_pay:upload_response", "claims_pay:reconcile", "claims_pay:retry_failed",
+      "claims_pay:manage_bank_profiles"
+    ]
+  },
+  {
+    "role_name": "Finance Officer",
+    "description": "Views premiums, manages invoices, records payments, views statements.",
+    "permissions": [
+      "navigation:view_gp_dashboard", "navigation:view_premium_dashboard",
+      "navigation:manage_invoices", "navigation:manage_payments", "navigation:view_statements",
+      "premiums:view", "premiums:record_payment", "premiums:generate_statement"
+    ]
+  },
+  {
+    "role_name": "Finance Manager",
+    "description": "Full premium lifecycle management including schedules, reconciliation, and arrears.",
+    "permissions": [
+      "navigation:view_gp_dashboard", "navigation:view_premium_dashboard",
+      "navigation:manage_premium_schedules", "navigation:manage_invoices",
+      "navigation:manage_payments", "navigation:manage_premium_reconciliation",
+      "navigation:manage_arrears", "navigation:view_statements",
+      "premiums:view", "premiums:generate_schedule", "premiums:finalize_schedule",
+      "premiums:generate_invoice", "premiums:record_payment", "premiums:void_payment",
+      "premiums:reconcile", "premiums:manage_arrears", "premiums:approve_suspension",
+      "premiums:generate_statement",
+      "claims_pay:generate_acb"
+    ]
+  },
+  {
+    "role_name": "Reinsurance Analyst",
+    "description": "Generates and reviews bordereaux, manages RI acceptances and recoveries.",
+    "permissions": [
+      "navigation:view_gp_dashboard", "navigation:manage_bordereaux",
+      "bordereaux:view", "bordereaux:generate_outbound",
+      "reinsurance:view", "reinsurance:manage_recoveries"
+    ]
+  },
+  {
+    "role_name": "Reinsurance Manager",
+    "description": "Full reinsurance authority including approvals, treaties, and settlements.",
+    "permissions": [
+      "navigation:view_gp_dashboard", "navigation:manage_bordereaux",
+      "bordereaux:view", "bordereaux:generate_outbound", "bordereaux:approve_outbound",
+      "bordereaux:submit_outbound", "bordereaux:manage_templates", "bordereaux:manage_deadlines",
+      "reinsurance:view", "reinsurance:manage_treaties", "reinsurance:manage_cessions",
+      "reinsurance:manage_recoveries", "reinsurance:manage_settlement",
+      "reinsurance:approve_settlement", "reinsurance:generate_ri_bordereaux"
+    ]
+  },
+  {
+    "role_name": "Compliance Officer",
+    "description": "Read-only access across all modules for compliance monitoring.",
+    "permissions": [
+      "navigation:view_gp_dashboard", "navigation:view_quotes", "navigation:view_schemes",
+      "navigation:group_tables", "navigation:view_metadata", "navigation:manage_members",
+      "navigation:manage_beneficiaries", "navigation:view_claims", "navigation:manage_claims",
+      "navigation:manage_bordereaux", "navigation:view_premium_dashboard",
+      "navigation:manage_premium_schedules", "navigation:manage_invoices",
+      "navigation:manage_payments", "navigation:manage_premium_reconciliation",
+      "navigation:manage_arrears", "navigation:view_statements",
+      "navigation:view_claims_analytics", "navigation:results",
+      "claims:access", "premiums:view", "bordereaux:view", "reinsurance:view",
+      "reports:view", "admin:view_audit_logs"
+    ]
+  },
+  {
+    "role_name": "Broker",
+    "description": "Views dashboard, quotes, schemes, and statements.",
+    "permissions": [
+      "navigation:view_gp_dashboard", "navigation:view_quotes", "navigation:view_schemes",
+      "navigation:view_statements",
+      "premiums:view", "premiums:generate_statement"
+    ]
+  },
+  {
+    "role_name": "Employer HR",
+    "description": "Views dashboard, members, submits inbound bordereaux, views statements.",
+    "permissions": [
+      "navigation:view_gp_dashboard", "navigation:manage_members", "navigation:manage_bordereaux",
+      "navigation:view_statements",
+      "members:view",
+      "bordereaux:view", "bordereaux:submit_inbound",
+      "premiums:view", "premiums:generate_statement"
+    ]
+  }
+]

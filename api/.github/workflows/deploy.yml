@@ -1,0 +1,168 @@
+name: Deploy API
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22.0'  # Use the appropriate Go version for your project
+        
+    - name: Set deployment status
+      id: deployment-status
+      run: echo "start_time=$(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+        
+    - name: Build binary for Linux
+      id: build
+      run: |
+        echo "Building binary for linux deploy"
+        env GOOS=linux GOARCH=amd64 go build -o aart_api || exit 1
+        echo "build_success=true" >> $GITHUB_OUTPUT
+      continue-on-error: false
+      
+    - name: Ensure migrations directory exists
+      run: |
+        echo "Ensuring migrations directory exists"
+        mkdir -p migrations
+        
+    - name: Set up SSH key
+      id: ssh-setup
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/aart_key_access.pem
+        chmod 600 ~/.ssh/aart_key_access.pem
+        ssh-keyscan -H 13.247.15.250 >> ~/.ssh/known_hosts || exit 1
+        echo "ssh_setup_success=true" >> $GITHUB_OUTPUT
+      continue-on-error: false
+      
+    # Deploy to app1
+    - name: Create migrations directory on server
+      if: steps.build.outputs.build_success == 'true' && steps.ssh-setup.outputs.ssh_setup_success == 'true'
+      id: create-migrations-dir
+      run: |
+        ssh -i ~/.ssh/aart_key_access.pem -l ubuntu 13.247.15.250 "sudo mkdir -p /home/aart/api1/migrations" || exit 1
+        echo "create_migrations_success=true" >> $GITHUB_OUTPUT
+      continue-on-error: false
+      
+    - name: Copy migrations to server
+      if: steps.create-migrations-dir.outputs.create_migrations_success == 'true'
+      id: copy-migrations
+      run: |
+        scp -i ~/.ssh/aart_key_access.pem -r migrations/* ubuntu@13.247.15.250:/home/aart/api1/migrations/ || exit 1
+        echo "copy_migrations_success=true" >> $GITHUB_OUTPUT
+      continue-on-error: false
+      
+    - name: Stop app1 service and backup existing binary
+      if: steps.copy-migrations.outputs.copy_migrations_success == 'true'
+      id: stop-app1
+      run: |
+        ssh -i ~/.ssh/aart_key_access.pem -l ubuntu 13.247.15.250 "sudo systemctl stop app1.service; sudo rm /home/aart/api1/api_bak; sudo mv /home/aart/api1/api /home/aart/api1/api_bak" || exit 1
+        echo "stop_app1_success=true" >> $GITHUB_OUTPUT
+      continue-on-error: false
+      
+    - name: Copy new binary to app1
+      if: steps.stop-app1.outputs.stop_app1_success == 'true'
+      id: copy-app1
+      run: |
+        scp -i ~/.ssh/aart_key_access.pem aart_api ubuntu@13.247.15.250:/home/aart/api1/api || exit 1
+        echo "copy_app1_success=true" >> $GITHUB_OUTPUT
+      continue-on-error: false
+      
+    - name: Set executable permissions for app1
+      if: steps.copy-app1.outputs.copy_app1_success == 'true'
+      id: chmod-app1
+      run: |
+        ssh -i ~/.ssh/aart_key_access.pem -l ubuntu 13.247.15.250 "sudo chmod +x /home/aart/api1/api" || exit 1
+        echo "chmod_app1_success=true" >> $GITHUB_OUTPUT
+      continue-on-error: false
+      
+    # Deploy to app2
+    - name: Stop app2 service and update binary
+      if: steps.chmod-app1.outputs.chmod_app1_success == 'true'
+      id: update-app2
+      run: |
+        ssh -i ~/.ssh/aart_key_access.pem -l ubuntu 13.247.15.250 "sudo systemctl stop app2.service; sudo rm /home/aart/api2/api_bak; sudo mv /home/aart/api2/api /home/aart/api2/api_bak; sudo cp /home/aart/api1/api /home/aart/api2/api" || exit 1
+        echo "update_app2_success=true" >> $GITHUB_OUTPUT
+      continue-on-error: false
+      
+    - name: Set executable permissions for app2
+      if: steps.update-app2.outputs.update_app2_success == 'true'
+      id: chmod-app2
+      run: |
+        ssh -i ~/.ssh/aart_key_access.pem -l ubuntu 13.247.15.250 "sudo chmod +x /home/aart/api2/api" || exit 1
+        echo "chmod_app2_success=true" >> $GITHUB_OUTPUT
+      continue-on-error: false
+      
+    # Deploy to app3
+    - name: Stop app3 service and update binary
+      if: steps.chmod-app2.outputs.chmod_app2_success == 'true'
+      id: update-app3
+      run: |
+        ssh -i ~/.ssh/aart_key_access.pem -l ubuntu 13.247.15.250 "sudo systemctl stop app3.service; sudo rm /home/aart/api3/api_bak; sudo mv /home/aart/api3/api /home/aart/api3/api_bak; sudo cp /home/aart/api1/api /home/aart/api3/api" || exit 1
+        echo "update_app3_success=true" >> $GITHUB_OUTPUT
+      continue-on-error: false
+      
+    - name: Set executable permissions for app3
+      if: steps.update-app3.outputs.update_app3_success == 'true'
+      id: chmod-app3
+      run: |
+        ssh -i ~/.ssh/aart_key_access.pem -l ubuntu 13.247.15.250 "sudo chmod +x /home/aart/api3/api" || exit 1
+        echo "chmod_app3_success=true" >> $GITHUB_OUTPUT
+      continue-on-error: false
+      
+    - name: Start all services
+      if: steps.chmod-app3.outputs.chmod_app3_success == 'true'
+      id: start-services
+      run: |
+        ssh -i ~/.ssh/aart_key_access.pem -l ubuntu 13.247.15.250 "sudo systemctl restart app1.service" || echo "Failed to start app1.service"
+        ssh -i ~/.ssh/aart_key_access.pem -l ubuntu 13.247.15.250 "sudo systemctl restart app2.service" || echo "Failed to start app2.service"
+        ssh -i ~/.ssh/aart_key_access.pem -l ubuntu 13.247.15.250 "sudo systemctl restart app3.service" || echo "Failed to start app3.service"
+        echo "services_started=true" >> $GITHUB_OUTPUT
+      
+    - name: Cleanup
+      run: rm aart_api
+      
+    - name: Deployment Status Notification
+      if: always()
+      run: |
+        echo "Deployment Status Summary:"
+        echo "=========================="
+        echo "Started at: ${{ steps.deployment-status.outputs.start_time }}"
+        echo "Ended at: $(date +'%Y-%m-%d %H:%M:%S')"
+        echo "Build: ${{ steps.build.outputs.build_success == 'true' && 'Success' || 'Failed' }}"
+        echo "SSH Setup: ${{ steps.ssh-setup.outputs.ssh_setup_success == 'true' && 'Success' || 'Failed' }}"
+        echo "App1 Deployment: ${{ steps.chmod-app1.outputs.chmod_app1_success == 'true' && 'Success' || 'Failed' }}"
+        echo "App2 Deployment: ${{ steps.chmod-app2.outputs.chmod_app2_success == 'true' && 'Success' || 'Failed' }}"
+        echo "App3 Deployment: ${{ steps.chmod-app3.outputs.chmod_app3_success == 'true' && 'Success' || 'Failed' }}"
+        echo "Services Started: ${{ steps.start-services.outputs.services_started == 'true' && 'Success' || 'Failed' }}"
+        
+    - name: Tag master branch with version
+      if: success() && github.ref == 'refs/heads/master'
+      run: |
+        # Get the app version from version.go
+        APP_VERSION=$(grep -oP 'const AppVersion = "\K[^"]+' services/version.go)
+        # Create a tag with version and date
+        TAG_NAME="v${APP_VERSION}-$(date +'%Y-%m-%d')"
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git tag -a $TAG_NAME -m "Release $TAG_NAME"
+        git push origin $TAG_NAME
+        echo "Tagged master branch with $TAG_NAME"
+      
+    - name: Notify on Success
+      if: success()
+      run: echo "Deployment completed successfully!"
+      
+    - name: Notify on Failure
+      if: failure()
+      run: echo "Deployment failed! Check the logs for details."

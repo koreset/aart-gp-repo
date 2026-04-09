@@ -1,0 +1,6 @@
+[{"rider_benefit":"Grocery", "product_code":"COMP_01", "a":500.0, "b":750.0, "c":1000.0, "d":1500.0, "e":0.0, "f":0.0},
+ {"rider_benefit":"Repatriation", "product_code":"COMP_01", "a":0.0, "b":0.0, "c":0.0, "d":0.0, "e":0.0, "f":0.0},
+ {"rider_benefit":"Educator", "product_code":"COMP_01", "a":0.0, "b":0.0, "c":0.0, "d":0.0, "e":0.0, "f":0.0},
+ {"rider_benefit":"Tombstone", "product_code":"COMP_01", "a":0.0, "b":0.0, "c":0.0, "d":0.0, "e":0.0, "f":0.0},
+ {"rider_benefit":"Cow", "product_code":"COMP_01", "a":0.0, "b":0.0, "c":0.0, "d":0.0, "e":0.0, "f":0.0},
+ {"rider_benefit":"Additional SumAssured", "product_code":"COMP_01", "a":1500.0, "b":2000.0, "c":3500.0, "d":0.0, "e":0.0, "f":0.0}]

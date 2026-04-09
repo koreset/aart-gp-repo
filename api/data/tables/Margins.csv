@@ -1,0 +1,3 @@
+product_code;mortality_margin;morbidity_margin;expense_margin;retrenchment_margin;inflation_margin;investment_margin
+FUN_01;0.075;0.15;0.1;0.1;0.1;-0.0025
+COMP_01;0.075;0.15;0.1;0.1;0.1;-0.0025

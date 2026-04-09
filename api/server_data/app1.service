@@ -1,0 +1,13 @@
+[Unit]
+Description=AART APP2
+ConditionPathExists=/home/apps/app2
+After=network.target
+
+[Service]
+
+WorkingDirectory=/home/apps
+ExecStart=/home/apps/app2
+Environment=PORT=9091
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,389 @@
+[
+      {
+        "index ": "1",
+        "account_name ": "Insurance Revenue",
+        "description": "Insurance Revenue",
+        "account_number ": "150",
+        "account_type ": "Insurance Revenue",
+        "normal_account_balance": "Credit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "2",
+        "account_name ": "Insurance Service Expense",
+        "description": "Insurance Service Expense",
+        "account_number ": "250",
+        "account_type ": "Insurance Service Expense",
+        "normal_account_balance": "Debit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "3",
+        "account_name ": "BEL_Inflow_Change_Finance",
+        "description": "B/F Current to Lockedin",
+        "account_number ": "400",
+        "account_type ": "Insurance Finance Income or Expense",
+        "normal_account_balance": "Credit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "4",
+        "account_name ": "BEL_Outflow_Change_Finance",
+        "description": "B/F Current to Lockedin",
+        "account_number ": "401",
+        "account_type ": "Insurance Finance Income or Expense",
+        "normal_account_balance": "Debit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "5",
+        "account_name ": "RA_Change_Finance",
+        "description": "B/F Current to Lockedin",
+        "account_number ": "402",
+        "account_type ": "Insurance Finance Income or Expense",
+        "normal_account_balance": "Debit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "6",
+        "account_name ": "Loss_Component_NB",
+        "description": "Initial Recognition",
+        "account_number ": "201",
+        "account_type ": "Insurance Service Expense",
+        "normal_account_balance": "Debit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "7",
+        "account_name ": "BEL_Outflow",
+        "description": "Initial Recognition",
+        "account_number ": "2001",
+        "account_type ": "Liability",
+        "normal_account_balance": "Credit",
+        "master_account_type": "B/S"
+      },
+      {
+        "index ": "8",
+        "account_name ": "Risk Adjustment",
+        "description": "Initial Recognition",
+        "account_number ": "2002",
+        "account_type ": "Liability",
+        "normal_account_balance": "Credit",
+        "master_account_type": "B/S"
+      },
+      {
+        "index ": "9",
+        "account_name ": "CSM",
+        "description": "Initial Recognition",
+        "account_number ": "2003",
+        "account_type ": "Liability",
+        "normal_account_balance": "Credit",
+        "master_account_type": "B/S"
+      },
+      {
+        "index ": "10",
+        "account_name ": "BEL_Inflow",
+        "description": "Initial Recognition",
+        "account_number ": "1001",
+        "account_type ": "Asset",
+        "normal_account_balance": "Debit",
+        "master_account_type": "B/S"
+      },
+      {
+        "index ": "11",
+        "account_name ": "DAC",
+        "description": "Initial Recognition",
+        "account_number ": "1002",
+        "account_type ": "Asset",
+        "normal_account_balance": "Debit",
+        "master_account_type": "B/S"
+      },
+      {
+        "index ": "12",
+        "account_name ": "Risk Adjustment Release",
+        "description": "Risk Adjustment Gross of LC",
+        "account_number ": "101",
+        "account_type ": "Insurance Revenue",
+        "normal_account_balance": "Credit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "13",
+        "account_name ": "Risk Adjustment Release_SAR_LC",
+        "description": "Risk Adjustment Allocated to LC",
+        "account_number ": "5001",
+        "account_type ": "Suspense",
+        "normal_account_balance": "Credit",
+        "master_account_type": "LC_Suspense"
+      },
+      {
+        "index ": "14",
+        "account_name ": "Expected Mortality Claims",
+        "description": "Expected Mortality Claims",
+        "account_number ": "102",
+        "account_type ": "Insurance Revenue",
+        "normal_account_balance": "Credit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "15",
+        "account_name ": "Expected Mortality Claims_SAR_LC",
+        "description": "LC",
+        "account_number ": "5002",
+        "account_type ": "Suspense",
+        "normal_account_balance": "Credit",
+        "master_account_type": "LC_Suspense"
+      },
+      {
+        "index ": "16",
+        "account_name ": "Expected Expenses",
+        "description": "Expected Expenses",
+        "account_number ": "103",
+        "account_type ": "Insurance Revenue",
+        "normal_account_balance": "Credit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "17",
+        "account_name ": "Expected Expenses_SAR_LC",
+        "description": "LC",
+        "account_number ": "5003",
+        "account_type ": "Suspense",
+        "normal_account_balance": "Credit",
+        "master_account_type": "LC_Suspense"
+      },
+      {
+        "index ": "18",
+        "account_name ": "Exp_Retrenchment",
+        "description": "Expected Retrenchment",
+        "account_number ": "104",
+        "account_type ": "Insurance Revenue",
+        "normal_account_balance": "Credit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "19",
+        "account_name ": "Exp_Retrenchment_SAR_LC",
+        "description": "LC",
+        "account_number ": "5004",
+        "account_type ": "Suspense",
+        "normal_account_balance": "Credit",
+        "master_account_type": "LC_Suspense"
+      },
+      {
+        "index ": "20",
+        "account_name ": "Exp_Morbidity",
+        "description": "Expected Morbidity",
+        "account_number ": "105",
+        "account_type ": "Insurance Revenue",
+        "normal_account_balance": "Credit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "21",
+        "account_name ": "Exp_Morbidity_SAR_LC",
+        "description": "LC",
+        "account_number ": "5005",
+        "account_type ": "Suspense",
+        "normal_account_balance": "Credit",
+        "master_account_type": "LC_Suspense"
+      },
+      {
+        "index ": "22",
+        "account_name ": "Loss_Component_Int",
+        "description": "Interest Accretion",
+        "account_number ": "5006",
+        "account_type ": "Suspense",
+        "normal_account_balance": "Credit",
+        "master_account_type": "LC_Suspense"
+      },
+      {
+        "index ": "23",
+        "account_name ": "BEL_Outflow_Change",
+        "description": "Data Change",
+        "account_number ": "2004",
+        "account_type ": "Liability",
+        "normal_account_balance": "Credit",
+        "master_account_type": "B/S"
+      },
+      {
+        "index ": "24",
+        "account_name ": "RA_Change",
+        "description": "Data Change",
+        "account_number ": "2005",
+        "account_type ": "Liability",
+        "normal_account_balance": "Credit",
+        "master_account_type": "B/S"
+      },
+      {
+        "index ": "25",
+        "account_name ": "CSM_Change",
+        "description": "Data Change",
+        "account_number ": "2006",
+        "account_type ": "Liability",
+        "normal_account_balance": "Credit",
+        "master_account_type": "B/S"
+      },
+      {
+        "index ": "26",
+        "account_name ": "Loss_Component_Adjustment",
+        "description": "Data Change",
+        "account_number ": "202",
+        "account_type ": "Insurance Service Expense",
+        "normal_account_balance": "Debit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "27",
+        "account_name ": "BEL_Inflow_Change",
+        "description": "Data Change",
+        "account_number ": "1003",
+        "account_type ": "Asset",
+        "normal_account_balance": "Debit",
+        "master_account_type": "B/S"
+      },
+      {
+        "index ": "28",
+        "account_name ": "CSM Release",
+        "description": "CSM Release",
+        "account_number ": "106",
+        "account_type ": "Insurance Revenue",
+        "normal_account_balance": "Credit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "29",
+        "account_name ": "DAC Release",
+        "description": "DAC Release",
+        "account_number ": "203",
+        "account_type ": "Insurance Service Expense",
+        "normal_account_balance": "Debit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "30",
+        "account_name ": "Acquisition Cashflows",
+        "description": "Acquisition Cashflows",
+        "account_number ": "2007",
+        "account_type ": "Liability",
+        "normal_account_balance": "Credit",
+        "master_account_type": "B/S"
+      },
+      {
+        "index ": "31",
+        "account_name ": "Amortisation of Acqusition Cashflows",
+        "description": "Amortisation of Acqusition Cashflows",
+        "account_number ": "108",
+        "account_type ": "Insurance Revenue",
+        "normal_account_balance": "Credit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "32",
+        "account_name ": "Loss Component",
+        "description": "Loss Component",
+        "account_number ": "5007",
+        "account_type ": "Suspense",
+        "normal_account_balance": "Credit",
+        "master_account_type": "B/S"
+      },
+      {
+        "index ": "33",
+        "account_name ": "Loss Component Reversal",
+        "description": "Loss Component Reversal",
+        "account_number ": "107",
+        "account_type ": "Insurance Revenue",
+        "normal_account_balance": "Credit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "34",
+        "account_name ": "Insurance Finance Income or Expense",
+        "description": "Insurance Finance Income or Expense",
+        "account_number ": "420",
+        "account_type ": "Insurance Finance Income or Expense",
+        "normal_account_balance": "Debit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "35",
+        "account_name ": "Investment Income",
+        "description": "Investment Income",
+        "account_number ": "410",
+        "account_type ": "Investment Income",
+        "normal_account_balance": "Credit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "36",
+        "account_name ": "Actual Mortality Claims",
+        "description": "Actuals",
+        "account_number ": "205",
+        "account_type ": "Insurance Service Expense",
+        "normal_account_balance": "Debit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "37",
+        "account_name ": "Actual Expenses",
+        "description": "Actuals",
+        "account_number ": "206",
+        "account_type ": "Insurance Service Expense",
+        "normal_account_balance": "Debit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "38",
+        "account_name ": "Actual Retrenchment Claims",
+        "description": "Actuals",
+        "account_number ": "207",
+        "account_type ": "Insurance Service Expense",
+        "normal_account_balance": "Debit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "39",
+        "account_name ": "Actual Morbidity Claims",
+        "description": "Actuals",
+        "account_number ": "208",
+        "account_type ": "Insurance Service Expense",
+        "normal_account_balance": "Debit",
+        "master_account_type": "PnL"
+      },
+      {
+        "index ": "40",
+        "account_name ": "BEL_Outflow_Buildup",
+        "description": "BEL_Outflow_Buildup",
+        "account_number ": "2008",
+        "account_type ": "Liability",
+        "normal_account_balance": "Credit",
+        "master_account_type": "B/S"
+      },
+      {
+        "index ": "41",
+        "account_name ": "RA_Buildup",
+        "description": "RA_Buildup",
+        "account_number ": "2009",
+        "account_type ": "Liability",
+        "normal_account_balance": "Credit",
+        "master_account_type": "B/S"
+      },
+      {
+        "index ": "42",
+        "account_name ": "BEL_Inflow_Buildup",
+        "description": "BEL_Inflow_Buildup",
+        "account_number ": "1004",
+        "account_type ": "Asset",
+        "normal_account_balance": "Debit",
+        "master_account_type": "B/S"
+      },
+      {
+        "index ": "43",
+        "account_name ": "Cash",
+        "description": "Cash",
+        "account_number ": "1005",
+        "account_type ": "Asset",
+        "normal_account_balance": "Debit",
+        "master_account_type": "B/S"
+      }
+    ]

@@ -1,0 +1,97 @@
+[
+  {
+    "name": "BEL_B/F(Current)",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "BEL_B/F(Lockedin)",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "BEL_NB",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "Premium_Unwind",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "Death_Outgo",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "Expenses_Outgo",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "Retrenchment_Outgo",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "Morbidity_Outgo",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "Acqusition_Outgo",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "Clawbacks",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "Interest_Unwind",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "BEL_Unwind_Total",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "NFA_Mortality",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "NFA_Expenses",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "NFA_Morbidity",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "NFA_Retrenchment",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "FA",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "BEL_C/F(Lockedin)",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  },
+  {
+    "name": "BEL_C/F(Current)",
+    "variable_change": 0.0,
+    "bel_buildup" : 0.0
+  }
+]

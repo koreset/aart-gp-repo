@@ -1,0 +1,1174 @@
+<template>
+  <v-container>
+    <v-row>
+      <v-col>
+        <base-card :show-actions="false">
+          <template #header>
+            <div class="d-flex align-center justify-space-between">
+              <div>
+                <span class="headline">Template Manager</span>
+                <p class="text-subtitle-1 text-medium-emphasis mt-2">
+                  Manage bordereaux templates for different schemes and
+                  customize field mappings
+                </p>
+              </div>
+              <div class="d-flex align-center gap-2">
+                <v-btn
+                  color="info"
+                  variant="outlined"
+                  prepend-icon="mdi-download"
+                  @click="exportTemplates"
+                >
+                  Export Templates
+                </v-btn>
+                <v-btn
+                  color="primary"
+                  size="large"
+                  prepend-icon="mdi-plus"
+                  @click="createTemplate"
+                >
+                  Create Template
+                </v-btn>
+              </div>
+            </div>
+          </template>
+          <template #default>
+            <!-- Template Summary -->
+            <v-row class="mb-6">
+              <v-col cols="12" sm="6" md="3">
+                <v-card variant="outlined" class="h-100">
+                  <v-card-text>
+                    <div class="d-flex align-center justify-space-between">
+                      <div>
+                        <p class="text-caption text-medium-emphasis mb-1"
+                          >Active</p
+                        >
+                        <p class="text-h5 font-weight-bold text-success">{{
+                          templateStats.active
+                        }}</p>
+                        <p class="text-caption text-success">Templates</p>
+                      </div>
+                      <v-icon size="40" color="success">mdi-file-check</v-icon>
+                    </div>
+                  </v-card-text>
+                </v-card>
+              </v-col>
+
+              <v-col cols="12" sm="6" md="3">
+                <v-card variant="outlined" class="h-100">
+                  <v-card-text>
+                    <div class="d-flex align-center justify-space-between">
+                      <div>
+                        <p class="text-caption text-medium-emphasis mb-1"
+                          >Draft</p
+                        >
+                        <p class="text-h5 font-weight-bold text-warning">{{
+                          templateStats.draft
+                        }}</p>
+                        <p class="text-caption text-warning">In Progress</p>
+                      </div>
+                      <v-icon size="40" color="warning">mdi-file-edit</v-icon>
+                    </div>
+                  </v-card-text>
+                </v-card>
+              </v-col>
+
+              <v-col cols="12" sm="6" md="3">
+                <v-card variant="outlined" class="h-100">
+                  <v-card-text>
+                    <div class="d-flex align-center justify-space-between">
+                      <div>
+                        <p class="text-caption text-medium-emphasis mb-1"
+                          >Usage</p
+                        >
+                        <p class="text-h5 font-weight-bold text-purple">{{
+                          templateStats.usage
+                        }}</p>
+                        <p class="text-caption text-purple">This Month</p>
+                      </div>
+                      <v-icon size="40" color="purple">mdi-chart-line</v-icon>
+                    </div>
+                  </v-card-text>
+                </v-card>
+              </v-col>
+            </v-row>
+
+            <!-- Filter Controls -->
+            <v-row class="mb-4">
+              <v-col cols="12">
+                <v-card variant="outlined">
+                  <v-card-title class="text-h6 font-weight-bold">
+                    <v-icon class="me-2">mdi-filter</v-icon>
+                    Filter Templates
+                  </v-card-title>
+                  <v-card-text>
+                    <v-row>
+                      <v-col cols="12" sm="6" md="3">
+                        <v-select
+                          v-model="filters.type"
+                          :items="bordereauTypes"
+                          label="Bordereaux Type"
+                          variant="outlined"
+                          density="compact"
+                          clearable
+                        />
+                      </v-col>
+                      <v-col cols="12" sm="6" md="3">
+                        <v-select
+                          v-model="filters.status"
+                          :items="statusOptions"
+                          label="Status"
+                          variant="outlined"
+                          density="compact"
+                          clearable
+                        />
+                      </v-col>
+                      <v-col cols="12" sm="6" md="3">
+                        <v-text-field
+                          v-model="filters.search"
+                          label="Search Templates"
+                          variant="outlined"
+                          density="compact"
+                          prepend-inner-icon="mdi-magnify"
+                          clearable
+                        />
+                      </v-col>
+                    </v-row>
+                  </v-card-text>
+                </v-card>
+              </v-col>
+            </v-row>
+
+            <!-- Templates Table -->
+            <v-row>
+              <v-col cols="12">
+                <v-card variant="outlined">
+                  <v-card-title
+                    class="d-flex align-center justify-space-between"
+                  >
+                    <span class="text-h6 font-weight-bold"
+                      >Bordereaux Templates</span
+                    >
+                    <v-btn
+                      color="success"
+                      size="small"
+                      prepend-icon="mdi-refresh"
+                      :loading="loading"
+                      @click="refreshTemplates"
+                    >
+                      Refresh
+                    </v-btn>
+                  </v-card-title>
+                  <v-card-text>
+                    <v-data-table
+                      :headers="headers"
+                      :items="filteredTemplates"
+                      :loading="loading"
+                      :items-per-page="15"
+                      item-key="id"
+                    >
+                      <template #[`item.name`]="{ item }: { item: any }">
+                        <div class="d-flex align-center">
+                          <v-icon
+                            :color="getTypeColor(item.type)"
+                            class="me-2"
+                            >{{ getTypeIcon(item.type) }}</v-icon
+                          >
+                          <div>
+                            <p class="font-weight-bold">{{ item.name }}</p>
+                            <p class="text-caption text-medium-emphasis"
+                              >Version {{ item.version }}</p
+                            >
+                          </div>
+                        </div>
+                      </template>
+
+                      <template #[`item.type`]="{ item }: { item: any }">
+                        <v-chip
+                          :color="getTypeColor(item.type)"
+                          size="small"
+                          variant="tonal"
+                        >
+                          {{ formatType(item.type) }}
+                        </v-chip>
+                      </template>
+
+                      <template #[`item.status`]="{ item }: { item: any }">
+                        <v-chip
+                          :color="getStatusColor(item.status)"
+                          size="small"
+                        >
+                          {{ formatStatus(item.status) }}
+                        </v-chip>
+                      </template>
+
+                      <template #[`item.format`]="{ item }: { item: any }">
+                        <div class="d-flex align-center">
+                          <v-icon
+                            :color="getFormatColor(item.format)"
+                            class="me-1"
+                            size="small"
+                          >
+                            {{ getFormatIcon(item.format) }}
+                          </v-icon>
+                          {{ item.format.toUpperCase() }}
+                        </div>
+                      </template>
+
+                      <template #[`item.usage_count`]="{ item }: { item: any }">
+                        <div class="text-center">
+                          <div class="font-weight-bold">{{
+                            item.usage_count
+                          }}</div>
+                          <div class="text-caption text-medium-emphasis"
+                            >times used</div
+                          >
+                        </div>
+                      </template>
+
+                      <template #[`item.last_used`]="{ item }: { item: any }">
+                        {{
+                          item.last_used
+                            ? formatDateTime(item.last_used)
+                            : 'Never'
+                        }}
+                      </template>
+
+                      <template
+                        #[`item.created_date`]="{ item }: { item: any }"
+                      >
+                        {{ formatDate(item.created_at) }}
+                      </template>
+
+                      <template #[`item.actions`]="{ item }: { item: any }">
+                        <div class="d-flex align-center gap-1">
+                          <v-btn
+                            size="small"
+                            color="info"
+                            variant="tonal"
+                            icon="mdi-eye"
+                            @click="viewTemplate(item)"
+                          />
+                          <v-btn
+                            size="small"
+                            color="primary"
+                            variant="tonal"
+                            icon="mdi-pencil"
+                            @click="editTemplate(item)"
+                          />
+                          <v-btn
+                            size="small"
+                            color="orange"
+                            variant="tonal"
+                            icon="mdi-content-copy"
+                            @click="duplicateTemplate(item)"
+                          />
+                          <v-btn
+                            size="small"
+                            color="success"
+                            variant="tonal"
+                            icon="mdi-play"
+                            :disabled="item.status !== 'active'"
+                            @click="testTemplate(item)"
+                          />
+                          <v-menu>
+                            <template #activator="{ props }">
+                              <v-btn
+                                size="small"
+                                color="grey"
+                                variant="tonal"
+                                icon="mdi-dots-vertical"
+                                v-bind="props"
+                              />
+                            </template>
+                            <v-list density="compact">
+                              <v-list-item @click="exportTemplate(item)">
+                                <template #prepend>
+                                  <v-icon>mdi-export</v-icon>
+                                </template>
+                                <v-list-item-title>Export</v-list-item-title>
+                              </v-list-item>
+                              <v-list-item @click="versionHistory(item)">
+                                <template #prepend>
+                                  <v-icon>mdi-history</v-icon>
+                                </template>
+                                <v-list-item-title
+                                  >Version History</v-list-item-title
+                                >
+                              </v-list-item>
+                              <v-divider></v-divider>
+                              <v-list-item
+                                v-if="
+                                  item.status === 'draft' ||
+                                  item.status === 'inactive'
+                                "
+                                :disabled="updatingStatus"
+                                @click="activateTemplate(item)"
+                              >
+                                <template #prepend>
+                                  <v-icon>mdi-check-circle</v-icon>
+                                </template>
+                                <v-list-item-title>Activate</v-list-item-title>
+                              </v-list-item>
+                              <v-list-item
+                                v-if="item.status === 'active'"
+                                :disabled="updatingStatus"
+                                @click="deactivateTemplate(item)"
+                              >
+                                <template #prepend>
+                                  <v-icon>mdi-pause-circle</v-icon>
+                                </template>
+                                <v-list-item-title
+                                  >Deactivate</v-list-item-title
+                                >
+                              </v-list-item>
+                              <v-list-item
+                                v-if="item.status !== 'active'"
+                                class="text-error"
+                                @click="deleteTemplate(item)"
+                              >
+                                <template #prepend>
+                                  <v-icon>mdi-delete</v-icon>
+                                </template>
+                                <v-list-item-title>Delete</v-list-item-title>
+                              </v-list-item>
+                            </v-list>
+                          </v-menu>
+                        </div>
+                      </template>
+                    </v-data-table>
+                  </v-card-text>
+                </v-card>
+              </v-col>
+            </v-row>
+          </template>
+        </base-card>
+      </v-col>
+    </v-row>
+
+    <!-- Template Editor Dialog -->
+    <v-dialog v-model="showEditorDialog" max-width="1200" persistent>
+      <v-card v-if="editingTemplate">
+        <v-card-title class="text-h6 font-weight-bold bg-primary text-white">
+          <v-icon class="me-2">{{
+            editingTemplate.id ? 'mdi-pencil' : 'mdi-plus'
+          }}</v-icon>
+          {{ editingTemplate.id ? 'Edit Template' : 'Create New Template' }}
+        </v-card-title>
+
+        <v-card-text class="pa-0">
+          <v-container fluid class="pa-6">
+            <v-row>
+              <!-- Basic Information -->
+              <v-col cols="12" md="6">
+                <v-card variant="outlined" class="h-100">
+                  <v-card-title class="text-subtitle-1 bg-grey-lighten-4">
+                    Basic Information
+                  </v-card-title>
+                  <v-card-text>
+                    <v-row>
+                      <v-col cols="12">
+                        <v-text-field
+                          v-model="editingTemplate.name"
+                          label="Template Name *"
+                          variant="outlined"
+                          density="compact"
+                          required
+                        />
+                      </v-col>
+                      <v-col cols="12" sm="6">
+                        <v-select
+                          v-model="editingTemplate.type"
+                          :items="bordereauTypes"
+                          label="Bordereaux Type *"
+                          variant="outlined"
+                          density="compact"
+                          required
+                        />
+                      </v-col>
+                      <v-col cols="12" sm="6">
+                        <v-select
+                          v-model="editingTemplate.format"
+                          :items="formatOptions"
+                          label="Output Format *"
+                          variant="outlined"
+                          density="compact"
+                          required
+                        />
+                      </v-col>
+                      <v-col cols="12" sm="6">
+                        <v-select
+                          v-model="editingTemplate.status"
+                          :items="statusOptions"
+                          label="Status *"
+                          variant="outlined"
+                          density="compact"
+                          required
+                        />
+                      </v-col>
+                      <v-col cols="12">
+                        <v-textarea
+                          v-model="editingTemplate.description"
+                          label="Description"
+                          variant="outlined"
+                          density="compact"
+                          rows="3"
+                        />
+                      </v-col>
+                    </v-row>
+                  </v-card-text>
+                </v-card>
+              </v-col>
+
+              <!-- Field Mappings -->
+              <v-col cols="12" md="6">
+                <v-card variant="outlined" class="h-100">
+                  <v-card-title
+                    class="text-subtitle-1 bg-grey-lighten-4 d-flex align-center justify-space-between"
+                  >
+                    Field Mappings
+                    <v-btn
+                      size="small"
+                      color="primary"
+                      variant="tonal"
+                      prepend-icon="mdi-plus"
+                      @click="addFieldMapping"
+                    >
+                      Add Field
+                    </v-btn>
+                  </v-card-title>
+                  <v-card-text
+                    class="pa-0"
+                    style="max-height: 400px; overflow-y: auto"
+                  >
+                    <v-list>
+                      <v-list-item
+                        v-for="(
+                          mapping, index
+                        ) in editingTemplate.field_mappings"
+                        :key="index"
+                        :value="index"
+                      >
+                        <div class="w-100">
+                          <v-row class="mt-1">
+                            <v-col cols="5">
+                              <v-select
+                                v-model="mapping.source_field"
+                                :items="bordereauFields"
+                                item-title="display_name"
+                                item-value="field_name"
+                                label="Source Field"
+                                variant="outlined"
+                                density="compact"
+                                hide-details
+                                :loading="loadingFields"
+                                :disabled="
+                                  !editingTemplate.type || loadingFields
+                                "
+                                clearable
+                              />
+                            </v-col>
+                            <v-col cols="5">
+                              <v-text-field
+                                v-model="mapping.target_field"
+                                label="Target Field"
+                                variant="outlined"
+                                density="compact"
+                                hide-details
+                              />
+                            </v-col>
+                            <v-col cols="2" class="d-flex align-center">
+                              <v-checkbox
+                                v-model="mapping.required"
+                                label="*"
+                                density="compact"
+                                hide-details
+                              />
+                              <v-btn
+                                size="small"
+                                color="error"
+                                variant="text"
+                                icon="mdi-delete"
+                                @click="removeFieldMapping(index)"
+                              />
+                            </v-col>
+                          </v-row>
+                        </div>
+                      </v-list-item>
+                    </v-list>
+                  </v-card-text>
+                </v-card>
+              </v-col>
+
+              <!-- Validation Rules -->
+              <v-col cols="12">
+                <v-card variant="outlined">
+                  <v-card-title class="text-subtitle-1 bg-grey-lighten-4">
+                    Validation Rules
+                  </v-card-title>
+                  <v-card-text>
+                    <v-row>
+                      <v-col cols="12" md="4">
+                        <v-checkbox
+                          v-model="
+                            editingTemplate.validation_rules.validate_id_numbers
+                          "
+                          label="Validate SA ID Numbers"
+                          density="compact"
+                        />
+                      </v-col>
+                      <v-col cols="12" md="4">
+                        <v-checkbox
+                          v-model="
+                            editingTemplate.validation_rules
+                              .validate_banking_details
+                          "
+                          label="Validate Banking Details"
+                          density="compact"
+                        />
+                      </v-col>
+                      <v-col cols="12" md="4">
+                        <v-checkbox
+                          v-model="
+                            editingTemplate.validation_rules.validate_amounts
+                          "
+                          label="Validate Amount Formats"
+                          density="compact"
+                        />
+                      </v-col>
+                      <v-col cols="12" md="4">
+                        <v-checkbox
+                          v-model="
+                            editingTemplate.validation_rules.exclude_invalid
+                          "
+                          label="Exclude Invalid Records"
+                          density="compact"
+                        />
+                      </v-col>
+                      <v-col cols="12" md="4">
+                        <v-checkbox
+                          v-model="
+                            editingTemplate.validation_rules
+                              .require_beneficiaries
+                          "
+                          label="Require Beneficiaries"
+                          density="compact"
+                        />
+                      </v-col>
+                      <v-col cols="12" md="4">
+                        <v-checkbox
+                          v-model="
+                            editingTemplate.validation_rules.validate_dates
+                          "
+                          label="Validate Date Formats"
+                          density="compact"
+                        />
+                      </v-col>
+                    </v-row>
+                  </v-card-text>
+                </v-card>
+              </v-col>
+            </v-row>
+          </v-container>
+        </v-card-text>
+
+        <v-card-actions class="pa-6">
+          <v-btn
+            color="success"
+            variant="outlined"
+            prepend-icon="mdi-play"
+            :disabled="!canTest"
+            @click="testCurrentTemplate"
+          >
+            Test Template
+          </v-btn>
+          <v-spacer></v-spacer>
+          <v-btn color="grey" variant="outlined" @click="cancelEdit">
+            Cancel
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            :disabled="!canSave"
+            :loading="saving"
+            @click="saveTemplate"
+          >
+            {{ editingTemplate.id ? 'Update' : 'Create' }} Template
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </v-container>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, watch } from 'vue'
+import BaseCard from '@/renderer/components/BaseCard.vue'
+import GroupPricingService from '@/renderer/api/GroupPricingService'
+
+// Reactive data
+const loading = ref(false)
+const saving = ref(false)
+const updatingStatus = ref(false)
+const showEditorDialog = ref(false)
+const editingTemplate: any = ref(null)
+const loadingFields = ref(false)
+const bordereauFields = ref<any[]>([])
+
+const templateStats = ref({
+  active: 12,
+  draft: 3,
+  insurers: 8,
+  usage: 47
+})
+
+const filters = ref({
+  insurer: null,
+  type: '',
+  status: '',
+  search: ''
+})
+
+// Static data
+const headers = [
+  { title: 'Template Name', key: 'name', sortable: true },
+  { title: 'Scheme', key: 'scheme_name', sortable: true },
+  { title: 'Type', key: 'type', sortable: true },
+  { title: 'Status', key: 'status', sortable: true },
+  { title: 'Format', key: 'format', sortable: true },
+  { title: 'Usage', key: 'usage_count', sortable: true },
+  { title: 'Last Used', key: 'last_used', sortable: true },
+  { title: 'Created', key: 'created_date', sortable: true },
+  { title: 'Actions', key: 'actions', sortable: false, width: '250px' }
+]
+
+const bordereauTypes = [
+  { title: 'Member', value: 'member' },
+  { title: 'Premium', value: 'premium' },
+  { title: 'Claims', value: 'claims' },
+  { title: 'Benefits', value: 'benefits' },
+  { title: 'Reinsurance Premium', value: 'reinsurance_premium' },
+  { title: 'Reinsurance Claims', value: 'reinsurance_claims' }
+]
+
+const statusOptions = [
+  { title: 'Draft', value: 'draft' },
+  { title: 'Active', value: 'active' },
+  { title: 'Inactive', value: 'inactive' },
+  { title: 'Deprecated', value: 'deprecated' }
+]
+
+const formatOptions = [
+  { title: 'Excel (.xlsx)', value: 'excel' },
+  { title: 'CSV', value: 'csv' },
+  { title: 'XML', value: 'xml' },
+  { title: 'JSON', value: 'json' }
+]
+
+const schemes = ref([
+  { id: 1, name: 'Liberty Life' },
+  { id: 2, name: 'Old Mutual' },
+  { id: 3, name: 'Momentum' },
+  { id: 4, name: 'Discovery Life' },
+  { id: 5, name: 'Sanlam' },
+  { id: 6, name: 'Metropolitan' },
+  { id: 7, name: 'AIG' },
+  { id: 8, name: 'Hollard' },
+  { id: 9, name: 'General' }
+])
+
+const templates: any = ref([])
+
+// Computed properties
+const filteredTemplates = computed(() => {
+  let filtered = templates.value
+
+  if (filters.value.type) {
+    filtered = filtered.filter((t) => t.type === filters.value.type)
+  }
+
+  if (filters.value.status) {
+    filtered = filtered.filter((t) => t.status === filters.value.status)
+  }
+
+  if (filters.value.search) {
+    const search = filters.value.search.toLowerCase()
+    filtered = filtered.filter(
+      (t) =>
+        t.name.toLowerCase().includes(search) ||
+        t.description?.toLowerCase().includes(search)
+    )
+  }
+
+  return filtered
+})
+
+const canSave = computed(() => {
+  return (
+    !saving.value &&
+    editingTemplate.value?.name &&
+    editingTemplate.value?.type &&
+    editingTemplate.value?.format &&
+    editingTemplate.value?.field_mappings?.length > 0
+  )
+})
+
+const canTest = computed(() => {
+  return canSave.value && editingTemplate.value?.field_mappings?.length > 0
+})
+
+// Methods
+const getTypeColor = (type: string): string => {
+  const colors: Record<string, string> = {
+    member: 'blue',
+    premium: 'green',
+    claims: 'orange',
+    benefits: 'purple'
+  }
+  return colors[type] || 'grey'
+}
+
+const getTypeIcon = (type: string): string => {
+  const icons: Record<string, string> = {
+    member: 'mdi-account-group',
+    premium: 'mdi-currency-usd',
+    claims: 'mdi-medical-bag',
+    benefits: 'mdi-gift'
+  }
+  return icons[type] || 'mdi-file'
+}
+
+const formatType = (type: string): string => {
+  const types: Record<string, string> = {
+    member: 'Member',
+    premium: 'Premium',
+    claims: 'Claims',
+    benefits: 'Benefits'
+  }
+  return types[type] || type
+}
+
+const getStatusColor = (status: string): string => {
+  const colors: Record<string, string> = {
+    active: 'success',
+    draft: 'warning',
+    inactive: 'grey',
+    deprecated: 'error'
+  }
+  return colors[status] || 'grey'
+}
+
+const formatStatus = (status: string): string => {
+  return status.charAt(0).toUpperCase() + status.slice(1)
+}
+
+const getFormatColor = (format: string): string => {
+  const colors: Record<string, string> = {
+    excel: 'green',
+    csv: 'blue',
+    xml: 'orange',
+    json: 'purple'
+  }
+  return colors[format] || 'grey'
+}
+
+const getFormatIcon = (format: string): string => {
+  const icons: Record<string, string> = {
+    excel: 'mdi-file-excel',
+    csv: 'mdi-file-delimited',
+    xml: 'mdi-file-code',
+    json: 'mdi-code-json'
+  }
+  return icons[format] || 'mdi-file'
+}
+
+const formatDateTime = (dateString: string): string => {
+  return new Date(dateString).toLocaleDateString('en-ZA', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+const formatDate = (dateString: string): string => {
+  return new Date(dateString).toLocaleDateString('en-ZA', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  })
+}
+
+const refreshTemplates = async () => {
+  loading.value = true
+  try {
+    const templatesResponse = await GroupPricingService.getBordereauxTemplates()
+    templates.value = templatesResponse.data
+
+    // Generate template statistics based on fetched data
+    const stats = {
+      active: 0,
+      draft: 0,
+      insurers: new Set(),
+      usage: 0
+    }
+
+    templates.value.forEach((template: any) => {
+      // Count by status
+      if (template.status === 'active') {
+        stats.active++
+      } else if (template.status === 'draft') {
+        stats.draft++
+      }
+
+      // Track unique insurers/schemes
+      if (template.insurer_id) {
+        stats.insurers.add(template.insurer_id)
+      }
+
+      // Sum usage counts
+      if (template.usage_count) {
+        stats.usage += template.usage_count
+      }
+    })
+
+    // Update template stats
+    templateStats.value = {
+      active: stats.active,
+      draft: stats.draft,
+      insurers: stats.insurers.size,
+      usage: stats.usage
+    }
+  } catch (error) {
+    console.error('Error fetching templates:', error)
+    templates.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+const fetchBordereauFields = async (bordereauType: string) => {
+  if (!bordereauType) {
+    bordereauFields.value = []
+    return
+  }
+
+  try {
+    loadingFields.value = true
+    const response =
+      await GroupPricingService.getBordereauxFields(bordereauType)
+    console.log('Fetched bordereaux fields:', response.data)
+    bordereauFields.value = response.data || []
+  } catch (error) {
+    console.error('Error fetching bordereaux fields:', error)
+    bordereauFields.value = []
+  } finally {
+    loadingFields.value = false
+  }
+}
+
+const createTemplate = () => {
+  editingTemplate.value = {
+    name: '',
+    insurer_id: null,
+    type: '',
+    status: 'draft',
+    format: 'excel',
+    description: '',
+    field_mappings: [],
+    validation_rules: {
+      validate_id_numbers: true,
+      validate_banking_details: true,
+      validate_amounts: true,
+      exclude_invalid: false,
+      require_beneficiaries: false,
+      validate_dates: true
+    }
+  }
+  // Clear previous fields
+  bordereauFields.value = []
+  showEditorDialog.value = true
+}
+
+const editTemplate = (template: any) => {
+  editingTemplate.value = { ...template }
+  // Fetch fields for the selected type
+  if (template.type) {
+    fetchBordereauFields(template.type)
+  }
+  showEditorDialog.value = true
+}
+
+const viewTemplate = (template: any) => {
+  // TODO: Implement template preview
+  console.log('Viewing template:', template.name)
+}
+
+const duplicateTemplate = (template: any) => {
+  editingTemplate.value = {
+    ...template,
+    id: null,
+    name: `${template.name} (Copy)`,
+    status: 'draft',
+    version: '1.0',
+    usage_count: 0,
+    last_used: null,
+    created_date: new Date().toISOString()
+  }
+  // Fetch fields for the duplicated template type
+  if (template.type) {
+    fetchBordereauFields(template.type)
+  }
+  showEditorDialog.value = true
+}
+
+const testTemplate = (template: any) => {
+  // TODO: Implement template testing
+  console.log('Testing template:', template.name)
+}
+
+const testCurrentTemplate = () => {
+  // TODO: Test template being edited
+  console.log('Testing current template')
+}
+
+const addFieldMapping = () => {
+  if (!editingTemplate.value.field_mappings) {
+    editingTemplate.value.field_mappings = []
+  }
+  editingTemplate.value.field_mappings.push({
+    source_field: '',
+    target_field: '',
+    required: false
+  })
+}
+
+const removeFieldMapping = (index: number | string) => {
+  const numIndex = typeof index === 'string' ? parseInt(index, 10) : index
+  editingTemplate.value.field_mappings.splice(numIndex, 1)
+}
+
+const saveTemplate = async () => {
+  try {
+    saving.value = true
+
+    console.log('Saving template:', editingTemplate.value)
+
+    const templateData = {
+      name: editingTemplate.value.name,
+      type: editingTemplate.value.type,
+      status: editingTemplate.value.status,
+      format: editingTemplate.value.format,
+      description: editingTemplate.value.description,
+      field_mappings: editingTemplate.value.field_mappings,
+      validation_rules: editingTemplate.value.validation_rules
+    }
+
+    let response
+    if (editingTemplate.value.id) {
+      // Update existing template
+      response = await GroupPricingService.updateBordereauxTemplate(
+        editingTemplate.value.id,
+        templateData
+      )
+
+      // Update local template list
+      const index = templates.value.findIndex(
+        (t) => t.id === editingTemplate.value.id
+      )
+      if (index !== -1) {
+        templates.value[index] = {
+          ...response.data,
+          scheme_name: schemes.value.find(
+            (s) => s.id === response.data.scheme_id
+          )?.name
+        }
+      }
+    } else {
+      // Create new template
+      response =
+        await GroupPricingService.createBordereauxTemplate(templateData)
+
+      // Add new template to local list
+      const newTemplate = {
+        ...response.data,
+        scheme_name: schemes.value.find((s) => s.id === response.data.scheme_id)
+          ?.name
+      }
+      templates.value.push(newTemplate)
+    }
+
+    showEditorDialog.value = false
+    editingTemplate.value = null
+    bordereauFields.value = []
+
+    // Show success message (you might want to add a toast/notification here)
+    console.log('Template saved successfully:', response.data.name)
+  } catch (error: any) {
+    console.error('Error saving template:', error)
+    // You might want to add error handling/notification here
+    alert(
+      'Error saving template: ' +
+        (error.data?.message || error.message || 'Unknown error')
+    )
+  } finally {
+    saving.value = false
+  }
+}
+
+const cancelEdit = () => {
+  showEditorDialog.value = false
+  editingTemplate.value = null
+  bordereauFields.value = []
+}
+
+const exportTemplate = (template: any) => {
+  // TODO: Export template configuration
+  console.log('Exporting template:', template.name)
+}
+
+const exportTemplates = () => {
+  // TODO: Export all templates
+  console.log('Exporting all templates')
+}
+
+const versionHistory = (template: any) => {
+  // TODO: Show version history
+  console.log('Version history for:', template.name)
+}
+
+const activateTemplate = async (template: any) => {
+  try {
+    updatingStatus.value = true
+    console.log('Activating template:', template.name)
+
+    // Prepare template data for API update
+    const templateData = {
+      name: template.name,
+      type: template.type,
+      status: 'active',
+      format: template.format,
+      description: template.description,
+      field_mappings: template.field_mappings || [],
+      validation_rules: template.validation_rules || {
+        validate_id_numbers: true,
+        validate_banking_details: true,
+        validate_amounts: true,
+        exclude_invalid: false,
+        require_beneficiaries: false,
+        validate_dates: true
+      }
+    }
+
+    // Update template status via API
+    const response = await GroupPricingService.updateBordereauxTemplate(
+      template.id,
+      templateData
+    )
+
+    // Update local template state only after successful API response
+    const index = templates.value.findIndex((t) => t.id === template.id)
+    if (index !== -1) {
+      templates.value[index] = {
+        ...response.data,
+        scheme_name: schemes.value.find((s) => s.id === response.data.scheme_id)
+          ?.name
+      }
+    }
+
+    console.log('Template activated successfully:', template.name)
+    // TODO: Show success notification
+  } catch (error: any) {
+    console.error('Error activating template:', error)
+    // TODO: Show error notification
+    alert(
+      'Error activating template: ' +
+        (error.data?.message || error.message || 'Unknown error')
+    )
+  } finally {
+    updatingStatus.value = false
+  }
+}
+
+const deactivateTemplate = async (template: any) => {
+  try {
+    updatingStatus.value = true
+    console.log('Deactivating template:', template.name)
+
+    // Prepare template data for API update
+    const templateData = {
+      name: template.name,
+      type: template.type,
+      status: 'inactive',
+      format: template.format,
+      description: template.description,
+      field_mappings: template.field_mappings || [],
+      validation_rules: template.validation_rules || {
+        validate_id_numbers: true,
+        validate_banking_details: true,
+        validate_amounts: true,
+        exclude_invalid: false,
+        require_beneficiaries: false,
+        validate_dates: true
+      }
+    }
+
+    // Update template status via API
+    const response = await GroupPricingService.updateBordereauxTemplate(
+      template.id,
+      templateData
+    )
+
+    // Update local template state only after successful API response
+    const index = templates.value.findIndex((t) => t.id === template.id)
+    if (index !== -1) {
+      templates.value[index] = {
+        ...response.data,
+        scheme_name: schemes.value.find((s) => s.id === response.data.scheme_id)
+          ?.name
+      }
+    }
+
+    console.log('Template deactivated successfully:', template.name)
+    // TODO: Show success notification
+  } catch (error: any) {
+    console.error('Error deactivating template:', error)
+    // TODO: Show error notification
+    alert(
+      'Error deactivating template: ' +
+        (error.data?.message || error.message || 'Unknown error')
+    )
+  } finally {
+    updatingStatus.value = false
+  }
+}
+
+const deleteTemplate = (template: any) => {
+  const index = templates.value.findIndex((t) => t.id === template.id)
+  if (index !== -1) {
+    templates.value.splice(index, 1)
+    console.log('Deleted template:', template.name)
+  }
+}
+
+// Watchers
+watch(
+  () => editingTemplate.value?.type,
+  (newType) => {
+    if (newType) {
+      fetchBordereauFields(newType)
+    }
+  }
+)
+
+onMounted(() => {
+  refreshTemplates()
+})
+</script>
+
+<style scoped>
+.w-100 {
+  width: 100%;
+}
+</style>

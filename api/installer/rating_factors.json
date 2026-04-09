@@ -1,0 +1,35 @@
+[
+  {
+    "factor": "ANB"
+  },
+  {
+    "factor": "GENDER"
+  },
+  {
+    "factor": "SMOKER_STATUS"
+  },
+  {
+    "factor": "INCOME"
+  },
+  {
+    "factor": "SEC"
+  },
+  {
+    "factor": "OCC_CLASS"
+  },
+  {
+    "factor": "SELECT_PERIOD"
+  },
+  {
+    "factor": "EDUCATION_LEVEL"
+  },
+  {
+    "factor": "DURATION_IF_M"
+  },
+  {
+    "factor": "PROJECTION_MONTH"
+  },
+  {
+    "factor": "DISTRIBUTION_CHANNEL"
+  }
+]

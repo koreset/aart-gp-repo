@@ -1,0 +1,13 @@
+upstream aart-app {
+    ip_hash;
+    server localhost:9090;
+    server localhost:9091;
+}
+
+server {
+    server_name app.aart-enterprise.com;
+
+    location / {
+        proxy_pass http://aart-app;
+    }
+}

@@ -1,0 +1,13 @@
+[{"state":"Health"},
+ {"state":"Lapse"},
+ {"state":"Death"},
+ {"state":"Accidental Death"},
+ {"state":"Permanent Disability"},
+ {"state":"Retrenchment"},
+ {"state":"Temporary Disability"},
+ {"state":"Critical Illness"},
+ {"state":"Sickness"},
+ {"state":"Fully Paid Up"},
+ {"state":"Semi Paid Up"},
+ {"state":"Termination"}
+]

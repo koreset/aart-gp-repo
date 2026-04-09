@@ -1,0 +1,6 @@
+product_code;calculated_term;initial_commission_percentage1;initial_commission_percentage2;initial_commission_rand;renewal_commission_percentage;renewal_commission_rand;initial_expense_percentage;initial_expense_rand;renewal_expense_percentage;renewal_expense_rand;additional_benefits;accidental_benefit_multiplier;premium_waiver_benefit_payout_adjusted;premium_waiver_waiting_period;child_exit_age;timing;premium_waiver_sum_adjusted_term;cashback_on_survival_period;cashback_on_survival_term;paidup_effective_age;paidup_effective_duration;main_member_indicator;other_lives_indicator;cashback_on_survival_ratio;rider_benefits;funeral_service_non_child;valuation_model;projection_results;grocery_benefit;repatriation_assumption;year
+FUN_01;0;0.1;0.05;0;0;0;0;0;0;191;1100;2;0.5;60;21;0.5;120;60;120;65;120;0;0;0.833333333;10000;0;1;1;24;0.25;2021
+FUN_02;0;0.1;0.05;0;0;0;0;0;0;191;1100;2;0.5;60;21;0.5;120;60;120;65;120;0;0;0.833333333;10000;0;1;1;24;0.25;2021
+FE_001;0;0.1;0.05;0;0;0;0;0;0;191;1100;2;0.5;60;21;0.5;120;60;120;65;120;0;0;0.833333333;10000;0;1;1;24;0.25;0
+FE_001;0;0.1;0.05;0;0;0;0;0;0;191;1100;2;0.5;60;21;0.5;120;60;120;65;120;0;0;0.833333333;10000;0;1;1;24;0.25;2021
+FE_001;0;0.1;0.05;0;0;0;0;0;0;191;0;2;0.5;60;21;0.5;120;60;120;65;120;0;0;0.833333333;10000;0;1;1;24;0.25;2020

@@ -1,0 +1,656 @@
+{
+  "id": "",
+  "product_family_id": 2,
+  "product_name": "Company X",
+  "product_code": "COMP_01",
+  "assumption_code": "",
+  "product_transition_states": [
+    {
+      "id": 1,
+      "state": "Health"
+    },
+    {
+      "id": 2,
+      "state": "Lapse"
+    },
+    {
+      "id": 3,
+      "state": "Death"
+    },
+    {
+      "id": 5,
+      "state": "Permanent Disability"
+    },
+    {
+      "id": 6,
+      "state": "Retrenchment"
+    },
+    {
+      "id": 12,
+      "state": "Accidental Death"
+    }
+  ],
+  "product_transitions": [
+    {
+      "absorbing": false,
+      "start_state": "Health",
+      "end_state": "Lapse",
+      "associated_table": "Lapse"
+    },
+    {
+      "absorbing": true,
+      "start_state": "Health",
+      "end_state": "Death",
+      "associated_table": "Mort_Table"
+    },
+    {
+      "absorbing": false,
+      "start_state": "Health",
+      "end_state": "Permanent Disability",
+      "associated_table": "Disability"
+    },
+    {
+      "absorbing": false,
+      "start_state": "Health",
+      "end_state": "Retrenchment",
+      "associated_table": "Retrenchment"
+    },
+    {
+      "absorbing": true,
+      "start_state": "Health",
+      "end_state": "Accidental Death",
+      "associated_table": "Mortality_Accidental"
+    }
+  ],
+  "product_rating_factors": [
+    {
+      "fds": [
+        {
+          "factor": "DURATION_IF_Y",
+          "dimension": "5"
+        }
+      ],
+      "table": "Lapse"
+    },
+    {
+      "fds": [
+        {
+          "factor": "ANB",
+          "dimension": "121"
+        },
+        {
+          "factor": "GENDER",
+          "dimension": "2"
+        }
+      ],
+      "table": "Mort_Table"
+    },
+    {
+      "fds": [
+        {
+          "factor": "ANB",
+          "dimension": "121"
+        },
+        {
+          "factor": "GENDER",
+          "dimension": "2"
+        },
+        {
+          "factor": "OCC_CLASS",
+          "dimension": "1"
+        },
+        {
+          "factor": "SEC",
+          "dimension": "1"
+        }
+      ],
+      "table": "Disability"
+    },
+    {
+      "fds": [
+        {
+          "factor": "DURATION_IF_Y",
+          "dimension": "5"
+        }
+      ],
+      "table": "Retrenchment"
+    },
+    {
+      "fds": [
+        {
+          "factor": "ANB",
+          "dimension": "121"
+        },
+        {
+          "factor": "GENDER",
+          "dimension": "2"
+        }
+      ],
+      "table": "Mortality_Accidental"
+    }
+  ],
+  "product_modelpoint_variables": [
+    {
+      "id": 1,
+      "name": "Policy Number",
+      "code": "POLICY_NUMBER",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 2,
+      "name": "SP Code",
+      "code": "SPCODE",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 3,
+      "name": "Product Code",
+      "code": "PRODUCT_CODE",
+      "type": "String",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 4,
+      "name": "Initial Policy",
+      "code": "INITIAL_POLICY",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 5,
+      "name": "Commencement Year",
+      "code": "COMMENCEMENT_YEAR",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 60,
+      "name": "Commencement Month",
+      "code": "COMMENCEMENT_MONTH",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 6,
+      "name": "IFRS17 Group",
+      "code": "IFRS17_GROUP",
+      "type": "String",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 7,
+      "name": "Age at Entry",
+      "code": "AGE_AT_ENTRY",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 8,
+      "name": "Gender",
+      "code": "GENDER",
+      "type": "String",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 9,
+      "name": "Main Member Age @ Entry",
+      "code": "MAIN_MEMBER_AGE@ENTRY",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 10,
+      "name": "Main Member Gender",
+      "code": "MAIN_MEMBER_GENDER",
+      "type": "String",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 11,
+      "name": "Sum Assured",
+      "code": "SUM_ASSURED",
+      "type": "Float",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 18,
+      "name": "Annual Premium",
+      "code": "ANNUAL_PREMIUM",
+      "type": "Float",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 21,
+      "name": "Premium Status",
+      "code": "PREMIUM_STATUS",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 0,
+      "name": "Premium Pattern",
+      "code": "PREMIUM_PATTERN",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+
+    {
+      "id": 25,
+      "name": "Waiting_Period",
+      "code": "WAITING_PERIOD",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 27,
+      "name": "Duration in Force (Months)",
+      "code": "DURATION_IN_FORCE_MONTHS",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 28,
+      "name": "Sum Assured Escalation",
+      "code": "SUM_ASSURED_ESCALATION",
+      "type": "Float",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 29,
+      "name": "Premium Escalation",
+      "code": "PREMIUM_ESCALATION",
+      "type": "Float",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 29,
+      "name": "Interest",
+      "code": "INTEREST",
+      "type": "Float",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 0,
+      "name": "Income",
+      "code": "INCOME",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 0,
+      "name": "Education Level",
+      "code": "EDUCATION_LEVEL",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 0,
+      "name": "Socio Economic Class",
+      "code": "SOCIO_ECONOMIC_CLASS",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 0,
+      "name": "Occupational Class",
+      "code": "OCCUPATIONAL_CLASS",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 0,
+      "name": "Smoker Status",
+      "code": "SMOKER_STATUS",
+      "type": "String",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 0,
+      "name": "Select Period",
+      "code": "SELECT_PERIOD",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 0,
+      "name": "Current Loan",
+      "code": "CURRENT_LOAN",
+      "type": "Float",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 32,
+      "name": "Premium Frequency",
+      "code": "PREMIUM_FREQUENCY",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 0,
+      "name": "Premium Rate",
+      "code": "PREMIUM_RATE",
+      "type": "Float",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 33,
+      "name": "Temporary Premium Waiver Indicator",
+      "code": "TEMPORARY_PREMIUM_WAIVER_INDICATOR",
+      "type": "Boolean",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 34,
+      "name": "Temporary Premium Waiver Month Exit",
+      "code": "TEMPORARY_PREMIUM_WAIVER_MONTH_EXIT",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 35,
+      "name": "Distribution",
+      "code": "DISTRIBUTION",
+      "type": "String",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 36,
+      "name": "Tax Class",
+      "code": "TAX_CLASS",
+      "type": "String",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 37,
+      "name": "Education",
+      "code": "EDUCATION",
+      "type": "String",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 39,
+      "name": "Plan",
+      "code": "PLAN",
+      "type": "String",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 40,
+      "name": "Continuity Or Premium Waiver Option",
+      "code": "CONTINUITY_OR_PREMIUM_WAIVER_OPTION",
+      "type": "Boolean",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 41,
+      "name": "Premium Waiver Indicator",
+      "code": "PREMIUM_WAIVER_INDICATOR",
+      "type": "Boolean",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 42,
+      "name": "Commission Type",
+      "code": "COMMISSION_TYPE",
+      "type": "String",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 43,
+      "name": "Cashback Indicator",
+      "code": "CASHBACK_INDICATOR",
+      "type": "Boolean",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 43,
+      "name": "Funeral Service Indicator",
+      "code": "FUNERAL_SERVICE_INDICATOR",
+      "type": "Boolean",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 45,
+      "name": "Repatriation",
+      "code": "REPATRIATION",
+      "type": "Boolean",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 46,
+      "name": "Tombstone",
+      "code": "TOMBSTONE",
+      "type": "Boolean",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 47,
+      "name": "Cow Benefit",
+      "code": "COW_BENEFIT",
+      "type": "Boolean",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 48,
+      "name": "Educator Option",
+      "code": "EDUCATOR_OPTION",
+      "type": "Boolean",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 49,
+      "name": "Paid Up Option",
+      "code": "PAIDUP_OPTION",
+      "type": "Boolean",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 50,
+      "name": "Paid Up Indicator",
+      "code": "PAIDUP_INDICATOR",
+      "type": "Boolean",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 51,
+      "name": "Member Type",
+      "code": "MEMBER_TYPE",
+      "type": "String",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 52,
+      "name": "Term",
+      "code": "TERM",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 0,
+      "name": "Original Term",
+      "code": "ORIGINAL_TERM",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 0,
+      "name": "Outstanding Term",
+      "code": "OUTSTANDING_TERM",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 53,
+      "name": "Food",
+      "code": "FOOD",
+      "type": "Boolean",
+      "funeral": true,
+      "credit_life": false
+    },
+    {
+      "id": 56,
+      "name": "Cashback Option",
+      "code": "CASHBACK_OPTION",
+      "type": "Boolean",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 56,
+      "name": "Premium Holiday Used",
+      "code": "PREMIUM_HOLIDAY_USED",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 0,
+      "name": "Disability Definition",
+      "code": "DISABILITY_DEFINITION",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 0,
+      "name": "Deferred Period",
+      "code": "DEFERRED_PERIOD",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 58,
+      "name": "Year",
+      "code": "YEAR",
+      "type": "Integer",
+      "funeral": true,
+      "credit_life": true
+    },
+    {
+      "id": 59,
+      "name": "Weighting",
+      "code": "WEIGHTING",
+      "type": "Float",
+      "funeral": true,
+      "credit_life": true
+    }
+
+  ],
+  "global_tables": [],
+  "product_tables": [
+    {
+      "table": "Mortality_Accidental",
+      "table_class": "TransitionRates"
+    },
+    {
+      "table": "Retrenchment",
+      "table_class": "TransitionRates"
+    },
+    {
+      "table": "Disability",
+      "table_class": "TransitionRates"
+    },
+    {
+      "table": "Mort_Table",
+      "table_class": "TransitionRates"
+    },
+    {
+      "table": "Lapse",
+      "table_class": "TransitionRates"
+    },
+    {
+      "table": "Yield_Curve",
+      "table_class": "Global"
+    },
+    {
+      "table": "Parameters",
+      "table_class": "Parameters"
+    },
+    {
+      "table": "Margins",
+      "table_class": "Margins"
+    },
+    {
+      "table": "Lapse_Margins",
+      "table_class": "LapseMargins"
+    },
+
+    {
+      "table": "Clawback",
+      "table_class": "Distribution"
+    },
+    {
+      "table": "Child_Sum_Assured",
+      "table_class": "BenefitStructure"
+    },
+    {
+      "table": "Child_Funeral_Service",
+      "table_class": "BenefitStructure"
+    },
+    {
+      "table": "Funeral_Service",
+      "table_class": "BenefitStructure"
+    },
+    {
+      "table": "Accident_Benefit_Multiplier",
+      "table_class": "BenefitStructure"
+    },
+    {
+      "table": "Shocks",
+      "table_class": "Valuations"
+    }
+  ]
+}

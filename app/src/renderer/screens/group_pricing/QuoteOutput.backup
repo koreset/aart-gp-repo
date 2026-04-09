@@ -1,0 +1,1075 @@
+<template>
+  <v-container>
+    <v-row>
+      <v-col>
+        <base-card v-if="quote" :show-actions="false">
+          <template #header>
+            <span class="headline">Quote Output for {{ quote.scheme_name }}</span>
+          </template>
+          <template #default>
+            <v-row>
+              <v-col cols="6">
+                <v-btn class="mr-4" rounded size="small" color="primary" @click="goBack"
+                  >Go Back</v-btn
+                >
+
+                <v-btn rounded size="small" color="primary" @click="createQuotePdf"
+                  >Generate PDF</v-btn
+                >
+                <v-btn
+                  v-if="pdfGenerated"
+                  class="ml-5"
+                  rounded
+                  size="small"
+                  color="primary"
+                  @click="savePdf"
+                  >Save PDF</v-btn
+                >
+                <v-btn
+                  v-if="pdfGenerated"
+                  class="ml-5"
+                  rounded
+                  size="small"
+                  color="primary"
+                  @click="exportBenefitDataToExcel"
+                  >Export Data</v-btn
+                >
+              </v-col>
+              <v-col v-if="pdfGenerated" class="d-flex justify-end" cols="6">
+                <v-btn
+                  class="mr-6"
+                  size="small"
+                  rounded
+                  color="primary"
+                  :disabled="currentPage === 1"
+                  @click="prevPage"
+                  >Previous</v-btn
+                >
+                <span> Page {{ currentPage }} of {{ totalPages }} </span>
+                <v-btn
+                  class="ml-6 mr-9"
+                  size="small"
+                  rounded
+                  color="primary"
+                  :disabled="currentPage === totalPages"
+                  @click="nextPage"
+                  >Next</v-btn
+                >
+              </v-col>
+            </v-row>
+            <v-row>
+              <v-col> <canvas ref="canvasRef" style="border: 1px solid #ddd"></canvas> </v-col>
+            </v-row>
+          </template>
+        </base-card>
+      </v-col>
+    </v-row>
+  </v-container>
+</template>
+
+<script setup lang="ts">
+import BaseCard from '@/renderer/components/BaseCard.vue'
+import { onMounted, ref } from 'vue'
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
+import * as pdfjsLib from 'pdfjs-dist'
+import { saveAs } from 'file-saver'
+import GroupPricingService from '@/renderer/api/GroupPricingService'
+import { useRouter } from 'vue-router'
+import formatDateString from '@/renderer/utils/helpers.js'
+import * as XLSX from 'xlsx'
+// import jsPDF from 'jspdf'
+
+// PDF Configuration
+const PDF_CONFIG = {
+  pageSize: [595.28, 841.89] as [number, number],
+  margins: { top: 50, bottom: 50, left: 50, right: 50 },
+  fonts: { regular: StandardFonts.Helvetica, bold: StandardFonts.HelveticaBold },
+  fontSize: { normal: 10, header: 12, title: 14, small: 8 },
+  spacing: { line: 15, section: 30, tableRow: 20 },
+  logo: { scale: 0.2 },
+  table: { borderWidth: 0.5, cellPadding: 5 },
+  colors: { black: rgb(0, 0, 0), gray: rgb(0.5, 0.5, 0.5) }
+}
+
+// Utility functions
+const formatCurrency = (value: number | null | undefined): string => {
+  if (value == null || isNaN(value)) return '-'
+  return (Math.ceil(value * 100) / 100)
+    .toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })
+    .replace(/,/g, ' ')
+}
+
+const formatPercentage = (value: number | null | undefined): string => {
+  if (value == null || isNaN(value)) return '-'
+  return `${formatCurrency(value * 100)}%`
+}
+
+const safeGetValue = (obj: any, path: string, defaultValue: any = null) => {
+  try {
+    return path.split('.').reduce((current, key) => current?.[key], obj) ?? defaultValue
+  } catch {
+    return defaultValue
+  }
+}
+
+const props = defineProps({
+  quoteId: {
+    type: String,
+    default: ''
+  }
+})
+
+const router = useRouter()
+
+const quote: any = ref(null)
+const resultSummary: any = ref(null)
+const currentPage = ref(1)
+const totalPages = ref(1)
+let pdf: any = null
+const pdfGenerated = ref(false)
+
+const glaBenefitTitle = ref('Group Life Assurance (GLA)')
+const sglaBenefitTitle = ref('Spouse Group Life Assurance (GLA)')
+const ptdBenefitTitle = ref('Permanent Total Disability')
+const ciBenefitTitle = ref('Critical Illness')
+const phiBenefitTitle = ref('Personal Health Insurance')
+const ttdBenefitTitle = ref('Temporary Total Disability')
+const familyFuneralBenefitTitle = ref('Family Funeral')
+const benefitMaps: any = ref([])
+const categoryEducatorBenefits: any = ref([])
+
+const insurer: any = ref(null)
+// const addressLines = [
+//   '534, Amberley Crescent',
+//   'Cedar Creek Estate',
+//   'Needwood, 2021',
+//   'Tel: +27719166815',
+//   'Email: jome.akpoduado@gmail.com'
+// ]
+
+const pdfSrc: any = ref(null)
+const canvasRef = ref<HTMLCanvasElement | null>(null)
+
+onMounted(() => {
+  GroupPricingService.getBenefitMaps().then((res) => {
+    benefitMaps.value = res.data
+    const glaBenefit = benefitMaps.value.find((item) => item.benefit_code === 'GLA')
+    if (glaBenefit.benefit_alias !== '') {
+      glaBenefitTitle.value = glaBenefit.benefit_alias
+    }
+    const sglaBenefit = benefitMaps.value.find((item) => item.benefit_code === 'SGLA')
+    if (sglaBenefit.benefit_alias !== '') {
+      sglaBenefitTitle.value = sglaBenefit.benefit_alias
+    }
+    const ptdBenefit = benefitMaps.value.find((item) => item.benefit_code === 'PTD')
+    if (ptdBenefit.benefit_alias !== '') {
+      ptdBenefitTitle.value = ptdBenefit.benefit_alias
+    }
+    const ciBenefit = benefitMaps.value.find((item) => item.benefit_code === 'CI')
+    if (ciBenefit.benefit_alias !== '') {
+      ciBenefitTitle.value = ciBenefit.benefit_alias
+    }
+    const phiBenefit = benefitMaps.value.find((item) => item.benefit_code === 'PHI')
+    if (phiBenefit.benefit_alias !== '') {
+      phiBenefitTitle.value = phiBenefit.benefit_alias
+    }
+    const ttdBenefit = benefitMaps.value.find((item) => item.benefit_code === 'TTD')
+    if (ttdBenefit.benefit_alias !== '') {
+      ttdBenefitTitle.value = ttdBenefit.benefit_alias
+    }
+    const familyFuneralBenefit = benefitMaps.value.find((item) => item.benefit_code === 'GFF')
+    if (familyFuneralBenefit.benefit_alias !== '') {
+      familyFuneralBenefitTitle.value = familyFuneralBenefit.benefit_alias
+    }
+  })
+
+  GroupPricingService.getQuote(props.quoteId).then((res) => {
+    quote.value = res.data
+  })
+  GroupPricingService.getResultSummary(props.quoteId).then((res) => {
+    console.log('Result Summary:', res.data)
+    resultSummary.value = res.data
+  })
+  GroupPricingService.getCategoryEducatorBenefits(props.quoteId).then((res) => {
+    categoryEducatorBenefits.value = res.data
+  })
+
+  GroupPricingService.getInsurer().then((res) => {
+    insurer.value = res.data
+  })
+})
+
+const goBack = () => {
+  router.push({ name: 'group-pricing-quotes' })
+}
+
+const prevPage = () => {
+  if (currentPage.value > 1) {
+    currentPage.value--
+    renderPage(currentPage.value)
+  }
+}
+
+const nextPage = () => {
+  if (currentPage.value < totalPages.value) {
+    currentPage.value++
+    renderPage(currentPage.value)
+  }
+}
+
+const savePdf = () => {
+  saveAs(pdfSrc.value, 'quotation.pdf')
+}
+
+const exportBenefitDataToExcel = () => {
+  if (!quote.value || !resultSummary.value) return
+
+  // Example: adjust this structure to match your screenshot layout
+  const wsData = [
+    // Title row (merged)
+    [`Benefit Summary for ${quote.value.scheme_name}`],
+    [],
+    // Headers
+    ['Benefit', 'Total Sum Assured', 'Annual Premium', '% of Salary'],
+    // Data rows
+    [
+      glaBenefitTitle.value,
+      dashIfEmpty(roundUpToTwoDecimalsAccounting(resultSummary.value.total_gla_capped_sum_assured)),
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(resultSummary.value.exp_total_gla_annual_office_premium)
+      ),
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(
+          resultSummary.value.exp_proportion_gla_office_premium_salary * 100
+        ) + '%'
+      )
+    ],
+    [
+      ptdBenefitTitle.value,
+      dashIfEmpty(roundUpToTwoDecimalsAccounting(resultSummary.value.total_ptd_capped_sum_assured)),
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(resultSummary.value.exp_total_ptd_annual_office_premium)
+      ),
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(
+          resultSummary.value.exp_proportion_ptd_office_premium_salary * 100
+        ) + '%'
+      )
+    ],
+    [
+      ciBenefitTitle.value,
+      dashIfEmpty(roundUpToTwoDecimalsAccounting(resultSummary.value.total_ci_capped_sum_assured)),
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(resultSummary.value.exp_total_ci_annual_office_premium)
+      ),
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(
+          resultSummary.value.exp_proportion_ci_office_premium_salary * 100
+        ) + '%'
+      )
+    ],
+    [
+      sglaBenefitTitle.value,
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(resultSummary.value.total_sgla_capped_sum_assured)
+      ),
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(resultSummary.value.exp_total_sgla_annual_office_premium)
+      ),
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(
+          resultSummary.value.exp_proportion_sgla_office_premium_salary * 100
+        ) + '%'
+      )
+    ],
+    [
+      phiBenefitTitle.value,
+      dashIfEmpty(roundUpToTwoDecimalsAccounting(resultSummary.value.total_phi_capped_income)),
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(resultSummary.value.exp_total_phi_annual_office_premium)
+      ),
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(
+          resultSummary.value.exp_proportion_phi_office_premium_salary * 100
+        ) + '%'
+      )
+    ],
+    [
+      ttdBenefitTitle.value,
+      dashIfEmpty(roundUpToTwoDecimalsAccounting(resultSummary.value.total_ttd_capped_income)),
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(resultSummary.value.exp_total_ttd_annual_office_premium)
+      ),
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(
+          resultSummary.value.exp_proportion_ttd_office_premium_salary * 100
+        ) + '%'
+      )
+    ],
+    [
+      'Sub Total/Total Premiums',
+      dashIfEmpty(roundUpToTwoDecimalsAccounting(resultSummary.value.total_gla_capped_sum_assured)),
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(resultSummary.value.exp_total_annual_premium_excl_funeral)
+      ),
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(
+          resultSummary.value.proportion_exp_total_premium_excl_funeral_salary * 100
+        ) + '%'
+      )
+    ],
+    [],
+    // Group Funeral section
+    ['Group Funeral'],
+    [
+      'Monthly Premium per Member',
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(resultSummary.value.exp_total_fun_monthly_premium_per_member)
+      )
+    ],
+    [
+      'Annual Premium per Member',
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(resultSummary.value.exp_total_fun_annual_premium_per_member)
+      )
+    ],
+    [
+      'Total Annual Premium',
+      dashIfEmpty(
+        roundUpToTwoDecimalsAccounting(resultSummary.value.exp_total_fun_annual_office_premium)
+      )
+    ]
+  ]
+
+  // Create worksheet and workbook
+  const ws = XLSX.utils.aoa_to_sheet(wsData)
+  // Merge the title row across all columns
+  ws['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } } // Merge A1:D1
+  ]
+  // Optionally set column widths
+  ws['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 15 }]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Benefit Summary')
+  // Export to file
+  XLSX.writeFile(wb, `benefits_summary_${quote.value.scheme_name}.xlsx`)
+}
+
+const loadPdf = async () => {
+  if (!pdfSrc.value || !canvasRef.value) return
+
+  pdfGenerated.value = true
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `./js/pdf.worker.min.mjs`
+
+  pdf = await pdfjsLib.getDocument(pdfSrc.value).promise
+  totalPages.value = pdf.numPages
+
+  await renderPage(currentPage.value)
+}
+
+const renderPage = async (num: any) => {
+  if (!pdfSrc.value || !canvasRef.value) return
+
+  const page = await pdf.getPage(num)
+
+  const viewport = page.getViewport({ scale: 1.9 })
+  const canvas = canvasRef.value
+  const context = canvas.getContext('2d')
+
+  if (!context) return
+
+  canvas.width = viewport.width
+  canvas.height = viewport.height
+
+  const renderContext = {
+    canvasContext: context,
+    viewport
+  }
+
+  await page.render(renderContext).promise
+}
+
+const roundUpToTwoDecimalsAccounting = (num: number | null | undefined): string => {
+  return formatCurrency(num)
+}
+
+const dashIfEmpty = (value: any): string => {
+  return value || '-'
+}
+
+const wrapText = (text: string, font: any, fontSize: number, maxWidth: number): string[] => {
+  if (!text) return []
+
+  const words = text.split(' ')
+  const lines: string[] = []
+  let currentLine = ''
+
+  words.forEach((word) => {
+    const testLine = currentLine ? `${currentLine} ${word}` : word
+    const testLineWidth = font.widthOfTextAtSize(testLine, fontSize)
+
+    if (testLineWidth <= maxWidth) {
+      currentLine = testLine
+    } else {
+      if (currentLine) {
+        lines.push(currentLine)
+        currentLine = word
+      } else {
+        // Handle very long words that don't fit
+        lines.push(word)
+      }
+    }
+  })
+
+  if (currentLine) {
+    lines.push(currentLine)
+  }
+
+  return lines
+}
+
+// const getImageType = (base64String: string): string | null => {
+//   const match = base64String.match(/^data:image\/(png|jpeg|jpg|gif|bmp|webp);base64,/)
+//   return match ? match[1] : null
+// }
+
+// const embedAndResizeImage = async (pdfDoc: PDFDocument, base64Image: string) => {
+//   const imageType = getImageType(base64Image);
+//   if (!imageType) {
+//     throw new Error('Invalid base64 image string');
+//   }
+//   // Remove the prefix from the base64 string
+//   const base64Data = base64Image.replace(/^data:image\/(png|jpeg|jpg|gif|bmp|webp);base64,/, '');
+
+//   const embeddedImage = await pdfDoc.embedPng(base64Image); // Use embedJpg() if it's a JPG
+//   const { width, height } = embeddedImage;
+
+//   // Target size
+//   const targetWidth = 100;
+//   const targetHeight = 100;
+
+//   // Maintain aspect ratio
+//   const scale = Math.min(targetWidth / width, targetHeight / height);
+//   const newWidth = width * scale;
+//   const newHeight = height * scale;
+
+//   return { embeddedImage, newWidth, newHeight };
+// };
+
+const createQuotePdf = async () => {
+  try {
+    // Validate required data
+    if (!quote.value || !resultSummary.value || !insurer.value) {
+      throw new Error('Missing required data for PDF generation')
+    }
+
+    const pdfDoc = await PDFDocument.create()
+    const pages = [
+      pdfDoc.addPage(PDF_CONFIG.pageSize),
+      pdfDoc.addPage(PDF_CONFIG.pageSize),
+      pdfDoc.addPage(PDF_CONFIG.pageSize)
+    ]
+
+    let currentPageIndex = 0
+    let currentPage = pages[currentPageIndex]
+    const { width, height } = currentPage.getSize()
+    const maxWidth = width - 2 * PDF_CONFIG.margins.left
+
+    // Load fonts
+    const font = await pdfDoc.embedFont(PDF_CONFIG.fonts.regular)
+    const boldFont = await pdfDoc.embedFont(PDF_CONFIG.fonts.bold)
+
+    // Helper functions for layout management
+    const checkPageSpace = (requiredSpace: number, currentY: number): { page: any; y: number } => {
+      if (currentY - requiredSpace < PDF_CONFIG.margins.bottom) {
+        currentPageIndex++
+        if (currentPageIndex >= pages.length) {
+          pages.push(pdfDoc.addPage(PDF_CONFIG.pageSize))
+        }
+        return { page: pages[currentPageIndex], y: height - PDF_CONFIG.margins.top }
+      }
+      return { page: currentPage, y: currentY }
+    }
+
+    const drawText = (text: string, x: number, y: number, options: any = {}) => {
+      const textOptions = {
+        size: PDF_CONFIG.fontSize.normal,
+        font: font,
+        color: PDF_CONFIG.colors.black,
+        ...options
+      }
+      currentPage.drawText(text, { x, y, ...textOptions })
+    }
+
+    const drawLine = (startX: number, startY: number, endX: number, endY: number) => {
+      currentPage.drawLine({
+        start: { x: startX, y: startY },
+        end: { x: endX, y: endY },
+        thickness: PDF_CONFIG.table.borderWidth,
+        color: PDF_CONFIG.colors.black
+      })
+    }
+
+    // Table drawing function
+    const drawTable = (tableConfig: any): number => {
+      const { tableHeaders, tableRows, tableColWidths } = tableConfig
+      let tableY = y - PDF_CONFIG.spacing.section
+
+      // Check if we need a new page for the table
+      const tableHeight = (tableRows.length + 2) * PDF_CONFIG.spacing.tableRow
+      const pageCheck = checkPageSpace(tableHeight, tableY)
+      currentPage = pageCheck.page
+      tableY = pageCheck.y - PDF_CONFIG.spacing.section
+
+      const tableLeftX = PDF_CONFIG.margins.left
+      const tableRightX = tableLeftX + tableColWidths.reduce((a: number, b: number) => a + b, 0)
+
+      // Draw top border
+      drawLine(tableLeftX, tableY, tableRightX, tableY)
+      tableY -= PDF_CONFIG.spacing.line + 5
+
+      // Draw headers
+      tableHeaders.forEach((header: string, i: number) => {
+        const headerX =
+          tableLeftX +
+          tableColWidths.slice(0, i).reduce((a: number, b: number) => a + b, 0) +
+          PDF_CONFIG.table.cellPadding
+        drawText(header, headerX, tableY, { font: boldFont })
+      })
+
+      tableY -= 5
+
+      // Draw horizontal lines for each row
+      for (let i = 0; i <= tableRows.length; i++) {
+        const lineY = tableY - i * PDF_CONFIG.spacing.tableRow
+        drawLine(tableLeftX, lineY, tableRightX, lineY)
+      }
+
+      // Draw vertical lines
+      let currentX = tableLeftX
+      for (let i = 0; i <= tableColWidths.length; i++) {
+        const lineHeight = (tableRows.length + 1) * PDF_CONFIG.spacing.tableRow
+        currentPage.drawLine({
+          start: { x: currentX, y: tableY },
+          end: { x: currentX, y: tableY - lineHeight },
+          thickness: PDF_CONFIG.table.borderWidth,
+          color: PDF_CONFIG.colors.black
+        })
+        if (i < tableColWidths.length) {
+          currentX += tableColWidths[i]
+        }
+      }
+
+      // Draw table data
+      tableRows.forEach((row: any, i: number) => {
+        const rowY = tableY - (i + 1) * PDF_CONFIG.spacing.tableRow + 5
+        Object.values(row).forEach((value: any, j: number) => {
+          const cellX =
+            tableLeftX +
+            tableColWidths.slice(0, j).reduce((a: number, b: number) => a + b, 0) +
+            PDF_CONFIG.table.cellPadding
+          const isNumeric = j > 0 // Assume columns after first are numeric
+          const cellWidth = tableColWidths[j] - 2 * PDF_CONFIG.table.cellPadding
+
+          if (isNumeric) {
+            // Right-align numeric values
+            const textWidth = font.widthOfTextAtSize(value, PDF_CONFIG.fontSize.normal)
+            const alignedX = cellX + cellWidth - textWidth
+            drawText(value, Math.max(cellX, alignedX), rowY)
+          } else {
+            drawText(value, cellX, rowY)
+          }
+        })
+      })
+
+      return (
+        tableY - (tableRows.length + 1) * PDF_CONFIG.spacing.tableRow - PDF_CONFIG.spacing.section
+      )
+    }
+
+    // Logo handling with error handling
+    let logoImage: any = null
+    let logoDims: any = null
+
+    try {
+      if (insurer.value?.logo && insurer.value?.logo_mime_type) {
+        if (insurer.value.logo_mime_type === 'image/jpeg') {
+          logoImage = await pdfDoc.embedJpg(insurer.value.logo)
+        } else if (insurer.value.logo_mime_type === 'image/png') {
+          logoImage = await pdfDoc.embedPng(insurer.value.logo)
+        }
+
+        if (logoImage) {
+          // Get original dimensions
+          const originalWidth = logoImage.width
+          const originalHeight = logoImage.height
+
+          // Calculate maximum allowed dimensions (reserve space in header)
+          const maxWidth = 150 // Maximum width for logo
+          const maxHeight = 80 // Maximum height for logo
+
+          // Calculate scale to maintain aspect ratio
+          const widthScale = maxWidth / originalWidth
+          const heightScale = maxHeight / originalHeight
+          const scale = Math.min(widthScale, heightScale) // Use the smaller scale to fit within bounds
+
+          // Calculate final dimensions maintaining aspect ratio
+          const finalWidth = originalWidth * scale
+          const finalHeight = originalHeight * scale
+
+          logoDims = {
+            width: finalWidth,
+            height: finalHeight
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load logo:', error)
+    }
+
+    // Start Y position
+    let y = height - PDF_CONFIG.margins.top
+    let pageCheck: any // Declare pageCheck variable once for the entire function
+
+    // Render header with insurer information
+    const renderHeader = (): number => {
+      let headerY = y
+
+      if (insurer.value) {
+        const insurerInfo = [
+          safeGetValue(insurer.value, 'name', ''),
+          `${safeGetValue(insurer.value, 'address_line_1', '')}, ${safeGetValue(insurer.value, 'address_line_2', '')}`,
+          `${safeGetValue(insurer.value, 'city', '')}, ${safeGetValue(insurer.value, 'province', '')}, ${safeGetValue(insurer.value, 'post_code', '')}`,
+          `Email: ${safeGetValue(insurer.value, 'email', '')}`,
+          `Tel: ${safeGetValue(insurer.value, 'telephone', '')}`,
+          safeGetValue(insurer.value, 'country', '')
+        ].filter((line) => line.trim())
+
+        // Draw logo if available
+        if (logoImage && logoDims) {
+          currentPage.drawImage(logoImage, {
+            x: width - PDF_CONFIG.margins.right - logoDims.width,
+            y: headerY - logoDims.height,
+            width: logoDims.width,
+            height: logoDims.height
+          })
+        }
+
+        // Draw insurer information
+        insurerInfo.forEach((line) => {
+          drawText(line, PDF_CONFIG.margins.left, headerY)
+          headerY -= PDF_CONFIG.spacing.line
+        })
+      }
+
+      return headerY
+    }
+
+    y = renderHeader()
+
+    // Render document title
+    const renderTitle = (): number => {
+      const title = 'Group Life Assurance Quotation Document'
+      const titleWidth = boldFont.widthOfTextAtSize(title, PDF_CONFIG.fontSize.title)
+      const titleX = (width - titleWidth) / 2
+
+      let titleY = y - PDF_CONFIG.spacing.section
+
+      drawText(title, titleX, titleY, {
+        size: PDF_CONFIG.fontSize.title,
+        font: boldFont
+      })
+
+      titleY -= 5
+      drawLine(PDF_CONFIG.margins.left, titleY, PDF_CONFIG.margins.left + maxWidth, titleY)
+
+      return titleY - PDF_CONFIG.spacing.line
+    }
+
+    y = renderTitle()
+
+    // Render quote details section
+    const renderQuoteDetails = (): number => {
+      const quoteDetails = [
+        { label: 'Type of Policy:', value: 'Group Life Assurance' },
+        {
+          label: 'Quote Date:',
+          value: safeGetValue(quote.value, 'creation_date')
+            ? formatDateString(quote.value.creation_date, true, true, true)
+            : new Date().toLocaleDateString()
+        },
+        { label: 'Prepared For:', value: safeGetValue(quote.value, 'scheme_name', 'N/A') },
+        { label: 'Scheme Name:', value: safeGetValue(quote.value, 'scheme_name', 'N/A') },
+        {
+          label: 'Commencement Date:',
+          value: safeGetValue(quote.value, 'commencement_date')
+            ? formatDateString(quote.value.commencement_date, true, true, true)
+            : 'N/A'
+        },
+        { label: 'Period of Assurance:', value: '1 year' },
+        {
+          label: 'Number of Lives Covered:',
+          value: `${safeGetValue(resultSummary.value, 'member_count', 0)}`
+        },
+        {
+          label: 'Total Sum Assured:',
+          value: formatCurrency(safeGetValue(resultSummary.value, 'total_sum_assured'))
+        },
+        {
+          label: 'Total Annual Salary:',
+          value: formatCurrency(safeGetValue(resultSummary.value, 'total_annual_salary'))
+        },
+        {
+          label: 'Total Annual Premium:',
+          value: formatCurrency(safeGetValue(resultSummary.value, 'total_annual_premium'))
+        }
+      ]
+
+      let detailY = y
+      const labelX = PDF_CONFIG.margins.left
+      const valueX = PDF_CONFIG.margins.left + 300
+
+      quoteDetails.forEach((detail) => {
+        drawText(detail.label, labelX, detailY)
+        drawText(detail.value, valueX, detailY)
+        detailY -= PDF_CONFIG.spacing.line + 5
+      })
+
+      return detailY
+    }
+
+    y = renderQuoteDetails()
+
+    // Check if any benefits are configured (excluding group funeral)
+    const hasBenefits =
+      safeGetValue(resultSummary.value, 'total_gla_capped_sum_assured', 0) > 0 ||
+      safeGetValue(resultSummary.value, 'total_ptd_capped_sum_assured', 0) > 0 ||
+      safeGetValue(resultSummary.value, 'total_ci_capped_sum_assured', 0) > 0 ||
+      safeGetValue(resultSummary.value, 'total_sgla_capped_sum_assured', 0) > 0 ||
+      safeGetValue(resultSummary.value, 'total_phi_capped_income', 0) > 0 ||
+      safeGetValue(resultSummary.value, 'total_ttd_capped_income', 0) > 0
+
+    // Only render benefits table if benefits are configured
+    if (hasBenefits) {
+      // Create benefits table data with better error handling
+      const benefitsData = [
+        {
+          benefit: glaBenefitTitle.value,
+          sumAssured: formatCurrency(
+            safeGetValue(resultSummary.value, 'total_gla_capped_sum_assured')
+          ),
+          annualPremium: formatCurrency(
+            safeGetValue(resultSummary.value, 'exp_total_gla_annual_office_premium')
+          ),
+          percentage: formatPercentage(
+            safeGetValue(resultSummary.value, 'exp_proportion_gla_office_premium_salary')
+          )
+        },
+        {
+          benefit: ptdBenefitTitle.value,
+          sumAssured: formatCurrency(
+            safeGetValue(resultSummary.value, 'total_ptd_capped_sum_assured')
+          ),
+          annualPremium: formatCurrency(
+            safeGetValue(resultSummary.value, 'exp_total_ptd_annual_office_premium')
+          ),
+          percentage: formatPercentage(
+            safeGetValue(resultSummary.value, 'exp_proportion_ptd_office_premium_salary')
+          )
+        },
+        {
+          benefit: ciBenefitTitle.value,
+          sumAssured: formatCurrency(
+            safeGetValue(resultSummary.value, 'total_ci_capped_sum_assured')
+          ),
+          annualPremium: formatCurrency(
+            safeGetValue(resultSummary.value, 'exp_total_ci_annual_office_premium')
+          ),
+          percentage: formatPercentage(
+            safeGetValue(resultSummary.value, 'exp_proportion_ci_office_premium_salary')
+          )
+        },
+        {
+          benefit: sglaBenefitTitle.value,
+          sumAssured: formatCurrency(
+            safeGetValue(resultSummary.value, 'total_sgla_capped_sum_assured')
+          ),
+          annualPremium: formatCurrency(
+            safeGetValue(resultSummary.value, 'exp_total_sgla_annual_office_premium')
+          ),
+          percentage: formatPercentage(
+            safeGetValue(resultSummary.value, 'exp_proportion_sgla_office_premium_salary')
+          )
+        },
+        {
+          benefit: phiBenefitTitle.value,
+          sumAssured: formatCurrency(safeGetValue(resultSummary.value, 'total_phi_capped_income')),
+          annualPremium: formatCurrency(
+            safeGetValue(resultSummary.value, 'exp_total_phi_annual_office_premium')
+          ),
+          percentage: formatPercentage(
+            safeGetValue(resultSummary.value, 'exp_proportion_phi_office_premium_salary')
+          )
+        },
+        {
+          benefit: ttdBenefitTitle.value,
+          sumAssured: formatCurrency(
+            safeGetValue(resultSummary.value, 'total_ttd_capped_income') *
+              safeGetValue(quote.value, 'ttd.number_monthly_payments', 1)
+          ),
+          annualPremium: formatCurrency(
+            safeGetValue(resultSummary.value, 'exp_total_ttd_annual_office_premium')
+          ),
+          percentage: formatPercentage(
+            safeGetValue(resultSummary.value, 'exp_proportion_ttd_office_premium_salary')
+          )
+        },
+        {
+          benefit: 'Sub Total/Total Premiums',
+          sumAssured: formatCurrency(
+            safeGetValue(resultSummary.value, 'total_gla_capped_sum_assured')
+          ),
+          annualPremium: formatCurrency(
+            safeGetValue(resultSummary.value, 'exp_total_annual_premium_excl_funeral')
+          ),
+          percentage: formatPercentage(
+            safeGetValue(resultSummary.value, 'proportion_exp_total_premium_excl_funeral_salary')
+          )
+        }
+      ]
+
+      // Filter out benefits with no data (0 values)
+      const activeBenefitsData = benefitsData.filter((benefit, index) => {
+        if (index === benefitsData.length - 1) return true // Keep subtotal row
+        return benefit.sumAssured !== '-' && benefit.sumAssured !== '0.00'
+      })
+
+      // Only render table if there are active benefits
+      if (activeBenefitsData.length > 1) {
+        // More than just the subtotal row
+        // Render benefits table
+        const benefitsTable = {
+          tableHeaders: ['Benefit', 'Total Sum Assured', 'Annual Premium', '% of Salary'],
+          tableRows: activeBenefitsData,
+          tableColWidths: [200, 100, 100, 100]
+        }
+
+        y = drawTable(benefitsTable)
+
+        // Add remarks section
+        const remarks =
+          'We are pleased to submit for your consideration the quotation you requested for the above scheme. Thank you for the opportunity to provide this quote.'
+        const remarkLines = wrapText(remarks, font, PDF_CONFIG.fontSize.normal, maxWidth)
+
+        pageCheck = checkPageSpace(remarkLines.length * PDF_CONFIG.spacing.line + 50, y)
+        currentPage = pageCheck.page
+        y = pageCheck.y
+
+        remarkLines.forEach((line) => {
+          drawText(line, PDF_CONFIG.margins.left, y)
+          y -= PDF_CONFIG.spacing.line
+        })
+      } else {
+        // If no benefits, just add some spacing after quote details
+        y -= PDF_CONFIG.spacing.section
+      }
+    } else {
+      // If no benefits, just add some spacing after quote details
+      y -= PDF_CONFIG.spacing.section
+    }
+
+    // Group Funeral Section
+    y -= PDF_CONFIG.spacing.section
+    pageCheck = checkPageSpace(150, y)
+    currentPage = pageCheck.page
+    y = pageCheck.y
+
+    drawText('Group Funeral (per Member)', PDF_CONFIG.margins.left, y, { font: boldFont })
+    y -= 2
+    drawLine(PDF_CONFIG.margins.left, y, PDF_CONFIG.margins.left + maxWidth, y)
+    y -= PDF_CONFIG.spacing.line
+
+    const groupFuneralData = [
+      {
+        label: 'Monthly Premium',
+        value: formatCurrency(
+          safeGetValue(resultSummary.value, 'exp_total_fun_monthly_premium_per_member')
+        )
+      },
+      {
+        label: 'Annual Premium',
+        value: formatCurrency(
+          safeGetValue(resultSummary.value, 'exp_total_fun_annual_premium_per_member')
+        )
+      },
+      {
+        label: 'Total Annual Premium',
+        value: formatCurrency(
+          safeGetValue(resultSummary.value, 'exp_total_fun_annual_office_premium')
+        )
+      }
+    ]
+
+    groupFuneralData.forEach((detail) => {
+      drawText(detail.label, PDF_CONFIG.margins.left, y)
+      drawText(` : ${detail.value}`, PDF_CONFIG.margins.left + 300, y)
+      y -= PDF_CONFIG.spacing.line
+    })
+
+    drawLine(PDF_CONFIG.margins.left, y, PDF_CONFIG.margins.left + maxWidth, y)
+    y -= PDF_CONFIG.spacing.section
+
+    // Only render benefits definitions if benefits are configured
+    if (hasBenefits) {
+      // Benefits definitions section
+      pageCheck = checkPageSpace(300, y)
+      currentPage = pageCheck.page
+      y = pageCheck.y
+
+      drawText(
+        'The benefits and definitions of the cover are as follows:',
+        PDF_CONFIG.margins.left,
+        y,
+        { font: boldFont }
+      )
+      y -= PDF_CONFIG.spacing.section
+
+      // Helper function to render benefit details
+      const renderBenefitDetails = (
+        title: string,
+        details: Array<{ label: string; value: any }>
+      ): number => {
+        let detailY = y
+        pageCheck = checkPageSpace(details.length * PDF_CONFIG.spacing.line + 50, detailY)
+        currentPage = pageCheck.page
+        detailY = pageCheck.y
+
+        drawText(title, PDF_CONFIG.margins.left, detailY, { font: boldFont })
+        detailY -= PDF_CONFIG.spacing.line
+
+        details.forEach((detail) => {
+          const value = detail.value || 'N/A'
+          drawText(detail.label, PDF_CONFIG.margins.left, detailY)
+          drawText(` : ${value}`, PDF_CONFIG.margins.left + 300, detailY)
+          detailY -= PDF_CONFIG.spacing.line
+        })
+
+        return detailY - PDF_CONFIG.spacing.line
+      }
+
+      // Only render benefit details for configured benefits
+      if (safeGetValue(resultSummary.value, 'total_gla_capped_sum_assured', 0) > 0) {
+        const glaDetails = [
+          {
+            label: 'Sum Assured',
+            value: `${safeGetValue(quote.value, 'gla.salary_multiple', 0)} times annual salary`
+          },
+          {
+            label: 'GLA Free Cover Limit (FCL)',
+            value: formatCurrency(safeGetValue(quote.value, 'free_cover_limit'))
+          },
+          {
+            label: 'Terminal Illness Benefit',
+            value: safeGetValue(quote.value, 'gla.terminal_illness_benefit')
+          },
+          {
+            label: 'Number of members above FCL',
+            value: safeGetValue(resultSummary.value, 'exceeds_free_cover_limit_indicator')
+          },
+          {
+            label: 'Cover Termination Age',
+            value: safeGetValue(quote.value, 'gla.cover_termination_age')
+          }
+        ]
+        y = renderBenefitDetails('Group Life Assurance', glaDetails)
+      }
+
+      if (safeGetValue(resultSummary.value, 'total_ptd_capped_sum_assured', 0) > 0) {
+        const ptdDetails = [
+          {
+            label: 'Sum Assured',
+            value: `${safeGetValue(quote.value, 'ptd.salary_multiple', 0)} times annual salary`
+          },
+          {
+            label: 'PTD Free Cover Limit (FCL)',
+            value: formatCurrency(safeGetValue(quote.value, 'free_cover_limit'))
+          },
+          { label: 'Benefit Structure', value: safeGetValue(quote.value, 'ptd.benefit_type') },
+          {
+            label: 'Waiting Period',
+            value: `${safeGetValue(quote.value, 'ptd.deferred_period', 0)} month(s)`
+          },
+          {
+            label: 'Cover Termination Age',
+            value: safeGetValue(quote.value, 'ptd.cover_termination_age')
+          }
+        ]
+        y = renderBenefitDetails('Permanent Total Disability', ptdDetails)
+      }
+    }
+
+    // Add underwriting and general provisions sections
+    pageCheck = checkPageSpace(200, y)
+    currentPage = pageCheck.page
+    y = pageCheck.y
+
+    // Underwriting section
+    drawText('Underwriting:', PDF_CONFIG.margins.left, y, { font: boldFont })
+    y -= PDF_CONFIG.spacing.line
+
+    const underwritingText =
+      "The quoted premium rates are based on the risk profile, data provided by the client, benefit features, and assumptions. The scheme is subject to the insurer's underwriting rules, and there is no guarantee of acceptance."
+    const underwritingLines = wrapText(underwritingText, font, PDF_CONFIG.fontSize.normal, maxWidth)
+
+    underwritingLines.forEach((line) => {
+      drawText(line, PDF_CONFIG.margins.left, y)
+      y -= PDF_CONFIG.spacing.line
+    })
+
+    y -= PDF_CONFIG.spacing.line
+
+    // General Provisions section
+    drawText('General Provision:', PDF_CONFIG.margins.left, y, { font: boldFont })
+    y -= PDF_CONFIG.spacing.line
+
+    const provisions = [
+      `This quote is valid for ${safeGetValue(resultSummary.value, 'quote_validity_period_months', 12)} month(s) from the date of issuance.`,
+      `All rates provided are guaranteed for a period of ${safeGetValue(resultSummary.value, 'premium_rates_guaranteed_period_months', 12)} month(s) from the inception date.`,
+      'Please note that members exceeding the FCL are required to undergo medical underwriting; otherwise, their coverage will be limited to the FCL.',
+      'Please feel free to contact us if you require any further information or clarification.',
+      'We look forward to your favourable response.'
+    ]
+
+    provisions.forEach((provision) => {
+      const provisionLines = wrapText(provision, font, PDF_CONFIG.fontSize.normal, maxWidth)
+      provisionLines.forEach((line) => {
+        pageCheck = checkPageSpace(20, y)
+        if (pageCheck.page !== currentPage) {
+          currentPage = pageCheck.page
+          y = pageCheck.y
+        }
+        drawText(line, PDF_CONFIG.margins.left, y)
+        y -= PDF_CONFIG.spacing.line
+      })
+      y -= PDF_CONFIG.spacing.line / 2
+    })
+
+    // Save the PDF
+    const pdfBytes: any = await pdfDoc.save()
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+
+    pdfSrc.value = url
+    await loadPdf()
+  } catch (error) {
+    console.error('Failed to generate PDF:', error)
+    // You could show a user-friendly error message here
+    alert('Failed to generate PDF. Please try again or contact support.')
+  }
+}
+</script>
+<style lang="css" scoped></style>

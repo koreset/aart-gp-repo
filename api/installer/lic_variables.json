@@ -1,0 +1,74 @@
+[
+  {
+    "name": "B/F",
+    "run_name": "",
+    "notes": "",
+    "assumption_basis": "Basis B/F"
+  },
+{
+    "name": "Interest Accretion",
+    "run_name": "",
+    "notes": "",
+    "assumption_basis": "Previous Step Basis"
+  },
+  {
+    "name": "Expected IBNR Release",
+    "run_name": "",
+    "notes": "",
+    "assumption_basis": "Previous Step Basis"
+  },
+  {
+    "name": "Non Financial Assumption Change",
+    "run_name": "",
+    "notes": "",
+    "assumption_basis": "Previous Step Basis but NFA"
+  },
+  {
+    "name": "Financial Assumption Change",
+    "run_name": "",
+    "notes": "",
+    "assumption_basis": "Previous Step Basis but FA"
+  },
+  {
+    "name": "Exchange Rate Effect",
+    "run_name": "",
+    "notes": "",
+    "assumption_basis": ""
+  },
+  {
+    "name": "Change in Non-Performance Rating",
+    "run_name": "",
+    "notes": "",
+    "assumption_basis": "Previous Step Basis"
+  },
+  {
+    "name": "New Data",
+    "run_name": "",
+    "notes": "",
+    "assumption_basis": "Previous Step Basis"
+  },
+  {
+    "name": "Old Claims Paid",
+    "run_name": "",
+    "notes": "",
+    "assumption_basis": ""
+  },
+  {
+    "name": "New Claims Reported",
+    "run_name": "",
+    "notes": "",
+    "assumption_basis": "Previous Step Basis"
+  },
+  {
+    "name": "New Claims Paid",
+    "run_name": "",
+    "notes": "",
+    "assumption_basis": "Previous Step Basis"
+  },
+  {
+    "name": "C/F",
+    "run_name": "",
+    "notes": "",
+    "assumption_basis": "Previous Step Basis"
+  }
+]
