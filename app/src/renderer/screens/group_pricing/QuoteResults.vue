@@ -156,7 +156,7 @@
   </base-card>
   <!-- Calculation progress overlay -->
   <v-overlay
-    :model-value="isCalculating"
+    :model-value="awaitingManualCredibility"
     contained
     persistent
     class="align-center justify-center"
@@ -267,7 +267,6 @@ const calculatingManualCredibility = ref(false)
 
 const {
   progress: calcProgress,
-  isCalculating,
   phaseLabel,
   progressPercent,
   startTracking,

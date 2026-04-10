@@ -2,7 +2,7 @@
   <v-container v-if="quote">
     <!-- Calculation progress overlay -->
     <v-overlay
-      :model-value="isCalculating"
+      :model-value="awaitingCalculation"
       contained
       persistent
       class="align-center justify-center"
@@ -480,23 +480,27 @@ const {
 
 const {
   progress: calcProgress,
-  isCalculating,
   phaseLabel,
   progressPercent,
   startTracking,
   stopTracking
 } = useCalculationProgress()
 
-// When a queued calculation completes (or fails), refresh the quote data.
+// Only show overlay and react to events when this component initiated the calculation.
+const awaitingCalculation = ref(false)
+
 watch(calcProgress, (val) => {
+  if (!awaitingCalculation.value) return
   if (val?.phase === 'completed') {
     snackbarText.value = 'Calculations Successful'
     snackbar.value = true
+    awaitingCalculation.value = false
     loadQuote()
   }
   if (val?.phase === 'failed') {
     snackbarText.value = 'Calculations failed. Please contact your administrator.'
     snackbar.value = true
+    awaitingCalculation.value = false
   }
 })
 
@@ -618,6 +622,7 @@ const loadQuote = async () => {
 const runQuoteCalculations = async () => {
   if (quote.value.basis !== null && quote.value.basis !== '') {
     loading.value = true
+    awaitingCalculation.value = true
     startTracking(String(quote.value.id))
     try {
       const res = await GroupPricingService.runQuoteCalculations(
@@ -633,6 +638,7 @@ const runQuoteCalculations = async () => {
     } catch (error: any) {
       console.error('Error:', error)
       stopTracking()
+      awaitingCalculation.value = false
       const apiMessage = error?.response?.data?.message || error?.response?.data
       snackbarText.value =
         typeof apiMessage === 'string' && apiMessage
