@@ -277,6 +277,8 @@ func getStructType(structName string) (reflect.Type, error) {
 		return reflect.TypeOf(models.GlaRate{}), nil
 	case "TtdRate":
 		return reflect.TypeOf(models.TtdRate{}), nil
+	case "CalculationJob":
+		return reflect.TypeOf(models.CalculationJob{}), nil
 	case "GroupPricingQuote":
 		return reflect.TypeOf(models.GroupPricingQuote{}), nil
 	case "MovementMemberRatingResult":
