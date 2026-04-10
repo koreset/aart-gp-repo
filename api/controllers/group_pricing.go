@@ -132,17 +132,36 @@ func CalculateGroupPricingQuote(c *gin.Context) {
 		"user_name":  user.UserName,
 	}).Debug("User retrieved from context")
 
-	logger.Info("Calling CalculateGroupPricingQuote service")
+	quoteIDInt, _ := strconv.Atoi(quoteId)
 
-	err := services.CalculateGroupPricingQuote(quoteId, basis, credibility, user)
+	// Enqueue the calculation job instead of running it synchronously.
+	// The background worker will pick it up and report progress via WebSocket.
+	jobID, err := services.EnqueueCalculationJob(quoteIDInt, basis, credibility, user)
 	if err != nil {
-		logger.WithField("error", err.Error()).Error("Failed to calculate group pricing quote")
+		logger.WithField("error", err.Error()).Error("Failed to enqueue calculation job")
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		return
 	}
 
-	logger.Info("Group pricing quote calculated successfully")
-	c.JSON(http.StatusCreated, nil)
+	logger.WithField("job_id", jobID).Info("Calculation job enqueued")
+	c.JSON(http.StatusAccepted, gin.H{"success": true, "jobId": jobID})
+}
+
+// GetCalculationJobStatus returns the current status of a calculation job.
+func GetCalculationJobStatus(c *gin.Context) {
+	jobID, err := strconv.Atoi(c.Param("jobId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid job ID"})
+		return
+	}
+
+	job, err := services.GetCalculationJob(jobID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "job not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, job)
 }
 
 // GetCustomTirTableStatus checks whether a quote that uses the custom tiered income

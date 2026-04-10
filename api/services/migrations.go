@@ -376,6 +376,7 @@ func MigrateExposureAnalysisTables() error {
 func MigrateGroupPricingTables() error {
 	appLog.Info("Migrating group pricing tables")
 	err := DB.Migrator().AutoMigrate(
+		&models.CalculationJob{},
 		&models.GroupPricingQuote{},
 		&models.GroupRiskQuoteStats{},
 		&models.SchemeCategory{},

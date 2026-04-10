@@ -163,18 +163,27 @@
     scrim="rgba(0,0,0,0.4)"
   >
     <v-card width="400" class="pa-6 text-center" rounded="lg" elevation="8">
-      <v-card-title class="text-h6 mb-2">Calculating Quote</v-card-title>
+      <v-card-title class="text-h6 mb-2">
+        {{ calcProgress?.phase === 'queued' ? 'Calculation Queued' : calcProgress?.phase === 'failed' ? 'Calculation Failed' : 'Calculating Quote' }}
+      </v-card-title>
       <v-card-text>
         <v-progress-linear
+          v-if="calcProgress?.phase !== 'queued'"
           :model-value="progressPercent"
           color="primary"
           height="8"
           rounded
           class="mb-3"
         />
-        <div class="text-body-1 font-weight-medium mb-1"
-          >{{ progressPercent }}%</div
-        >
+        <v-progress-linear
+          v-else
+          indeterminate
+          color="primary"
+          height="8"
+          rounded
+          class="mb-3"
+        />
+        <div v-if="calcProgress?.phase !== 'queued'" class="text-body-1 font-weight-medium mb-1">{{ progressPercent }}%</div>
         <div class="text-body-2 text-medium-emphasis">
           {{ phaseLabel }}
           <span v-if="calcProgress?.currentCategory">
@@ -206,7 +215,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { useCalculationProgress } from '@/renderer/composables/useCalculationProgress'
@@ -264,6 +273,20 @@ const {
   startTracking,
   stopTracking
 } = useCalculationProgress()
+
+// When a queued calculation completes (or fails), refresh the results.
+watch(calcProgress, (val) => {
+  if (val?.phase === 'completed') {
+    snackbarText.value = 'Manual credibility calculation completed successfully'
+    snackbar.value = true
+    emit('quote-updated')
+  }
+  if (val?.phase === 'failed') {
+    snackbarText.value = 'Calculations failed. Please contact your administrator.'
+    snackbar.value = true
+  }
+})
+
 const manualCredibilityForm: any = ref(null)
 
 // Validation rules
@@ -349,34 +372,14 @@ const calculateManualCredibility = async () => {
   startTracking(String(props.quote.id))
 
   try {
-    const response =
-      await GroupPricingService.runQuoteCalculationsWithCredibility(
-        props.quote.id,
-        selectedBasis.value,
-        parseFloat(manualCredibilityValue.value)
-      )
+    await GroupPricingService.runQuoteCalculationsWithCredibility(
+      props.quote.id,
+      selectedBasis.value,
+      parseFloat(manualCredibilityValue.value)
+    )
 
-    console.log('Manual credibility calculation response:', response)
-
-    // Show success message
-    snackbarText.value = 'Manual credibility calculation completed successfully'
-    snackbar.value = true
-
-    // Close dialog
+    // Job has been queued — progress and completion arrive via WebSocket.
     closeManualCredibilityDialog()
-
-    // Emit event to refresh parent component data
-    emit('quote-updated')
-
-    // Optionally refresh current table data if one is selected
-    if (selectedTable.value && currentTableType.value) {
-      const currentItem = relatedResultTables.value.find(
-        (table) => table.table_type === selectedTable.value
-      )
-      if (currentItem) {
-        await viewTable(currentItem)
-      }
-    }
   } catch (error: any) {
     console.error('Error calculating manual credibility:', error)
     stopTracking()

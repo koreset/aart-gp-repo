@@ -3,11 +3,13 @@ import { useWebSocket } from './useWebSocket'
 
 export interface CalculationProgress {
   quoteId: string
+  jobId?: number
   totalCategories: number
   completedCategories: number
   currentCategory: string
-  phase: string // "loading_data" | "rating_members" | "saving_results" | "category_done" | "completed"
-  progress: number // 0-100
+  phase: string
+  progress: number
+  queuePosition?: number
 }
 
 const progress = ref<CalculationProgress | null>(null)
@@ -16,6 +18,10 @@ const isCalculating = ref(false)
 const phaseLabel = computed(() => {
   if (!progress.value) return ''
   switch (progress.value.phase) {
+    case 'queued':
+      return progress.value.queuePosition
+        ? `Queued — position ${progress.value.queuePosition}`
+        : 'Queued'
     case 'loading_data':
       return 'Loading data'
     case 'rating_members':
@@ -26,25 +32,41 @@ const phaseLabel = computed(() => {
       return 'Category complete'
     case 'completed':
       return 'Completed'
+    case 'failed':
+      return 'Calculation failed'
     default:
       return progress.value.phase
   }
 })
+
+const isQueued = computed(() => progress.value?.phase === 'queued')
 
 const progressPercent = computed(() => {
   return Math.round(progress.value?.progress ?? 0)
 })
 
 function handleProgress(payload: CalculationProgress) {
+  // Only handle events for the quote we're tracking
+  if (progress.value && payload.quoteId !== progress.value.quoteId) return
+
   progress.value = payload
+
   if (payload.phase === 'completed') {
-    // Keep the completed state visible briefly, then clear
     setTimeout(() => {
       if (progress.value?.phase === 'completed') {
         isCalculating.value = false
         progress.value = null
       }
     }, 1500)
+  }
+
+  if (payload.phase === 'failed') {
+    setTimeout(() => {
+      if (progress.value?.phase === 'failed') {
+        isCalculating.value = false
+        progress.value = null
+      }
+    }, 3000)
   }
 }
 
@@ -57,7 +79,7 @@ function startTracking(quoteId: string) {
     totalCategories: 0,
     completedCategories: 0,
     currentCategory: '',
-    phase: 'loading_data',
+    phase: 'queued',
     progress: 0
   }
 
@@ -77,6 +99,7 @@ export function useCalculationProgress() {
   return {
     progress,
     isCalculating,
+    isQueued,
     phaseLabel,
     progressPercent,
     startTracking,

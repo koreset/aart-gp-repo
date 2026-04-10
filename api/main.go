@@ -410,6 +410,9 @@ func startApplication(initTables bool, s service.Service) {
 	services.InitWSHub()
 	services.StartRedisWSSubscriber()
 
+	// Start the calculation job queue worker (bounded concurrency)
+	services.StartCalculationJobWorker()
+
 	// Initialize service logger
 	globals.Logger.Info("We are starting up...")
 	globals.Logger.Info(globals.AppConfig)

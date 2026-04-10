@@ -26,11 +26,13 @@ const (
 // CalculationProgress reports quote calculation progress to the frontend.
 type CalculationProgress struct {
 	QuoteID             string  `json:"quoteId"`
+	JobID               int     `json:"jobId,omitempty"`
 	TotalCategories     int     `json:"totalCategories"`
 	CompletedCategories int     `json:"completedCategories"`
 	CurrentCategory     string  `json:"currentCategory"`
-	Phase               string  `json:"phase"` // "loading_data", "rating_members", "saving_results", "completed"
+	Phase               string  `json:"phase"` // "queued", "loading_data", "rating_members", "saving_results", "category_done", "completed", "failed"
 	Progress            float64 `json:"progress"`
+	QueuePosition       int     `json:"queuePosition,omitempty"`
 }
 
 // WSEnvelope is the JSON wrapper sent over the wire.

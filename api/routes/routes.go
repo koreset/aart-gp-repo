@@ -53,6 +53,7 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.POST("generate-quote", controllers.GenerateGroupPricingQuote)
 			groupPricing.POST("calculate-quote/:id/basis/:basis", controllers.CalculateGroupPricingQuote)
 			groupPricing.POST("calculate-quote/:id/basis/:basis/credibility/:credibility", controllers.CalculateGroupPricingQuote)
+			groupPricing.GET("calculation-job/:jobId", controllers.GetCalculationJobStatus)
 
 			groupPricing.POST("quotes/:id/update-status", controllers.UpdateGroupPricingQuote)
 			groupPricing.POST("quotes/:id/approve-quote", controllers.ApproveGroupPricingQuote)

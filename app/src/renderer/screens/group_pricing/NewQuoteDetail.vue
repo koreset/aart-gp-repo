@@ -9,18 +9,27 @@
       scrim="rgba(0,0,0,0.4)"
     >
       <v-card width="400" class="pa-6 text-center" rounded="lg" elevation="8">
-        <v-card-title class="text-h6 mb-2">Calculating Quote</v-card-title>
+        <v-card-title class="text-h6 mb-2">
+          {{ calcProgress?.phase === 'queued' ? 'Calculation Queued' : calcProgress?.phase === 'failed' ? 'Calculation Failed' : 'Calculating Quote' }}
+        </v-card-title>
         <v-card-text>
           <v-progress-linear
+            v-if="calcProgress?.phase !== 'queued'"
             :model-value="progressPercent"
             color="primary"
             height="8"
             rounded
             class="mb-3"
           />
-          <div class="text-body-1 font-weight-medium mb-1"
-            >{{ progressPercent }}%</div
-          >
+          <v-progress-linear
+            v-else
+            indeterminate
+            color="primary"
+            height="8"
+            rounded
+            class="mb-3"
+          />
+          <div v-if="calcProgress?.phase !== 'queued'" class="text-body-1 font-weight-medium mb-1">{{ progressPercent }}%</div>
           <div class="text-body-2 text-medium-emphasis">
             {{ phaseLabel }}
             <span v-if="calcProgress?.currentCategory">
@@ -443,7 +452,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import BaseCard from '@/renderer/components/BaseCard.vue'
@@ -477,6 +486,19 @@ const {
   startTracking,
   stopTracking
 } = useCalculationProgress()
+
+// When a queued calculation completes (or fails), refresh the quote data.
+watch(calcProgress, (val) => {
+  if (val?.phase === 'completed') {
+    snackbarText.value = 'Calculations Successful'
+    snackbar.value = true
+    loadQuote()
+  }
+  if (val?.phase === 'failed') {
+    snackbarText.value = 'Calculations failed. Please contact your administrator.'
+    snackbar.value = true
+  }
+})
 
 const props = defineProps({
   id: {
@@ -602,12 +624,12 @@ const runQuoteCalculations = async () => {
         quote.value.id,
         quote.value.basis
       )
-      if (res.status === 201) {
-        snackbarText.value = 'Calculations Successful'
-        snackbar.value = true
+      if (res.status === 202 || res.status === 201) {
+        // Job has been queued — progress updates arrive via WebSocket.
+        // The button stays in loading state; the overlay shows queue/progress.
+        // We stop the button spinner since the overlay takes over.
+        loading.value = false
       }
-      loading.value = false
-      loadQuote()
     } catch (error: any) {
       console.error('Error:', error)
       stopTracking()

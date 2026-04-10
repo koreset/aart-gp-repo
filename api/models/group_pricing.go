@@ -39,6 +39,21 @@ const (
 	ChannelTiedAgent DistributionChannel = "tied_agent"
 )
 
+// CalculationJob represents a queued quote calculation request.
+type CalculationJob struct {
+	ID          int        `json:"id" gorm:"primaryKey"`
+	QuoteID     int        `json:"quote_id" gorm:"index"`
+	Basis       string     `json:"basis"`
+	Credibility float64    `json:"credibility"`
+	UserEmail   string     `json:"user_email"`
+	UserName    string     `json:"user_name"`
+	Status      string     `json:"status" gorm:"index;default:queued"` // queued, processing, completed, failed
+	Error       string     `json:"error"`
+	QueuedAt    time.Time  `json:"queued_at" gorm:"autoCreateTime"`
+	StartedAt   *time.Time `json:"started_at"`
+	CompletedAt *time.Time `json:"completed_at"`
+}
+
 // GroupPricingQuote struct
 type GroupPricingQuote struct {
 	ID                           int                       `json:"id" gorm:"primary_key"`
