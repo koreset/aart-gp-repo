@@ -16,11 +16,22 @@ import (
 type WSMessageType string
 
 const (
-	WSNotification        WSMessageType = "notification"
-	WSConversationMessage WSMessageType = "conversation_message"
-	WSPresence            WSMessageType = "presence"
-	WSTyping              WSMessageType = "typing"
+	WSNotification           WSMessageType = "notification"
+	WSConversationMessage    WSMessageType = "conversation_message"
+	WSPresence               WSMessageType = "presence"
+	WSTyping                 WSMessageType = "typing"
+	WSCalculationProgress    WSMessageType = "calculation_progress"
 )
+
+// CalculationProgress reports quote calculation progress to the frontend.
+type CalculationProgress struct {
+	QuoteID             string  `json:"quoteId"`
+	TotalCategories     int     `json:"totalCategories"`
+	CompletedCategories int     `json:"completedCategories"`
+	CurrentCategory     string  `json:"currentCategory"`
+	Phase               string  `json:"phase"` // "loading_data", "rating_members", "saving_results", "completed"
+	Progress            float64 `json:"progress"`
+}
 
 // WSEnvelope is the JSON wrapper sent over the wire.
 type WSEnvelope struct {

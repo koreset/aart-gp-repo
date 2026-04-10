@@ -1,5 +1,37 @@
 <template>
   <v-container v-if="quote">
+    <!-- Calculation progress overlay -->
+    <v-overlay
+      :model-value="isCalculating"
+      contained
+      persistent
+      class="align-center justify-center"
+      scrim="rgba(0,0,0,0.4)"
+    >
+      <v-card width="400" class="pa-6 text-center" rounded="lg" elevation="8">
+        <v-card-title class="text-h6 mb-2">Calculating Quote</v-card-title>
+        <v-card-text>
+          <v-progress-linear
+            :model-value="progressPercent"
+            color="primary"
+            height="8"
+            rounded
+            class="mb-3"
+          />
+          <div class="text-body-1 font-weight-medium mb-1">{{ progressPercent }}%</div>
+          <div class="text-body-2 text-medium-emphasis">
+            {{ phaseLabel }}
+            <span v-if="calcProgress?.currentCategory">
+              — {{ calcProgress.currentCategory }}
+            </span>
+          </div>
+          <div v-if="calcProgress && calcProgress.totalCategories > 0" class="text-caption text-medium-emphasis mt-1">
+            {{ calcProgress.completedCategories }} / {{ calcProgress.totalCategories }} categories
+          </div>
+        </v-card-text>
+      </v-card>
+    </v-overlay>
+
     <base-card :show-actions="false">
       <template #header>
         <h4 class="text-h6 d-flex align-center">
@@ -423,12 +455,22 @@ import ConfirmDialog from '@/renderer/components/ConfirmDialog.vue'
 import OutputSummary from './OutputSummary.vue'
 import { VDateInput } from 'vuetify/labs/VDateInput'
 import { useOnRiskLetterGeneration } from '@/renderer/composables/useOnRiskLetterGeneration'
+import { useCalculationProgress } from '@/renderer/composables/useCalculationProgress'
 
 const {
   isGenerating: isGeneratingOnRiskLetter,
   generateOnRiskLetterDocx,
   generateOnRiskLetterPdf
 } = useOnRiskLetterGeneration()
+
+const {
+  progress: calcProgress,
+  isCalculating,
+  phaseLabel,
+  progressPercent,
+  startTracking,
+  stopTracking
+} = useCalculationProgress()
 
 const props = defineProps({
   id: {
@@ -548,6 +590,7 @@ const loadQuote = async () => {
 const runQuoteCalculations = async () => {
   if (quote.value.basis !== null && quote.value.basis !== '') {
     loading.value = true
+    startTracking(String(quote.value.id))
     try {
       const res = await GroupPricingService.runQuoteCalculations(
         quote.value.id,
@@ -561,6 +604,7 @@ const runQuoteCalculations = async () => {
       loadQuote()
     } catch (error: any) {
       console.error('Error:', error)
+      stopTracking()
       const apiMessage = error?.response?.data?.message || error?.response?.data
       snackbarText.value =
         typeof apiMessage === 'string' && apiMessage

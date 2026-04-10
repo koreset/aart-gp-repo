@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -915,6 +916,19 @@ type TheoreticalRiskTotal struct {
 	CiSumAssured      float64
 }
 
+// sendCalculationProgress pushes a progress update to the user via WebSocket.
+// It is a no-op if the hub is not initialized (e.g. in tests).
+func sendCalculationProgress(userEmail string, progress CalculationProgress) {
+	hub := GetHub()
+	if hub == nil {
+		return
+	}
+	hub.SendToUser(userEmail, WSEnvelope{
+		Type:    WSCalculationProgress,
+		Payload: progress,
+	})
+}
+
 func CalculateGroupPricingQuote(quoteId string, basis string, credibility float64, user models.AppUser) error {
 	// TODO: Implement the logic to calculate the group pricing quote based on the provided quoteId and basis and optionally, credibility.
 	startTime := time.Now()
@@ -977,23 +991,50 @@ func CalculateGroupPricingQuote(quoteId string, basis string, credibility float6
 	schemeSizeLevel := GetSchemeSizeLevel(tempParam, groupQuote.MemberDataCount)
 	logger.WithField("scheme_size_level", schemeSizeLevel).Debug("Determined scheme size level")
 
+	totalCategories := len(groupQuote.SelectedSchemeCategories)
+	var completedCategories int64
+
+	// Progress callback invoked by each category worker at key checkpoints.
+	emitProgress := func(category, phase string) {
+		completed := int(atomic.LoadInt64(&completedCategories))
+		// Each category has 3 phases; compute overall progress.
+		phaseWeight := map[string]float64{"loading_data": 0.0, "rating_members": 0.33, "saving_results": 0.66, "category_done": 1.0}
+		w := phaseWeight[phase]
+		progress := (float64(completed) + w) / float64(totalCategories) * 100
+		sendCalculationProgress(user.UserEmail, CalculationProgress{
+			QuoteID:             quoteId,
+			TotalCategories:     totalCategories,
+			CompletedCategories: completed,
+			CurrentCategory:     category,
+			Phase:               phase,
+			Progress:            math.Min(progress, 100),
+		})
+	}
+
 	categoryWorkerPool := workerpool.New(runtime.NumCPU())
 	for _, selectedSchemeCategory := range groupQuote.SelectedSchemeCategories {
 		selectedSchemeCategory := selectedSchemeCategory // capture range variable
 		categoryWorkerPool.Submit(func() {
-			err2 := calculateForCategory(quoteId, basis, credibility, user, logger, groupQuote, dbStartTime, dbElapsed, selectedSchemeCategory, taxTable, tieredIncomeTiers, customTieredIncomeTiers, schemeSizeLevel)
+			err2 := calculateForCategory(quoteId, basis, credibility, user, logger, groupQuote, dbStartTime, dbElapsed, selectedSchemeCategory, taxTable, tieredIncomeTiers, customTieredIncomeTiers, schemeSizeLevel, emitProgress)
 			if err2 != nil {
 				logger.WithField("error", err2.Error()).Error("Error calculating for scheme category")
 			}
+			atomic.AddInt64(&completedCategories, 1)
+			emitProgress(selectedSchemeCategory, "category_done")
 		})
-		//err2 := calculateForCategory(quoteId, basis, credibility, user, logger, groupQuote, dbStartTime, dbElapsed, selectedSchemeCategory)
-		//if err2 != nil {
-		//	return err2
-		//}
 	}
 
 	categoryWorkerPool.StopWait()
 	GroupPricingCache.Clear()
+
+	// Send final 100% completion event
+	sendCalculationProgress(user.UserEmail, CalculationProgress{
+		QuoteID:             quoteId,
+		TotalCategories:     totalCategories,
+		CompletedCategories: totalCategories,
+		Phase:               "completed",
+		Progress:            100,
+	})
 
 	elapsed := time.Since(startTime)
 	logger.WithField("elapsed_ms", elapsed.Milliseconds()).Info("Group pricing quote calculation completed successfully")
@@ -1001,7 +1042,7 @@ func CalculateGroupPricingQuote(quoteId string, basis string, credibility float6
 	return nil
 }
 
-func calculateForCategory(quoteId string, basis string, credibility float64, user models.AppUser, logger *logrus.Entry, groupQuote models.GroupPricingQuote, dbStartTime time.Time, dbElapsed time.Duration, selectedSchemeCategory string, taxTable []models.TaxTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, schemeSizeLevel int) error {
+func calculateForCategory(quoteId string, basis string, credibility float64, user models.AppUser, logger *logrus.Entry, groupQuote models.GroupPricingQuote, dbStartTime time.Time, dbElapsed time.Duration, selectedSchemeCategory string, taxTable []models.TaxTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, schemeSizeLevel int, emitProgress func(category, phase string)) error {
 	var memberMps []models.GPricingMemberData
 	var indicativeMemberMps []models.MemberIndicativeDataSet
 	var experienceMemberMps []models.GPricingMemberData
@@ -1171,6 +1212,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		return egErr
 	}
 	logger.WithField("elapsed_ms", time.Since(dbParallelStart).Milliseconds()).Debug("Loaded all reference data in parallel")
+	emitProgress(selectedSchemeCategory, "loading_data")
 
 	if memberDataErr != nil {
 		logger.WithField("error", memberDataErr.Error()).Error("Failed to retrieve member data")
@@ -1377,6 +1419,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		})
 	}
 	rateWorkerPool.StopWait()
+	emitProgress(selectedSchemeCategory, "rating_members")
 
 	// Single-threaded reduce: aggregate results into slices and summary
 	memberDataResults = make([]models.MemberRatingResult, 0, len(rateResults))
@@ -1505,6 +1548,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	mdrs.TotalExpectedClaims = mdrs.ExpTotalGlaAnnualRiskPremium + mdrs.ExpTotalPtdAnnualRiskPremium + mdrs.ExpTotalCiAnnualRiskPremium + mdrs.ExpTotalSglaAnnualRiskPremium + mdrs.ExpTotalTtdAnnualRiskPremium + mdrs.ExpTotalPhiAnnualRiskPremium + mdrs.ExpTotalFunAnnualRiskPremium
 
 	// Delete results before saving new set of results
+	emitProgress(selectedSchemeCategory, "saving_results")
 	logger.Debug("Deleting existing results before saving new set")
 	dbStartTime = time.Now()
 	DB.Where("quote_id = ? and category = ?", quoteId, selectedSchemeCategory).Delete(&models.MemberRatingResult{})

@@ -154,6 +154,38 @@
       </v-dialog>
     </template>
   </base-card>
+  <!-- Calculation progress overlay -->
+  <v-overlay
+    :model-value="isCalculating"
+    contained
+    persistent
+    class="align-center justify-center"
+    scrim="rgba(0,0,0,0.4)"
+  >
+    <v-card width="400" class="pa-6 text-center" rounded="lg" elevation="8">
+      <v-card-title class="text-h6 mb-2">Calculating Quote</v-card-title>
+      <v-card-text>
+        <v-progress-linear
+          :model-value="progressPercent"
+          color="primary"
+          height="8"
+          rounded
+          class="mb-3"
+        />
+        <div class="text-body-1 font-weight-medium mb-1">{{ progressPercent }}%</div>
+        <div class="text-body-2 text-medium-emphasis">
+          {{ phaseLabel }}
+          <span v-if="calcProgress?.currentCategory">
+            — {{ calcProgress.currentCategory }}
+          </span>
+        </div>
+        <div v-if="calcProgress && calcProgress.totalCategories > 0" class="text-caption text-medium-emphasis mt-1">
+          {{ calcProgress.completedCategories }} / {{ calcProgress.totalCategories }} categories
+        </div>
+      </v-card-text>
+    </v-card>
+  </v-overlay>
+
   <v-snackbar
     v-model="snackbar"
     centered
@@ -171,6 +203,7 @@
 import { ref, onMounted, computed } from 'vue'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
+import { useCalculationProgress } from '@/renderer/composables/useCalculationProgress'
 import _ from 'lodash'
 import formatValues from '@/renderer/utils/format_values'
 import HistoricalCredibilityChartDialog from '@/renderer/components/charts/HistoricalCredibilityChartDialog.vue'
@@ -216,6 +249,15 @@ const selectedBasis: any = ref('')
 const parameterBases = ref([])
 const manualCredibilityFormValid = ref(false)
 const calculatingManualCredibility = ref(false)
+
+const {
+  progress: calcProgress,
+  isCalculating,
+  phaseLabel,
+  progressPercent,
+  startTracking,
+  stopTracking
+} = useCalculationProgress()
 const manualCredibilityForm: any = ref(null)
 
 // Validation rules
@@ -298,6 +340,7 @@ const calculateManualCredibility = async () => {
   if (!manualCredibilityFormValid.value) return
 
   calculatingManualCredibility.value = true
+  startTracking(String(props.quote.id))
 
   try {
     const response =
@@ -330,6 +373,7 @@ const calculateManualCredibility = async () => {
     }
   } catch (error: any) {
     console.error('Error calculating manual credibility:', error)
+    stopTracking()
     snackbarText.value =
       error.response?.data?.message || 'Error calculating manual credibility'
     snackbar.value = true
