@@ -274,16 +274,21 @@ const {
   stopTracking
 } = useCalculationProgress()
 
-// When a queued calculation completes (or fails), refresh the results.
+// Only react to progress events when this component initiated the calculation.
+const awaitingManualCredibility = ref(false)
+
 watch(calcProgress, (val) => {
+  if (!awaitingManualCredibility.value) return
   if (val?.phase === 'completed') {
     snackbarText.value = 'Manual credibility calculation completed successfully'
     snackbar.value = true
+    awaitingManualCredibility.value = false
     emit('quote-updated')
   }
   if (val?.phase === 'failed') {
     snackbarText.value = 'Calculations failed. Please contact your administrator.'
     snackbar.value = true
+    awaitingManualCredibility.value = false
   }
 })
 
@@ -369,6 +374,7 @@ const calculateManualCredibility = async () => {
   if (!manualCredibilityFormValid.value) return
 
   calculatingManualCredibility.value = true
+  awaitingManualCredibility.value = true
   startTracking(String(props.quote.id))
 
   try {
@@ -383,6 +389,7 @@ const calculateManualCredibility = async () => {
   } catch (error: any) {
     console.error('Error calculating manual credibility:', error)
     stopTracking()
+    awaitingManualCredibility.value = false
     snackbarText.value =
       error.response?.data?.message || 'Error calculating manual credibility'
     snackbar.value = true
