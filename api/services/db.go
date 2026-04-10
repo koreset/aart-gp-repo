@@ -348,41 +348,48 @@ func HasTables() bool {
 
 // SetupTables initializes the database and migrates tables required
 // On setup, it populates base data requirements.
+// Auto-migrations only run when the database is empty (no existing tables).
+// For existing databases, schema changes are handled by manual migration
+// scripts in the migrations/ folder (see RunMigrationsOnStartup).
 func SetupTables(initTables, initDatabaseTables bool) {
 	appLog.Info("Setting up database tables")
-	//Somewhere here, we check if there is a config file created and if there is a valid database setup.
 	initializeDb()
 
 	if initDatabaseTables {
-		// AutoMigrate is idempotent — it only creates missing tables and adds
-		// missing columns; it never drops tables or existing columns.
-		// Running it unconditionally ensures that models added after the initial
-		// deploy are always present in existing databases.
-		appLog.Info("Running model auto-migrations")
+		dbHasTables := HasTables()
 
-		// Always ensure system_locks table exists before anything else
-		if err := DB.AutoMigrate(&models.SystemLock{}); err != nil {
-			appLog.WithField("error", err.Error()).Error("Failed to migrate SystemLock table")
-		}
+		if !dbHasTables {
+			// Database is empty — run full auto-migrations to bootstrap the schema.
+			appLog.Info("Empty database detected — running full auto-migrations")
 
-		if err := MigrateBaseTables(); err != nil {
-			appLog.WithField("error", err.Error()).Error("Failed to migrate base tables")
-		}
+			if err := DB.AutoMigrate(&models.SystemLock{}); err != nil {
+				appLog.WithField("error", err.Error()).Error("Failed to migrate SystemLock table")
+			}
 
-		if err := MigrateGroupPricingTables(); err != nil {
-			appLog.WithField("error", err.Error()).Error("Failed to migrate group pricing tables")
-		}
+			if err := MigrateBaseTables(); err != nil {
+				appLog.WithField("error", err.Error()).Error("Failed to migrate base tables")
+			}
 
-		if err := MigrateGroupPricingUserTables(); err != nil {
-			appLog.WithField("error", err.Error()).Error("Failed to migrate group pricing user tables")
-		}
+			if err := MigrateGroupPricingTables(); err != nil {
+				appLog.WithField("error", err.Error()).Error("Failed to migrate group pricing tables")
+			}
 
-		if err := MigrateGroupPremiumTables(); err != nil {
-			appLog.WithField("error", err.Error()).Error("Failed to migrate group premium tables")
-		}
+			if err := MigrateGroupPricingUserTables(); err != nil {
+				appLog.WithField("error", err.Error()).Error("Failed to migrate group pricing user tables")
+			}
 
-		if err := MigratePhiValuationTables(); err != nil {
-			appLog.WithField("error", err.Error()).Error("Failed to migrate PHI valuation tables")
+			if err := MigrateGroupPremiumTables(); err != nil {
+				appLog.WithField("error", err.Error()).Error("Failed to migrate group premium tables")
+			}
+
+			if err := MigratePhiValuationTables(); err != nil {
+				appLog.WithField("error", err.Error()).Error("Failed to migrate PHI valuation tables")
+			}
+		} else {
+			// Database already has tables — skip auto-migrations.
+			// Schema changes for existing databases are applied via manual
+			// migration scripts in RunMigrationsOnStartup().
+			appLog.Info("Existing database detected — skipping auto-migrations, relying on manual migration scripts")
 		}
 	}
 
