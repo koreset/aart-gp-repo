@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/gammazero/workerpool"
 	"github.com/jszwec/csvutil"
 	"github.com/montanaflynn/stats"
@@ -892,6 +894,14 @@ func DeleteGroupPricingQuote(id string, user models.AppUser) error {
 	})
 }
 
+// MemberRateResult bundles the per-member outputs produced by PopulateRatesPerMember
+// so that the caller can collect them without shared-state mutation.
+type MemberRateResult struct {
+	Rating          models.MemberRatingResult
+	PremiumSchedule models.MemberPremiumSchedule
+	Bordereaux      models.Bordereaux
+}
+
 type TheoreticalRiskTotal struct {
 	GlaSumRiskPremium float64
 	PtdSumRiskPremium float64
@@ -1094,124 +1104,86 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	dbElapsed = time.Since(dbStartTime)
 	logger.WithField("elapsed_ms", dbElapsed.Milliseconds()).Debug("Saved group quote")
 
-	logger.Debug("Retrieving reinsurance structure")
-	dbStartTime = time.Now()
-	DB.Where("risk_rate_code=? and basis=?", groupParameter.RiskRateCode, basis).Find(&groupPricingReinsuranceStructure)
-	dbElapsed = time.Since(dbStartTime)
-	logger.WithField("elapsed_ms", dbElapsed.Milliseconds()).Debug("Retrieved reinsurance structure")
+	// Run independent DB queries in parallel using errgroup
+	logger.Debug("Loading reference data in parallel")
+	dbParallelStart := time.Now()
+	var memberDataErr error
+	eg := new(errgroup.Group)
 
-	logger.Debug("Retrieving member data")
-	dbStartTime = time.Now()
+	eg.Go(func() error {
+		return DB.Where("risk_rate_code=? and basis=?", groupParameter.RiskRateCode, basis).Find(&groupPricingReinsuranceStructure).Error
+	})
 
-	if groupQuote.MemberIndicativeData {
+	eg.Go(func() error {
+		return DB.Where("risk_rate_code=?", groupParameter.RiskRateCode).Find(&incomeLevels).Error
+	})
 
-		var membermp models.GPricingMemberData
-		err = DB.Where("quote_id = ? and scheme_category = ?", groupQuote.ID, selectedSchemeCategory).Find(&indicativeMemberMps).Error
-		membermp.AnnualSalary = indicativeMemberMps[0].MemberAverageIncome
-		membermp.SchemeName = groupQuote.SchemeName
-		membermp.SchemeId = groupQuote.SchemeID
-		membermp.QuoteId = groupQuote.ID
-		membermp.Gender = "M"
-		memberMps = append(memberMps, membermp)
-	}
-	if !groupQuote.MemberIndicativeData {
-		if groupQuote.QuoteType == "Renewal" {
-			err = DB.Model(&models.GPricingMemberDataInForce{}).Where("scheme_id = ? and scheme_category=?", groupQuote.SchemeID, selectedSchemeCategory).Scan(&memberMps).Error
-		} else {
-			err = DB.Where("quote_id = ? and scheme_category=?", groupQuote.ID, selectedSchemeCategory).Find(&memberMps).Error
-		}
-
-		if len(memberMps) == 0 {
-			return nil
-		}
-
-		if groupQuote.ExperienceRating == "Yes" {
-			if groupQuote.QuoteType == "Renewal" {
-				err = DB.Model(&models.GPricingMemberDataInForce{}).Where("scheme_id = ?", groupQuote.SchemeID).Scan(&experienceMemberMps).Error
-			} else {
-				err = DB.Where("quote_id = ?", groupQuote.ID).Find(&experienceMemberMps).Error
-			}
-		}
-	}
-
-	dbElapsed = time.Since(dbStartTime)
-	if err != nil {
-		logger.WithFields(map[string]interface{}{
-			"error":      err.Error(),
-			"elapsed_ms": dbElapsed.Milliseconds(),
-		}).Error("Failed to retrieve member data")
-	} else {
-		logger.WithFields(map[string]interface{}{
-			"member_count": len(memberMps),
-			"elapsed_ms":   dbElapsed.Milliseconds(),
-		}).Debug("Retrieved member data")
-	}
-
-	logger.Debug("Retrieving income levels")
-	dbStartTime = time.Now()
-	err = DB.Where("risk_rate_code=?", groupParameter.RiskRateCode).Find(&incomeLevels).Error
-	dbElapsed = time.Since(dbStartTime)
-	if err != nil {
-		logger.WithFields(map[string]interface{}{
-			"error":      err.Error(),
-			"elapsed_ms": dbElapsed.Milliseconds(),
-		}).Error("Failed to retrieve income levels")
-	} else {
-		logger.WithFields(map[string]interface{}{
-			"income_level_count": len(incomeLevels),
-			"elapsed_ms":         dbElapsed.Milliseconds(),
-		}).Debug("Retrieved income levels")
-	}
-
-	logger.Debug("Retrieving age bands")
-	dbStartTime = time.Now()
-	err = DB.Find(&ageBands).Error
-	dbElapsed = time.Since(dbStartTime)
-	if err != nil {
-		logger.WithFields(map[string]interface{}{
-			"error":      err.Error(),
-			"elapsed_ms": dbElapsed.Milliseconds(),
-		}).Error("Failed to retrieve age bands")
-	} else {
-		logger.WithFields(map[string]interface{}{
-			"age_band_count": len(ageBands),
-			"elapsed_ms":     dbElapsed.Milliseconds(),
-		}).Debug("Retrieved age bands")
-	}
+	eg.Go(func() error {
+		return DB.Find(&ageBands).Error
+	})
 
 	if category != nil && (category.GlaEducatorBenefit == "Yes" || category.PtdEducatorBenefit == "Yes") {
-		logger.Debug("Retrieving educator structure")
-		dbStartTime = time.Now()
-		err = DB.Where("risk_rate_code=? and educator_benefit_code=?", groupParameter.RiskRateCode, groupParameter.EducatorBenefitCode).Find(&educatorBenefitStructure).Error
-		dbElapsed = time.Since(dbStartTime)
-		if err != nil {
-			logger.WithFields(map[string]interface{}{
-				"error":      err.Error(),
-				"elapsed_ms": dbElapsed.Milliseconds(),
-			}).Error("Failed to retrieve educator benefit structure")
+		eg.Go(func() error {
+			return DB.Where("risk_rate_code=? and educator_benefit_code=?", groupParameter.RiskRateCode, groupParameter.EducatorBenefitCode).Find(&educatorBenefitStructure).Error
+		})
+	}
+
+	if groupQuote.ExperienceRating == "Yes" {
+		eg.Go(func() error {
+			return DB.Where("quote_id=?", groupQuote.ID).Find(&experienceClaimsData).Error
+		})
+	}
+
+	// Member data loading (runs concurrently with the above)
+	eg.Go(func() error {
+		if groupQuote.MemberIndicativeData {
+			var membermp models.GPricingMemberData
+			if err := DB.Where("quote_id = ? and scheme_category = ?", groupQuote.ID, selectedSchemeCategory).Find(&indicativeMemberMps).Error; err != nil {
+				memberDataErr = err
+				return nil
+			}
+			membermp.AnnualSalary = indicativeMemberMps[0].MemberAverageIncome
+			membermp.SchemeName = groupQuote.SchemeName
+			membermp.SchemeId = groupQuote.SchemeID
+			membermp.QuoteId = groupQuote.ID
+			membermp.Gender = "M"
+			memberMps = append(memberMps, membermp)
 		} else {
-			logger.WithField("elapsed_ms", dbElapsed.Milliseconds()).Debug("Retrieved educator benefit structure")
+			if groupQuote.QuoteType == "Renewal" {
+				memberDataErr = DB.Model(&models.GPricingMemberDataInForce{}).Where("scheme_id = ? and scheme_category=?", groupQuote.SchemeID, selectedSchemeCategory).Scan(&memberMps).Error
+			} else {
+				memberDataErr = DB.Where("quote_id = ? and scheme_category=?", groupQuote.ID, selectedSchemeCategory).Find(&memberMps).Error
+			}
+
+			if groupQuote.ExperienceRating == "Yes" && len(memberMps) > 0 {
+				if groupQuote.QuoteType == "Renewal" {
+					DB.Model(&models.GPricingMemberDataInForce{}).Where("scheme_id = ?", groupQuote.SchemeID).Scan(&experienceMemberMps)
+				} else {
+					DB.Where("quote_id = ?", groupQuote.ID).Find(&experienceMemberMps)
+				}
+			}
 		}
+		return nil
+	})
+
+	if egErr := eg.Wait(); egErr != nil {
+		logger.WithField("error", egErr.Error()).Error("Failed to load reference data")
+		return egErr
+	}
+	logger.WithField("elapsed_ms", time.Since(dbParallelStart).Milliseconds()).Debug("Loaded all reference data in parallel")
+
+	if memberDataErr != nil {
+		logger.WithField("error", memberDataErr.Error()).Error("Failed to retrieve member data")
+	}
+	logger.WithField("member_count", len(memberMps)).Debug("Retrieved member data")
+
+	if !groupQuote.MemberIndicativeData && len(memberMps) == 0 {
+		return nil
 	}
 
 	var weightedLifeYears float64
 
 	if groupQuote.ExperienceRating == "Yes" {
-		logger.Debug("Experience rating enabled, retrieving claims experience data")
-		dbStartTime = time.Now()
-		err = DB.Where("quote_id=?", groupQuote.ID).Find(&experienceClaimsData).Error
-		dbElapsed = time.Since(dbStartTime)
-		if err != nil {
-			logger.WithFields(map[string]interface{}{
-				"error":      err.Error(),
-				"elapsed_ms": dbElapsed.Milliseconds(),
-			}).Error("Failed to retrieve claims experience data")
-		} else {
-			logger.WithFields(map[string]interface{}{
-				"claims_data_count": len(experienceClaimsData),
-				"elapsed_ms":        dbElapsed.Milliseconds(),
-			}).Debug("Retrieved claims experience data")
-		}
 
 		var weightedPeriod, experienceRate, annualExperienceRate float64
 		var ptdExperienceRate, ciExperienceRate, ptdAnnualExperienceRate, ciAnnualExperienceRate float64
@@ -1364,45 +1336,173 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		logger.WithField("selected_scheme_category", selectedSchemeCategory).Warn("Selected scheme category not found in SchemeCategories")
 	}
 
-	//where experience rating is chosen
+	//where experience rating is chosen — collect-then-reduce pattern (no shared-state mutation)
 
 	if groupQuote.ExperienceRating == "Yes" {
+		expResults := make([]TheoreticalRiskTotal, len(experienceMemberMps))
 		experienceWorkerPool := workerpool.New(min(runtime.NumCPU(), 8))
-		for _, mp := range experienceMemberMps {
-			mp := mp
+		for idx, mp := range experienceMemberMps {
+			idx, mp := idx, mp
 			experienceWorkerPool.Submit(func() {
-				PopulateRatesPerMemberForExperienceRating(categoryIndex, indicativeRatesCount, mp, groupQuote, groupParameter, incomeLevels, ageBands, calculatedFreeCoverLimit, &theoreticalRiskTotal, insurerYearEndMonth, restriction, taxTable, tieredIncomeTiers, customTieredIncomeTiers, premiumLoading, regionLoadingByGender)
+				expResults[idx] = PopulateRatesPerMemberForExperienceRating(categoryIndex, indicativeRatesCount, mp, groupQuote, groupParameter, incomeLevels, ageBands, calculatedFreeCoverLimit, insurerYearEndMonth, restriction, taxTable, tieredIncomeTiers, customTieredIncomeTiers, premiumLoading, regionLoadingByGender)
 			})
 		}
 		experienceWorkerPool.StopWait()
+
+		// Single-threaded reduce — no mutex needed
+		for _, r := range expResults {
+			theoreticalRiskTotal.GlaSumRiskPremium += r.GlaSumRiskPremium
+			theoreticalRiskTotal.PtdSumRiskPremium += r.PtdSumRiskPremium
+			theoreticalRiskTotal.TtdSumRiskPremium += r.TtdSumRiskPremium
+			theoreticalRiskTotal.PhiSumRiskPremium += r.PhiSumRiskPremium
+			theoreticalRiskTotal.CiSumRiskPremium += r.CiSumRiskPremium
+			theoreticalRiskTotal.GlaSumAssured += r.GlaSumAssured
+			theoreticalRiskTotal.PtdSumAssured += r.PtdSumAssured
+			theoreticalRiskTotal.TtdSumAssured += r.TtdSumAssured
+			theoreticalRiskTotal.PhiSumAssured += r.PhiSumAssured
+			theoreticalRiskTotal.CiSumAssured += r.CiSumAssured
+		}
 		if theoreticalRiskTotal.GlaSumAssured > 0 {
 			glaTheoreticalRate = theoreticalRiskTotal.GlaSumRiskPremium * 1000 / theoreticalRiskTotal.GlaSumAssured
 		}
-
-		//if theoreticalRiskTotal.PtdSumAssured > 0 {
-		//	ptdTheoreticalRate = theoreticalRiskTotal.PtdSumRiskPremium * 1000 / theoreticalRiskTotal.PtdSumAssured
-		//}
-		//if theoreticalRiskTotal.CiSumAssured > 0 {
-		//	ciTheoreticalRate = theoreticalRiskTotal.CiSumRiskPremium * 1000 / theoreticalRiskTotal.CiSumAssured
-		//}
-		//if theoreticalRiskTotal.TtdSumAssured > 0 {
-		//	ttdTheoreticalRate = theoreticalRiskTotal.TtdSumRiskPremium * 1000 / theoreticalRiskTotal.TtdSumAssured
-		//}
-		//if theoreticalRiskTotal.PhiSumAssured > 0 {
-		//	phiTheoreticalRate = theoreticalRiskTotal.PhiSumRiskPremium * 1000 / theoreticalRiskTotal.PhiSumAssured
-		//}
 	}
 
-	// rework for parallel job processing
+	// Collect-then-reduce: each goroutine writes to its own pre-allocated slot — no mutex needed
+	rateResults := make([]MemberRateResult, len(memberMps))
 	rateWorkerPool := workerpool.New(min(runtime.NumCPU(), 8))
-	for _, mp := range memberMps { //Remember to adjust here later.
-		mp := mp
+	for idx, mp := range memberMps {
+		idx, mp := idx, mp
 		rateWorkerPool.Submit(func() {
-			PopulateRatesPerMember(categoryIndex, indicativeRatesCount, indicativeMemberMps, selectedSchemeCategory, mp, &memberDataResults, &memberPremiumSchedule, &bordereaux, groupQuote, groupParameter, groupPricingReinsuranceStructure, &mdrs, incomeLevels, ageBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit, educatorBenefitStructure, credibility, glaTheoreticalRate, insurerYearEndMonth, user, restriction, taxTable, tieredIncomeTiers, customTieredIncomeTiers, premiumLoading, regionLoadingByGender)
+			rateResults[idx] = PopulateRatesPerMember(categoryIndex, indicativeRatesCount, indicativeMemberMps, selectedSchemeCategory, mp, groupQuote, groupParameter, groupPricingReinsuranceStructure, incomeLevels, ageBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit, educatorBenefitStructure, credibility, glaTheoreticalRate, insurerYearEndMonth, user, restriction, taxTable, tieredIncomeTiers, customTieredIncomeTiers, premiumLoading, regionLoadingByGender)
 		})
-
 	}
 	rateWorkerPool.StopWait()
+
+	// Single-threaded reduce: aggregate results into slices and summary
+	memberDataResults = make([]models.MemberRatingResult, 0, len(rateResults))
+	memberPremiumSchedule = make([]models.MemberPremiumSchedule, 0, len(rateResults))
+	bordereaux = make([]models.Bordereaux, 0, len(rateResults))
+
+	for _, r := range rateResults {
+		memberDataResults = append(memberDataResults, r.Rating)
+		memberPremiumSchedule = append(memberPremiumSchedule, r.PremiumSchedule)
+		bordereaux = append(bordereaux, r.Bordereaux)
+
+		mr := r.Rating
+		mdrs.Category = selectedSchemeCategory
+		mdrs.FinancialYear = mr.FinancialYear
+		if groupQuote.MemberIndicativeData {
+			mdrs.MemberCount = float64(indicativeMemberMps[0].MemberDataCount)
+		} else {
+			mdrs.MemberCount++
+		}
+		mdrs.ExceedsFreeCoverLimitIndicator += mr.ExceedsFreeCoverLimitIndicator
+		mdrs.ExceedsNormalRetirementAgeIndicator += mr.ExceedsNormalRetirementAgeIndicator
+		mdrs.TotalGlaRiskRate += mr.LoadedGlaRate
+		mdrs.ExpTotalGlaRiskRate += mr.ExpAdjLoadedGlaRate
+		mdrs.TotalGlaAnnualRiskPremium += mr.GlaRiskPremium
+		mdrs.TotalGlaAnnualOfficePremium += mr.GlaOfficePremium
+		mdrs.ExpTotalGlaAnnualRiskPremium += mr.ExpAdjGlaRiskPremium
+		mdrs.ExpTotalGlaAnnualOfficePremium += mr.ExpAdjGlaOfficePremium
+
+		mdrs.TotalPtdRiskRate += mr.LoadedPtdRate
+		mdrs.ExpTotalPtdRiskRate += mr.ExpAdjLoadedPtdRate
+		mdrs.TotalPtdAnnualRiskPremium += mr.PtdRiskPremium
+		mdrs.TotalPtdAnnualOfficePremium += mr.PtdOfficePremium
+		mdrs.ExpTotalPtdAnnualRiskPremium += mr.ExpAdjPtdRiskPremium
+		mdrs.ExpTotalPtdAnnualOfficePremium += mr.ExpAdjPtdOfficePremium
+
+		mdrs.TotalTtdRiskRate += mr.LoadedTtdRate
+		mdrs.ExpTotalTtdRiskRate += mr.ExpAdjLoadedTtdRate
+		mdrs.TotalTtdAnnualRiskPremium += mr.TtdRiskPremium
+		mdrs.TotalTtdAnnualOfficePremium += mr.TtdOfficePremium
+		mdrs.ExpTotalTtdAnnualRiskPremium += mr.ExpAdjTtdRiskPremium
+		mdrs.ExpTotalTtdAnnualOfficePremium += mr.ExpAdjTtdOfficePremium
+
+		mdrs.TotalPhiRiskRate += mr.LoadedPhiRate
+		mdrs.ExpTotalPhiRiskRate += mr.ExpAdjLoadedPhiRate
+		mdrs.TotalPhiAnnualRiskPremium += mr.PhiRiskPremium
+		mdrs.TotalPhiAnnualOfficePremium += mr.PhiOfficePremium
+		mdrs.ExpTotalPhiAnnualRiskPremium += mr.ExpAdjPhiRiskPremium
+		mdrs.ExpTotalPhiAnnualOfficePremium += mr.ExpAdjPhiOfficePremium
+
+		mdrs.TotalCiRiskRate += mr.LoadedCiRate
+		mdrs.ExpTotalCiRiskRate += mr.ExpAdjLoadedCiRate
+		mdrs.TotalCiAnnualRiskPremium += mr.CiRiskPremium
+		mdrs.TotalCiAnnualOfficePremium += mr.CiOfficePremium
+		mdrs.ExpTotalCiAnnualRiskPremium += mr.ExpAdjCiRiskPremium
+		mdrs.ExpTotalCiAnnualOfficePremium += mr.ExpAdjCiOfficePremium
+
+		mdrs.TotalSglaRiskRate += mr.LoadedSpouseGlaRate
+		mdrs.ExpTotalSglaRiskRate += mr.ExpAdjLoadedSpouseGlaRate
+		mdrs.TotalSglaAnnualRiskPremium += mr.SpouseGlaRiskPremium
+		mdrs.TotalSglaAnnualOfficePremium += mr.SpouseGlaOfficePremium
+		mdrs.ExpTotalSglaAnnualRiskPremium += mr.ExpAdjSpouseGlaRiskPremium
+		mdrs.ExpTotalSglaAnnualOfficePremium += mr.ExpAdjSpouseGlaOfficePremium
+
+		mdrs.TotalFunAnnualRiskPremium += mr.TotalFuneralRiskCost
+		mdrs.TotalFunAnnualOfficePremium += mr.TotalFuneralOfficeCost
+		mdrs.ExpTotalFunAnnualRiskPremium += mr.ExpAdjTotalFuneralRiskCost
+		mdrs.ExpTotalFunAnnualOfficePremium += mr.ExpAdjTotalFuneralOfficeCost
+
+		mdrs.TotalGlaSumAssured += mr.GlaSumAssured
+		mdrs.TotalGlaCappedSumAssured += mr.GlaCappedSumAssured
+		mdrs.TotalPtdSumAssured += mr.PtdSumAssured
+		mdrs.TotalPtdCappedSumAssured += mr.PtdCappedSumAssured
+		mdrs.TotalCiSumAssured += mr.CiSumAssured
+		mdrs.TotalCiCappedSumAssured += mr.CiCappedSumAssured
+		mdrs.TotalSglaSumAssured += mr.SpouseGlaSumAssured
+		mdrs.TotalSglaCappedSumAssured += mr.SpouseGlaCappedSumAssured
+		mdrs.TotalTtdIncome += mr.TtdIncome
+		mdrs.TotalTtdCappedIncome += mr.TtdCappedIncome
+		mdrs.TotalPhiIncome += mr.PhiIncome
+		mdrs.TotalPhiCappedIncome += mr.PhiCappedIncome
+		mdrs.TotalAnnualSalary += mr.AnnualSalary
+
+		if category != nil && (category.GlaEducatorBenefit == "Yes" || category.PtdEducatorBenefit == "Yes") {
+			educatorRates := GetEducatorRate(groupParameter, mr.AgeNextBirthday)
+			mdrs.TotalRiskWeightedEducatorSumAssured += mr.Grade0SumAssured*educatorRates.Grade0RiskRate + mr.Grade17SumAssured*educatorRates.Grade17RiskRate + mr.Grade812SumAssured*educatorRates.Grade812RiskRate + mr.TertiarySumAssured*educatorRates.TertiaryRiskRate
+			mdrs.TotalEducatorRiskPremium += mr.EducatorRiskPremium
+			mdrs.TotalEducatorOfficePremium += mr.EducatorOfficePremium
+			mdrs.ExpAdjTotalEducatorRiskPremium += mr.ExpAdjEducatorRiskPremium
+			mdrs.ExpAdjTotalEducatorOfficePremium += mr.ExpAdjEducatorOfficePremium
+		}
+
+		if mdrs.MemberCount == 1 {
+			mdrs.MinGlaSumAssured = mr.GlaSumAssured
+			mdrs.MinPtdSumAssured = mr.PtdSumAssured
+			mdrs.MinCiSumAssured = mr.CiSumAssured
+			mdrs.MinSglaSumAssured = mr.SpouseGlaSumAssured
+			mdrs.MinPhiIncome = mr.PhiIncome
+			mdrs.MinTtdIncome = mr.TtdIncome
+		} else {
+			mdrs.MinGlaSumAssured = math.Min(mdrs.MinGlaSumAssured, mr.GlaSumAssured)
+			mdrs.MinPtdSumAssured = math.Min(mdrs.MinPtdSumAssured, mr.PtdSumAssured)
+			mdrs.MinCiSumAssured = math.Min(mdrs.MinCiSumAssured, mr.CiSumAssured)
+			mdrs.MinSglaSumAssured = math.Min(mdrs.MinSglaSumAssured, mr.SpouseGlaSumAssured)
+			mdrs.MinPhiIncome = math.Min(mdrs.MinPhiIncome, mr.PhiIncome)
+			mdrs.MinTtdIncome = math.Min(mdrs.MinTtdIncome, mr.TtdIncome)
+		}
+		mdrs.MaxGlaSumAssured = math.Max(mdrs.MaxGlaSumAssured, mr.GlaSumAssured)
+		mdrs.MaxGlaCappedSumAssured = math.Max(mdrs.MaxGlaCappedSumAssured, mr.GlaCappedSumAssured)
+		mdrs.MaxPtdSumAssured = math.Max(mdrs.MaxPtdSumAssured, mr.PtdSumAssured)
+		mdrs.MaxPtdCappedSumAssured = math.Max(mdrs.MaxPtdCappedSumAssured, mr.PtdCappedSumAssured)
+		mdrs.MaxCiSumAssured = math.Max(mdrs.MaxCiSumAssured, mr.CiSumAssured)
+		mdrs.MaxCiCappedSumAssured = math.Max(mdrs.MaxCiCappedSumAssured, mr.CiCappedSumAssured)
+		mdrs.MaxSglaSumAssured = math.Max(mdrs.MaxSglaSumAssured, mr.SpouseGlaSumAssured)
+		mdrs.MaxSglaCappedSumAssured = math.Max(mdrs.MaxSglaCappedSumAssured, mr.SpouseGlaCappedSumAssured)
+		mdrs.MaxPhiIncome = math.Max(mdrs.MaxPhiIncome, mr.PhiIncome)
+		mdrs.MaxPhiCappedIncome = math.Max(mdrs.MaxPhiCappedIncome, mr.PhiCappedIncome)
+		mdrs.MaxTtdIncome = math.Max(mdrs.MaxTtdIncome, mr.TtdIncome)
+		mdrs.MaxTtdCappedIncome = math.Max(mdrs.MaxTtdCappedIncome, mr.TtdCappedIncome)
+	}
+
+	// Compute derived summary fields after the reduce loop
+	mdrs.TotalAnnualPremium = mdrs.TotalGlaAnnualOfficePremium + mdrs.TotalPtdAnnualOfficePremium + mdrs.TotalTtdAnnualOfficePremium + mdrs.TotalPhiAnnualOfficePremium + mdrs.TotalCiAnnualOfficePremium + mdrs.TotalSglaAnnualOfficePremium
+	mdrs.ExpTotalAnnualPremiumExclFuneral = mdrs.ExpTotalGlaAnnualOfficePremium + mdrs.ExpTotalPtdAnnualOfficePremium + mdrs.ExpTotalTtdAnnualOfficePremium + mdrs.ExpTotalPhiAnnualOfficePremium + mdrs.ExpTotalCiAnnualOfficePremium + mdrs.ExpTotalSglaAnnualOfficePremium
+	mdrs.TotalCommission = (mdrs.ExpTotalAnnualPremiumExclFuneral + mdrs.ExpTotalFunAnnualOfficePremium) * premiumLoading.CommissionLoading
+	mdrs.TotalExpenses = (mdrs.ExpTotalAnnualPremiumExclFuneral + mdrs.ExpTotalFunAnnualOfficePremium) * premiumLoading.ExpenseLoading
+	mdrs.TotalExpectedClaims = mdrs.ExpTotalGlaAnnualRiskPremium + mdrs.ExpTotalPtdAnnualRiskPremium + mdrs.ExpTotalCiAnnualRiskPremium + mdrs.ExpTotalSglaAnnualRiskPremium + mdrs.ExpTotalTtdAnnualRiskPremium + mdrs.ExpTotalPhiAnnualRiskPremium + mdrs.ExpTotalFunAnnualRiskPremium
 
 	// Delete results before saving new set of results
 	logger.Debug("Deleting existing results before saving new set")
@@ -2039,8 +2139,8 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float64, mp models.GPricingMemberData,
 	groupQuote models.GroupPricingQuote,
 	groupParameter models.GroupPricingParameters, incomeLevels []models.IncomeLevel, ageBands []models.GroupPricingAgeBands, calculatedFreeCoverLimit float64,
-	theoreticalRiskTotal *TheoreticalRiskTotal, insurerYearEndMonth int, restriction models.Restriction,
-	taxTable []models.TaxTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, premiumLoading models.PremiumLoading, regionLoadingByGender map[string]models.RegionLoading) {
+	insurerYearEndMonth int, restriction models.Restriction,
+	taxTable []models.TaxTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, premiumLoading models.PremiumLoading, regionLoadingByGender map[string]models.RegionLoading) TheoreticalRiskTotal {
 
 	var memberDataPointResult models.MemberRatingResult
 	var memberPremiumScheduleDatapoint models.MemberPremiumSchedule
@@ -2250,21 +2350,21 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	memberDataPointResult.PhiRiskPremium = memberDataPointResult.LoadedPhiRate * memberDataPointResult.PhiMonthlyBenefit
 	memberDataPointResult.CiRiskPremium = memberDataPointResult.LoadedCiRate * memberDataPointResult.CiCappedSumAssured
 
-	mutex.Lock()
-	(*theoreticalRiskTotal).GlaSumRiskPremium += memberDataPointResult.GlaRiskPremium
-	(*theoreticalRiskTotal).PtdSumRiskPremium += memberDataPointResult.PtdRiskPremium
-	(*theoreticalRiskTotal).TtdSumRiskPremium += memberDataPointResult.TtdRiskPremium
-	(*theoreticalRiskTotal).PhiSumRiskPremium += memberDataPointResult.PhiRiskPremium
-	(*theoreticalRiskTotal).CiSumRiskPremium += memberDataPointResult.CiRiskPremium
-	(*theoreticalRiskTotal).GlaSumAssured += memberDataPointResult.GlaCappedSumAssured
-	(*theoreticalRiskTotal).PtdSumAssured += memberDataPointResult.PtdCappedSumAssured
-	(*theoreticalRiskTotal).TtdSumAssured += memberDataPointResult.TtdCappedIncome * groupParameter.TtdNumberMonthlyPayments
-	(*theoreticalRiskTotal).PhiSumAssured += memberDataPointResult.PhiCappedIncome
-	(*theoreticalRiskTotal).CiSumAssured += memberDataPointResult.CiCappedSumAssured
-	mutex.Unlock()
+	return TheoreticalRiskTotal{
+		GlaSumRiskPremium: memberDataPointResult.GlaRiskPremium,
+		PtdSumRiskPremium: memberDataPointResult.PtdRiskPremium,
+		TtdSumRiskPremium: memberDataPointResult.TtdRiskPremium,
+		PhiSumRiskPremium: memberDataPointResult.PhiRiskPremium,
+		CiSumRiskPremium:  memberDataPointResult.CiRiskPremium,
+		GlaSumAssured:     memberDataPointResult.GlaCappedSumAssured,
+		PtdSumAssured:     memberDataPointResult.PtdCappedSumAssured,
+		TtdSumAssured:     memberDataPointResult.TtdCappedIncome * groupParameter.TtdNumberMonthlyPayments,
+		PhiSumAssured:     memberDataPointResult.PhiCappedIncome,
+		CiSumAssured:      memberDataPointResult.CiCappedSumAssured,
+	}
 }
 
-func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMemberMps []models.MemberIndicativeDataSet, selectedSchemeCategory string, mp models.GPricingMemberData, memberDataResults *[]models.MemberRatingResult, memberPremiumSchedule *[]models.MemberPremiumSchedule, bordereaux *[]models.Bordereaux, groupQuote models.GroupPricingQuote, groupParameter models.GroupPricingParameters, groupPricingReinsuranceStructure models.GroupPricingReinsuranceStructure, mdrs *models.MemberRatingResultSummary, incomeLevels []models.IncomeLevel, ageBands []models.GroupPricingAgeBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit float64, educatorBenefitStructure models.EducatorBenefitStructure, credibility, glatheoreticalRate float64, insurerYearEndMonth int, user models.AppUser, restriction models.Restriction, taxTable []models.TaxTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, premiumLoading models.PremiumLoading, regionLoadingByGender map[string]models.RegionLoading) {
+func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMemberMps []models.MemberIndicativeDataSet, selectedSchemeCategory string, mp models.GPricingMemberData, groupQuote models.GroupPricingQuote, groupParameter models.GroupPricingParameters, groupPricingReinsuranceStructure models.GroupPricingReinsuranceStructure, incomeLevels []models.IncomeLevel, ageBands []models.GroupPricingAgeBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit float64, educatorBenefitStructure models.EducatorBenefitStructure, credibility, glatheoreticalRate float64, insurerYearEndMonth int, user models.AppUser, restriction models.Restriction, taxTable []models.TaxTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, premiumLoading models.PremiumLoading, regionLoadingByGender map[string]models.RegionLoading) MemberRateResult {
 
 	var memberDataPointResult models.MemberRatingResult
 	var memberPremiumScheduleDatapoint models.MemberPremiumSchedule
@@ -2743,135 +2843,11 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	bordereauxDatapoint.DependantRetainedRiskPremium = bordereauxDatapoint.DependantRetainedSumAssured * memberDataPointResult.DependantFuneralBaseRate
 	bordereauxDatapoint.DependantCededRiskPremium = bordereauxDatapoint.DependantCededSumAssured * memberDataPointResult.DependantFuneralBaseRate
 
-	mutex.Lock()
-	*memberDataResults = append(*memberDataResults, memberDataPointResult)
-	*memberPremiumSchedule = append(*memberPremiumSchedule, memberPremiumScheduleDatapoint)
-	*bordereaux = append(*bordereaux, bordereauxDatapoint)
-	mutex.Unlock()
-
-	mutex.Lock()
-	mdrs.Category = selectedSchemeCategory
-	mdrs.FinancialYear = memberDataPointResult.FinancialYear
-	if groupQuote.MemberIndicativeData {
-		mdrs.MemberCount = float64(indicativeMemberMps[0].MemberDataCount)
+	return MemberRateResult{
+		Rating:          memberDataPointResult,
+		PremiumSchedule: memberPremiumScheduleDatapoint,
+		Bordereaux:      bordereauxDatapoint,
 	}
-	if !groupQuote.MemberIndicativeData {
-		mdrs.MemberCount = mdrs.MemberCount + 1
-	}
-	mdrs.ExceedsFreeCoverLimitIndicator += memberDataPointResult.ExceedsFreeCoverLimitIndicator
-	mdrs.ExceedsNormalRetirementAgeIndicator += memberDataPointResult.ExceedsNormalRetirementAgeIndicator
-	mdrs.TotalGlaRiskRate += memberDataPointResult.LoadedGlaRate
-	mdrs.ExpTotalGlaRiskRate += memberDataPointResult.ExpAdjLoadedGlaRate
-	mdrs.TotalGlaAnnualRiskPremium += memberDataPointResult.GlaRiskPremium
-	mdrs.TotalGlaAnnualOfficePremium += memberDataPointResult.GlaOfficePremium
-	mdrs.ExpTotalGlaAnnualRiskPremium += memberDataPointResult.ExpAdjGlaRiskPremium
-	mdrs.ExpTotalGlaAnnualOfficePremium += memberDataPointResult.ExpAdjGlaOfficePremium
-
-	mdrs.TotalPtdRiskRate += memberDataPointResult.LoadedPtdRate
-	mdrs.ExpTotalPtdRiskRate += memberDataPointResult.ExpAdjLoadedPtdRate
-	mdrs.TotalPtdAnnualRiskPremium += memberDataPointResult.PtdRiskPremium
-	mdrs.TotalPtdAnnualOfficePremium += memberDataPointResult.PtdOfficePremium
-	mdrs.ExpTotalPtdAnnualRiskPremium += memberDataPointResult.ExpAdjPtdRiskPremium
-	mdrs.ExpTotalPtdAnnualOfficePremium += memberDataPointResult.ExpAdjPtdOfficePremium
-
-	mdrs.TotalTtdRiskRate += memberDataPointResult.LoadedTtdRate
-	mdrs.ExpTotalTtdRiskRate += memberDataPointResult.ExpAdjLoadedTtdRate
-	mdrs.TotalTtdAnnualRiskPremium += memberDataPointResult.TtdRiskPremium
-	mdrs.TotalTtdAnnualOfficePremium += memberDataPointResult.TtdOfficePremium
-	mdrs.ExpTotalTtdAnnualRiskPremium += memberDataPointResult.ExpAdjTtdRiskPremium
-	mdrs.ExpTotalTtdAnnualOfficePremium += memberDataPointResult.ExpAdjTtdOfficePremium
-
-	mdrs.TotalPhiRiskRate += memberDataPointResult.LoadedPhiRate
-	mdrs.ExpTotalPhiRiskRate += memberDataPointResult.ExpAdjLoadedPhiRate
-	mdrs.TotalPhiAnnualRiskPremium += memberDataPointResult.PhiRiskPremium
-	mdrs.TotalPhiAnnualOfficePremium += memberDataPointResult.PhiOfficePremium
-	mdrs.ExpTotalPhiAnnualRiskPremium += memberDataPointResult.ExpAdjPhiRiskPremium
-	mdrs.ExpTotalPhiAnnualOfficePremium += memberDataPointResult.ExpAdjPhiOfficePremium
-
-	mdrs.TotalCiRiskRate += memberDataPointResult.LoadedCiRate
-	mdrs.ExpTotalCiRiskRate += memberDataPointResult.ExpAdjLoadedCiRate
-	mdrs.TotalCiAnnualRiskPremium += memberDataPointResult.CiRiskPremium
-	mdrs.TotalCiAnnualOfficePremium += memberDataPointResult.CiOfficePremium
-	mdrs.ExpTotalCiAnnualRiskPremium += memberDataPointResult.ExpAdjCiRiskPremium
-	mdrs.ExpTotalCiAnnualOfficePremium += memberDataPointResult.ExpAdjCiOfficePremium
-
-	mdrs.TotalSglaRiskRate += memberDataPointResult.LoadedSpouseGlaRate
-	mdrs.ExpTotalSglaRiskRate += memberDataPointResult.ExpAdjLoadedSpouseGlaRate
-	mdrs.TotalSglaAnnualRiskPremium += memberDataPointResult.SpouseGlaRiskPremium
-	mdrs.TotalSglaAnnualOfficePremium += memberDataPointResult.SpouseGlaOfficePremium
-	mdrs.ExpTotalSglaAnnualRiskPremium += memberDataPointResult.ExpAdjSpouseGlaRiskPremium
-	mdrs.ExpTotalSglaAnnualOfficePremium += memberDataPointResult.ExpAdjSpouseGlaOfficePremium
-
-	mdrs.TotalFunAnnualRiskPremium += memberDataPointResult.TotalFuneralRiskCost
-	mdrs.TotalFunAnnualOfficePremium += memberDataPointResult.TotalFuneralOfficeCost
-	mdrs.ExpTotalFunAnnualRiskPremium += memberDataPointResult.ExpAdjTotalFuneralRiskCost
-	mdrs.ExpTotalFunAnnualOfficePremium += memberDataPointResult.ExpAdjTotalFuneralOfficeCost
-	//mdrs.TotalGlaExperienceAdjustedAnnualPremium += memberDataPointResult.GlaExperienceAdjustedAnnualPremium
-	//mdrs.TotalPtdExperienceAdjustedAnnualPremium += memberDataPointResult.PtdExperienceAdjustedAnnualPremium
-	//mdrs.TotalPhiExperienceAdjustedAnnualPremium += memberDataPointResult.PhiExperienceAdjustedAnnualPremium
-	//mdrs.TotalTtdExperienceAdjustedAnnualPremium += memberDataPointResult.TtdExperienceAdjustedAnnualPremium
-	//mdrs.TotalCiExperienceAdjustedAnnualPremium += memberDataPointResult.CiExperienceAdjustedAnnualPremium
-	//mdrs.TotalSpouseExperienceAdjustedAnnualPremium += memberDataPointResult.SpouseExperienceAdjustedAnnualPremium
-	//mdrs.TotalFuneralExperienceAdjustedAnnualPremium += memberDataPointResult.FuneralExperienceAdjustedAnnualPremium
-	mdrs.TotalGlaSumAssured += memberDataPointResult.GlaSumAssured
-	mdrs.TotalGlaCappedSumAssured += memberDataPointResult.GlaCappedSumAssured
-	mdrs.TotalPtdSumAssured += memberDataPointResult.PtdSumAssured
-	mdrs.TotalPtdCappedSumAssured += memberDataPointResult.PtdCappedSumAssured
-	mdrs.TotalCiSumAssured += memberDataPointResult.CiSumAssured
-	mdrs.TotalCiCappedSumAssured += memberDataPointResult.CiCappedSumAssured
-	mdrs.TotalSglaSumAssured += memberDataPointResult.SpouseGlaSumAssured
-	mdrs.TotalSglaCappedSumAssured += memberDataPointResult.SpouseGlaCappedSumAssured
-	mdrs.TotalTtdIncome += memberDataPointResult.TtdIncome
-	mdrs.TotalTtdCappedIncome += memberDataPointResult.TtdCappedIncome
-	mdrs.TotalPhiIncome += memberDataPointResult.PhiIncome
-	mdrs.TotalPhiCappedIncome += memberDataPointResult.PhiCappedIncome
-	mdrs.TotalAnnualPremium = mdrs.TotalGlaAnnualOfficePremium + mdrs.TotalPtdAnnualOfficePremium + mdrs.TotalTtdAnnualOfficePremium + mdrs.TotalPhiAnnualOfficePremium + mdrs.TotalCiAnnualOfficePremium + mdrs.TotalSglaAnnualOfficePremium
-	mdrs.ExpTotalAnnualPremiumExclFuneral = mdrs.ExpTotalGlaAnnualOfficePremium + mdrs.ExpTotalPtdAnnualOfficePremium + mdrs.ExpTotalTtdAnnualOfficePremium + mdrs.ExpTotalPhiAnnualOfficePremium + mdrs.ExpTotalCiAnnualOfficePremium + mdrs.ExpTotalSglaAnnualOfficePremium
-	mdrs.TotalCommission = (mdrs.ExpTotalAnnualPremiumExclFuneral + mdrs.ExpTotalFunAnnualOfficePremium) * premiumLoading.CommissionLoading // / 100.0
-	mdrs.TotalExpenses = (mdrs.ExpTotalAnnualPremiumExclFuneral + mdrs.ExpTotalFunAnnualOfficePremium) * premiumLoading.ExpenseLoading      /// 100.0
-	mdrs.TotalExpectedClaims = mdrs.ExpTotalGlaAnnualRiskPremium + mdrs.ExpTotalPtdAnnualRiskPremium + mdrs.ExpTotalCiAnnualRiskPremium + mdrs.ExpTotalSglaAnnualRiskPremium + mdrs.ExpTotalTtdAnnualRiskPremium + mdrs.ExpTotalPhiAnnualRiskPremium + mdrs.ExpTotalFunAnnualRiskPremium
-	mdrs.TotalAnnualSalary += mp.AnnualSalary
-
-	if groupQuote.SchemeCategories[i].GlaEducatorBenefit == "Yes" || groupQuote.SchemeCategories[i].PtdEducatorBenefit == "Yes" {
-		educatorRates := GetEducatorRate(groupParameter, memberDataPointResult.AgeNextBirthday)
-		mdrs.TotalRiskWeightedEducatorSumAssured += memberDataPointResult.Grade0SumAssured*educatorRates.Grade0RiskRate + memberDataPointResult.Grade17SumAssured*educatorRates.Grade17RiskRate + memberDataPointResult.Grade812SumAssured*educatorRates.Grade812RiskRate + memberDataPointResult.TertiarySumAssured*educatorRates.TertiaryRiskRate
-		mdrs.TotalEducatorRiskPremium += memberDataPointResult.EducatorRiskPremium
-		mdrs.TotalEducatorOfficePremium += memberDataPointResult.EducatorOfficePremium
-		mdrs.ExpAdjTotalEducatorRiskPremium += memberDataPointResult.ExpAdjEducatorRiskPremium
-		mdrs.ExpAdjTotalEducatorOfficePremium += memberDataPointResult.ExpAdjEducatorOfficePremium
-	}
-
-	if mdrs.MemberCount == 1 {
-		mdrs.MinGlaSumAssured = memberDataPointResult.GlaSumAssured
-		mdrs.MinPtdSumAssured = memberDataPointResult.PtdSumAssured
-		mdrs.MinCiSumAssured = memberDataPointResult.CiSumAssured
-		mdrs.MinSglaSumAssured = memberDataPointResult.SpouseGlaSumAssured
-		mdrs.MinPhiIncome = memberDataPointResult.PhiIncome
-		mdrs.MinTtdIncome = memberDataPointResult.TtdIncome
-	}
-	if mdrs.MemberCount > 1 {
-		mdrs.MinGlaSumAssured = math.Min(mdrs.MinGlaSumAssured, memberDataPointResult.GlaSumAssured)
-		mdrs.MinPtdSumAssured = math.Min(mdrs.MinPtdSumAssured, memberDataPointResult.PtdSumAssured)
-		mdrs.MinCiSumAssured = math.Min(mdrs.MinCiSumAssured, memberDataPointResult.CiSumAssured)
-		mdrs.MinSglaSumAssured = math.Min(mdrs.MinSglaSumAssured, memberDataPointResult.SpouseGlaSumAssured)
-		mdrs.MinPhiIncome = math.Min(mdrs.MinPhiIncome, memberDataPointResult.PhiIncome)
-		mdrs.MinTtdIncome = math.Min(mdrs.MinTtdIncome, memberDataPointResult.TtdIncome)
-	}
-	mdrs.MaxGlaSumAssured = math.Max(mdrs.MaxGlaSumAssured, memberDataPointResult.GlaSumAssured)
-	mdrs.MaxGlaCappedSumAssured = math.Max(mdrs.MaxGlaCappedSumAssured, memberDataPointResult.GlaCappedSumAssured)
-	mdrs.MaxPtdSumAssured = math.Max(mdrs.MaxPtdSumAssured, memberDataPointResult.PtdSumAssured)
-	mdrs.MaxPtdCappedSumAssured = math.Max(mdrs.MaxPtdCappedSumAssured, memberDataPointResult.PtdCappedSumAssured)
-	mdrs.MaxCiSumAssured = math.Max(mdrs.MaxCiSumAssured, memberDataPointResult.CiSumAssured)
-	mdrs.MaxCiCappedSumAssured = math.Max(mdrs.MaxCiCappedSumAssured, memberDataPointResult.CiCappedSumAssured)
-	mdrs.MaxSglaSumAssured = math.Max(mdrs.MaxSglaSumAssured, memberDataPointResult.SpouseGlaSumAssured)
-	mdrs.MaxSglaCappedSumAssured = math.Max(mdrs.MaxSglaCappedSumAssured, memberDataPointResult.SpouseGlaCappedSumAssured)
-	mdrs.MaxPhiIncome = math.Max(mdrs.MaxPhiIncome, memberDataPointResult.PhiIncome)
-	mdrs.MaxPhiCappedIncome = math.Max(mdrs.MaxPhiCappedIncome, memberDataPointResult.PhiCappedIncome)
-	mdrs.MaxTtdIncome = math.Max(mdrs.MaxTtdIncome, memberDataPointResult.TtdIncome)
-	mdrs.MaxTtdCappedIncome = math.Max(mdrs.MaxTtdCappedIncome, memberDataPointResult.TtdCappedIncome)
-
-	mutex.Unlock()
-	//UpdateRatedMemberData(mpIndex, memberDataPointResult, memberDataResults)
 }
 
 func UpdateRatedMemberData(mpIndex int, memberDataPointResult models.MemberRatingResult, memberDataResults *map[string]models.MemberRatingResult) {
