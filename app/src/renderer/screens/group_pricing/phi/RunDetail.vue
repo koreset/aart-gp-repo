@@ -330,8 +330,6 @@ onMounted(async () => {
   }
 
   loadingData.value = false
-
-
 })
 </script>
 

@@ -18,15 +18,21 @@
             rounded
             class="mb-3"
           />
-          <div class="text-body-1 font-weight-medium mb-1">{{ progressPercent }}%</div>
+          <div class="text-body-1 font-weight-medium mb-1"
+            >{{ progressPercent }}%</div
+          >
           <div class="text-body-2 text-medium-emphasis">
             {{ phaseLabel }}
             <span v-if="calcProgress?.currentCategory">
               — {{ calcProgress.currentCategory }}
             </span>
           </div>
-          <div v-if="calcProgress && calcProgress.totalCategories > 0" class="text-caption text-medium-emphasis mt-1">
-            {{ calcProgress.completedCategories }} / {{ calcProgress.totalCategories }} categories
+          <div
+            v-if="calcProgress && calcProgress.totalCategories > 0"
+            class="text-caption text-medium-emphasis mt-1"
+          >
+            {{ calcProgress.completedCategories }} /
+            {{ calcProgress.totalCategories }} categories
           </div>
         </v-card-text>
       </v-card>

@@ -117,10 +117,10 @@ export default {
   deletePhiRunConfig(id) {
     return Api.delete('phi-valuation/run-configs/' + id)
   },
-    getValuationJobWithSpCode(id, spCode) {
+  getValuationJobWithSpCode(id, spCode) {
     return Api.get('valuations/jobs/' + id + '/sp-code/' + spCode)
   },
-    getValuationJobs() {
+  getValuationJobs() {
     return Api.get('valuations/jobs')
   },
   getJobExcelResults(jobId) {
@@ -133,7 +133,7 @@ export default {
       responseType: 'blob'
     })
   },
-    getExcelResults(jobId, control) {
+  getExcelResults(jobId, control) {
     if (control) {
       return Api.get('valuations/jobs/' + jobId + '/excel/control', {
         responseType: 'blob'
@@ -143,6 +143,5 @@ export default {
         responseType: 'blob'
       })
     }
-  },
-
+  }
 }

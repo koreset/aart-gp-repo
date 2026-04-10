@@ -199,7 +199,5 @@ const createColumnDefs = (data) => {
     columnDefs.value.push(header)
   })
 }
-
-
 </script>
 <style lang="css" scoped></style>
