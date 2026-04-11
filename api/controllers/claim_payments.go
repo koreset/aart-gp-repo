@@ -376,6 +376,7 @@ type verifyBankAccountRequest struct {
 	FirstName         string `json:"first_name" binding:"required"`
 	Surname           string `json:"surname"`
 	IdentityNumber    string `json:"identity_number" binding:"required"`
+	IdentityType      string `json:"identity_type"`
 	BankAccountNumber string `json:"bank_account_number" binding:"required"`
 	BankBranchCode    string `json:"bank_branch_code" binding:"required"`
 	BankAccountType   string `json:"bank_account_type" binding:"required"`
@@ -393,6 +394,7 @@ func VerifyBankAccount(c *gin.Context) {
 		FirstName:         req.FirstName,
 		Surname:           req.Surname,
 		IdentityNumber:    req.IdentityNumber,
+		IdentityType:      req.IdentityType,
 		BankAccountNumber: req.BankAccountNumber,
 		BankBranchCode:    req.BankBranchCode,
 		BankAccountType:   req.BankAccountType,

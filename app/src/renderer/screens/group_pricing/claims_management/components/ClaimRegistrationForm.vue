@@ -1278,10 +1278,14 @@ const verifyBankingDetails = async () => {
     const firstName = nameParts.slice(0, -1).join(' ') || nameParts[0] || ''
     const surname = nameParts.length > 1 ? nameParts[nameParts.length - 1] : ''
 
+    const idNumber = formData.value.claimant_id_number || formData.value.member_id_number
+    const identityType = /^\d{13}$/.test(idNumber) ? 'IDNumber' : 'Passport'
+
     const res = await GroupPricingService.verifyBankAccount({
       first_name: firstName,
       surname: surname,
-      identity_number: formData.value.claimant_id_number || formData.value.member_id_number,
+      identity_number: idNumber,
+      identity_type: identityType,
       bank_account_number: formData.value.bank_account_number,
       bank_branch_code: formData.value.bank_branch_code,
       bank_account_type: accountTypeMap[formData.value.bank_account_type] || formData.value.bank_account_type
