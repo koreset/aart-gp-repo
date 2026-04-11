@@ -257,6 +257,24 @@ func ValidateMigration(files map[string]*multipart.FileHeader, user models.AppUs
 		return nil, fmt.Errorf("member_data: %v", err)
 	}
 
+	// Collect RSA IDs for bulk validation via CheckID API
+	var rsaIDsForValidation []string
+	for _, row := range memberRows {
+		idType := strings.ToUpper(strings.TrimSpace(row.MemberIdType))
+		idNum := strings.TrimSpace(row.MemberIdNumber)
+		if (idType == "RSA_ID" || idType == "ID") && idNum != "" {
+			rsaIDsForValidation = append(rsaIDsForValidation, idNum)
+		}
+	}
+	rsaIDResults, rsaIDErr := utils.ValidateRSAIDsBulk(rsaIDsForValidation)
+	if rsaIDErr != nil {
+		result.Valid = false
+		result.Errors = append(result.Errors, models.MigrationValidationError{
+			Template: "member_data", Row: 0, Column: "member_id_number", Message: fmt.Sprintf("ID validation service error: %v", rsaIDErr),
+		})
+		return result, nil
+	}
+
 	// Validate member data: cross-references and field values
 	memberIdSet := make(map[string]map[string]bool) // scheme_name -> set of member_id_numbers
 	for i, row := range memberRows {
@@ -290,11 +308,13 @@ func ValidateMigration(files map[string]*multipart.FileHeader, user models.AppUs
 			})
 		} else {
 			idType := strings.ToUpper(strings.TrimSpace(row.MemberIdType))
-			if (idType == "RSA_ID" || idType == "ID") && !utils.IsValidRSAID(idNum) {
-				result.Valid = false
-				result.Errors = append(result.Errors, models.MigrationValidationError{
-					Template: "member_data", Row: rowNum, Column: "member_id_number", Message: fmt.Sprintf("invalid RSA ID '%s'", idNum),
-				})
+			if (idType == "RSA_ID" || idType == "ID") {
+				if valid, ok := rsaIDResults[idNum]; ok && !valid {
+					result.Valid = false
+					result.Errors = append(result.Errors, models.MigrationValidationError{
+						Template: "member_data", Row: rowNum, Column: "member_id_number", Message: fmt.Sprintf("invalid RSA ID '%s'", idNum),
+					})
+				}
 			}
 			if memberIdSet[sn] == nil {
 				memberIdSet[sn] = make(map[string]bool)

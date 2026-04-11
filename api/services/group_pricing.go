@@ -408,6 +408,19 @@ func AcceptGroupPricingQuote(quoteId string, commencementDate string, term strin
 				return err
 			}
 
+			// Collect RSA IDs for bulk validation via CheckID API
+			var rsaIDsToValidate []string
+			for _, m := range gmdif {
+				idType := strings.ToUpper(strings.TrimSpace(m.MemberIdType))
+				if (idType == "RSA_ID" || idType == "ID" || idType == "RSA_ISD") && strings.TrimSpace(m.MemberIdNumber) != "" {
+					rsaIDsToValidate = append(rsaIDsToValidate, strings.TrimSpace(m.MemberIdNumber))
+				}
+			}
+			rsaIDResults, rsaIDErr := utils.ValidateRSAIDsBulk(rsaIDsToValidate)
+			if rsaIDErr != nil {
+				return fmt.Errorf("ID validation service error: %v", rsaIDErr)
+			}
+
 			for i := range gmdif {
 				if strings.TrimSpace(gmdif[i].EmployeeNumber) == "" {
 					return fmt.Errorf("employee number for member %s is empty. All members must have an employee number for New Business quotes", gmdif[i].MemberName)
@@ -421,7 +434,7 @@ func AcceptGroupPricingQuote(quoteId string, commencementDate string, term strin
 
 				idType := strings.ToUpper(strings.TrimSpace(gmdif[i].MemberIdType))
 				if (idType == "RSA_ID" || idType == "ID" || idType == "RSA_ISD") && strings.TrimSpace(gmdif[i].MemberIdNumber) != "" {
-					if !utils.IsValidRSAID(gmdif[i].MemberIdNumber) {
+					if valid, ok := rsaIDResults[strings.TrimSpace(gmdif[i].MemberIdNumber)]; ok && !valid {
 						return fmt.Errorf("invalid RSA ID '%s' for member %s", gmdif[i].MemberIdNumber, gmdif[i].MemberName)
 					}
 				}
@@ -3618,8 +3631,11 @@ func SaveQuoteTables(v *multipart.FileHeader, tableType string, quoteId int, use
 			idType := strings.ToUpper(strings.TrimSpace(row.MemberIdType))
 			idNumber := strings.TrimSpace(row.MemberIdNumber)
 			if (idType == "RSA_ID" || idType == "ID") && idNumber != "" {
-				if !utils.IsValidRSAID(idNumber) {
-					// Record error for invalid RSA ID
+				valid, checkErr := utils.ValidateRSAID(idNumber)
+				if checkErr != nil {
+					return fmt.Errorf("ID validation service error: %v", checkErr), 0
+				}
+				if !valid {
 					validationErrors = append(validationErrors, fmt.Sprintf("invalid RSA ID '%s' at row %d", idNumber, i))
 					continue
 				}
