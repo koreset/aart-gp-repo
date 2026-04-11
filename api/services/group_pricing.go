@@ -6394,6 +6394,18 @@ func GetGroupSchemeCategories(id string) ([]models.SchemeCategory, error) {
 func AddMemberToScheme(member models.GPricingMemberDataInForce, user models.AppUser) (models.GPricingMemberDataInForce, error) {
 	var created models.GPricingMemberDataInForce
 	var schemecategory models.SchemeCategory
+	// Validate RSA ID before proceeding
+	idType := strings.ToUpper(strings.TrimSpace(member.MemberIdType))
+	if (idType == "RSA_ID" || idType == "ID" || idType == "RSA_ISD") && strings.TrimSpace(member.MemberIdNumber) != "" {
+		valid, checkErr := utils.ValidateRSAID(strings.TrimSpace(member.MemberIdNumber))
+		if checkErr != nil {
+			return created, fmt.Errorf("ID validation service error: %v", checkErr)
+		}
+		if !valid {
+			return created, fmt.Errorf("invalid RSA ID '%s'", member.MemberIdNumber)
+		}
+	}
+
 	// Wrap the whole operation in a transaction to ensure atomicity and audit consistency
 	if err := DB.Transaction(func(tx *gorm.DB) error {
 		// Prevent duplicates: a member with the same ID Number must not already exist for this scheme

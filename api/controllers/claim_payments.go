@@ -3,6 +3,7 @@ package controllers
 import (
 	"api/models"
 	"api/services"
+	"api/utils"
 	"errors"
 	"net/http"
 	"strconv"
@@ -368,4 +369,37 @@ func RetryFailedPayments(c *gin.Context) {
 		return
 	}
 	Created(c, fileRecord)
+}
+
+// verifyBankAccountRequest is the frontend-facing request for bank account verification.
+type verifyBankAccountRequest struct {
+	FirstName         string `json:"first_name" binding:"required"`
+	Surname           string `json:"surname"`
+	IdentityNumber    string `json:"identity_number" binding:"required"`
+	BankAccountNumber string `json:"bank_account_number" binding:"required"`
+	BankBranchCode    string `json:"bank_branch_code" binding:"required"`
+	BankAccountType   string `json:"bank_account_type" binding:"required"`
+}
+
+// VerifyBankAccount handles POST /group-pricing/claims/verify-bank-account
+func VerifyBankAccount(c *gin.Context) {
+	var req verifyBankAccountRequest
+	if err := c.BindJSON(&req); err != nil {
+		BadRequest(c, err)
+		return
+	}
+
+	result, err := utils.VerifyBankAccount(utils.VerifyBankAccountRequest{
+		FirstName:         req.FirstName,
+		Surname:           req.Surname,
+		IdentityNumber:    req.IdentityNumber,
+		BankAccountNumber: req.BankAccountNumber,
+		BankBranchCode:    req.BankBranchCode,
+		BankAccountType:   req.BankAccountType,
+	})
+	if err != nil {
+		InternalError(c, err)
+		return
+	}
+	OK(c, result)
 }

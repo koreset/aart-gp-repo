@@ -1257,20 +1257,14 @@ const canVerifyBanking = computed(() => {
   )
 })
 
+const accountTypeMap: Record<string, string> = {
+  '1': 'Cheque',
+  '2': 'Savings',
+  '3': 'Transmission'
+}
+
 /**
- * Verify banking details via external AVS (Account Verification Service).
- *
- * STUB: This is a placeholder that simulates a bank verification API call.
- * In production, this would integrate with a service such as:
- *   - BankServ AVS (Account Verification Service)
- *   - Stitch Bank Account Verification API
- *   - Peach Payments AVS
- *   - TransUnion CDV (Check Digit Validation) + AVS
- *
- * The API call would typically send:
- *   { bank_name, branch_code, account_number, account_type, account_holder_name, id_number }
- * And receive:
- *   { verified: boolean, holder_match: boolean, account_open: boolean, reference: string }
+ * Verify banking details via VerifyNow bank account verification API.
  */
 const verifyBankingDetails = async () => {
   if (!canVerifyBanking.value) return
@@ -1280,49 +1274,49 @@ const verifyBankingDetails = async () => {
   bankVerificationError.value = ''
 
   try {
-    // --- STUB: Simulate API call with 1.5s delay ---
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    const nameParts = (formData.value.account_holder_name || '').trim().split(/\s+/)
+    const firstName = nameParts.slice(0, -1).join(' ') || nameParts[0] || ''
+    const surname = nameParts.length > 1 ? nameParts[nameParts.length - 1] : ''
 
-    // Simulate CDV (Check Digit Validation) for SA bank accounts
-    const acctNum = formData.value.bank_account_number
-    const isValidLength = acctNum.length >= 6 && acctNum.length <= 15
+    const res = await GroupPricingService.verifyBankAccount({
+      first_name: firstName,
+      surname: surname,
+      identity_number: formData.value.claimant_id_number || formData.value.member_id_number,
+      bank_account_number: formData.value.bank_account_number,
+      bank_branch_code: formData.value.bank_branch_code,
+      bank_account_type: accountTypeMap[formData.value.bank_account_type] || formData.value.bank_account_type
+    })
 
-    if (!isValidLength) {
+    const data = res.data?.data || res.data
+    if (data.success && data.results?.identity_and_account_verified) {
+      const now = new Date()
+      formData.value.bank_verification_status = 'verified'
+      formData.value.bank_verification_date =
+        now.toISOString().split('T')[0] +
+        ' ' +
+        now.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })
+      formData.value.bank_verification_reference = data.requestId || ''
+    } else {
       formData.value.bank_verification_status = 'failed'
-      bankVerificationError.value =
-        'Invalid account number length. SA bank accounts are typically 6-15 digits.'
-      return
+      const vr = data.results?.verification_results
+      if (vr) {
+        const issues: string[] = []
+        if (vr.accountFound !== 'Yes') issues.push('Account not found')
+        if (vr.accountOpen !== 'Yes') issues.push('Account is not active')
+        if (vr.identityMatch !== 'Yes') issues.push('Identity does not match account holder')
+        if (vr.accountTypeMatch !== 'Yes') issues.push('Account type mismatch')
+        bankVerificationError.value =
+          issues.length > 0
+            ? issues.join('. ') + '.'
+            : data.results?.summary || 'Verification failed.'
+      } else {
+        bankVerificationError.value = data.results?.summary || 'Verification failed.'
+      }
     }
-
-    // Stub: treat all well-formed accounts as verified
-    const now = new Date()
-    formData.value.bank_verification_status = 'verified'
-    formData.value.bank_verification_date =
-      now.toISOString().split('T')[0] +
-      ' ' +
-      now.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })
-    formData.value.bank_verification_reference =
-      'AVS-' +
-      now.getFullYear() +
-      String(now.getMonth() + 1).padStart(2, '0') +
-      String(now.getDate()).padStart(2, '0') +
-      '-' +
-      String(Math.floor(Math.random() * 900000) + 100000)
-    // --- END STUB ---
-
-    // TODO: Replace stub with real API call:
-    // const res = await BankingVerificationService.verifyAccount({
-    //   bank_name: formData.value.bank_name,
-    //   branch_code: formData.value.bank_branch_code,
-    //   account_number: formData.value.bank_account_number,
-    //   account_type: formData.value.bank_account_type,
-    //   account_holder_name: formData.value.account_holder_name,
-    //   id_number: formData.value.member_id_number
-    // })
-    // if (res.data.verified) { ... } else { ... }
   } catch (error: any) {
     formData.value.bank_verification_status = 'failed'
     bankVerificationError.value =
+      error?.response?.data?.error ||
       error?.message ||
       'Verification service unavailable. Please try again or verify manually.'
   } finally {

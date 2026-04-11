@@ -14,7 +14,9 @@ var (
 	DbPassword string
 	DbName     string
 
-	CheckIDApiKey string
+	CheckIDApiKey    string
+	VerifyNowApiKey  string
+	VerifyNowMode    string
 )
 
 func init() {
@@ -29,6 +31,11 @@ func init() {
 	DbName = os.Getenv("DB_NAME")
 
 	CheckIDApiKey = os.Getenv("CHECKID_API_KEY")
+	VerifyNowApiKey = os.Getenv("VERIFYNOW_API_KEY")
+	VerifyNowMode = os.Getenv("VERIFYNOW_MODE")
+	if VerifyNowMode == "" {
+		VerifyNowMode = "production"
+	}
 }
 
 

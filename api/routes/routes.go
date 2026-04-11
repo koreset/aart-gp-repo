@@ -188,6 +188,8 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.POST("claims/payment-schedules/:schedule_id/proof", controllers.UploadPaymentProof)
 			groupPricing.GET("claims/payment-schedules/:schedule_id/proof", controllers.GetPaymentProofs)
 			groupPricing.GET("claims/payment-schedules/proof/:proof_id/download", controllers.DownloadPaymentProof)
+			// Bank account verification (VerifyNow)
+			groupPricing.POST("claims/verify-bank-account", controllers.VerifyBankAccount)
 			// ACB Bank profiles
 			groupPricing.POST("claims/bank-profiles", controllers.CreateBankProfile)
 			groupPricing.GET("claims/bank-profiles", controllers.GetBankProfiles)

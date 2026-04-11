@@ -1499,6 +1499,9 @@ export default {
       responseType: 'blob'
     })
   },
+  verifyBankAccount(data) {
+    return Api.post('/group-pricing/claims/verify-bank-account', data)
+  },
   getOrgUsers(organization) {
     const json = JSON.stringify(organization)
     return Api.post('org-users', json, {
