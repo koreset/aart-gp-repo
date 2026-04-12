@@ -1,0 +1,15 @@
+{
+  "db_type": "mysql",
+  "db_name": "group_risk",
+  "db_host": "localhost",
+  "db_user": "root",
+  "db_password": "Wordpass15",
+  "db_port": "3306",
+  "app_port": "9095",
+  "app_host": "localhost",
+  "redis_enabled": false,
+  "redis_host": "",
+  "redis_port": "",
+  "redis_password": "",
+  "redis_db": 0
+}
