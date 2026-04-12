@@ -190,6 +190,52 @@ func (l *CustomGormLogger) Trace(ctx context.Context, begin time.Time, fc func()
 	}
 }
 
+// dialectorForConfig builds a GORM dialector for the given AppConfig. It is
+// the single source of truth for DSN construction, shared by both the runtime
+// database initialiser and the setup wizard's connectivity check.
+func dialectorForConfig(cfg models.AppConfig) (gorm.Dialector, error) {
+	switch cfg.DbType {
+	case "postgresql":
+		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
+			cfg.DbHost, cfg.DbUser, cfg.DbPassword, cfg.DbName, cfg.DbPort)
+		return postgres.Open(dsn), nil
+	case "mysql":
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4,utf8&parseTime=true&loc=Local&interpolateParams=true&tls=skip-verify",
+			cfg.DbUser, cfg.DbPassword, cfg.DbHost, cfg.DbPort, cfg.DbName)
+		return mysql.Open(dsn), nil
+	case "mssql":
+		dsn := fmt.Sprintf("sqlserver://%s:%s@%s:%s?database=%s",
+			cfg.DbUser, cfg.DbPassword, cfg.DbHost, cfg.DbPort, cfg.DbName)
+		return sqlserver.Open(dsn), nil
+	default:
+		return nil, fmt.Errorf("unsupported db type: %q", cfg.DbType)
+	}
+}
+
+// TestDBConnection opens a throwaway connection using globals.AppConfig and
+// pings it. Used by the setup wizard to validate credentials before writing
+// config.json. It does not mutate the global DB variable.
+func TestDBConnection() error {
+	dialector, err := dialectorForConfig(globals.AppConfig)
+	if err != nil {
+		return err
+	}
+
+	db, err := gorm.Open(dialector, &gorm.Config{})
+	if err != nil {
+		return err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	defer sqlDB.Close()
+
+	pingCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return sqlDB.PingContext(pingCtx)
+}
+
 func initializeDb() {
 	var err error
 	appLog.Info("Initializing database connection")
@@ -205,87 +251,25 @@ func initializeDb() {
 	customLogger := &CustomGormLogger{}
 	customLogger.LogMode(gormLogger.Info)
 
-	if globals.AppConfig.DbType == "postgresql" {
-		appLog.Info("Connecting to PostgreSQL database")
-		postgresDsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
-			globals.AppConfig.DbHost,
-			globals.AppConfig.DbUser,
-			globals.AppConfig.DbPassword,
-			globals.AppConfig.DbName,
-			globals.AppConfig.DbPort)
-
-		DB, err = gorm.Open(postgres.Open(postgresDsn), &gorm.Config{
-			Logger:      customLogger,
-			PrepareStmt: false, // Enable prepared statement cache
-		})
-
-		if err != nil {
-			appLog.WithField("error", err.Error()).Error("Failed to connect to PostgreSQL database")
-		} else {
-			appLog.Info("Successfully connected to PostgreSQL database")
-		}
-
-		DbBackend = "postgresql"
-	}
-
-	if globals.AppConfig.DbType == "mysql" {
-		appLog.Info("Connecting to MySQL database")
-		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4,utf8&parseTime=true&loc=Local&interpolateParams=true&tls=skip-verify",
-			globals.AppConfig.DbUser,
-			globals.AppConfig.DbPassword,
-			globals.AppConfig.DbHost,
-			globals.AppConfig.DbPort,
-			globals.AppConfig.DbName)
-
-		DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
-			Logger:      customLogger,
-			PrepareStmt: false, // Enable prepared statement cache
-		})
-
-		if err != nil {
-			appLog.WithField("error", err.Error()).Error("Failed to connect to MySQL database")
-		} else {
-			appLog.Info("Successfully connected to MySQL database")
-		}
-
-		DbBackend = "mysql"
-	}
-
-	if globals.AppConfig.DbType == "mssql" {
-		appLog.Info("Connecting to MSSQL database")
-		// Note: This requires the gorm.io/driver/sqlserver package to be installed
-		// Uncomment the import and this code when the package is available
-
-		mssqlDsn := fmt.Sprintf("sqlserver://%s:%s@%s:%s?database=%s",
-			globals.AppConfig.DbUser,
-			globals.AppConfig.DbPassword,
-			globals.AppConfig.DbHost,
-			globals.AppConfig.DbPort,
-			globals.AppConfig.DbName)
-
-		DB, err = gorm.Open(sqlserver.Open(mssqlDsn), &gorm.Config{
-			Logger:      customLogger,
-			PrepareStmt: false, // Enable prepared statement cache
-		})
-
-		//// Temporary placeholder until the sqlserver driver is available
-		//appLog.Error("MSSQL support is not yet implemented")
-		//err = fmt.Errorf("MSSQL support is not yet implemented")
-
-		if err != nil {
-			appLog.WithField("error", err.Error()).Error("Failed to connect to MSSQL database")
-		} else {
-			appLog.Info("Successfully connected to MSSQL database")
-		}
-
-		DbBackend = "mssql"
-	}
-
+	dialector, err := dialectorForConfig(globals.AppConfig)
 	if err != nil {
 		appLog.WithField("error", err.Error()).Error("Could not start Database")
 		globals.Logger.Error("Could not start Database: ", err)
 		return
 	}
+
+	appLog.WithField("db_type", globals.AppConfig.DbType).Info("Connecting to database")
+	DB, err = gorm.Open(dialector, &gorm.Config{
+		Logger:      customLogger,
+		PrepareStmt: false,
+	})
+	if err != nil {
+		appLog.WithField("error", err.Error()).Error("Failed to connect to database")
+		globals.Logger.Error("Could not start Database: ", err)
+		return
+	}
+	appLog.Info("Successfully connected to database")
+	DbBackend = globals.AppConfig.DbType
 
 	sqlDb, err := DB.DB()
 	if err != nil {

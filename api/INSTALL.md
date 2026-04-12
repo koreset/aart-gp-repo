@@ -1,66 +1,184 @@
-## Installation Notes
+# AART API — Installation & Setup
 
-### Prerequisites
-Configured MySQL database server on the machine
+## Prerequisites
 
+- A running database server. Supported backends: **MySQL**, **PostgreSQL**, **SQL Server**.
+- A database user with read/write (and DDL) permissions on the target database. The database itself should exist — AART will create tables but does not create the database.
+- (Optional) A Redis server, if you plan to enable Redis-backed caching and pub/sub.
+- Network connectivity from the machine running the API to the database (and Redis, if enabled).
 
-#### __Installation Steps__
-* Download the latest release of AART API Server from [here](https://github.com/koreset/aart-api/releases). 
+## 1. Obtain the binary
 
-* Choose the executable/binary that's suitable for your operating system (Windows/Mac/Linux are currently supported) and save the file in an appropriate location on your server or machine.
+Download the release for your platform from
+[the releases page](https://github.com/koreset/aart-api/releases) and place the
+binary somewhere writable — e.g. `/opt/aart/` on Linux/macOS or `C:\aart\` on
+Windows. The binary has no GUI; all interaction is via a terminal.
 
-* The API Server comes without a graphical user interface and interactions with the application can only happen via the command line window (Windows) or the Terminal (Mac/Linux)
+Below, we use `aart_api` as the binary name; substitute whatever your download
+is called (e.g. `api-1.2.0-linux`).
 
-* Open a console and navigate to the download location of the file
+## 2. Run the setup wizard
 
-* Assuming that the filename of the download is api-0.9-beta.exe, run the following command at the prompt
-```shell script
-api-0.9-beta.exe --new-setup
-```
-This will start off a series of prompts for configuration information
+From the directory containing the binary, run:
 
-```shell script
-Running Initial Setup...
-Enter your Database name:
-```
-Enter the name of the configured MySQL database you plan to use. This should ideally be an empty database. If the created database is ads, enter that name.
-
-```shell script
-Enter your Database Host:
-``` 
-Enter the database hostname. If the database is installed on the same machine as the server on which the application will be installed, enter "localhost"
-
-```shell script
-Enter your Database Port:
-```
-Provide the port on which the MySQL server listens on. The default is 3306
-
-```shell script
-Enter the Database Username:
-```
-The name of the database user that has the requisite read and write permissions to the database.
-
-```shell script
-Enter the Database Password:
-```
-The password for the database user.
-
-```shell script
-Enter the port for the Application (default 9090):
-```
-The API Server is RESTful application that needs to listen for requests on a port. The default is 9090. However, this can be configured to any port the application will need to listen on.
-
-```shell script
-Enter the IP or domain for the application (default localhost):
+```shell
+./aart_api -service setup
 ```
 
-Supplying this information will result in a configuration for the application to run.
+The wizard walks through the configuration interactively and writes the result
+to `config.json` in the current directory (mode `0600` — readable only by the
+owner, since it contains the database password).
 
-When the setup is complete, run the following command to start the server:
-```shell script
-api-0.9-beta.exe
+If `config.json` already exists, setup refuses to overwrite it. Use
+[`-service reconfigure`](#reconfiguring-an-existing-install) instead.
+
+### What the wizard asks
+
+1. **Confirmation** — "Installing a new instance of AART. Have your database
+   credentials ready. Continue?" Answer `Yes` to proceed.
+
+2. **Database type** — choose `MySQL`, `PostgreSQL`, or `SQL Server`.
+
+3. **Database connection details**:
+   - `Database name` — the existing database AART should use.
+   - `Database user`
+   - `Database password` (masked)
+   - `Database host (IP or hostname)` — whitespace and URL schemes are
+     rejected; use a bare host like `db.internal` or `10.0.0.5`.
+   - `Database port` — must be an integer between 1 and 65535. Common
+     defaults: MySQL `3306`, PostgreSQL `5432`, SQL Server `1433`.
+
+   After collecting these, the wizard **opens a test connection and pings
+   the database**. If it fails, the error is printed and you're asked whether
+   you want to re-enter credentials. Nothing is written to disk until the
+   ping succeeds.
+
+4. **Application host / port** — the hostname and port the API server
+   should listen on. `9090` is the conventional default.
+
+5. **Redis (optional)** — "Enable Redis?". Answer `No` to skip Redis
+   entirely; the application will run fine without it (caching falls back to
+   in-memory and pub/sub features are disabled). If you answer `Yes`, you
+   will be asked for:
+   - Redis host
+   - Redis port
+   - Redis password (may be left blank)
+   - Redis DB number (0–15; defaults to 0)
+
+6. **Write & run** — the wizard writes `config.json`, runs the initial
+   schema setup against the database (creates tables on first boot), and
+   then starts the API server.
+
+## 3. Subsequent starts
+
+Once `config.json` exists, you no longer need any flags. Just run:
+
+```shell
+./aart_api
 ```
-This assumes the name of the file is api-0.9-beta.exe.
-Ensure that the MySQL Server is up and running.
 
- 
+The binary reads `config.json`, runs any pending migrations, starts the
+background workers, and begins listening on the configured host/port.
+
+## Reconfiguring an existing install
+
+To change any setting (rotate a DB password, point at a different host,
+toggle Redis, etc.) without hand-editing `config.json`:
+
+```shell
+./aart_api -service reconfigure
+```
+
+This loads the current `config.json`, runs the same wizard with **every
+value pre-filled as the default** (press Enter to keep), and rewrites the
+file. The DB password prompt accepts a blank value to keep the existing
+password. The connection is still tested before anything is written.
+
+Reconfigure does **not** restart the running service. After it completes,
+restart the API process manually for the new settings to take effect.
+
+## Running as a system service (Windows)
+
+On Windows you can register AART as a Windows Service:
+
+```shell
+aart_api.exe -service install
+```
+
+You'll be prompted for a service name and a display name. The service is
+installed and started automatically. To remove it:
+
+```shell
+aart_api.exe -service uninstall
+```
+
+`-service install` is **Windows-only**. On macOS/Linux, run the binary
+directly or wrap it in a `launchd` / `systemd` unit of your own.
+
+## The config file
+
+`config.json` is a plain JSON document. A typical file looks like:
+
+```json
+{
+  "db_type": "postgresql",
+  "db_name": "aart",
+  "db_host": "db.internal",
+  "db_user": "aart",
+  "db_password": "********",
+  "db_port": "5432",
+  "app_port": "9090",
+  "app_host": "0.0.0.0",
+  "redis_enabled": false,
+  "redis_host": "",
+  "redis_port": "",
+  "redis_password": "",
+  "redis_db": 0
+}
+```
+
+Field reference:
+
+| Field            | Description                                                   |
+|------------------|---------------------------------------------------------------|
+| `db_type`        | `mysql`, `postgresql`, or `mssql`                             |
+| `db_name`        | Target database (must already exist)                          |
+| `db_host`        | DB hostname or IP                                             |
+| `db_user`        | DB username                                                   |
+| `db_password`    | DB password (stored in plaintext — protect this file)         |
+| `db_port`        | DB port                                                       |
+| `app_host`       | Host the API binds to                                         |
+| `app_port`       | Port the API listens on                                       |
+| `redis_enabled`  | `true` to use Redis; `false` to disable (default)             |
+| `redis_host`     | Redis hostname (only used when `redis_enabled`)               |
+| `redis_port`     | Redis port                                                    |
+| `redis_password` | Redis password (empty for no auth)                            |
+| `redis_db`       | Redis logical DB index, 0–15                                  |
+
+You can edit `config.json` by hand in an emergency, but
+`-service reconfigure` is preferred because it also verifies the database
+connection before writing.
+
+## Environment overrides
+
+A few fields can be overridden at runtime without editing the config:
+
+- `APP_PORT` — overrides `app_port`.
+- `ENVIRONMENT=production` — switches the HTTP listener to AutoTLS (Let's
+  Encrypt) on `app_host`. Use this only on a publicly reachable host with a
+  valid DNS name and ports 80/443 open.
+
+## Troubleshooting
+
+- **"config.json already exists"** when running `-service setup`: delete
+  the file if you really want a clean setup, or use `-service reconfigure`.
+- **"✗ Database connection failed"** during setup: the wizard prints the
+  underlying driver error. Check host/port reachability, credentials, and
+  that the database named in the prompt actually exists on the server.
+- **Redis connection errors at boot** (when `redis_enabled: true`): the
+  app logs a warning and continues without Redis — it does not crash. If
+  you want to disable Redis entirely, set `redis_enabled: false` or run
+  reconfigure and answer `No` to the Redis prompt.
+- **Permission denied reading `config.json`**: the file is written as
+  `0600`. Run the binary as the same user that ran `-service setup`, or
+  `chown` the file to the runtime user.

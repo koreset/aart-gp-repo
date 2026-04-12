@@ -104,234 +104,86 @@ func main() {
 	}
 
 	if *svcFlag == "install" {
-		if runtime.GOOS == "windows" {
-			//We need to configure and install the service
-			//Service Name
-			promptServiceName := promptui.Prompt{
-				Label: "Enter a service name for installation",
-				Validate: func(input string) error {
-					if input == "" {
-						return fmt.Errorf("service name is required")
-					}
-					return nil
-				},
-			}
+		if runtime.GOOS != "windows" {
+			fmt.Println("-service install is only supported on Windows. " +
+				"On macOS/Linux, run the binary directly or wrap it in a systemd/launchd unit.")
+			return
+		}
 
-			serviceName, err := promptServiceName.Run()
-			if err != nil {
-				fmt.Printf("Prompt failed %v\n", err)
-				return
-			}
+		serviceName, err := promptRequired("Enter a service name for installation", "")
+		if err != nil {
+			fmt.Printf("Prompt failed %v\n", err)
+			return
+		}
+		svcConfig.Name = serviceName
 
-			svcConfig.Name = serviceName
+		displayName, err := promptRequired("Enter a display name for the service", "")
+		if err != nil {
+			fmt.Printf("Prompt failed %v\n", err)
+			return
+		}
+		svcConfig.DisplayName = displayName
 
-			//Display Name
-			promptDisplayName := promptui.Prompt{
-				Label: "Enter a service name for installation",
-				Validate: func(input string) error {
-					if input == "" {
-						return fmt.Errorf("service name is required")
-					}
-					return nil
-				},
-			}
-
-			displayName, err := promptDisplayName.Run()
-			if err != nil {
-				fmt.Printf("Prompt failed %v\n", err)
-				return
-			}
-
-			svcConfig.DisplayName = displayName
-
-			err = s.Install()
-			if err != nil {
-				log.Fatal(err)
-			}
-			err = s.Start()
-
+		if err := s.Install(); err != nil {
+			log.Fatal(err)
+		}
+		if err := s.Start(); err != nil {
+			fmt.Printf("Service installed but failed to start: %v\n", err)
 		}
 	}
 
 	if *svcFlag == "setup" {
-		_, err := os.Open("config.json")
-		if err != nil { //config.json does not exist, clean setup
-			//				// Start off installation process and ask for comfirmation from user
-			install := promptui.Select{
-				Label: "Installing a new instance of AART. " +
-					"Please have the database credentials handy as this will be required. " +
-					"Continue?",
-				Items: []string{"Yes", "No"},
-			}
-
-			_, res, err := install.Run()
-
-			if err != nil {
-				_ = globals.Logger.Error(err)
-
-			}
-
-			if res == "Yes" {
-				//DB Type
-				promptDb := promptui.Select{
-					Label: "Select the database type to install",
-					Items: []string{"MySQL", "PostgreSQL"},
-				}
-
-				_, result, err := promptDb.Run()
-				if err != nil {
-					fmt.Printf("Prompt failed %v\n", err)
-					return
-				}
-				globals.AppConfig.DbType = strings.ToLower(result)
-
-				//DB Name
-				promptDbName := promptui.Prompt{
-					Label: "Enter the database name",
-					Validate: func(input string) error {
-						if input == "" {
-							return fmt.Errorf("database name can not be empty")
-						}
-						return nil
-					},
-				}
-
-				dbName, err := promptDbName.Run()
-				if err != nil {
-					fmt.Printf("Prompt failed %v\n", err)
-					return
-				}
-				globals.AppConfig.DbName = dbName
-
-				//DB UserEmail
-				promptDbUser := promptui.Prompt{
-					Label: "Enter the database user",
-					Validate: func(input string) error {
-						if input == "" {
-							return fmt.Errorf("database user can not be empty")
-						}
-						return nil
-					},
-				}
-
-				dbUser, err := promptDbUser.Run()
-				if err != nil {
-					fmt.Printf("Prompt failed %v\n", err)
-					return
-				}
-				globals.AppConfig.DbUser = dbUser
-
-				//DB Password
-				promptDbPassword := promptui.Prompt{
-					Label: "Enter the database password",
-					Validate: func(input string) error {
-						if input == "" {
-							return fmt.Errorf("database password can not be empty")
-						}
-						return nil
-					},
-					Mask: '*',
-				}
-
-				dbPassword, err := promptDbPassword.Run()
-				if err != nil {
-					fmt.Printf("Prompt failed %v\n", err)
-					return
-				}
-				globals.AppConfig.DbPassword = dbPassword
-
-				//DB Host
-				promptDbHost := promptui.Prompt{
-					Label: "Enter the database host. This should be a valid IP address or accessible hostname",
-					Validate: func(input string) error {
-						if input == "" {
-							return fmt.Errorf("database host can not be empty")
-						}
-						return nil
-					},
-				}
-
-				dbHost, err := promptDbHost.Run()
-				if err != nil {
-					fmt.Printf("Prompt failed %v\n", err)
-					return
-				}
-				globals.AppConfig.DbHost = dbHost
-
-				//DB Port
-				promptDbPort := promptui.Prompt{
-					Label: "Enter the database port",
-					Validate: func(input string) error {
-						if input == "" {
-							return fmt.Errorf("database port can not be empty")
-						}
-						return nil
-					},
-				}
-
-				dbPort, err := promptDbPort.Run()
-				if err != nil {
-					fmt.Printf("Prompt failed %v\n", err)
-					return
-				}
-				globals.AppConfig.DbPort = dbPort
-
-				//App Port
-				promptAppPort := promptui.Prompt{
-					Label: "Enter the port number the application will be running on",
-					Validate: func(input string) error {
-						if input == "" {
-							return fmt.Errorf("Application port can not be empty")
-						}
-						return nil
-					},
-				}
-
-				appPort, err := promptAppPort.Run()
-				if err != nil {
-					fmt.Printf("Prompt failed %v\n", err)
-					return
-				}
-				globals.AppConfig.AppPort = appPort
-
-				//App Host
-				promptAppHost := promptui.Prompt{
-					Label: "Enter the hostname the application will be running on",
-					Validate: func(input string) error {
-						if input == "" {
-							return fmt.Errorf("Application host can not be empty")
-						}
-						return nil
-					},
-				}
-
-				appHost, err := promptAppHost.Run()
-				if err != nil {
-					fmt.Printf("Prompt failed %v\n", err)
-					return
-				}
-				globals.AppConfig.AppHost = appHost
-
-				bytes, _ := json.MarshalIndent(globals.AppConfig, "", "  ")
-				f, err := os.Create("config.json")
-				if err != nil {
-					fmt.Println(err)
-				}
-				_, err = f.Write(bytes)
-
-				if err != nil {
-					fmt.Println(err)
-				}
-				_ = f.Close()
-				fmt.Println("Configuration saved to config.json")
-				services.SetupTables(true, true)
-				fmt.Println("Running Application")
-				err = s.Run()
-				if err != nil {
-					fmt.Println(err)
-				}
-			}
+		if _, statErr := os.Stat("config.json"); statErr == nil {
+			fmt.Println("config.json already exists. Use -service reconfigure to change it.")
+			return
 		}
+
+		confirm, err := promptYesNo(
+			"Installing a new instance of AART. Have your database credentials ready. Continue?", true)
+		if err != nil || !confirm {
+			fmt.Println("Setup aborted.")
+			return
+		}
+
+		if err := runConfigWizard(false); err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		if err := writeConfig(); err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		services.SetupTables(true, true)
+		fmt.Println("Running Application")
+		if err := s.Run(); err != nil {
+			fmt.Println(err)
+		}
+	}
+
+	if *svcFlag == "reconfigure" {
+		configBytes, err := os.ReadFile("config.json")
+		if err != nil {
+			fmt.Printf("Could not read config.json: %v\n", err)
+			return
+		}
+		if err := json.Unmarshal(configBytes, &globals.AppConfig); err != nil {
+			fmt.Printf("Could not parse config.json: %v\n", err)
+			return
+		}
+
+		fmt.Println("Reconfiguring AART. Current values are shown as defaults; press enter to keep.")
+		if err := runConfigWizard(true); err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		if err := writeConfig(); err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println("Configuration updated. Restart the service to apply changes.")
 	}
 
 	if *svcFlag == "" {
