@@ -15,7 +15,7 @@
             <div class="logo-container">
               <img
                 class="logo-image"
-                src="/images/aart-logo-02.png"
+                src="./images/aart-logo-02.png"
                 alt="AART Logo"
                 @load="logoLoaded = true"
               />

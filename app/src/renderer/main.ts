@@ -54,7 +54,7 @@ const AppSplash = defineComponent({
         },
         [
           h('img', {
-            src: '/images/aart-logo-02.png',
+            src: './images/aart-logo-02.png',
             style: { width: '200px', marginBottom: '32px' }
           }),
           h('div', {

@@ -10,7 +10,7 @@
     <v-container>
       <v-row>
         <v-col>
-          <img class="ml-3" width="100%" src="/images/aart-logo-02.png" />
+          <img class="ml-3" width="100%" src="./images/aart-logo-02.png" />
           <p class="nav-text">App Version: {{ appVersion }}</p>
         </v-col>
       </v-row>

@@ -5,7 +5,7 @@
         <img
           class="ml-3 mb-3 mt-0"
           width="100%"
-          src="/images/aart-logo-02.png"
+          src="./images/aart-logo-02.png"
         />
       </v-col>
     </v-row>

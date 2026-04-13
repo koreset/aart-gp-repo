@@ -164,7 +164,13 @@
   >
     <v-card width="400" class="pa-6 text-center" rounded="lg" elevation="8">
       <v-card-title class="text-h6 mb-2">
-        {{ calcProgress?.phase === 'queued' ? 'Calculation Queued' : calcProgress?.phase === 'failed' ? 'Calculation Failed' : 'Calculating Quote' }}
+        {{
+          calcProgress?.phase === 'queued'
+            ? 'Calculation Queued'
+            : calcProgress?.phase === 'failed'
+              ? 'Calculation Failed'
+              : 'Calculating Quote'
+        }}
       </v-card-title>
       <v-card-text>
         <v-progress-linear
@@ -183,7 +189,11 @@
           rounded
           class="mb-3"
         />
-        <div v-if="calcProgress?.phase !== 'queued'" class="text-body-1 font-weight-medium mb-1">{{ progressPercent }}%</div>
+        <div
+          v-if="calcProgress?.phase !== 'queued'"
+          class="text-body-1 font-weight-medium mb-1"
+          >{{ progressPercent }}%</div
+        >
         <div class="text-body-2 text-medium-emphasis">
           {{ phaseLabel }}
           <span v-if="calcProgress?.currentCategory">
@@ -285,7 +295,8 @@ watch(calcProgress, (val) => {
     emit('quote-updated')
   }
   if (val?.phase === 'failed') {
-    snackbarText.value = 'Calculations failed. Please contact your administrator.'
+    snackbarText.value =
+      'Calculations failed. Please contact your administrator.'
     snackbar.value = true
     awaitingManualCredibility.value = false
   }
