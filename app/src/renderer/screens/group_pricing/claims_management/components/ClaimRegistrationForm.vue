@@ -1274,11 +1274,14 @@ const verifyBankingDetails = async () => {
   bankVerificationError.value = ''
 
   try {
-    const nameParts = (formData.value.account_holder_name || '').trim().split(/\s+/)
+    const nameParts = (formData.value.account_holder_name || '')
+      .trim()
+      .split(/\s+/)
     const firstName = nameParts.slice(0, -1).join(' ') || nameParts[0] || ''
     const surname = nameParts.length > 1 ? nameParts[nameParts.length - 1] : ''
 
-    const idNumber = formData.value.claimant_id_number || formData.value.member_id_number
+    const idNumber =
+      formData.value.claimant_id_number || formData.value.member_id_number
     const identityType = /^\d{13}$/.test(idNumber) ? 'IDNumber' : 'Passport'
 
     const res = await GroupPricingService.verifyBankAccount({
@@ -1288,7 +1291,9 @@ const verifyBankingDetails = async () => {
       identity_type: identityType,
       bank_account_number: formData.value.bank_account_number,
       bank_branch_code: formData.value.bank_branch_code,
-      bank_account_type: accountTypeMap[formData.value.bank_account_type] || formData.value.bank_account_type
+      bank_account_type:
+        accountTypeMap[formData.value.bank_account_type] ||
+        formData.value.bank_account_type
     })
 
     const data = res.data?.data || res.data
@@ -1307,14 +1312,16 @@ const verifyBankingDetails = async () => {
         const issues: string[] = []
         if (vr.accountFound !== 'Yes') issues.push('Account not found')
         if (vr.accountOpen !== 'Yes') issues.push('Account is not active')
-        if (vr.identityMatch !== 'Yes') issues.push('Identity does not match account holder')
+        if (vr.identityMatch !== 'Yes')
+          issues.push('Identity does not match account holder')
         if (vr.accountTypeMatch !== 'Yes') issues.push('Account type mismatch')
         bankVerificationError.value =
           issues.length > 0
             ? issues.join('. ') + '.'
             : data.results?.summary || 'Verification failed.'
       } else {
-        bankVerificationError.value = data.results?.summary || 'Verification failed.'
+        bankVerificationError.value =
+          data.results?.summary || 'Verification failed.'
       }
     }
   } catch (error: any) {
