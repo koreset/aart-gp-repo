@@ -64,6 +64,16 @@
                   <benefits-customization />
                 </v-expansion-panel-text>
               </v-expansion-panel>
+
+              <v-expansion-panel>
+                <v-expansion-panel-title>
+                  <v-icon icon="mdi-file-word-outline" class="mr-2" />
+                  Quote Template
+                </v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  <quote-template-management />
+                </v-expansion-panel-text>
+              </v-expansion-panel>
             </v-expansion-panels>
           </template>
         </base-card>
@@ -88,6 +98,7 @@ import BrokerManagement from '@/renderer/components/grouppricing/BrokerManagemen
 import ReinsurerManagement from '@/renderer/components/grouppricing/ReinsurerManagement.vue'
 import SchemeCategoryManagement from '@/renderer/components/grouppricing/SchemeCategoryManagement.vue'
 import BenefitsCustomization from '@/renderer/components/grouppricing/BenefitsCustomization.vue'
+import QuoteTemplateManagement from '@/renderer/components/grouppricing/QuoteTemplateManagement.vue'
 import { useNotifications } from '@/renderer/composables/useNotifications'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 // Use the notifications composable for the snackbar

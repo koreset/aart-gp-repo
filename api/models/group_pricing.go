@@ -1329,6 +1329,19 @@ type GroupPricingInsurerDetail struct {
 	OnRiskLetterText      string    `json:"on_risk_letter_text" csv:"on_risk_letter_text"`
 }
 
+// InsurerQuoteTemplate represents a custom DOCX template uploaded by an insurer
+type InsurerQuoteTemplate struct {
+	ID         int       `json:"id" gorm:"primaryKey;autoIncrement"`
+	InsurerID  int       `json:"insurer_id" gorm:"index;not null"`
+	Version    int       `json:"version"`              // 1, 2, 3, ... per insurer
+	Filename   string    `json:"filename"`             // original upload filename
+	DocxBlob   []byte    `json:"-"`                    // never serialised in JSON
+	SizeBytes  int       `json:"size_bytes"`
+	UploadedBy string    `json:"uploaded_by"`
+	UploadedAt time.Time `json:"uploaded_at" gorm:"autoCreateTime"`
+	IsActive   bool      `json:"is_active" gorm:"index"` // exactly one true per insurer
+}
+
 // OnRiskLetter records the issuance of an On Risk letter when a quote is accepted.
 type OnRiskLetter struct {
 	ID               int       `json:"id" gorm:"primaryKey;autoIncrement"`

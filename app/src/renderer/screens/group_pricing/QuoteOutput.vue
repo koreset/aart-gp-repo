@@ -113,6 +113,17 @@
                 <v-btn
                   class="ml-2"
                   size="small"
+                  color="info"
+                  variant="outlined"
+                  rounded
+                  :loading="isGeneratingBackendWord"
+                  :disabled="!quote"
+                  @click="generateWordFromBackend"
+                  >Generate Word (Backend)</v-btn
+                >
+                <v-btn
+                  class="ml-2"
+                  size="small"
                   color="primary"
                   rounded
                   @click="exportBenefitDataToExcel"
@@ -207,6 +218,7 @@ import GroupPricingService from '@/renderer/api/GroupPricingService'
 import formatDateString from '@/renderer/utils/helpers.js'
 import { useRouter } from 'vue-router'
 import * as XLSX from 'xlsx'
+import { saveAs } from 'file-saver'
 import { AgGridVue } from 'ag-grid-vue3'
 import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-balham.css'
@@ -271,6 +283,28 @@ const generateWord = async () => {
     )
   } catch (error) {
     console.error('Error generating Word document:', error)
+  }
+}
+
+// Backend-generated Word document (PoC — parallel path to the client-side generator above)
+const isGeneratingBackendWord = ref(false)
+const generateWordFromBackend = async () => {
+  if (!quote.value?.id) return
+  isGeneratingBackendWord.value = true
+  try {
+    const response = await GroupPricingService.getQuoteDocx(quote.value.id)
+    // Try to pull the filename from Content-Disposition; fall back to a sensible default.
+    let filename = `${quote.value.scheme_name || 'Quotation'}_Quotation_Backend.docx`
+    const cd = response.headers?.['content-disposition']
+    if (cd) {
+      const match = /filename="?([^";]+)"?/i.exec(cd)
+      if (match?.[1]) filename = match[1]
+    }
+    saveAs(response.data, filename)
+  } catch (error) {
+    console.error('Error generating backend Word document:', error)
+  } finally {
+    isGeneratingBackendWord.value = false
   }
 }
 

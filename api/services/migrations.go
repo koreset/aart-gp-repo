@@ -464,6 +464,7 @@ func MigrateGroupPricingTables() error {
 		&models.Reinsurer{},
 		&models.GroupBenefitMapper{},
 		&models.GPTableStat{},
+		&models.InsurerQuoteTemplate{},
 	)
 
 	if err != nil {

@@ -37,6 +37,38 @@ export default {
   getTableMetaData() {
     return Api.get('/group-pricing/rate-tables')
   },
+  getQuoteDocx(id: number) {
+    return Api.get(`/group-pricing/get-quote/${id}/document.docx`, { responseType: 'blob' })
+  },
+  // ----- Per-insurer quote templates -----
+  uploadInsurerQuoteTemplate(insurerId: number, file: File) {
+    const formData = new FormData()
+    formData.append('file', file)
+    return Api.post(
+      `/group-pricing/insurers/${insurerId}/quote-template`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    )
+  },
+  getActiveInsurerQuoteTemplate(insurerId: number) {
+    return Api.get(`/group-pricing/insurers/${insurerId}/quote-template/active`)
+  },
+  listInsurerQuoteTemplateVersions(insurerId: number) {
+    return Api.get(`/group-pricing/insurers/${insurerId}/quote-template/versions`)
+  },
+  downloadInsurerQuoteTemplate(templateId: number) {
+    return Api.get(`/group-pricing/insurers/quote-template/${templateId}/download`, {
+      responseType: 'blob'
+    })
+  },
+  activateInsurerQuoteTemplate(insurerId: number, templateId: number) {
+    return Api.post(
+      `/group-pricing/insurers/${insurerId}/quote-template/${templateId}/activate`
+    )
+  },
+  downloadSampleQuoteTemplate() {
+    return Api.get(`/group-pricing/quote-template/sample`, { responseType: 'blob' })
+  },
   uploadTables(formdata) {
     return Api.post('group-pricing/rate-tables', formdata, {
       headers: {
