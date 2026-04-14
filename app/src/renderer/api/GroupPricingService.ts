@@ -38,7 +38,9 @@ export default {
     return Api.get('/group-pricing/rate-tables')
   },
   getQuoteDocx(id: number) {
-    return Api.get(`/group-pricing/get-quote/${id}/document.docx`, { responseType: 'blob' })
+    return Api.get(`/group-pricing/get-quote/${id}/document.docx`, {
+      responseType: 'blob'
+    })
   },
   // ----- Per-insurer quote templates -----
   uploadInsurerQuoteTemplate(insurerId: number, file: File) {
@@ -54,12 +56,17 @@ export default {
     return Api.get(`/group-pricing/insurers/${insurerId}/quote-template/active`)
   },
   listInsurerQuoteTemplateVersions(insurerId: number) {
-    return Api.get(`/group-pricing/insurers/${insurerId}/quote-template/versions`)
+    return Api.get(
+      `/group-pricing/insurers/${insurerId}/quote-template/versions`
+    )
   },
   downloadInsurerQuoteTemplate(templateId: number) {
-    return Api.get(`/group-pricing/insurers/quote-template/${templateId}/download`, {
-      responseType: 'blob'
-    })
+    return Api.get(
+      `/group-pricing/insurers/quote-template/${templateId}/download`,
+      {
+        responseType: 'blob'
+      }
+    )
   },
   activateInsurerQuoteTemplate(insurerId: number, templateId: number) {
     return Api.post(
@@ -67,7 +74,9 @@ export default {
     )
   },
   downloadSampleQuoteTemplate() {
-    return Api.get(`/group-pricing/quote-template/sample`, { responseType: 'blob' })
+    return Api.get(`/group-pricing/quote-template/sample`, {
+      responseType: 'blob'
+    })
   },
   uploadTables(formdata) {
     return Api.post('group-pricing/rate-tables', formdata, {

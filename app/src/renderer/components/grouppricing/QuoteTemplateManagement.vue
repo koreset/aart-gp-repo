@@ -10,7 +10,9 @@
           variant="outlined"
           size="small"
         >
-          {{ active ? `Active v${active.version}` : 'Using default formatting' }}
+          {{
+            active ? `Active v${active.version}` : 'Using default formatting'
+          }}
         </v-chip>
       </div>
     </template>
@@ -18,9 +20,8 @@
     <template #default>
       <p class="text-subtitle-2 text-medium-emphasis mb-4">
         Upload a Word (.docx) template to customise quote documents for this
-        insurer. Tokens like
-        <code>{{ '{{scheme_name}}' }}</code> and
-        <code>{{ '{{#categories}}...{{/categories}}' }}</code> are filled with
+        insurer. Tokens like <code v-pre>{{ scheme_name }}</code> and
+        <code v-pre>{{#categories}}...{{/categories}}</code> are filled with
         quote data at generation time. Download the sample template to see all
         supported tokens.
       </p>
@@ -34,15 +35,23 @@
           </div>
           <div v-else-if="active">
             <div class="d-flex align-center">
-              <v-icon icon="mdi-file-word" color="primary" size="large" class="mr-3" />
+              <v-icon
+                icon="mdi-file-word"
+                color="primary"
+                size="large"
+                class="mr-3"
+              />
               <div class="flex-grow-1">
                 <div class="text-subtitle-1 font-weight-medium">
                   {{ active.filename }}
                 </div>
                 <div class="text-caption text-medium-emphasis">
-                  Version {{ active.version }} · {{ formatBytes(active.size_bytes) }} ·
-                  uploaded {{ formatDate(active.uploaded_at) }}
-                  <span v-if="active.uploaded_by"> by {{ active.uploaded_by }}</span>
+                  Version {{ active.version }} ·
+                  {{ formatBytes(active.size_bytes) }} · uploaded
+                  {{ formatDate(active.uploaded_at) }}
+                  <span v-if="active.uploaded_by">
+                    by {{ active.uploaded_by }}</span
+                  >
                 </div>
               </div>
             </div>
@@ -180,14 +189,18 @@ async function loadAll() {
   try {
     // Active (404 is normal — means no template yet)
     try {
-      const r = await GroupPricingService.getActiveInsurerQuoteTemplate(insurerId.value)
+      const r = await GroupPricingService.getActiveInsurerQuoteTemplate(
+        insurerId.value
+      )
       active.value = r.data
     } catch (e: any) {
       if (e?.response?.status === 404) active.value = null
       else throw e
     }
     // Versions
-    const v = await GroupPricingService.listInsurerQuoteTemplateVersions(insurerId.value)
+    const v = await GroupPricingService.listInsurerQuoteTemplateVersions(
+      insurerId.value
+    )
     versions.value = v.data || []
   } catch (e: any) {
     console.error('Failed to load templates', e)
@@ -251,7 +264,10 @@ async function downloadSample() {
 async function activateVersion(t: any) {
   if (!insurerId.value) return
   try {
-    await GroupPricingService.activateInsurerQuoteTemplate(insurerId.value, t.id)
+    await GroupPricingService.activateInsurerQuoteTemplate(
+      insurerId.value,
+      t.id
+    )
     showSuccess(`Activated version ${t.version}`)
     await loadAll()
   } catch (e) {

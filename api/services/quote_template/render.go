@@ -115,43 +115,77 @@ func processBlocks(xmlStr string, ctx Context) string {
 		switch v := value.(type) {
 		case bool:
 			if v {
-				// Include body, remove conditional tags
 				replacement = removeBlockMarkersSimple(block.body, block.key)
 			} else {
-				// Exclude body and the block markers
 				replacement = ""
 			}
 		case []map[string]interface{}:
-			// Iteration over array of objects
 			var expanded strings.Builder
 			for _, item := range v {
-				// Create new context with item fields
 				itemCtx := mergeContexts(ctx, item)
-				// Process body with new context
 				processedBody := processBlocks(block.body, itemCtx)
 				processedBody = performSimpleSubstitutions(processedBody, itemCtx)
 				expanded.WriteString(processedBody)
 			}
 			replacement = expanded.String()
 		case []interface{}:
-			// Iteration over generic array
 			var expanded strings.Builder
 			for _, item := range v {
-				itemCtx := mergeContexts(ctx, map[string]interface{}{"_value": item})
+				// If item is a map, merge its fields; else expose as {{_value}}
+				var itemCtx Context
+				if m, ok := item.(map[string]interface{}); ok {
+					itemCtx = mergeContexts(ctx, m)
+				} else {
+					itemCtx = mergeContexts(ctx, map[string]interface{}{"_value": item})
+				}
 				processedBody := processBlocks(block.body, itemCtx)
 				processedBody = performSimpleSubstitutions(processedBody, itemCtx)
 				expanded.WriteString(processedBody)
 			}
 			replacement = expanded.String()
 		default:
-			// Not a recognized block type, leave as-is
-			replacement = xmlStr[block.start:block.end]
+			// Anything else (nil / missing key, string, number, map) — treat
+			// as boolean coercion so blocks with unknown keys behave sensibly
+			// instead of looping forever. Falsy → drop the block; truthy →
+			// include the body.
+			if isTruthy(value) {
+				replacement = removeBlockMarkersSimple(block.body, block.key)
+			} else {
+				replacement = ""
+			}
 		}
 
 		xmlStr = xmlStr[:block.start] + replacement + xmlStr[block.end:]
 	}
 
 	return xmlStr
+}
+
+// isTruthy implements Mustache-style truthiness: nil, false, "", 0, and
+// empty collections are falsy; everything else is truthy.
+func isTruthy(v interface{}) bool {
+	switch x := v.(type) {
+	case nil:
+		return false
+	case bool:
+		return x
+	case string:
+		return x != ""
+	case int:
+		return x != 0
+	case int64:
+		return x != 0
+	case float64:
+		return x != 0
+	case []interface{}:
+		return len(x) > 0
+	case []map[string]interface{}:
+		return len(x) > 0
+	case map[string]interface{}:
+		return len(x) > 0
+	default:
+		return true
+	}
 }
 
 // blockInfo represents a found block
