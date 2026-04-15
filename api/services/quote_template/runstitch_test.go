@@ -65,6 +65,37 @@ func TestStitchRuns_RunWithAttributes(t *testing.T) {
 	}
 }
 
+func TestStitchRuns_SelfClosingParagraphBeforeToken(t *testing.T) {
+	// Regression: Word emits empty self-closing paragraphs like
+	// <w:p w14:paraId="..."/> between real paragraphs. A too-permissive
+	// opening-tag regex would match the self-closing tag as an opener,
+	// extend the body into the next real paragraph, and produce an
+	// invalid "<w:p .../>...</w:p>" pair that Word refuses to open.
+	input := `<w:p w14:paraId="AAA" w:rsidR="001" w:rsidP="002"/><w:p w14:paraId="BBB" w:rsidR="003"><w:r><w:t>{{ quote_</w:t></w:r><w:r><w:t>number }}</w:t></w:r></w:p>`
+	result := StitchRuns(input)
+
+	// The self-closing paragraph must survive untouched.
+	if !strings.Contains(result, `<w:p w14:paraId="AAA" w:rsidR="001" w:rsidP="002"/>`) {
+		t.Errorf("Self-closing paragraph was altered. Got: %s", result)
+	}
+	// No stray "<w:p .../>...</w:p>" malformation.
+	if strings.Contains(result, `/><w:r`) && strings.Contains(result, `</w:p>`) {
+		// Only fail if the self-close precedes runs that close with </w:p>
+		// — that is the exact corruption pattern.
+		if idx := strings.Index(result, "/>"); idx >= 0 {
+			tail := result[idx+2:]
+			if strings.Contains(tail, "<w:r") && strings.Contains(tail, "</w:p>") &&
+				strings.Index(tail, "<w:p") > strings.Index(tail, "</w:p>") {
+				t.Errorf("Self-closing paragraph followed by orphan runs+</w:p>: %s", result)
+			}
+		}
+	}
+	// The token should still end up stitched.
+	if !strings.Contains(result, "{{ quote_number }}") {
+		t.Errorf("Token not stitched: %s", result)
+	}
+}
+
 func TestStitchRuns_MultipleTokens(t *testing.T) {
 	// Multiple tokens in one paragraph - some split, some not
 	input := `<w:p><w:r><w:t>{{quote_</w:t></w:r><w:r><w:t>name}} and {{scheme_name}}</w:t></w:r></w:p>`

@@ -11,9 +11,12 @@ import (
 func StitchRuns(documentXML string) string {
 	// Find all paragraphs. Word routinely emits attributes on <w:p> (e.g.
 	// w14:paraId, w:rsidR), so the opening tag must allow an optional
-	// attribute list. Skip self-closing paragraphs (<w:p .../>) — they have
-	// no runs to stitch.
-	paraRegex := regexp.MustCompile(`<w:p(?:\s[^>]*)?>.*?</w:p>`)
+	// attribute list. The trailing [^/] guard excludes self-closing
+	// paragraphs (<w:p .../>) — matching one of those as an opening tag
+	// would cause the body to extend into the next real paragraph, and
+	// rebuildParagraph would then emit an invalid "<w:p .../>...</w:p>"
+	// pair that Word refuses to open.
+	paraRegex := regexp.MustCompile(`<w:p(?:\s[^>]*[^/])?>.*?</w:p>`)
 	return paraRegex.ReplaceAllStringFunc(documentXML, stitchParagraphRuns)
 }
 
@@ -30,7 +33,9 @@ type runInfo struct {
 func stitchParagraphRuns(para string) string {
 	// Extract runs from the paragraph. Runs may carry attributes like
 	// w:rsidR, so allow an optional attribute list on the opening tag.
-	runRegex := regexp.MustCompile(`<w:r(?:\s[^>]*)?>.*?</w:r>`)
+	// The [^/] guard excludes self-closing runs — matching one as an
+	// opening tag would swallow the next real run's content.
+	runRegex := regexp.MustCompile(`<w:r(?:\s[^>]*[^/])?>.*?</w:r>`)
 	runs := runRegex.FindAllString(para, -1)
 
 	if len(runs) == 0 {
