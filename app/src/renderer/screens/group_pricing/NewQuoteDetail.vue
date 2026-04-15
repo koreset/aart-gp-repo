@@ -223,6 +223,32 @@
                 </div>
               </template>
             </v-tooltip>
+            <v-tooltip
+              location="top"
+              text="Generate the On Risk letter from the insurer's uploaded Word template (if any)."
+            >
+              <template #activator="{ props: tooltipProps }">
+                <div v-bind="tooltipProps" class="d-inline-block">
+                  <v-btn
+                    :disabled="
+                      (quote.status !== 'accepted' &&
+                        quote.status !== 'in_force' &&
+                        quote.status !== 'Accepted' &&
+                        quote.status !== 'InForce') ||
+                      isGeneratingTemplatedOnRisk
+                    "
+                    :loading="isGeneratingTemplatedOnRisk"
+                    size="small"
+                    rounded
+                    color="success"
+                    variant="outlined"
+                    class="mr-2"
+                    @click="generateOnRiskLetterFromBackend"
+                    >Generate On Risk Letter (Backend)</v-btn
+                  >
+                </div>
+              </template>
+            </v-tooltip>
 
             <v-tooltip
               location="top"
@@ -777,6 +803,43 @@ const confirmAcceptQuote = async () => {
     snackbar.value = true
   } finally {
     acceptQuoteLoading.value = false
+  }
+}
+
+/** Backend-templated On Risk letter generation. Falls back gracefully
+ * when no template is configured for the insurer. */
+const isGeneratingTemplatedOnRisk = ref(false)
+const generateOnRiskLetterFromBackend = async () => {
+  if (!quote.value?.id) return
+  isGeneratingTemplatedOnRisk.value = true
+  try {
+    // Make sure a letter record exists (creates one if needed)
+    await GroupPricingService.createOnRiskLetter(quote.value.id)
+    const r = await GroupPricingService.getOnRiskLetterDocx(quote.value.id)
+    let filename = `${quote.value.scheme_name || 'On_Risk_Letter'}_On_Risk_Letter_Backend.docx`
+    const cd = r.headers?.['content-disposition']
+    if (cd) {
+      const m = /filename="?([^";]+)"?/i.exec(cd)
+      if (m?.[1]) filename = m[1]
+    }
+    const { saveAs } = await import('file-saver')
+    saveAs(r.data, filename)
+    snackbarText.value = 'On Risk letter generated from template'
+    snackbarTimeout.value = 4000
+    snackbar.value = true
+  } catch (err: any) {
+    console.error('Backend On Risk letter generation failed:', err)
+    if (err?.response?.status === 404) {
+      snackbarText.value =
+        'No On Risk letter template uploaded for this insurer. Upload one in Group Pricing Configuration → On Risk Letter Template.'
+      snackbarTimeout.value = 6000
+    } else {
+      snackbarText.value = 'On Risk letter generation failed'
+      snackbarTimeout.value = 3000
+    }
+    snackbar.value = true
+  } finally {
+    isGeneratingTemplatedOnRisk.value = false
   }
 }
 

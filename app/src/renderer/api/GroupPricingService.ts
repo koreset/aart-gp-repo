@@ -78,6 +78,48 @@ export default {
       responseType: 'blob'
     })
   },
+  // ----- Per-insurer on-risk letter templates -----
+  uploadInsurerOnRiskLetterTemplate(insurerId: number, file: File) {
+    const formData = new FormData()
+    formData.append('file', file)
+    return Api.post(
+      `/group-pricing/insurers/${insurerId}/on-risk-letter-template`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    )
+  },
+  getActiveInsurerOnRiskLetterTemplate(insurerId: number) {
+    return Api.get(
+      `/group-pricing/insurers/${insurerId}/on-risk-letter-template/active`
+    )
+  },
+  listInsurerOnRiskLetterTemplateVersions(insurerId: number) {
+    return Api.get(
+      `/group-pricing/insurers/${insurerId}/on-risk-letter-template/versions`
+    )
+  },
+  downloadInsurerOnRiskLetterTemplate(templateId: number) {
+    return Api.get(
+      `/group-pricing/insurers/on-risk-letter-template/${templateId}/download`,
+      { responseType: 'blob' }
+    )
+  },
+  activateInsurerOnRiskLetterTemplate(insurerId: number, templateId: number) {
+    return Api.post(
+      `/group-pricing/insurers/${insurerId}/on-risk-letter-template/${templateId}/activate`
+    )
+  },
+  downloadSampleOnRiskLetterTemplate() {
+    return Api.get(`/group-pricing/on-risk-letter-template/sample`, {
+      responseType: 'blob'
+    })
+  },
+  getOnRiskLetterDocx(quoteId: number) {
+    return Api.get(
+      `/group-pricing/quotes/${quoteId}/on-risk-letter/document.docx`,
+      { responseType: 'blob' }
+    )
+  },
   uploadTables(formdata) {
     return Api.post('group-pricing/rate-tables', formdata, {
       headers: {
