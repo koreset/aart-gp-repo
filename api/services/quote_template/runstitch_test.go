@@ -41,6 +41,30 @@ func TestStitchRuns_SplitAcrossThreeRuns(t *testing.T) {
 	}
 }
 
+func TestStitchRuns_ParagraphWithAttributes(t *testing.T) {
+	// Regression: Word emits <w:p w14:paraId="..." w:rsidR="..."> with
+	// attributes. The stitcher must match these, otherwise tokens split
+	// across runs (e.g. by proofErr spell-check markers) are left
+	// un-stitched and never get substituted downstream.
+	input := `<w:p w14:paraId="0E94DF7E" w:rsidR="007F110E"><w:r><w:t xml:space="preserve"> {{</w:t></w:r><w:proofErr w:type="spellStart"/><w:r><w:t>scheme_name</w:t></w:r><w:proofErr w:type="spellEnd"/><w:r><w:t>}}</w:t></w:r></w:p>`
+	result := StitchRuns(input)
+
+	if !strings.Contains(result, "{{scheme_name}}") {
+		t.Errorf("Token not stitched when paragraph has attributes. Got: %s", result)
+	}
+}
+
+func TestStitchRuns_RunWithAttributes(t *testing.T) {
+	// Runs can also carry attributes like w:rsidR. Ensure the run regex
+	// matches them so split tokens inside attributed runs are stitched.
+	input := `<w:p><w:r w:rsidR="001D5446"><w:t>{{scheme_</w:t></w:r><w:r w:rsidR="001D5446"><w:t>name}}</w:t></w:r></w:p>`
+	result := StitchRuns(input)
+
+	if !strings.Contains(result, "{{scheme_name}}") {
+		t.Errorf("Token not stitched when runs have attributes. Got: %s", result)
+	}
+}
+
 func TestStitchRuns_MultipleTokens(t *testing.T) {
 	// Multiple tokens in one paragraph - some split, some not
 	input := `<w:p><w:r><w:t>{{quote_</w:t></w:r><w:r><w:t>name}} and {{scheme_name}}</w:t></w:r></w:p>`

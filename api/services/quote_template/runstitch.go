@@ -9,8 +9,11 @@ import (
 // When Word saves a document with curly braces, it may split tokens across multiple <w:r> elements.
 // This function finds token patterns ({{...}}) that span multiple runs and merges them into a single run.
 func StitchRuns(documentXML string) string {
-	// Find all paragraphs
-	paraRegex := regexp.MustCompile(`<w:p>.*?</w:p>`)
+	// Find all paragraphs. Word routinely emits attributes on <w:p> (e.g.
+	// w14:paraId, w:rsidR), so the opening tag must allow an optional
+	// attribute list. Skip self-closing paragraphs (<w:p .../>) — they have
+	// no runs to stitch.
+	paraRegex := regexp.MustCompile(`<w:p(?:\s[^>]*)?>.*?</w:p>`)
 	return paraRegex.ReplaceAllStringFunc(documentXML, stitchParagraphRuns)
 }
 
@@ -25,8 +28,9 @@ type runInfo struct {
 
 // stitchParagraphRuns processes a single paragraph to merge runs containing split tokens
 func stitchParagraphRuns(para string) string {
-	// Extract runs from the paragraph
-	runRegex := regexp.MustCompile(`<w:r>.*?</w:r>`)
+	// Extract runs from the paragraph. Runs may carry attributes like
+	// w:rsidR, so allow an optional attribute list on the opening tag.
+	runRegex := regexp.MustCompile(`<w:r(?:\s[^>]*)?>.*?</w:r>`)
 	runs := runRegex.FindAllString(para, -1)
 
 	if len(runs) == 0 {
