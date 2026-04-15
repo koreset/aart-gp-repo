@@ -73,6 +73,16 @@ export default {
       `/group-pricing/insurers/${insurerId}/quote-template/${templateId}/activate`
     )
   },
+  deleteInsurerQuoteTemplate(insurerId: number, templateId: number) {
+    return Api.delete(
+      `/group-pricing/insurers/${insurerId}/quote-template/${templateId}`
+    )
+  },
+  deleteInactiveInsurerQuoteTemplates(insurerId: number) {
+    return Api.delete(
+      `/group-pricing/insurers/${insurerId}/quote-template/inactive`
+    )
+  },
   downloadSampleQuoteTemplate() {
     return Api.get(`/group-pricing/quote-template/sample`, {
       responseType: 'blob'
@@ -107,6 +117,16 @@ export default {
   activateInsurerOnRiskLetterTemplate(insurerId: number, templateId: number) {
     return Api.post(
       `/group-pricing/insurers/${insurerId}/on-risk-letter-template/${templateId}/activate`
+    )
+  },
+  deleteInsurerOnRiskLetterTemplate(insurerId: number, templateId: number) {
+    return Api.delete(
+      `/group-pricing/insurers/${insurerId}/on-risk-letter-template/${templateId}`
+    )
+  },
+  deleteInactiveInsurerOnRiskLetterTemplates(insurerId: number) {
+    return Api.delete(
+      `/group-pricing/insurers/${insurerId}/on-risk-letter-template/inactive`
     )
   },
   downloadSampleOnRiskLetterTemplate() {

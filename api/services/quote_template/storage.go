@@ -112,6 +112,46 @@ func GetTemplate(id int) (*models.InsurerQuoteTemplate, error) {
 	return &template, nil
 }
 
+// DeleteTemplate removes a single template version. Refuses to delete the
+// currently active template — callers must activate another version first,
+// so an insurer is never left without a usable template by accident.
+// Returns an error whose message contains "active template" for that case
+// so the controller can map it to a 409.
+func DeleteTemplate(insurerID, templateID int) error {
+	var template models.InsurerQuoteTemplate
+	result := services.DB.First(&template, templateID)
+	if result.Error != nil {
+		return fmt.Errorf("template not found: %w", result.Error)
+	}
+
+	if template.InsurerID != insurerID {
+		return fmt.Errorf("template does not belong to insurer")
+	}
+
+	if template.IsActive {
+		return fmt.Errorf("cannot delete active template; activate another version first")
+	}
+
+	err := services.DB.Delete(&models.InsurerQuoteTemplate{}, templateID).Error
+	if err != nil {
+		return fmt.Errorf("failed to delete template: %w", err)
+	}
+	return nil
+}
+
+// DeleteInactiveTemplates removes every non-active template for an insurer
+// in one shot. Returns the number of rows deleted. The active template is
+// never touched, so subsequent quote generation is unaffected.
+func DeleteInactiveTemplates(insurerID int) (int64, error) {
+	result := services.DB.
+		Where("insurer_id = ? AND is_active = ?", insurerID, false).
+		Delete(&models.InsurerQuoteTemplate{})
+	if result.Error != nil {
+		return 0, fmt.Errorf("failed to delete inactive templates: %w", result.Error)
+	}
+	return result.RowsAffected, nil
+}
+
 // ActivateVersion sets the given template as active and deactivates all others for that insurer
 func ActivateVersion(insurerID, templateID int) error {
 	// Get the template to verify it belongs to this insurer

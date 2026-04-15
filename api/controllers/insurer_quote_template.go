@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"api/log"
 	"api/services/quote_template"
@@ -266,6 +267,98 @@ func ActivateInsurerQuoteTemplate(c *gin.Context) {
 	}).Info("Successfully activated template version")
 
 	c.JSON(http.StatusOK, gin.H{"message": "template activated"})
+}
+
+// DeleteInsurerQuoteTemplate deletes one template version for an insurer.
+// Returns 409 if the requested version is currently active.
+func DeleteInsurerQuoteTemplate(c *gin.Context) {
+	requestID, exists := c.Get("requestID")
+	var ctx context.Context
+	if exists {
+		ctx = context.WithValue(context.Background(), log.RequestIDKey, requestID.(string))
+	} else {
+		ctx = context.Background()
+	}
+
+	logger := log.WithContext(ctx)
+
+	insurerID := c.Param("id")
+	insurerIDInt, err := strconv.Atoi(insurerID)
+	if err != nil {
+		logger.WithField("error", "invalid insurer id").Error("Invalid insurer ID")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid insurer id"})
+		return
+	}
+
+	templateID := c.Param("templateId")
+	templateIDInt, err := strconv.Atoi(templateID)
+	if err != nil {
+		logger.WithField("error", "invalid template id").Error("Invalid template ID")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid template id"})
+		return
+	}
+
+	err = quote_template.DeleteTemplate(insurerIDInt, templateIDInt)
+	if err != nil {
+		// Detect the "active template" refusal via error-message match so
+		// callers see a 409 Conflict rather than a 500. This mirrors the
+		// storage layer's contract documented on DeleteTemplate.
+		if strings.Contains(err.Error(), "active template") {
+			logger.WithField("error", err.Error()).Warn("Refused to delete active template")
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		logger.WithField("error", err.Error()).Error("Failed to delete template")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete template: %v", err)})
+		return
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"insurer_id":  insurerIDInt,
+		"template_id": templateIDInt,
+	}).Info("Successfully deleted quote template version")
+
+	c.JSON(http.StatusOK, gin.H{"message": "template deleted"})
+}
+
+// DeleteInactiveInsurerQuoteTemplates wipes every previous (non-active)
+// quote template for an insurer. The active template is preserved, so
+// rendering a new quote still works.
+func DeleteInactiveInsurerQuoteTemplates(c *gin.Context) {
+	requestID, exists := c.Get("requestID")
+	var ctx context.Context
+	if exists {
+		ctx = context.WithValue(context.Background(), log.RequestIDKey, requestID.(string))
+	} else {
+		ctx = context.Background()
+	}
+
+	logger := log.WithContext(ctx)
+
+	insurerID := c.Param("id")
+	insurerIDInt, err := strconv.Atoi(insurerID)
+	if err != nil {
+		logger.WithField("error", "invalid insurer id").Error("Invalid insurer ID")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid insurer id"})
+		return
+	}
+
+	count, err := quote_template.DeleteInactiveTemplates(insurerIDInt)
+	if err != nil {
+		logger.WithField("error", err.Error()).Error("Failed to delete inactive templates")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete inactive templates: %v", err)})
+		return
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"insurer_id": insurerIDInt,
+		"deleted":    count,
+	}).Info("Successfully deleted inactive quote template versions")
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "inactive templates deleted",
+		"deleted": count,
+	})
 }
 
 // DownloadSampleQuoteTemplate returns a sample template for admins to download and modify

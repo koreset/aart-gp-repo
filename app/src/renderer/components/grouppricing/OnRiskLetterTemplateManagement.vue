@@ -98,10 +98,23 @@
       </div>
 
       <div v-if="previousVersions.length > 0">
-        <h5 class="section-title">
-          <v-icon icon="mdi-history" size="small" class="mr-2" />
-          Previous versions
-        </h5>
+        <div class="d-flex align-center mb-2">
+          <h5 class="section-title mb-0">
+            <v-icon icon="mdi-history" size="small" class="mr-2" />
+            Previous versions
+          </h5>
+          <v-spacer />
+          <v-btn
+            size="small"
+            variant="outlined"
+            color="error"
+            prepend-icon="mdi-trash-can-outline"
+            :loading="deletingInactive"
+            @click="confirmDeleteAllInactive"
+          >
+            Delete all previous
+          </v-btn>
+        </div>
         <v-table density="compact">
           <thead>
             <tr>
@@ -118,35 +131,77 @@
               <td>{{ t.filename }}</td>
               <td>{{ formatDate(t.uploaded_at) }}</td>
               <td>{{ t.uploaded_by || '—' }}</td>
-              <td class="text-right">
+              <td class="actions-cell text-right">
                 <v-btn
                   size="small"
                   variant="text"
-                  prepend-icon="mdi-download"
+                  icon="mdi-download"
+                  density="comfortable"
                   @click="downloadVersion(t)"
                 >
-                  Download
+                  <v-icon>mdi-download</v-icon>
+                  <v-tooltip activator="parent" location="top">
+                    Download
+                  </v-tooltip>
                 </v-btn>
                 <v-btn
                   size="small"
                   variant="text"
                   color="primary"
-                  prepend-icon="mdi-check"
+                  icon="mdi-check"
+                  density="comfortable"
                   @click="activateVersion(t)"
                 >
-                  Activate
+                  <v-icon>mdi-check</v-icon>
+                  <v-tooltip activator="parent" location="top">
+                    Activate
+                  </v-tooltip>
+                </v-btn>
+                <v-btn
+                  size="small"
+                  variant="text"
+                  color="error"
+                  icon="mdi-trash-can-outline"
+                  density="comfortable"
+                  :loading="deletingId === t.id"
+                  @click="confirmDelete(t)"
+                >
+                  <v-icon>mdi-trash-can-outline</v-icon>
+                  <v-tooltip activator="parent" location="top">
+                    Delete
+                  </v-tooltip>
                 </v-btn>
               </td>
             </tr>
           </tbody>
         </v-table>
       </div>
+
+      <!-- Delete confirmation dialog -->
+      <v-dialog v-model="deleteDialog.open" max-width="480">
+        <v-card>
+          <v-card-title class="text-h6">
+            <v-icon icon="mdi-alert-circle-outline" color="error" class="mr-2" />
+            {{ deleteDialog.title }}
+          </v-card-title>
+          <v-card-text>{{ deleteDialog.message }}</v-card-text>
+          <v-card-actions>
+            <v-spacer />
+            <v-btn variant="text" @click="deleteDialog.open = false">
+              Cancel
+            </v-btn>
+            <v-btn color="error" variant="flat" @click="deleteDialog.confirm">
+              Delete
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
     </template>
   </base-card>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, reactive, ref, computed } from 'vue'
 import { saveAs } from 'file-saver'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { useNotifications } from '@/renderer/composables/useNotifications'
@@ -159,7 +214,22 @@ const active = ref<any>(null)
 const versions = ref<any[]>([])
 const loading = ref(false)
 const uploading = ref(false)
+const deletingId = ref<number | null>(null)
+const deletingInactive = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+
+// Single dialog used for both single-version and bulk deletes.
+const deleteDialog = reactive<{
+  open: boolean
+  title: string
+  message: string
+  confirm: () => void
+}>({
+  open: false,
+  title: '',
+  message: '',
+  confirm: () => {}
+})
 
 const previousVersions = computed(() =>
   versions.value.filter((v) => !v.is_active)
@@ -272,6 +342,69 @@ async function activateVersion(t: any) {
   }
 }
 
+function confirmDelete(t: any) {
+  deleteDialog.title = `Delete version ${t.version}?`
+  deleteDialog.message = `"${t.filename}" will be permanently removed. This cannot be undone.`
+  deleteDialog.confirm = () => {
+    deleteDialog.open = false
+    deleteVersion(t)
+  }
+  deleteDialog.open = true
+}
+
+async function deleteVersion(t: any) {
+  if (!insurerId.value) return
+  deletingId.value = t.id
+  try {
+    await GroupPricingService.deleteInsurerOnRiskLetterTemplate(
+      insurerId.value,
+      t.id
+    )
+    showSuccess(`Deleted version ${t.version}`)
+    await loadAll()
+  } catch (e: any) {
+    console.error(e)
+    const msg =
+      e?.response?.status === 409
+        ? e.response.data?.error ||
+          'Cannot delete the active template. Activate another version first.'
+        : 'Failed to delete version'
+    showError(msg)
+  } finally {
+    deletingId.value = null
+  }
+}
+
+function confirmDeleteAllInactive() {
+  const n = previousVersions.value.length
+  deleteDialog.title = `Delete all ${n} previous version${n === 1 ? '' : 's'}?`
+  deleteDialog.message = `The active template is kept. All ${n} previous version${n === 1 ? '' : 's'} will be permanently removed. This cannot be undone.`
+  deleteDialog.confirm = () => {
+    deleteDialog.open = false
+    deleteAllInactive()
+  }
+  deleteDialog.open = true
+}
+
+async function deleteAllInactive() {
+  if (!insurerId.value) return
+  deletingInactive.value = true
+  try {
+    const r =
+      await GroupPricingService.deleteInactiveInsurerOnRiskLetterTemplates(
+        insurerId.value
+      )
+    const n = r?.data?.deleted ?? 0
+    showSuccess(`Deleted ${n} previous version${n === 1 ? '' : 's'}`)
+    await loadAll()
+  } catch (e) {
+    console.error(e)
+    showError('Failed to delete previous versions')
+  } finally {
+    deletingInactive.value = false
+  }
+}
+
 onMounted(async () => {
   try {
     const r = await GroupPricingService.getInsurer()
@@ -299,5 +432,12 @@ code {
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 0.85em;
+}
+.actions-cell {
+  white-space: nowrap;
+  width: 1%;
+}
+.actions-cell .v-btn {
+  margin-left: 4px;
 }
 </style>
