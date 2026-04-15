@@ -5,6 +5,9 @@ import (
 	"bytes"
 	"io"
 	"strings"
+
+	"api/models"
+	"api/services/quote_docx"
 )
 
 // BuildSampleTemplate produces a comprehensive .docx template that exercises
@@ -59,9 +62,26 @@ func BuildSampleTemplate() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// buildSampleBodyXML composes the template body. Organized as a reference
-// document with one section per token category.
+// buildSampleBodyXML composes the template body. It is driven entirely by
+// the schema in schema.go — every key in every *Fields function shows up
+// here as a table row, so adding a new token in schema.go automatically
+// surfaces it in the next-generated sample. The narrative sections
+// (introductions, worked example, tips) remain hand-written because they
+// document *how* to use tokens, not which ones exist.
 func buildSampleBodyXML() string {
+	// Zero fixtures — BuildSampleTemplate only needs Keys and Labels, so
+	// the Value outputs of each *Fields function are irrelevant. Per-benefit
+	// specs carry their own zero fixtures inside schema.go, so this file
+	// only declares the ones used by the non-benefit tables.
+	var (
+		zs models.MemberRatingResultSummary
+		zc models.SchemeCategory
+		zq models.GroupPricingQuote
+		zi models.GroupPricingInsurerDetail
+		zT quote_docx.QuoteTotals
+	)
+	zFlags := benefitFlags{}
+
 	var b strings.Builder
 
 	// ===== Cover / title =====
@@ -80,42 +100,12 @@ func buildSampleBodyXML() string {
 	// ===== Quote-level tokens =====
 	b.WriteString(heading("Quote-level Tokens"))
 	b.WriteString(bodyPara("These tokens resolve to values at the quote level. They can be used anywhere in the document."))
-	b.WriteString(keyValueTable([][2]string{
-		{"Quote Number", "{{quote_number}}"},
-		{"Quote Name (alias)", "{{quote_name}}"},
-		{"Quote Type", "{{quote_type}}"},
-		{"Obligation Type", "{{obligation_type}}"},
-		{"Scheme Name", "{{scheme_name}}"},
-		{"Creation Date", "{{creation_date}}"},
-		{"Commencement Date", "{{commencement_date}}"},
-		{"Industry", "{{industry}}"},
-		{"Currency", "{{currency}}"},
-		{"Free Cover Limit", "{{free_cover_limit}}"},
-		{"Normal Retirement Age", "{{normal_retirement_age}}"},
-		{"Total Lives Covered", "{{total_lives}}"},
-		{"Total Sum Assured", "{{total_sum_assured}}"},
-		{"Total Annual Salary", "{{total_annual_salary}}"},
-		{"Total Annual Premium", "{{total_annual_premium}}"},
-	}))
+	b.WriteString(keyValueTable(rowsFromFields("", filterScalars(quoteFields(zq, zT, false)))))
 
 	// ===== Insurer tokens =====
 	b.WriteString(heading("Insurer Tokens"))
 	b.WriteString(bodyPara("The insurer object carries all the insurer details configured in the system. Access fields with dot notation."))
-	b.WriteString(keyValueTable([][2]string{
-		{"Insurer Name", "{{insurer.name}}"},
-		{"Contact Person", "{{insurer.contact_person}}"},
-		{"Address Line 1", "{{insurer.address_line_1}}"},
-		{"Address Line 2", "{{insurer.address_line_2}}"},
-		{"Address Line 3", "{{insurer.address_line_3}}"},
-		{"City", "{{insurer.city}}"},
-		{"Province", "{{insurer.province}}"},
-		{"Post Code", "{{insurer.post_code}}"},
-		{"Country", "{{insurer.country}}"},
-		{"Telephone", "{{insurer.telephone}}"},
-		{"Email", "{{insurer.email}}"},
-		{"Introductory Text", "{{insurer.introductory_text}}"},
-		{"General Provisions Text", "{{insurer.general_provisions_text}}"},
-	}))
+	b.WriteString(keyValueTable(rowsFromFields("insurer", insurerFields(zi))))
 
 	// ===== Top-level conditional =====
 	b.WriteString(heading("Top-level Conditional"))
@@ -128,24 +118,13 @@ func buildSampleBodyXML() string {
 	b.WriteString(bodyPara("The categories list contains one entry per scheme category in the quote. Wrap content you want repeated inside {{#categories}}…{{/categories}}. The fields below are available for each category."))
 
 	b.WriteString(subheading("Category-level tokens"))
-	b.WriteString(keyValueTable([][2]string{
-		{"Category Name", "{{name}}"},
-		{"Region", "{{region}}"},
-		{"Member Count", "{{member_count}}"},
-		{"Free Cover Limit (category override)", "{{free_cover_limit}}"},
-		{"Total Annual Salary", "{{total_salary}}"},
-		{"Total Sum Assured", "{{total_sum_assured}}"},
-		{"Annual Premium (excl. funeral)", "{{annual_premium}}"},
-		{"Premium as % of Salary", "{{percent_salary}}"},
-		{"Retirement Premium Waiver", "{{retirement_premium_waiver}}"},
-		{"Medical Aid Premium Waiver", "{{medical_aid_premium_waiver}}"},
-	}))
+	b.WriteString(keyValueTable(rowsFromFields("", categoryScalarFields(zs, zc))))
 
 	b.WriteString(subheading("Category-level flags (true/false)"))
-	b.WriteString(bodyPara("Use these as conditional blocks to include content only when the category has that benefit."))
-	b.WriteString(bulletPara("{{#has_non_funeral_benefits}}…{{/has_non_funeral_benefits}}"))
-	b.WriteString(bulletPara("{{#has_gla}}…{{/has_gla}}, {{#has_sgla}}…{{/has_sgla}}, {{#has_ptd}}…{{/has_ptd}}"))
-	b.WriteString(bulletPara("{{#has_ci}}…{{/has_ci}}, {{#has_phi}}…{{/has_phi}}, {{#has_ttd}}…{{/has_ttd}}, {{#has_funeral}}…{{/has_funeral}}"))
+	b.WriteString(bodyPara("Use these as conditional blocks to include content only when the category has that benefit. Wrap your content inside the open/close tags below:"))
+	for _, f := range categoryBoolFields(zs, zFlags) {
+		b.WriteString(bulletPara("{{#" + f.Key + "}}…{{/" + f.Key + "}} — " + f.Label))
+	}
 
 	b.WriteString(subheading("Example: one paragraph per category"))
 	b.WriteString(bodyPara("{{#categories}}— {{name}}: {{member_count}} lives · annual premium {{annual_premium}} · {{percent_salary}} of salary{{/categories}}"))
@@ -154,104 +133,10 @@ func buildSampleBodyXML() string {
 	b.WriteString(heading("Benefit Tokens — Used Inside the Categories Block"))
 	b.WriteString(bodyPara("Each category exposes an object per benefit. These are populated only when the category has the corresponding benefit. Combine with the conditional flags above to show a block only when relevant."))
 
-	b.WriteString(subheading("Group Life Assurance (GLA)"))
-	b.WriteString(benefitTokenTable([][2]string{
-		{"Benefit Title", "{{gla.title}}"},
-		{"Salary Multiple", "{{gla.salary_multiple}}"},
-		{"Waiting Period (months)", "{{gla.waiting_period}}"},
-		{"Benefit Structure", "{{gla.benefit_structure}}"},
-		{"Benefit Type", "{{gla.benefit_type}}"},
-		{"Terminal Illness Benefit", "{{gla.terminal_illness_benefit}}"},
-		{"Educator Benefit", "{{gla.educator_benefit}}"},
-		{"Total Sum Assured", "{{gla.total_sum_assured}}"},
-		{"Annual Premium", "{{gla.annual_premium}}"},
-		{"% of Salary", "{{gla.percent_salary}}"},
-	}))
-
-	b.WriteString(subheading("Spouse Group Life (SGLA)"))
-	b.WriteString(benefitTokenTable([][2]string{
-		{"Benefit Title", "{{sgla.title}}"},
-		{"Salary Multiple", "{{sgla.salary_multiple}}"},
-		{"Waiting Period (months)", "{{sgla.waiting_period}}"},
-		{"Benefit Structure", "{{sgla.benefit_structure}}"},
-		{"Maximum Benefit", "{{sgla.max_benefit}}"},
-		{"Total Sum Assured", "{{sgla.total_sum_assured}}"},
-		{"Annual Premium", "{{sgla.annual_premium}}"},
-		{"% of Salary", "{{sgla.percent_salary}}"},
-	}))
-
-	b.WriteString(subheading("Permanent Total Disability (PTD)"))
-	b.WriteString(benefitTokenTable([][2]string{
-		{"Benefit Title", "{{ptd.title}}"},
-		{"Salary Multiple", "{{ptd.salary_multiple}}"},
-		{"Waiting Period (months)", "{{ptd.waiting_period}}"},
-		{"Deferred Period (months)", "{{ptd.deferred_period}}"},
-		{"Benefit Type", "{{ptd.benefit_type}}"},
-		{"Disability Definition", "{{ptd.disability_definition}}"},
-		{"Risk Type", "{{ptd.risk_type}}"},
-		{"Educator Benefit", "{{ptd.educator_benefit}}"},
-		{"Total Sum Assured", "{{ptd.total_sum_assured}}"},
-		{"Annual Premium", "{{ptd.annual_premium}}"},
-		{"% of Salary", "{{ptd.percent_salary}}"},
-	}))
-
-	b.WriteString(subheading("Critical Illness (CI)"))
-	b.WriteString(benefitTokenTable([][2]string{
-		{"Benefit Title", "{{ci.title}}"},
-		{"Salary Multiple", "{{ci.salary_multiple}}"},
-		{"Waiting Period (months)", "{{ci.waiting_period}}"},
-		{"Deferred Period (months)", "{{ci.deferred_period}}"},
-		{"Benefit Structure", "{{ci.benefit_structure}}"},
-		{"Benefit Definition", "{{ci.benefit_definition}}"},
-		{"Maximum Benefit", "{{ci.max_benefit}}"},
-		{"Total Sum Assured", "{{ci.total_sum_assured}}"},
-		{"Annual Premium", "{{ci.annual_premium}}"},
-		{"% of Salary", "{{ci.percent_salary}}"},
-	}))
-
-	b.WriteString(subheading("Permanent Health Insurance (PHI)"))
-	b.WriteString(benefitTokenTable([][2]string{
-		{"Benefit Title", "{{phi.title}}"},
-		{"Income Replacement %", "{{phi.income_replacement_percentage}}"},
-		{"Waiting Period (months)", "{{phi.waiting_period}}"},
-		{"Deferred Period (months)", "{{phi.deferred_period}}"},
-		{"Disability Definition", "{{phi.disability_definition}}"},
-		{"Risk Type", "{{phi.risk_type}}"},
-		{"Premium Waiver", "{{phi.premium_waiver}}"},
-		{"Medical Aid Premium Waiver", "{{phi.medical_aid_premium_waiver}}"},
-		{"Benefit Escalation", "{{phi.benefit_escalation}}"},
-		{"Total Covered Income", "{{phi.total_sum_assured}}"},
-		{"Annual Premium", "{{phi.annual_premium}}"},
-		{"% of Salary", "{{phi.percent_salary}}"},
-	}))
-
-	b.WriteString(subheading("Temporary Total Disability (TTD)"))
-	b.WriteString(benefitTokenTable([][2]string{
-		{"Benefit Title", "{{ttd.title}}"},
-		{"Income Replacement %", "{{ttd.income_replacement_percentage}}"},
-		{"Waiting Period (months)", "{{ttd.waiting_period}}"},
-		{"Deferred Period (months)", "{{ttd.deferred_period}}"},
-		{"Disability Definition", "{{ttd.disability_definition}}"},
-		{"Risk Type", "{{ttd.risk_type}}"},
-		{"Total Covered Income", "{{ttd.total_sum_assured}}"},
-		{"Annual Premium", "{{ttd.annual_premium}}"},
-		{"% of Salary", "{{ttd.percent_salary}}"},
-	}))
-
-	b.WriteString(subheading("Group Funeral"))
-	b.WriteString(benefitTokenTable([][2]string{
-		{"Benefit Title", "{{funeral.title}}"},
-		{"Monthly Premium per Member", "{{funeral.monthly_premium_per_member}}"},
-		{"Annual Premium per Member", "{{funeral.annual_premium_per_member}}"},
-		{"Total Annual Premium", "{{funeral.total_annual_premium}}"},
-		{"Main Member Sum Assured", "{{funeral.main_member_sum_assured}}"},
-		{"Spouse Sum Assured", "{{funeral.spouse_sum_assured}}"},
-		{"Child Sum Assured", "{{funeral.child_sum_assured}}"},
-		{"Max Children Covered", "{{funeral.max_children}}"},
-		{"Parent Sum Assured", "{{funeral.parent_sum_assured}}"},
-		{"Dependant Sum Assured", "{{funeral.dependant_sum_assured}}"},
-		{"Max Dependants Covered", "{{funeral.max_dependants}}"},
-	}))
+	for _, spec := range benefitSpecsForSample() {
+		b.WriteString(subheading(spec.Title))
+		b.WriteString(benefitTokenTable(rowsFromFields(spec.Prefix, spec.Fields())))
+	}
 
 	// ===== Worked example =====
 	b.WriteString(heading("Worked Example — Combining Everything"))
@@ -266,6 +151,36 @@ func buildSampleBodyXML() string {
 	b.WriteString(bulletPara("Missing tokens resolve to empty strings, so a template that references a token not populated for a given quote simply shows nothing rather than breaking."))
 
 	return b.String()
+}
+
+// rowsFromFields converts a []Field into the [][2]string rows expected by
+// keyValueTable / benefitTokenTable. When prefix is non-empty, tokens are
+// rendered with dot notation ({{prefix.key}}); otherwise they are bare
+// ({{key}}).
+func rowsFromFields(prefix string, fs []Field) [][2]string {
+	rows := make([][2]string, 0, len(fs))
+	for _, f := range fs {
+		token := "{{" + f.Key + "}}"
+		if prefix != "" {
+			token = "{{" + prefix + "." + f.Key + "}}"
+		}
+		rows = append(rows, [2]string{f.Label, token})
+	}
+	return rows
+}
+
+// filterScalars drops bool-valued fields from the slice — the sample
+// renders quote-level bools (has_non_funeral_benefits) as a dedicated
+// "Top-level Conditional" section rather than in the scalar table.
+func filterScalars(fs []Field) []Field {
+	out := make([]Field, 0, len(fs))
+	for _, f := range fs {
+		if _, ok := f.Value.(bool); ok {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
 }
 
 // --- Paragraph builders ---

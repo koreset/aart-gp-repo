@@ -2,7 +2,6 @@ package quote_template
 
 import (
 	"fmt"
-	"strconv"
 
 	"api/models"
 	"api/services"
@@ -13,6 +12,10 @@ import (
 // Keys nested under "insurer" and each entry of "categories" are accessed
 // via dot syntax in templates (e.g. {{insurer.name}}, {{gla.annual_premium}}
 // inside a {{#categories}} block).
+//
+// Every key in this map is produced by a *Fields function in schema.go.
+// schema.go is the single source of truth — add new tokens there and they
+// flow automatically into both the rendered quote and the sample template.
 type Context map[string]interface{}
 
 // BuildContext assembles the complete context for a given quote. It joins
@@ -51,234 +54,45 @@ func BuildContext(quoteID string) (Context, error) {
 	for _, s := range summaries {
 		cat, ok := catByName[s.Category]
 		if !ok {
-			// Summary with no matching scheme category — populate what we can.
 			cat = models.SchemeCategory{SchemeCategory: s.Category}
 		}
-		categories = append(categories, buildCategoryContext(s, cat, quote, titles))
+		categories = append(categories, buildCategoryMap(s, cat, quote, titles))
 	}
 
-	return Context{
-		// Quote-level
-		"quote_name":                  quote.QuoteName,
-		"quote_number":                quote.QuoteName,
-		"scheme_name":                 quote.SchemeName,
-		"creation_date":               quote_docx.FormatQuoteDate(quote.CreationDate),
-		"commencement_date":           quote_docx.FormatQuoteDate(quote.CommencementDate),
-		"industry":                    quote.Industry,
-		"currency":                    quote.Currency,
-		"free_cover_limit":            quote_docx.RoundUpToTwoDecimalsAccounting(quote.FreeCoverLimit),
-		"normal_retirement_age":       strconv.Itoa(quote.NormalRetirementAge),
-		"obligation_type":             quote.ObligationType,
-		"quote_type":                  quote.QuoteType,
-		"use_global_salary_multiple":  quote.UseGlobalSalaryMultiple,
-		"total_lives":                 strconv.Itoa(totals.TotalLives),
-		"total_sum_assured":           quote_docx.RoundUpToTwoDecimalsAccounting(totals.TotalSumAssured),
-		"total_annual_salary":         quote_docx.RoundUpToTwoDecimalsAccounting(totals.TotalAnnualSalary),
-		"total_annual_premium":        quote_docx.RoundUpToTwoDecimalsAccounting(totals.TotalAnnualPremium),
-		"has_non_funeral_benefits":    hasNonFuneral,
-		"insurer": map[string]interface{}{
-			"name":                    insurer.Name,
-			"contact_person":          insurer.ContactPerson,
-			"address_line_1":          insurer.AddressLine1,
-			"address_line_2":          insurer.AddressLine2,
-			"address_line_3":          insurer.AddressLine3,
-			"city":                    insurer.City,
-			"province":                insurer.Province,
-			"post_code":               insurer.PostCode,
-			"country":                 insurer.Country,
-			"telephone":               insurer.Telephone,
-			"email":                   insurer.Email,
-			"introductory_text":       insurer.IntroductoryText,
-			"general_provisions_text": insurer.GeneralProvisionsText,
-		},
-		"categories": categories,
-	}, nil
+	// Fold the root-scope fields into the Context map, then layer the
+	// nested "insurer" object and the "categories" list on top.
+	ctx := Context(fieldsToMap(quoteFields(quote, totals, hasNonFuneral)))
+	ctx["insurer"] = fieldsToMap(insurerFields(insurer))
+	ctx["categories"] = categories
+	return ctx, nil
 }
 
-// buildCategoryContext returns the per-category map used inside a
-// {{#categories}} block.
-func buildCategoryContext(
+// buildCategoryMap produces the per-category map used inside {{#categories}}.
+// It layers the scalar fields, the has_* bool flags, and the seven benefit
+// sub-objects into a single map with the exact keys the template expects.
+func buildCategoryMap(
 	s models.MemberRatingResultSummary,
 	cat models.SchemeCategory,
 	quote models.GroupPricingQuote,
 	titles quote_docx.BenefitTitles,
 ) map[string]interface{} {
-	hasGLA := s.TotalGlaCappedSumAssured > 0
-	hasSGLA := s.TotalSglaCappedSumAssured > 0
-	hasPTD := s.TotalPtdCappedSumAssured > 0
-	hasCI := s.TotalCiCappedSumAssured > 0
-	hasPHI := s.TotalPhiCappedIncome > 0
-	hasTTD := s.TotalTtdCappedIncome > 0
-	hasFuneral := s.TotalFunAnnualOfficePremium > 0 || cat.FamilyFuneralBenefit
+	flags := deriveBenefitFlags(s, cat)
 
-	ctx := map[string]interface{}{
-		// Category summary
-		"name":                     s.Category,
-		"region":                   cat.Region,
-		"member_count":             strconv.Itoa(int(s.MemberCount)),
-		"total_salary":             quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalAnnualSalary),
-		"total_sum_assured":        quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalSumAssured),
-		"annual_premium":           quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalAnnualPremiumExclFuneral),
-		"percent_salary":           formatPercent(s.ProportionExpTotalPremiumExclFuneralSalary),
-		"free_cover_limit":         quote_docx.RoundUpToTwoDecimalsAccounting(cat.FreeCoverLimit),
-		"has_non_funeral_benefits": quote_docx.CategoryHasNonFuneralBenefits(s),
-		"has_gla":                  hasGLA,
-		"has_sgla":                 hasSGLA,
-		"has_ptd":                  hasPTD,
-		"has_ci":                   hasCI,
-		"has_phi":                  hasPHI,
-		"has_ttd":                  hasTTD,
-		"has_funeral":              hasFuneral,
-		// Common / shared flags
-		"retirement_premium_waiver":   orDash(cat.PhiPremiumWaiver),
-		"medical_aid_premium_waiver":  orDash(cat.PhiMedicalAidPremiumWaiver),
-		"gla_terminal_illness_benefit": orDash(cat.GlaTerminalIllnessBenefit),
-		"gla_educator_benefit":         orDash(cat.GlaEducatorBenefit),
-		"ptd_educator_benefit":         orDash(cat.PtdEducatorBenefit),
+	m := fieldsToMap(categoryScalarFields(s, cat))
+	for k, v := range fieldsToMap(categoryBoolFields(s, flags)) {
+		m[k] = v
 	}
-
-	// Benefit-specific objects — populated only when the category has the
-	// benefit. Missing maps resolve to empty strings in templates so users
-	// can safely reference them.
-	ctx["gla"] = glaContext(s, cat, quote, titles, hasGLA)
-	ctx["sgla"] = sglaContext(s, cat, quote, titles, hasSGLA)
-	ctx["ptd"] = ptdContext(s, cat, quote, titles, hasPTD)
-	ctx["ci"] = ciContext(s, cat, quote, titles, hasCI)
-	ctx["phi"] = phiContext(s, cat, titles, hasPHI)
-	ctx["ttd"] = ttdContext(s, cat, titles, hasTTD)
-	ctx["funeral"] = funeralContext(s, cat, titles, hasFuneral)
-
-	return ctx
+	m["gla"] = benefitMap(flags.GLA, glaFields(s, cat, quote, titles))
+	m["sgla"] = benefitMap(flags.SGLA, sglaFields(s, cat, quote, titles))
+	m["ptd"] = benefitMap(flags.PTD, ptdFields(s, cat, quote, titles))
+	m["ci"] = benefitMap(flags.CI, ciFields(s, cat, quote, titles))
+	m["phi"] = benefitMap(flags.PHI, phiFields(s, cat, titles))
+	m["ttd"] = benefitMap(flags.TTD, ttdFields(s, cat, titles))
+	m["funeral"] = benefitMap(flags.Funeral, funeralFields(s, cat, titles))
+	return m
 }
 
-func glaContext(s models.MemberRatingResultSummary, cat models.SchemeCategory, q models.GroupPricingQuote, t quote_docx.BenefitTitles, has bool) map[string]interface{} {
-	if !has {
-		return map[string]interface{}{}
-	}
-	return map[string]interface{}{
-		"title":                    t.GlaBenefitTitle,
-		"salary_multiple":          salaryMultiple(q.UseGlobalSalaryMultiple, cat.GlaSalaryMultiple),
-		"waiting_period":           strconv.Itoa(cat.GlaWaitingPeriod),
-		"benefit_structure":        "standalone",
-		"benefit_type":             orDash(cat.GlaBenefitType),
-		"terminal_illness_benefit": orDash(cat.GlaTerminalIllnessBenefit),
-		"educator_benefit":         orDash(cat.GlaEducatorBenefit),
-		"total_sum_assured":        quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalGlaCappedSumAssured),
-		"annual_premium":           quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalGlaAnnualOfficePremium),
-		"percent_salary":           formatPercent(s.ExpProportionGlaOfficePremiumSalary),
-	}
-}
-
-func sglaContext(s models.MemberRatingResultSummary, cat models.SchemeCategory, q models.GroupPricingQuote, t quote_docx.BenefitTitles, has bool) map[string]interface{} {
-	if !has {
-		return map[string]interface{}{}
-	}
-	return map[string]interface{}{
-		"title":             t.SglaBenefitTitle,
-		"salary_multiple":   salaryMultiple(q.UseGlobalSalaryMultiple, cat.SglaSalaryMultiple),
-		"waiting_period":    "0",
-		"benefit_structure": "rider",
-		"max_benefit":       quote_docx.RoundUpToTwoDecimalsAccounting(cat.SglaMaxBenefit),
-		"total_sum_assured": quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalSglaCappedSumAssured),
-		"annual_premium":    quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalSglaAnnualOfficePremium),
-		"percent_salary":    formatPercent(s.ExpProportionSglaOfficePremiumSalary),
-	}
-}
-
-func ptdContext(s models.MemberRatingResultSummary, cat models.SchemeCategory, q models.GroupPricingQuote, t quote_docx.BenefitTitles, has bool) map[string]interface{} {
-	if !has {
-		return map[string]interface{}{}
-	}
-	return map[string]interface{}{
-		"title":                 t.PtdBenefitTitle,
-		"salary_multiple":       salaryMultiple(q.UseGlobalSalaryMultiple, cat.PtdSalaryMultiple),
-		"waiting_period":        "0",
-		"deferred_period":       strconv.Itoa(cat.PtdDeferredPeriod),
-		"benefit_type":          orDash(cat.PtdBenefitType),
-		"disability_definition": orDash(cat.PtdDisabilityDefinition),
-		"risk_type":             orDash(cat.PtdRiskType),
-		"educator_benefit":      orDash(cat.PtdEducatorBenefit),
-		"total_sum_assured":     quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalPtdCappedSumAssured),
-		"annual_premium":        quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalPtdAnnualOfficePremium),
-		"percent_salary":        formatPercent(s.ExpProportionPtdOfficePremiumSalary),
-	}
-}
-
-func ciContext(s models.MemberRatingResultSummary, cat models.SchemeCategory, q models.GroupPricingQuote, t quote_docx.BenefitTitles, has bool) map[string]interface{} {
-	if !has {
-		return map[string]interface{}{}
-	}
-	return map[string]interface{}{
-		"title":              t.CiBenefitTitle,
-		"salary_multiple":    salaryMultiple(q.UseGlobalSalaryMultiple, cat.CiCriticalIllnessSalaryMultiple),
-		"waiting_period":     "0",
-		"deferred_period":    "0",
-		"benefit_structure":  orDash(cat.CiBenefitStructure),
-		"benefit_definition": orDash(cat.CiBenefitDefinition),
-		"max_benefit":        quote_docx.RoundUpToTwoDecimalsAccounting(cat.CiMaxBenefit),
-		"total_sum_assured":  quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalCiCappedSumAssured),
-		"annual_premium":     quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalCiAnnualOfficePremium),
-		"percent_salary":     formatPercent(s.ExpProportionCiOfficePremiumSalary),
-	}
-}
-
-func phiContext(s models.MemberRatingResultSummary, cat models.SchemeCategory, t quote_docx.BenefitTitles, has bool) map[string]interface{} {
-	if !has {
-		return map[string]interface{}{}
-	}
-	return map[string]interface{}{
-		"title":                         t.PhiBenefitTitle,
-		"income_replacement_percentage": fmt.Sprintf("%.2f%%", cat.PhiIncomeReplacementPercentage),
-		"waiting_period":                strconv.Itoa(cat.PhiWaitingPeriod),
-		"deferred_period":               strconv.Itoa(cat.PhiDeferredPeriod),
-		"disability_definition":         orDash(cat.PhiDisabilityDefinition),
-		"risk_type":                     orDash(cat.PhiRiskType),
-		"premium_waiver":                orDash(cat.PhiPremiumWaiver),
-		"medical_aid_premium_waiver":    orDash(cat.PhiMedicalAidPremiumWaiver),
-		"benefit_escalation":            orDash(cat.PhiBenefitEscalation),
-		"total_sum_assured":             quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalPhiCappedIncome),
-		"annual_premium":                quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalPhiAnnualOfficePremium),
-		"percent_salary":                formatPercent(s.ExpProportionPhiOfficePremiumSalary),
-	}
-}
-
-func ttdContext(s models.MemberRatingResultSummary, cat models.SchemeCategory, t quote_docx.BenefitTitles, has bool) map[string]interface{} {
-	if !has {
-		return map[string]interface{}{}
-	}
-	return map[string]interface{}{
-		"title":                         t.TtdBenefitTitle,
-		"income_replacement_percentage": fmt.Sprintf("%.2f%%", cat.TtdIncomeReplacementPercentage),
-		"waiting_period":                strconv.Itoa(cat.TtdWaitingPeriod),
-		"deferred_period":               strconv.Itoa(cat.TtdDeferredPeriod),
-		"disability_definition":         orDash(cat.TtdDisabilityDefinition),
-		"risk_type":                     orDash(cat.TtdRiskType),
-		"total_sum_assured":             quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalTtdCappedIncome),
-		"annual_premium":                quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalTtdAnnualOfficePremium),
-		"percent_salary":                formatPercent(s.ExpProportionTtdOfficePremiumSalary),
-	}
-}
-
-func funeralContext(s models.MemberRatingResultSummary, cat models.SchemeCategory, t quote_docx.BenefitTitles, has bool) map[string]interface{} {
-	if !has {
-		return map[string]interface{}{}
-	}
-	return map[string]interface{}{
-		"title":                      t.FamilyFuneralBenefitTitle,
-		"monthly_premium_per_member": quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalFunMonthlyPremiumPerMember),
-		"annual_premium_per_member":  quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalFunAnnualPremiumPerMember),
-		"total_annual_premium":       quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalFunAnnualOfficePremium),
-		"main_member_sum_assured":    quote_docx.RoundUpToTwoDecimalsAccounting(cat.FamilyFuneralMainMemberFuneralSumAssured),
-		"spouse_sum_assured":         quote_docx.RoundUpToTwoDecimalsAccounting(cat.FamilyFuneralSpouseFuneralSumAssured),
-		"child_sum_assured":          quote_docx.RoundUpToTwoDecimalsAccounting(cat.FamilyFuneralChildrenFuneralSumAssured),
-		"max_children":               strconv.Itoa(cat.FamilyFuneralMaxNumberChildren),
-		"parent_sum_assured":         quote_docx.RoundUpToTwoDecimalsAccounting(cat.FamilyFuneralParentFuneralSumAssured),
-		"dependant_sum_assured":      quote_docx.RoundUpToTwoDecimalsAccounting(cat.FamilyFuneralAdultDependantSumAssured),
-		"max_dependants":             strconv.Itoa(cat.FamilyFuneralMaxNumberAdultDependants),
-	}
-}
-
-// --- formatting helpers ---
+// --- formatting helpers (shared by schema.go) ---
 
 func formatPercent(decimal float64) string {
 	return fmt.Sprintf("%.2f%%", decimal*100)
@@ -302,3 +116,4 @@ func orDash(s string) string {
 	}
 	return s
 }
+
