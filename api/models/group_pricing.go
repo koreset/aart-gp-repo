@@ -1051,7 +1051,7 @@ type MovementMemberRatingResult struct {
 	ChildFuneralSumAssured              float64 `json:"child_funeral_sum_assured" csv:"child_funeral_sum_assured"`
 	DependantFuneralBaseRate            float64 `json:"dependant_funeral_base_rate" csv:"dependant_funeral_base_rate"`
 	DependantFuneralSumAssured          float64 `json:"dependant_funeral_sum_assured" csv:"dependant_funeral_sum_assured"`
-	MainMemberFuneralBaseRate            float64 `json:"main_member_funeral_base_rate" csv:"main_member_funeral_base_rate"`
+	MainMemberFuneralBaseRate           float64 `json:"main_member_funeral_base_rate" csv:"main_member_funeral_base_rate"`
 	MainMemberFuneralCost               float64 `json:"main_member_funeral_cost" csv:"main_member_funeral_cost"`
 	SpouseFuneralBaseRate               float64 `json:"spouse_funeral_base_rate" csv:"spouse_funeral_base_rate"`
 	SpouseFuneralCost                   float64 `json:"spouse_funeral_cost" csv:"spouse_funeral_cost"`
@@ -1345,9 +1345,9 @@ type GroupPricingInsurerDetail struct {
 type InsurerQuoteTemplate struct {
 	ID         int       `json:"id" gorm:"primaryKey;autoIncrement"`
 	InsurerID  int       `json:"insurer_id" gorm:"index;not null"`
-	Version    int       `json:"version"`              // 1, 2, 3, ... per insurer
-	Filename   string    `json:"filename"`             // original upload filename
-	DocxBlob   []byte    `json:"-"`                    // never serialised in JSON
+	Version    int       `json:"version"`  // 1, 2, 3, ... per insurer
+	Filename   string    `json:"filename"` // original upload filename
+	DocxBlob   []byte    `json:"-"`        // never serialised in JSON
 	SizeBytes  int       `json:"size_bytes"`
 	UploadedBy string    `json:"uploaded_by"`
 	UploadedAt time.Time `json:"uploaded_at" gorm:"autoCreateTime"`
@@ -1521,7 +1521,12 @@ type GeneralLoading struct {
 	RiskRateCode                  string    `json:"risk_rate_code" csv:"risk_rate_code"`
 	Age                           int       `json:"age" csv:"age"`
 	Gender                        string    `json:"gender" csv:"gender"`
-	ContigencyLoadingRate         float64   `json:"contigency_loading_rate" csv:"contigency_loading_rate"`
+	GlaContigencyLoadingRate      float64   `json:"gla_contigency_loading_rate" csv:"gla_contigency_loading_rate"`
+	PtdContigencyLoadingRate      float64   `json:"ptd_contigency_loading_rate" csv:"ptd_contigency_loading_rate"`
+	CiContigencyLoadingRate       float64   `json:"ci_contigency_loading_rate" csv:"ci_contigency_loading_rate"`
+	TtdContigencyLoadingRate      float64   `json:"ttd_contigency_loading_rate" csv:"ttd_contigency_loading_rate"`
+	PhiContigencyLoadingRate      float64   `json:"phi_contigency_loading_rate" csv:"phi_contigency_loading_rate"`
+	FunContigencyLoadingRate      float64   `json:"fun_contigency_loading_rate" csv:"fun_contigency_loading_rate"`
 	ContinuationLoadingRate       float64   `json:"continuation_loading_rate" csv:"continuation_loading_rate"`
 	TerminalIllnessLoadingRate    float64   `json:"terminal_illness_loading_rate" csv:"terminal_illness_loading_rate"`
 	PtdAcceleratedBenefitDiscount float64   `json:"ptd_accelerated_benefit_discount" csv:"ptd_accelerated_benefit_discount"`

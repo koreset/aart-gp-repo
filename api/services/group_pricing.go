@@ -1993,8 +1993,12 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	if schemeCategory.GlaTerminalIllnessBenefit == "Yes" {
 		memberDataPointResult.GlaTerminalIllnessLoading = gl1.TerminalIllnessLoadingRate
 	}
+	var glaContinuationLoading1 float64
+	if groupQuote.ContinuationOption {
+		glaContinuationLoading1 = gl1.ContinuationLoadingRate
+	}
 
-	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate
+	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + gl1.GlaContigencyLoadingRate + memberDataPointResult.GlaTerminalIllnessLoading + glaContinuationLoading1)
 
 	memberDataPointResult.ExpAdjLoadedGlaRate = memberDataPointResult.LoadedGlaRate * memberDataPointResult.GlaExperienceAdjustment
 
@@ -2006,7 +2010,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		} else {
 			memberDataPointResult.BasePtdRate = ptdRate * (1 + memberDataPointResult.PtdLoading + memberRegionLoading.PtdRegionLoadingRate)
 		}
-		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate
+		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate * (1 + gl1.PtdContigencyLoadingRate)
 		memberDataPointResult.ExpAdjLoadedPtdRate = memberDataPointResult.LoadedPtdRate * memberDataPointResult.PtdExperienceAdjustment
 	}
 
@@ -2014,7 +2018,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		ttdRate := GetTtdRate(&originalMemberDataPointResult, groupParameter, groupQuote, schemeCategory, mpIncomeLevel)
 		memberDataPointResult.TtdLoading = memberIndustryLoading.TtdIndustryLoadingRate
 		memberDataPointResult.BaseTtdRate = ttdRate * (1 + memberDataPointResult.TtdLoading + memberRegionLoading.TtdRegionLoadingRate)
-		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate
+		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate * (1 + gl1.TtdContigencyLoadingRate)
 		memberDataPointResult.ExpAdjLoadedTtdRate = memberDataPointResult.LoadedTtdRate * memberDataPointResult.TtdExperienceAdjustment
 	}
 
@@ -2023,7 +2027,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		memberDataPointResult.PhiSalaryLevel = float64(mpIncomeLevel)
 		memberDataPointResult.PhiLoading = memberIndustryLoading.PhiIndustryLoadingRate
 		memberDataPointResult.BasePhiRate = phiRate * (1 + memberDataPointResult.PhiLoading + memberRegionLoading.PhiRegionLoadingRate)
-		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate
+		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate * (1 + gl1.PhiContigencyLoadingRate)
 		memberDataPointResult.ExpAdjLoadedPhiRate = memberDataPointResult.LoadedPhiRate * memberDataPointResult.PhiExperienceAdjustment
 	}
 
@@ -2035,7 +2039,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		} else {
 			memberDataPointResult.BaseCiRate = ciRate * (1 + memberDataPointResult.CiLoading + memberRegionLoading.CiRegionLoadingRate)
 		}
-		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate
+		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate * (1 + gl1.CiContigencyLoadingRate)
 		memberDataPointResult.ExpAdjLoadedCiRate = memberDataPointResult.LoadedCiRate * memberDataPointResult.CiExperienceAdjustment
 	}
 
@@ -2385,7 +2389,11 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	if groupQuote.SchemeCategories[i].GlaTerminalIllnessBenefit == "Yes" {
 		memberDataPointResult.GlaTerminalIllnessLoading = gl2.TerminalIllnessLoadingRate
 	}
-	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate
+	var glaContinuationLoading2 float64
+	if groupQuote.ContinuationOption {
+		glaContinuationLoading2 = gl2.ContinuationLoadingRate
+	}
+	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + gl2.GlaContigencyLoadingRate + memberDataPointResult.GlaTerminalIllnessLoading + glaContinuationLoading2)
 
 	if groupQuote.SchemeCategories[i].PtdBenefit {
 		ptdRate := GetPtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
@@ -2395,14 +2403,14 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 		} else {
 			memberDataPointResult.BasePtdRate = ptdRate * (1 + memberDataPointResult.PtdLoading + memberRegionLoadingExp.PtdRegionLoadingRate)
 		}
-		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate
+		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate * (1 + gl2.PtdContigencyLoadingRate)
 	}
 
 	if groupQuote.SchemeCategories[i].TtdBenefit {
 		ttdRate := GetTtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
 		memberDataPointResult.TtdLoading = memberIndustryLoading.TtdIndustryLoadingRate
 		memberDataPointResult.BaseTtdRate = ttdRate * (1 + memberDataPointResult.TtdLoading + memberRegionLoadingExp.TtdRegionLoadingRate)
-		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate
+		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate * (1 + gl2.TtdContigencyLoadingRate)
 	}
 
 	if groupQuote.SchemeCategories[i].PhiBenefit {
@@ -2410,7 +2418,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 		memberDataPointResult.PhiSalaryLevel = float64(mpIncomeLevel)
 		memberDataPointResult.PhiLoading = memberIndustryLoading.PhiIndustryLoadingRate
 		memberDataPointResult.BasePhiRate = phiRate * (1 + memberDataPointResult.PhiLoading + memberRegionLoadingExp.PhiRegionLoadingRate)
-		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate
+		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate * (1 + gl2.PhiContigencyLoadingRate)
 	}
 
 	if groupQuote.SchemeCategories[i].CiBenefit {
@@ -2421,7 +2429,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 		} else {
 			memberDataPointResult.BaseCiRate = ciRate * (1 + memberDataPointResult.CiLoading + memberRegionLoadingExp.CiRegionLoadingRate)
 		}
-		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate
+		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate * (1 + gl2.CiContigencyLoadingRate)
 	}
 
 	if groupQuote.SchemeCategories[i].SglaBenefit && len(memberDataPointResult.SpouseGender) > 0 {
@@ -2682,7 +2690,11 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	if groupQuote.SchemeCategories[i].GlaTerminalIllnessBenefit == "Yes" {
 		memberDataPointResult.GlaTerminalIllnessLoading = gl3.TerminalIllnessLoadingRate
 	}
-	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate
+	var glaContinuationLoading3 float64
+	if groupQuote.ContinuationOption {
+		glaContinuationLoading3 = gl3.ContinuationLoadingRate
+	}
+	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + gl3.GlaContigencyLoadingRate + memberDataPointResult.GlaTerminalIllnessLoading + glaContinuationLoading3)
 
 	if groupQuote.SchemeCategories[i].PtdBenefit {
 		ptdRate := GetPtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
@@ -2692,14 +2704,14 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		} else {
 			memberDataPointResult.BasePtdRate = ptdRate * (1 + memberDataPointResult.PtdLoading + memberRegionLoading.PtdRegionLoadingRate)
 		}
-		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate
+		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate * (1 + gl3.PtdContigencyLoadingRate)
 	}
 
 	if groupQuote.SchemeCategories[i].TtdBenefit {
 		ttdRate := GetTtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
 		memberDataPointResult.TtdLoading = memberIndustryLoading.TtdIndustryLoadingRate
 		memberDataPointResult.BaseTtdRate = ttdRate * (1 + memberDataPointResult.TtdLoading + memberRegionLoading.TtdRegionLoadingRate)
-		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate
+		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate * (1 + gl3.TtdContigencyLoadingRate)
 	}
 
 	if groupQuote.SchemeCategories[i].PhiBenefit {
@@ -2707,7 +2719,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		memberDataPointResult.PhiSalaryLevel = float64(mpIncomeLevel)
 		memberDataPointResult.PhiLoading = memberIndustryLoading.PhiIndustryLoadingRate
 		memberDataPointResult.BasePhiRate = phiRate * (1 + memberDataPointResult.PhiLoading + memberRegionLoading.PhiRegionLoadingRate)
-		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate
+		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate * (1 + gl3.PhiContigencyLoadingRate)
 	}
 
 	if groupQuote.SchemeCategories[i].CiBenefit {
@@ -2718,7 +2730,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		} else {
 			memberDataPointResult.BaseCiRate = ciRate * (1 + memberDataPointResult.CiLoading + memberRegionLoading.CiRegionLoadingRate)
 		}
-		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate
+		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate * (1 + gl3.CiContigencyLoadingRate)
 	}
 
 	if groupQuote.SchemeCategories[i].SglaBenefit && len(memberDataPointResult.SpouseGender) > 0 {
