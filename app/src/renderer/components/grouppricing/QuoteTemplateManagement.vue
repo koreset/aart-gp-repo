@@ -186,7 +186,11 @@
       <v-dialog v-model="deleteDialog.open" max-width="480">
         <v-card>
           <v-card-title class="text-h6">
-            <v-icon icon="mdi-alert-circle-outline" color="error" class="mr-2" />
+            <v-icon
+              icon="mdi-alert-circle-outline"
+              color="error"
+              class="mr-2"
+            />
             {{ deleteDialog.title }}
           </v-card-title>
           <v-card-text>{{ deleteDialog.message }}</v-card-text>

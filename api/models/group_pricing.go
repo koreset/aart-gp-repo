@@ -608,6 +608,8 @@ type MemberRatingResult struct {
 	Discount                        float64   `json:"discount" csv:"discount"`
 	TotalLoading                    float64   `json:"total_loading" csv:"total_loading"`
 
+	GlaQx                          float64 `json:"gla_qx" csv:"gla_qx"`
+	GlaAidsQx                      float64 `json:"gla_aids_qx" csv:"gla_aids_qx"`
 	BaseGlaRate                    float64 `json:"base_gla_rate" csv:"base_gla_rate"`
 	GlaLoading                     float64 `json:"gla_loading" csv:"gla_loading"`
 	GlaTerminalIllnessLoading      float64 `json:"gla_terminal_illness_loading" csv:"gla_terminal_illness_loading"`
@@ -651,6 +653,8 @@ type MemberRatingResult struct {
 
 	SpouseGlaSumAssured          float64 `json:"spouse_gla_sum_assured" csv:"spouse_gla_sum_assured"`
 	SpouseGlaCappedSumAssured    float64 `json:"spouse_gla_capped_sum_assured" csv:"spouse_gla_capped_sum_assured"`
+	SpouseGlaQx                  float64 `json:"spouse_gla_qx" csv:"spouse_gla_qx"`
+	SpouseGlaAidsQx              float64 `json:"spouse_gla_aids_qx" csv:"spouse_gla_aids_qx"`
 	BaseSpouseGlaRate            float64 `json:"base_spouse_gla_rate" csv:"base_spouse_gla_rate"`
 	SpouseGlaLoading             float64 `json:"spouse_gla_loading" csv:"spouse_gla_loading"`
 	LoadedSpouseGlaRate          float64 `json:"loaded_spouse_gla_rate" csv:"loaded_spouse_gla_rate"`
@@ -692,12 +696,14 @@ type MemberRatingResult struct {
 	ExpAdjPhiOfficePremium  float64 `json:"exp_adj_phi_office_premium" csv:"exp_adj_phi_office_premium"`
 
 	MemberFuneralSumAssured        float64 `json:"member_funeral_sum_assured" csv:"member_funeral_sum_assured"`
+	MainMemberFuneralBaseRate      float64 `json:"main_member_funeral_base_rate" csv:"main_member_funeral_base_rate"`
 	MainMemberFuneralCost          float64 `json:"main_member_funeral_cost" csv:"main_member_funeral_cost"`
 	MainMemberFuneralOfficePremium float64 `json:"main_member_funeral_office_premium" csv:"main_member_funeral_office_premium"`
 
 	//MarriageProportion float64 `json:"marriage_proportion" csv:"marriage_proportion"`
 
 	SpouseFuneralSumAssured    float64 `json:"spouse_funeral_sum_assured" csv:"spouse_funeral_sum_assured"`
+	SpouseFuneralBaseRate      float64 `json:"spouse_funeral_base_rate" csv:"spouse_funeral_base_rate"`
 	SpouseFuneralCost          float64 `json:"spouse_funeral_cost" csv:"spouse_funeral_cost"`
 	SpouseFuneralOfficePremium float64 `json:"spouse_funeral_office_premium" csv:"spouse_funeral_office_premium"`
 
@@ -979,6 +985,8 @@ type MovementMemberRatingResult struct {
 	PhiMedicalAidWaiver                 float64 `json:"phi_medical_aid_waiver" csv:"phi_medical_aid_waiver"`
 	PhiMonthlyBenefit                   float64 `json:"phi_monthly_benefit" csv:"phi_monthly_benefit"`
 	PhiAnnuityFactor                    float64 `json:"phi_annuity_factor" csv:"phi_annuity_factor"`
+	GlaQx                               float64 `json:"gla_qx" csv:"gla_qx"`
+	GlaAidsQx                           float64 `json:"gla_aids_qx" csv:"gla_aids_qx"`
 	BaseGlaRate                         float64 `json:"base_gla_rate" csv:"base_gla_rate"`
 	GlaLoading                          float64 `json:"gla_loading" csv:"gla_loading"`
 	GlaTerminalIllnessLoading           float64 `json:"gla_terminal_illness_loading" csv:"gla_terminal_illness_loading"`
@@ -1004,6 +1012,8 @@ type MovementMemberRatingResult struct {
 	CiLoading                           float64 `json:"ci_loading" csv:"ci_loading"`
 	LoadedCiRate                        float64 `json:"loaded_ci_rate" csv:"loaded_ci_rate"`
 	ExpAdjLoadedCiRate                  float64 `json:"exp_adj_loaded_ci_rate" csv:"exp_adj_loaded_ci_rate"`
+	SpouseGlaQx                         float64 `json:"spouse_gla_qx" csv:"spouse_gla_qx"`
+	SpouseGlaAidsQx                     float64 `json:"spouse_gla_aids_qx" csv:"spouse_gla_aids_qx"`
 	BaseSpouseGlaRate                   float64 `json:"base_spouse_gla_rate" csv:"base_spouse_gla_rate"`
 	SpouseGlaLoading                    float64 `json:"spouse_gla_loading" csv:"spouse_gla_loading"`
 	LoadedSpouseGlaRate                 float64 `json:"loaded_spouse_gla_rate" csv:"loaded_spouse_gla_rate"`
@@ -1041,7 +1051,9 @@ type MovementMemberRatingResult struct {
 	ChildFuneralSumAssured              float64 `json:"child_funeral_sum_assured" csv:"child_funeral_sum_assured"`
 	DependantFuneralBaseRate            float64 `json:"dependant_funeral_base_rate" csv:"dependant_funeral_base_rate"`
 	DependantFuneralSumAssured          float64 `json:"dependant_funeral_sum_assured" csv:"dependant_funeral_sum_assured"`
+	MainMemberFuneralBaseRate            float64 `json:"main_member_funeral_base_rate" csv:"main_member_funeral_base_rate"`
 	MainMemberFuneralCost               float64 `json:"main_member_funeral_cost" csv:"main_member_funeral_cost"`
+	SpouseFuneralBaseRate               float64 `json:"spouse_funeral_base_rate" csv:"spouse_funeral_base_rate"`
 	SpouseFuneralCost                   float64 `json:"spouse_funeral_cost" csv:"spouse_funeral_cost"`
 	ChildrenFuneralCost                 float64 `json:"children_funeral_cost" csv:"children_funeral_cost"`
 	DependantsFuneralCost               float64 `json:"dependants_funeral_cost" csv:"dependants_funeral_cost"`

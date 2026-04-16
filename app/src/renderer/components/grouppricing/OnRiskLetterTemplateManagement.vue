@@ -10,17 +10,19 @@
           variant="outlined"
           size="small"
         >
-          {{ active ? `Active v${active.version}` : 'Using default formatting' }}
+          {{
+            active ? `Active v${active.version}` : 'Using default formatting'
+          }}
         </v-chip>
       </div>
     </template>
 
     <template #default>
       <p class="text-subtitle-2 text-medium-emphasis mb-4">
-        Upload a Word (.docx) template to customise the On Risk letter sent
-        when a quote is accepted. Tokens like
-        <code v-pre>{{scheme_name}}</code>,
-        <code v-pre>{{commencement_date}}</code> and
+        Upload a Word (.docx) template to customise the On Risk letter sent when
+        a quote is accepted. Tokens like
+        <code v-pre>{{ scheme_name }}</code
+        >, <code v-pre>{{ commencement_date }}</code> and
         <code v-pre>{{#benefit_summary}}...{{/benefit_summary}}</code> are
         filled with the accepted quote's data at generation time. Download the
         sample template to see all supported tokens.
@@ -48,7 +50,9 @@
                   Version {{ active.version }} ·
                   {{ formatBytes(active.size_bytes) }} · uploaded
                   {{ formatDate(active.uploaded_at) }}
-                  <span v-if="active.uploaded_by"> by {{ active.uploaded_by }}</span>
+                  <span v-if="active.uploaded_by">
+                    by {{ active.uploaded_by }}</span
+                  >
                 </div>
               </div>
             </div>
@@ -181,7 +185,11 @@
       <v-dialog v-model="deleteDialog.open" max-width="480">
         <v-card>
           <v-card-title class="text-h6">
-            <v-icon icon="mdi-alert-circle-outline" color="error" class="mr-2" />
+            <v-icon
+              icon="mdi-alert-circle-outline"
+              color="error"
+              class="mr-2"
+            />
             {{ deleteDialog.title }}
           </v-card-title>
           <v-card-text>{{ deleteDialog.message }}</v-card-text>
@@ -309,7 +317,9 @@ async function downloadActive() {
 
 async function downloadVersion(t: any) {
   try {
-    const r = await GroupPricingService.downloadInsurerOnRiskLetterTemplate(t.id)
+    const r = await GroupPricingService.downloadInsurerOnRiskLetterTemplate(
+      t.id
+    )
     saveAs(r.data, t.filename || `on_risk_letter_template_v${t.version}.docx`)
   } catch (e) {
     console.error(e)

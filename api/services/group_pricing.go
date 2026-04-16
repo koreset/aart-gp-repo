@@ -1152,6 +1152,19 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		}
 	}
 
+	// Pre-load industry loadings for this category (single DB hit, keyed by gender)
+	industryLoadingByGender := make(map[string]models.IndustryLoading)
+	var categoryIndustryLoadings []models.IndustryLoading
+	DB.Where("risk_rate_code = ? AND occupation_class = ?",
+		groupParameter.RiskRateCode,
+		groupQuote.OccupationClass,
+	).Find(&categoryIndustryLoadings)
+	for _, il := range categoryIndustryLoadings {
+		if len(il.Gender) > 0 {
+			industryLoadingByGender[strings.ToUpper(il.Gender[:1])] = il
+		}
+	}
+
 	dbStartTime = time.Now()
 	DB.Save(&groupQuote)
 
@@ -1399,7 +1412,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		for idx, mp := range experienceMemberMps {
 			idx, mp := idx, mp
 			experienceWorkerPool.Submit(func() {
-				expResults[idx] = PopulateRatesPerMemberForExperienceRating(categoryIndex, indicativeRatesCount, mp, groupQuote, groupParameter, incomeLevels, ageBands, calculatedFreeCoverLimit, insurerYearEndMonth, restriction, taxTable, tieredIncomeTiers, customTieredIncomeTiers, premiumLoading, regionLoadingByGender)
+				expResults[idx] = PopulateRatesPerMemberForExperienceRating(categoryIndex, indicativeRatesCount, mp, groupQuote, groupParameter, incomeLevels, ageBands, calculatedFreeCoverLimit, insurerYearEndMonth, restriction, taxTable, tieredIncomeTiers, customTieredIncomeTiers, premiumLoading, regionLoadingByGender, industryLoadingByGender)
 			})
 		}
 		experienceWorkerPool.StopWait()
@@ -1428,7 +1441,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	for idx, mp := range memberMps {
 		idx, mp := idx, mp
 		rateWorkerPool.Submit(func() {
-			rateResults[idx] = PopulateRatesPerMember(categoryIndex, indicativeRatesCount, indicativeMemberMps, selectedSchemeCategory, mp, groupQuote, groupParameter, groupPricingReinsuranceStructure, incomeLevels, ageBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit, educatorBenefitStructure, credibility, glaTheoreticalRate, insurerYearEndMonth, user, restriction, taxTable, tieredIncomeTiers, customTieredIncomeTiers, premiumLoading, regionLoadingByGender)
+			rateResults[idx] = PopulateRatesPerMember(categoryIndex, indicativeRatesCount, indicativeMemberMps, selectedSchemeCategory, mp, groupQuote, groupParameter, groupPricingReinsuranceStructure, incomeLevels, ageBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit, educatorBenefitStructure, credibility, glaTheoreticalRate, insurerYearEndMonth, user, restriction, taxTable, tieredIncomeTiers, customTieredIncomeTiers, premiumLoading, regionLoadingByGender, industryLoadingByGender)
 		})
 	}
 	rateWorkerPool.StopWait()
@@ -1823,7 +1836,7 @@ func calculateAgeNextBirthday(commencementDate, dob time.Time) int {
 func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingResult, bordereauxDatapoint models.Bordereaux, memberPremiumScheduleDatapoint *models.MemberPremiumSchedule, addedMemberInForce models.GPricingMemberDataInForce, groupQuote models.GroupPricingQuote,
 	groupParameter models.GroupPricingParameters,
 	groupPricingReinsuranceStructure models.GroupPricingReinsuranceStructure,
-	incomeLevels []models.IncomeLevel, ageBands []models.GroupPricingAgeBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, manuallyAddedCredibility float64, finacialYear int, restriction models.Restriction, premiumLoading models.PremiumLoading) {
+	incomeLevels []models.IncomeLevel, ageBands []models.GroupPricingAgeBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, manuallyAddedCredibility float64, finacialYear int, restriction models.Restriction, premiumLoading models.PremiumLoading, industryLoadingByGender map[string]models.IndustryLoading, regionLoadingByGender map[string]models.RegionLoading) {
 
 	//var memberPremiumScheduleDatapoint models.MemberPremiumSchedule
 	var mpIncomeLevel int
@@ -1956,67 +1969,84 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 
 	data, _ := json.Marshal(memberDataPointResult)
 	json.Unmarshal(data, &originalMemberDataPointResult)
-	memberIndustryLoading := GetGlaIndustryLoading(&originalMemberDataPointResult, groupParameter, groupQuote.OccupationClass)
+	memberIndustryLoading := industryLoadingByGender[strings.ToUpper(originalMemberDataPointResult.Gender[:1])]
+	memberRegionLoading := regionLoadingByGender[strings.ToUpper(originalMemberDataPointResult.Gender[:1])]
 
-	memberDataPointResult.BaseGlaRate = GetGlaRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, schemeCategory)
-	memberDataPointResult.GlaLoading = memberIndustryLoading.GlaIndustryLoadingRate
+	if schemeCategory.GlaBenefit {
+		memberDataPointResult.GlaQx = GetGlaRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, schemeCategory)
+		memberDataPointResult.GlaAidsQx = GetGlaAidsRate(memberDataPointResult, groupParameter)
+		memberDataPointResult.GlaLoading = memberIndustryLoading.GlaIndustryLoadingRate
+		memberDataPointResult.BaseGlaRate = memberDataPointResult.GlaQx*(1+memberDataPointResult.GlaLoading+memberRegionLoading.GlaRegionLoadingRate) + memberDataPointResult.GlaAidsQx*(1+memberRegionLoading.GlaAidsRegionLoadingRate)
+	} else if schemeCategory.FamilyFuneralBenefit {
+		funQx := GetFuneralRate(memberDataPointResult, groupParameter)
+		funAidsQx := GetFuneralAidsRate(memberDataPointResult, groupParameter)
+		memberDataPointResult.MainMemberFuneralBaseRate = funQx*(1+memberRegionLoading.FunRegionLoadingRate) + funAidsQx*(1+memberRegionLoading.FunAidsRegionLoadingRate)
+		if len(memberDataPointResult.SpouseGender) > 0 {
+			spouseRegionLoading := regionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+			spouseFunQx := GetSpouseFuneralRate(memberDataPointResult, groupParameter)
+			spouseFunAidsQx := GetSpouseFuneralAidsRate(memberDataPointResult, groupParameter)
+			memberDataPointResult.SpouseFuneralBaseRate = spouseFunQx*(1+spouseRegionLoading.FunRegionLoadingRate) + spouseFunAidsQx*(1+spouseRegionLoading.FunAidsRegionLoadingRate)
+		}
+	}
 
 	gl1 := GetGeneralLoading(groupParameter.RiskRateCode, memberDataPointResult.AgeNextBirthday, memberDataPointResult.Gender)
 	if schemeCategory.GlaTerminalIllnessBenefit == "Yes" {
 		memberDataPointResult.GlaTerminalIllnessLoading = gl1.TerminalIllnessLoadingRate
 	}
 
-	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaLoading)
+	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate
 
 	memberDataPointResult.ExpAdjLoadedGlaRate = memberDataPointResult.LoadedGlaRate * memberDataPointResult.GlaExperienceAdjustment
 
 	if schemeCategory.PtdBenefit {
-		var AcceleratedDiscount float64
-		if schemeCategory.PtdBenefitType == "Accelerated" {
-			AcceleratedDiscount = 1 - gl1.PtdAcceleratedBenefitDiscount
-		}
-		if schemeCategory.PtdBenefitType != "Accelerated" {
-			AcceleratedDiscount = 1
-		}
-		memberDataPointResult.BasePtdRate = GetPtdRate(&originalMemberDataPointResult, groupParameter, groupQuote, schemeCategory, mpIncomeLevel) * AcceleratedDiscount
+		ptdRate := GetPtdRate(&originalMemberDataPointResult, groupParameter, groupQuote, schemeCategory, mpIncomeLevel)
 		memberDataPointResult.PtdLoading = memberIndustryLoading.PtdIndustryLoadingRate
-		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate * (1 + memberDataPointResult.PtdLoading)
+		if schemeCategory.PtdBenefitType == "Accelerated" {
+			memberDataPointResult.BasePtdRate = ptdRate * (1 + memberDataPointResult.PtdLoading + memberRegionLoading.PtdRegionLoadingRate - gl1.PtdAcceleratedBenefitDiscount)
+		} else {
+			memberDataPointResult.BasePtdRate = ptdRate * (1 + memberDataPointResult.PtdLoading + memberRegionLoading.PtdRegionLoadingRate)
+		}
+		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate
 		memberDataPointResult.ExpAdjLoadedPtdRate = memberDataPointResult.LoadedPtdRate * memberDataPointResult.PtdExperienceAdjustment
 	}
 
 	if schemeCategory.TtdBenefit {
-		memberDataPointResult.BaseTtdRate = GetTtdRate(&originalMemberDataPointResult, groupParameter, groupQuote, schemeCategory, mpIncomeLevel)
+		ttdRate := GetTtdRate(&originalMemberDataPointResult, groupParameter, groupQuote, schemeCategory, mpIncomeLevel)
 		memberDataPointResult.TtdLoading = memberIndustryLoading.TtdIndustryLoadingRate
-		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate * (1 + memberDataPointResult.TtdLoading)
+		memberDataPointResult.BaseTtdRate = ttdRate * (1 + memberDataPointResult.TtdLoading + memberRegionLoading.TtdRegionLoadingRate)
+		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate
 		memberDataPointResult.ExpAdjLoadedTtdRate = memberDataPointResult.LoadedTtdRate * memberDataPointResult.TtdExperienceAdjustment
 	}
 
 	if schemeCategory.PhiBenefit {
-		memberDataPointResult.BasePhiRate = GetPhiRate(&originalMemberDataPointResult, groupParameter, groupQuote, schemeCategory, mpIncomeLevel)
+		phiRate := GetPhiRate(&originalMemberDataPointResult, groupParameter, groupQuote, schemeCategory, mpIncomeLevel)
 		memberDataPointResult.PhiSalaryLevel = float64(mpIncomeLevel)
 		memberDataPointResult.PhiLoading = memberIndustryLoading.PhiIndustryLoadingRate
-		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate * (1 + memberDataPointResult.PhiLoading)
+		memberDataPointResult.BasePhiRate = phiRate * (1 + memberDataPointResult.PhiLoading + memberRegionLoading.PhiRegionLoadingRate)
+		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate
 		memberDataPointResult.ExpAdjLoadedPhiRate = memberDataPointResult.LoadedPhiRate * memberDataPointResult.PhiExperienceAdjustment
 	}
 
 	if schemeCategory.CiBenefit {
-		var AcceleratedDiscount float64
-		if schemeCategory.CiBenefitStructure == "Accelerated" {
-			AcceleratedDiscount = 1 - gl1.CiAcceleratedBenefitDiscount
-		}
-		if schemeCategory.CiBenefitStructure != "Accelerated" {
-			AcceleratedDiscount = 1
-		}
-		memberDataPointResult.BaseCiRate = GetCiRate(&originalMemberDataPointResult, groupParameter, groupQuote, schemeCategory, mpIncomeLevel) * AcceleratedDiscount
+		ciRate := GetCiRate(&originalMemberDataPointResult, groupParameter, groupQuote, schemeCategory, mpIncomeLevel)
 		memberDataPointResult.CiLoading = memberIndustryLoading.CiIndustryLoadingRate
-		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate * (1 + memberDataPointResult.CiLoading)
+		if schemeCategory.CiBenefitStructure == "Accelerated" {
+			memberDataPointResult.BaseCiRate = ciRate * (1 + memberDataPointResult.CiLoading + memberRegionLoading.CiRegionLoadingRate - gl1.CiAcceleratedBenefitDiscount)
+		} else {
+			memberDataPointResult.BaseCiRate = ciRate * (1 + memberDataPointResult.CiLoading + memberRegionLoading.CiRegionLoadingRate)
+		}
+		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate
 		memberDataPointResult.ExpAdjLoadedCiRate = memberDataPointResult.LoadedCiRate * memberDataPointResult.CiExperienceAdjustment
 	}
 
-	if schemeCategory.SglaBenefit {
-		memberDataPointResult.BaseSpouseGlaRate = GetSpouseGlaRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, schemeCategory)
-		memberDataPointResult.SpouseGlaLoading = 0
-		memberDataPointResult.LoadedSpouseGlaRate = memberDataPointResult.BaseSpouseGlaRate * (1 + memberDataPointResult.SpouseGlaLoading)
+	if schemeCategory.SglaBenefit && len(memberDataPointResult.SpouseGender) > 0 {
+		spouseIndustryLoading := industryLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+		spouseRegionLoading := regionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+		memberDataPointResult.SpouseGlaQx = GetSpouseGlaRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, schemeCategory)
+		memberDataPointResult.SpouseGlaAidsQx = GetSpouseGlaAidsRate(memberDataPointResult, groupParameter)
+		memberDataPointResult.SpouseGlaLoading = spouseIndustryLoading.GlaIndustryLoadingRate
+		memberDataPointResult.BaseSpouseGlaRate = memberDataPointResult.SpouseGlaQx*(1+memberDataPointResult.SpouseGlaLoading+spouseRegionLoading.GlaRegionLoadingRate) + memberDataPointResult.SpouseGlaAidsQx*(1+spouseRegionLoading.GlaAidsRegionLoadingRate)
+		memberDataPointResult.LoadedSpouseGlaRate = memberDataPointResult.BaseSpouseGlaRate
 		memberDataPointResult.ExpAdjLoadedSpouseGlaRate = memberDataPointResult.LoadedSpouseGlaRate * memberDataPointResult.GlaExperienceAdjustment
 	}
 
@@ -2064,8 +2094,13 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	memberDataPointResult.DependantFuneralBaseRate = GetDependantMortalityRate(&originalMemberDataPointResult, groupParameter, memberDataPointResult.AverageDependantAgeNextBirthday, mpIncomeLevel)
 	memberDataPointResult.DependantFuneralSumAssured = schemeCategory.FamilyFuneralAdultDependantSumAssured
 
-	memberDataPointResult.MainMemberFuneralCost = memberDataPointResult.LoadedGlaRate * schemeCategory.FamilyFuneralMainMemberFuneralSumAssured
-	memberDataPointResult.SpouseFuneralCost = memberDataPointResult.LoadedSpouseGlaRate * schemeCategory.FamilyFuneralSpouseFuneralSumAssured
+	if schemeCategory.GlaBenefit {
+		memberDataPointResult.MainMemberFuneralCost = memberDataPointResult.LoadedGlaRate * schemeCategory.FamilyFuneralMainMemberFuneralSumAssured
+		memberDataPointResult.SpouseFuneralCost = memberDataPointResult.LoadedSpouseGlaRate * schemeCategory.FamilyFuneralSpouseFuneralSumAssured
+	} else {
+		memberDataPointResult.MainMemberFuneralCost = memberDataPointResult.MainMemberFuneralBaseRate * schemeCategory.FamilyFuneralMainMemberFuneralSumAssured
+		memberDataPointResult.SpouseFuneralCost = memberDataPointResult.SpouseFuneralBaseRate * schemeCategory.FamilyFuneralSpouseFuneralSumAssured
+	}
 	memberDataPointResult.ChildrenFuneralCost = memberDataPointResult.ChildFuneralBaseRate * schemeCategory.FamilyFuneralChildrenFuneralSumAssured * math.Min(memberDataPointResult.AverageNumberChildren, float64(schemeCategory.FamilyFuneralMaxNumberChildren))
 	memberDataPointResult.DependantsFuneralCost = memberDataPointResult.DependantFuneralBaseRate * schemeCategory.FamilyFuneralAdultDependantSumAssured * memberDataPointResult.AverageNumberDependants
 
@@ -2197,7 +2232,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	groupQuote models.GroupPricingQuote,
 	groupParameter models.GroupPricingParameters, incomeLevels []models.IncomeLevel, ageBands []models.GroupPricingAgeBands, calculatedFreeCoverLimit float64,
 	insurerYearEndMonth int, restriction models.Restriction,
-	taxTable []models.TaxTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, premiumLoading models.PremiumLoading, regionLoadingByGender map[string]models.RegionLoading) TheoreticalRiskTotal {
+	taxTable []models.TaxTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, premiumLoading models.PremiumLoading, regionLoadingByGender map[string]models.RegionLoading, industryLoadingByGender map[string]models.IndustryLoading) TheoreticalRiskTotal {
 
 	var memberDataPointResult models.MemberRatingResult
 	var memberPremiumScheduleDatapoint models.MemberPremiumSchedule
@@ -2339,65 +2374,64 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	memberDataPointResult.PhiContributionWaiver = math.Min(mp.AnnualSalary*mp.ContributionWaiverProportion, restriction.PhiMaximumMonthlyContributionWaiver) * indicativeRatesCount
 	memberDataPointResult.PhiMonthlyBenefit = memberDataPointResult.PhiCappedIncome + memberDataPointResult.PhiContributionWaiver
 
-	memberIndustryLoading := GetGlaIndustryLoading(&memberDataPointResult, groupParameter, groupQuote.OccupationClass)
+	memberIndustryLoading := industryLoadingByGender[strings.ToUpper(memberDataPointResult.Gender[:1])]
 
-	memberDataPointResult.BaseGlaRate = GetGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, groupQuote.SchemeCategories[i])
+	memberDataPointResult.GlaQx = GetGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, groupQuote.SchemeCategories[i])
+	memberDataPointResult.GlaAidsQx = GetGlaAidsRate(&memberDataPointResult, groupParameter)
 	memberDataPointResult.GlaLoading = memberIndustryLoading.GlaIndustryLoadingRate
+	memberDataPointResult.BaseGlaRate = memberDataPointResult.GlaQx*(1+memberDataPointResult.GlaLoading+memberRegionLoadingExp.GlaRegionLoadingRate) + memberDataPointResult.GlaAidsQx*(1+memberRegionLoadingExp.GlaAidsRegionLoadingRate)
 
 	gl2 := GetGeneralLoading(groupParameter.RiskRateCode, memberDataPointResult.AgeNextBirthday, memberDataPointResult.Gender)
 	if groupQuote.SchemeCategories[i].GlaTerminalIllnessBenefit == "Yes" {
 		memberDataPointResult.GlaTerminalIllnessLoading = gl2.TerminalIllnessLoadingRate
 	}
-	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaLoading)
-	memberDataPointResult.LoadedGlaRate *= (1 + memberRegionLoadingExp.GlaRegionLoadingRate)
+	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate
 
 	if groupQuote.SchemeCategories[i].PtdBenefit {
-		var AcceleratedDiscount float64
-		if groupQuote.SchemeCategories[i].PtdBenefitType == "Accelerated" {
-			AcceleratedDiscount = 1 - gl2.PtdAcceleratedBenefitDiscount
-		}
-		if groupQuote.SchemeCategories[i].PtdBenefitType != "Accelerated" {
-			AcceleratedDiscount = 1
-		}
-		memberDataPointResult.BasePtdRate = GetPtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel) * AcceleratedDiscount
+		ptdRate := GetPtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
 		memberDataPointResult.PtdLoading = memberIndustryLoading.PtdIndustryLoadingRate
-		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate * (1 + memberDataPointResult.PtdLoading)
-		memberDataPointResult.LoadedPtdRate *= (1 + memberRegionLoadingExp.PtdRegionLoadingRate)
+		if groupQuote.SchemeCategories[i].PtdBenefitType == "Accelerated" {
+			memberDataPointResult.BasePtdRate = ptdRate * (1 + memberDataPointResult.PtdLoading + memberRegionLoadingExp.PtdRegionLoadingRate - gl2.PtdAcceleratedBenefitDiscount)
+		} else {
+			memberDataPointResult.BasePtdRate = ptdRate * (1 + memberDataPointResult.PtdLoading + memberRegionLoadingExp.PtdRegionLoadingRate)
+		}
+		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate
 	}
 
 	if groupQuote.SchemeCategories[i].TtdBenefit {
-		memberDataPointResult.BaseTtdRate = GetTtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
+		ttdRate := GetTtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
 		memberDataPointResult.TtdLoading = memberIndustryLoading.TtdIndustryLoadingRate
-		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate * (1 + memberDataPointResult.TtdLoading)
-		memberDataPointResult.LoadedTtdRate *= (1 + memberRegionLoadingExp.TtdRegionLoadingRate)
+		memberDataPointResult.BaseTtdRate = ttdRate * (1 + memberDataPointResult.TtdLoading + memberRegionLoadingExp.TtdRegionLoadingRate)
+		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate
 	}
 
 	if groupQuote.SchemeCategories[i].PhiBenefit {
-		memberDataPointResult.BasePhiRate = GetPhiRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
+		phiRate := GetPhiRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
 		memberDataPointResult.PhiSalaryLevel = float64(mpIncomeLevel)
 		memberDataPointResult.PhiLoading = memberIndustryLoading.PhiIndustryLoadingRate
-		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate * (1 + memberDataPointResult.PhiLoading)
-		memberDataPointResult.LoadedPhiRate *= (1 + memberRegionLoadingExp.PhiRegionLoadingRate)
+		memberDataPointResult.BasePhiRate = phiRate * (1 + memberDataPointResult.PhiLoading + memberRegionLoadingExp.PhiRegionLoadingRate)
+		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate
 	}
 
 	if groupQuote.SchemeCategories[i].CiBenefit {
-		var AcceleratedDiscount float64
-		if groupQuote.SchemeCategories[i].CiBenefitStructure == "Accelerated" {
-			AcceleratedDiscount = 1 - gl2.CiAcceleratedBenefitDiscount
-		}
-		if groupQuote.SchemeCategories[i].CiBenefitStructure != "Accelerated" {
-			AcceleratedDiscount = 1
-		}
-		memberDataPointResult.BaseCiRate = GetCiRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel) * AcceleratedDiscount
+		ciRate := GetCiRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
 		memberDataPointResult.CiLoading = memberIndustryLoading.CiIndustryLoadingRate
-		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate * (1 + memberDataPointResult.CiLoading)
-		memberDataPointResult.LoadedCiRate *= (1 + memberRegionLoadingExp.CiRegionLoadingRate)
+		if groupQuote.SchemeCategories[i].CiBenefitStructure == "Accelerated" {
+			memberDataPointResult.BaseCiRate = ciRate * (1 + memberDataPointResult.CiLoading + memberRegionLoadingExp.CiRegionLoadingRate - gl2.CiAcceleratedBenefitDiscount)
+		} else {
+			memberDataPointResult.BaseCiRate = ciRate * (1 + memberDataPointResult.CiLoading + memberRegionLoadingExp.CiRegionLoadingRate)
+		}
+		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate
 	}
 
-	if groupQuote.SchemeCategories[i].SglaBenefit {
-		memberDataPointResult.BaseSpouseGlaRate = GetSpouseGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, groupQuote.SchemeCategories[i])
-		memberDataPointResult.SpouseGlaLoading = 0
-		memberDataPointResult.LoadedSpouseGlaRate = memberDataPointResult.BaseSpouseGlaRate * (1 + memberDataPointResult.SpouseGlaLoading)
+	if groupQuote.SchemeCategories[i].SglaBenefit && len(memberDataPointResult.SpouseGender) > 0 {
+		spouseIndustryLoading := industryLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+		spouseRegionLoading := regionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+		memberDataPointResult.SpouseGlaQx = GetSpouseGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, groupQuote.SchemeCategories[i])
+		memberDataPointResult.SpouseGlaAidsQx = GetSpouseGlaAidsRate(&memberDataPointResult, groupParameter)
+		memberDataPointResult.SpouseGlaLoading = spouseIndustryLoading.GlaIndustryLoadingRate
+		memberDataPointResult.BaseSpouseGlaRate = memberDataPointResult.SpouseGlaQx*(1+memberDataPointResult.SpouseGlaLoading+spouseRegionLoading.GlaRegionLoadingRate) + memberDataPointResult.SpouseGlaAidsQx*(1+spouseRegionLoading.GlaAidsRegionLoadingRate)
+		memberDataPointResult.LoadedSpouseGlaRate = memberDataPointResult.BaseSpouseGlaRate
 	}
 
 	memberDataPointResult.GlaRiskPremium = memberDataPointResult.LoadedGlaRate * memberDataPointResult.GlaCappedSumAssured
@@ -2421,7 +2455,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	}
 }
 
-func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMemberMps []models.MemberIndicativeDataSet, selectedSchemeCategory string, mp models.GPricingMemberData, groupQuote models.GroupPricingQuote, groupParameter models.GroupPricingParameters, groupPricingReinsuranceStructure models.GroupPricingReinsuranceStructure, incomeLevels []models.IncomeLevel, ageBands []models.GroupPricingAgeBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit float64, educatorBenefitStructure models.EducatorBenefitStructure, credibility, glatheoreticalRate float64, insurerYearEndMonth int, user models.AppUser, restriction models.Restriction, taxTable []models.TaxTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, premiumLoading models.PremiumLoading, regionLoadingByGender map[string]models.RegionLoading) MemberRateResult {
+func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMemberMps []models.MemberIndicativeDataSet, selectedSchemeCategory string, mp models.GPricingMemberData, groupQuote models.GroupPricingQuote, groupParameter models.GroupPricingParameters, groupPricingReinsuranceStructure models.GroupPricingReinsuranceStructure, incomeLevels []models.IncomeLevel, ageBands []models.GroupPricingAgeBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit float64, educatorBenefitStructure models.EducatorBenefitStructure, credibility, glatheoreticalRate float64, insurerYearEndMonth int, user models.AppUser, restriction models.Restriction, taxTable []models.TaxTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, premiumLoading models.PremiumLoading, regionLoadingByGender map[string]models.RegionLoading, industryLoadingByGender map[string]models.IndustryLoading) MemberRateResult {
 
 	var memberDataPointResult models.MemberRatingResult
 	var memberPremiumScheduleDatapoint models.MemberPremiumSchedule
@@ -2557,7 +2591,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.AverageNumberChildren = groupFuneralParameter.NumberChildren
 	unScaledGlaSumAssured := mp.AnnualSalary * memberDataPointResult.GlaSalaryMultiple
 
-	memberIndustryLoading := GetGlaIndustryLoading(&memberDataPointResult, groupParameter, groupQuote.OccupationClass)
+	memberIndustryLoading := industryLoadingByGender[strings.ToUpper(memberDataPointResult.Gender[:1])]
 
 	if groupQuote.SchemeCategories[i].GlaBenefit {
 		memberDataPointResult.GlaSumAssured = mp.AnnualSalary * memberDataPointResult.GlaSalaryMultiple * indicativeRatesCount
@@ -2627,66 +2661,74 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		memberDataPointResult.PhiMonthlyBenefit = memberDataPointResult.PhiCappedIncome + memberDataPointResult.PhiContributionWaiver + memberDataPointResult.PhiMedicalAidWaiver
 	}
 
-	if groupQuote.SchemeCategories[i].GlaBenefit || groupQuote.SchemeCategories[i].FamilyFuneralBenefit {
-		memberDataPointResult.BaseGlaRate = GetGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, groupQuote.SchemeCategories[i])
+	if groupQuote.SchemeCategories[i].GlaBenefit {
+		memberDataPointResult.GlaQx = GetGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, groupQuote.SchemeCategories[i])
+		memberDataPointResult.GlaAidsQx = GetGlaAidsRate(&memberDataPointResult, groupParameter)
 		memberDataPointResult.GlaLoading = memberIndustryLoading.GlaIndustryLoadingRate
-
+		memberDataPointResult.BaseGlaRate = memberDataPointResult.GlaQx*(1+memberDataPointResult.GlaLoading+memberRegionLoading.GlaRegionLoadingRate) + memberDataPointResult.GlaAidsQx*(1+memberRegionLoading.GlaAidsRegionLoadingRate)
+	} else if groupQuote.SchemeCategories[i].FamilyFuneralBenefit {
+		funQx := GetFuneralRate(&memberDataPointResult, groupParameter)
+		funAidsQx := GetFuneralAidsRate(&memberDataPointResult, groupParameter)
+		memberDataPointResult.MainMemberFuneralBaseRate = funQx*(1+memberRegionLoading.FunRegionLoadingRate) + funAidsQx*(1+memberRegionLoading.FunAidsRegionLoadingRate)
+		if len(memberDataPointResult.SpouseGender) > 0 {
+			spouseRegionLoading := regionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+			spouseFunQx := GetSpouseFuneralRate(&memberDataPointResult, groupParameter)
+			spouseFunAidsQx := GetSpouseFuneralAidsRate(&memberDataPointResult, groupParameter)
+			memberDataPointResult.SpouseFuneralBaseRate = spouseFunQx*(1+spouseRegionLoading.FunRegionLoadingRate) + spouseFunAidsQx*(1+spouseRegionLoading.FunAidsRegionLoadingRate)
+		}
 	}
 
 	gl3 := GetGeneralLoading(groupParameter.RiskRateCode, memberDataPointResult.AgeNextBirthday, memberDataPointResult.Gender)
 	if groupQuote.SchemeCategories[i].GlaTerminalIllnessBenefit == "Yes" {
 		memberDataPointResult.GlaTerminalIllnessLoading = gl3.TerminalIllnessLoadingRate
 	}
-	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaLoading)
-	memberDataPointResult.LoadedGlaRate *= (1 + memberRegionLoading.GlaRegionLoadingRate)
+	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate
 
 	if groupQuote.SchemeCategories[i].PtdBenefit {
-		var AcceleratedDiscount float64
-		if groupQuote.SchemeCategories[i].PtdBenefitType == "Accelerated" {
-			AcceleratedDiscount = 1 - gl3.PtdAcceleratedBenefitDiscount
-		}
-		if groupQuote.SchemeCategories[i].PtdBenefitType != "Accelerated" {
-			AcceleratedDiscount = 1
-		}
-		memberDataPointResult.BasePtdRate = GetPtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel) * AcceleratedDiscount
+		ptdRate := GetPtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
 		memberDataPointResult.PtdLoading = memberIndustryLoading.PtdIndustryLoadingRate
-		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate * (1 + memberDataPointResult.PtdLoading)
-		memberDataPointResult.LoadedPtdRate *= (1 + memberRegionLoading.PtdRegionLoadingRate)
+		if groupQuote.SchemeCategories[i].PtdBenefitType == "Accelerated" {
+			memberDataPointResult.BasePtdRate = ptdRate * (1 + memberDataPointResult.PtdLoading + memberRegionLoading.PtdRegionLoadingRate - gl3.PtdAcceleratedBenefitDiscount)
+		} else {
+			memberDataPointResult.BasePtdRate = ptdRate * (1 + memberDataPointResult.PtdLoading + memberRegionLoading.PtdRegionLoadingRate)
+		}
+		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate
 	}
 
 	if groupQuote.SchemeCategories[i].TtdBenefit {
-		memberDataPointResult.BaseTtdRate = GetTtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
+		ttdRate := GetTtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
 		memberDataPointResult.TtdLoading = memberIndustryLoading.TtdIndustryLoadingRate
-		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate * (1 + memberDataPointResult.TtdLoading)
-		memberDataPointResult.LoadedTtdRate *= (1 + memberRegionLoading.TtdRegionLoadingRate)
+		memberDataPointResult.BaseTtdRate = ttdRate * (1 + memberDataPointResult.TtdLoading + memberRegionLoading.TtdRegionLoadingRate)
+		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate
 	}
 
 	if groupQuote.SchemeCategories[i].PhiBenefit {
-		memberDataPointResult.BasePhiRate = GetPhiRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
+		phiRate := GetPhiRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
 		memberDataPointResult.PhiSalaryLevel = float64(mpIncomeLevel)
 		memberDataPointResult.PhiLoading = memberIndustryLoading.PhiIndustryLoadingRate
-		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate * (1 + memberDataPointResult.PhiLoading)
-		memberDataPointResult.LoadedPhiRate *= (1 + memberRegionLoading.PhiRegionLoadingRate)
+		memberDataPointResult.BasePhiRate = phiRate * (1 + memberDataPointResult.PhiLoading + memberRegionLoading.PhiRegionLoadingRate)
+		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate
 	}
 
 	if groupQuote.SchemeCategories[i].CiBenefit {
-		var AcceleratedDiscount float64
-		if groupQuote.SchemeCategories[i].CiBenefitStructure == "Accelerated" {
-			AcceleratedDiscount = 1 - gl3.CiAcceleratedBenefitDiscount
-		}
-		if groupQuote.SchemeCategories[i].CiBenefitStructure != "Accelerated" {
-			AcceleratedDiscount = 1
-		}
-		memberDataPointResult.BaseCiRate = GetCiRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel) * AcceleratedDiscount
+		ciRate := GetCiRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
 		memberDataPointResult.CiLoading = memberIndustryLoading.CiIndustryLoadingRate
-		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate * (1 + memberDataPointResult.CiLoading)
-		memberDataPointResult.LoadedCiRate *= (1 + memberRegionLoading.CiRegionLoadingRate)
+		if groupQuote.SchemeCategories[i].CiBenefitStructure == "Accelerated" {
+			memberDataPointResult.BaseCiRate = ciRate * (1 + memberDataPointResult.CiLoading + memberRegionLoading.CiRegionLoadingRate - gl3.CiAcceleratedBenefitDiscount)
+		} else {
+			memberDataPointResult.BaseCiRate = ciRate * (1 + memberDataPointResult.CiLoading + memberRegionLoading.CiRegionLoadingRate)
+		}
+		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate
 	}
 
-	if groupQuote.SchemeCategories[i].SglaBenefit {
-		memberDataPointResult.BaseSpouseGlaRate = GetSpouseGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, groupQuote.SchemeCategories[i])
-		memberDataPointResult.SpouseGlaLoading = 0
-		memberDataPointResult.LoadedSpouseGlaRate = memberDataPointResult.BaseSpouseGlaRate * (1 + memberDataPointResult.SpouseGlaLoading)
+	if groupQuote.SchemeCategories[i].SglaBenefit && len(memberDataPointResult.SpouseGender) > 0 {
+		spouseIndustryLoading := industryLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+		spouseRegionLoading := regionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+		memberDataPointResult.SpouseGlaQx = GetSpouseGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, groupQuote.SchemeCategories[i])
+		memberDataPointResult.SpouseGlaAidsQx = GetSpouseGlaAidsRate(&memberDataPointResult, groupParameter)
+		memberDataPointResult.SpouseGlaLoading = spouseIndustryLoading.GlaIndustryLoadingRate
+		memberDataPointResult.BaseSpouseGlaRate = memberDataPointResult.SpouseGlaQx*(1+memberDataPointResult.SpouseGlaLoading+spouseRegionLoading.GlaRegionLoadingRate) + memberDataPointResult.SpouseGlaAidsQx*(1+spouseRegionLoading.GlaAidsRegionLoadingRate)
+		memberDataPointResult.LoadedSpouseGlaRate = memberDataPointResult.BaseSpouseGlaRate
 	}
 
 	memberDataPointResult.GlaRiskPremium = memberDataPointResult.LoadedGlaRate * memberDataPointResult.GlaCappedSumAssured
@@ -2715,9 +2757,17 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.DependantFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured
 	memberDataPointResult.MemberFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralMainMemberFuneralSumAssured
 
-	memberDataPointResult.MainMemberFuneralCost = memberDataPointResult.LoadedGlaRate * groupQuote.SchemeCategories[i].FamilyFuneralMainMemberFuneralSumAssured
+	if groupQuote.SchemeCategories[i].GlaBenefit {
+		memberDataPointResult.MainMemberFuneralCost = memberDataPointResult.LoadedGlaRate * groupQuote.SchemeCategories[i].FamilyFuneralMainMemberFuneralSumAssured
+	} else {
+		memberDataPointResult.MainMemberFuneralCost = memberDataPointResult.MainMemberFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralMainMemberFuneralSumAssured
+	}
 	memberDataPointResult.SpouseFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured
-	memberDataPointResult.SpouseFuneralCost = memberDataPointResult.LoadedSpouseGlaRate * groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured
+	if groupQuote.SchemeCategories[i].GlaBenefit {
+		memberDataPointResult.SpouseFuneralCost = memberDataPointResult.LoadedSpouseGlaRate * groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured
+	} else {
+		memberDataPointResult.SpouseFuneralCost = memberDataPointResult.SpouseFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured
+	}
 	memberDataPointResult.ChildrenFuneralCost = memberDataPointResult.ChildFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralChildrenFuneralSumAssured * math.Min(memberDataPointResult.AverageNumberChildren, float64(groupQuote.SchemeCategories[i].FamilyFuneralMaxNumberChildren))
 	memberDataPointResult.DependantsFuneralCost = memberDataPointResult.DependantFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured * memberDataPointResult.AverageNumberDependants
 
@@ -5173,61 +5223,6 @@ func GetGlaRate(memberResultData *models.MemberRatingResult, groupPricingParamet
 	return qx
 }
 
-func GetGlaIndustryLoading(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, occupationClass int) models.IndustryLoading {
-
-	var industryLoading models.IndustryLoading
-
-	key := fmt.Sprintf("ads:industry-loading:%s:%d:%s", groupPricingParameter.RiskRateCode, occupationClass, memberResultData.Gender[:1])
-
-	//tableName := "industry_loadings"
-	//var keyString strings.Builder
-	//
-	//keyString.WriteString(strconv.Itoa(groupPricingParameter.Year) + "_")
-	//keyString.WriteString(groupPricingParameter.RiskRateCode + "_")
-	//keyString.WriteString(strconv.Itoa(occupationClass) + "_") //incomelevel
-	//keyString.WriteString(memberResultData.Gender[:1] + "_")
-	//keyString.WriteString(benefit + "_")
-	//key := keyString.String()
-	cacheKey := key
-	cached, found := GroupPricingCache.Get(cacheKey)
-
-	if found {
-		result := cached.(models.IndustryLoading)
-		//if result > 0 {
-		return result
-		//}
-	}
-
-	DB.Where("risk_rate_code=? and occupation_class=? and gender =?", groupPricingParameter.RiskRateCode, occupationClass, memberResultData).
-		Find(&industryLoading)
-
-	if industryLoading.ID == 0 {
-		fmt.Println("No industry loading found for key:", key)
-	}
-	//var industryLoadingRate float64
-	//var err error
-	//query := "year = ? and risk_rate_code=? and occupation_class=? and gender=?"
-	//switch benefit {
-	//case "GLA":
-	//	err = DB.Table(tableName).Where(query, groupPricingParameter.Year, groupPricingParameter.RiskRateCode, occupationClass, memberResultData.Gender).Pluck("gla_industry_loading_rate", &industryLoadingRate).Error //.Select("industry_loading_rate").Row()
-	//case "PTD":
-	//	err = DB.Table(tableName).Where(query, groupPricingParameter.Year, groupPricingParameter.RiskRateCode, occupationClass, memberResultData.Gender).Pluck("ptd_industry_loading_rate", &industryLoadingRate).Error //.Select("industry_loading_rate").Row()
-	//case "CI":
-	//	err = DB.Table(tableName).Where(query, groupPricingParameter.Year, groupPricingParameter.RiskRateCode, occupationClass, memberResultData.Gender).Pluck("ci_industry_loading_rate", &industryLoadingRate).Error //.Select("industry_loading_rate").Row()
-	//case "TTD":
-	//	err = DB.Table(tableName).Where(query, groupPricingParameter.Year, groupPricingParameter.RiskRateCode, occupationClass, memberResultData.Gender).Pluck("ttd_industry_loading_rate", &industryLoadingRate).Error //.Select("industry_loading_rate").Row()
-	//case "PHI":
-	//	err = DB.Table(tableName).Where(query, groupPricingParameter.Year, groupPricingParameter.RiskRateCode, occupationClass, memberResultData.Gender).Pluck("phi_industry_loading_rate", &industryLoadingRate).Error //.Select("industry_loading_rate").Row()
-	//}
-
-	//if err != nil {
-	//	fmt.Println(err)
-	//}
-	GroupPricingCache.Set(cacheKey, industryLoading, 1)
-	//time.Sleep(5 * time.Millisecond)
-	return industryLoading
-}
-
 func GetGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
 	tableName := "gla_aids_rates"
 
@@ -5248,6 +5243,37 @@ func GetGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingPar
 			groupPricingParameter.RiskRateCode,
 			memberResultData.AgeNextBirthday,
 			memberResultData.Gender[:1],
+		).
+		Pluck("gla_aids_qx", &qx).Error
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	GroupPricingCache.Set(cacheKey, qx, 1)
+	return qx
+}
+
+func GetSpouseGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+	tableName := "gla_aids_rates"
+
+	var keyString strings.Builder
+	keyString.WriteString("spouse_")
+	keyString.WriteString(groupPricingParameter.RiskRateCode + "_")
+	keyString.WriteString(strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_")
+	keyString.WriteString(memberResultData.SpouseGender[:1] + "_")
+	key := keyString.String()
+
+	cacheKey := tableName + "_" + key
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(float64)
+	}
+
+	var qx float64
+	err := DB.Table(tableName).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ?",
+			groupPricingParameter.RiskRateCode,
+			memberResultData.SpouseAgeNextBirthday,
+			memberResultData.SpouseGender[:1],
 		).
 		Pluck("gla_aids_qx", &qx).Error
 	if err != nil {
@@ -5500,6 +5526,68 @@ func GetFuneralAidsRate(memberResultData *models.MemberRatingResult, groupPricin
 			groupPricingParameter.RiskRateCode,
 			memberResultData.AgeNextBirthday,
 			memberResultData.Gender[:1],
+		).
+		Pluck("fun_aids_qx", &qx).Error
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	GroupPricingCache.Set(cacheKey, qx, 1)
+	return qx
+}
+
+func GetSpouseFuneralRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+	tableName := "funeral_rates"
+
+	var keyString strings.Builder
+	keyString.WriteString("spouse_")
+	keyString.WriteString(groupPricingParameter.RiskRateCode + "_")
+	keyString.WriteString(strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_")
+	keyString.WriteString(memberResultData.SpouseGender[:1] + "_")
+	key := keyString.String()
+
+	cacheKey := tableName + "_" + key
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(float64)
+	}
+
+	var qx float64
+	err := DB.Table(tableName).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ?",
+			groupPricingParameter.RiskRateCode,
+			memberResultData.SpouseAgeNextBirthday,
+			memberResultData.SpouseGender[:1],
+		).
+		Pluck("fun_qx", &qx).Error
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	GroupPricingCache.Set(cacheKey, qx, 1)
+	return qx
+}
+
+func GetSpouseFuneralAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+	tableName := "funeral_aids_rates"
+
+	var keyString strings.Builder
+	keyString.WriteString("spouse_")
+	keyString.WriteString(groupPricingParameter.RiskRateCode + "_")
+	keyString.WriteString(strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_")
+	keyString.WriteString(memberResultData.SpouseGender[:1] + "_")
+	key := keyString.String()
+
+	cacheKey := tableName + "_" + key
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(float64)
+	}
+
+	var qx float64
+	err := DB.Table(tableName).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ?",
+			groupPricingParameter.RiskRateCode,
+			memberResultData.SpouseAgeNextBirthday,
+			memberResultData.SpouseGender[:1],
 		).
 		Pluck("fun_aids_qx", &qx).Error
 	if err != nil {
