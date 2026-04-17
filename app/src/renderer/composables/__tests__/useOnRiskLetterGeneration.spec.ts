@@ -74,7 +74,6 @@ function makeTestData(overrides: Record<string, any> = {}) {
       currency: 'ZAR',
       free_cover_limit: 2000000,
       normal_retirement_age: 65,
-      continuation_option: true,
       distribution_channel: 'broker',
       quote_broker: { broker_name: 'Test Broker' },
       ...overrides

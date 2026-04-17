@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -1189,9 +1190,9 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		return DB.Find(&ageBands).Error
 	})
 
-	if category != nil && (category.GlaEducatorBenefit == "Yes" || category.PtdEducatorBenefit == "Yes") {
+	if code := educatorCodeForCategory(category); code != "" {
 		eg.Go(func() error {
-			return DB.Where("risk_rate_code=? and educator_benefit_code=?", groupParameter.RiskRateCode, groupParameter.EducatorBenefitCode).Find(&educatorBenefitStructure).Error
+			return DB.Where("risk_rate_code=? and educator_benefit_code=?", groupParameter.RiskRateCode, code).Find(&educatorBenefitStructure).Error
 		})
 	}
 
@@ -4678,6 +4679,58 @@ func SaveGPTables(v *multipart.FileHeader, tableType string, riskRateCode string
 			return fmt.Errorf("failed to save Tax Table data: %v", err)
 		}
 
+	case "Commission Structure":
+		if err := utils.ValidateCSVHeaders(headers, models.CommissionStructure{}); err != nil {
+			return fmt.Errorf("%s validation failed: %v", tableType, err)
+		}
+		var pps []models.CommissionStructure
+		type chKey struct {
+			Channel string
+			Holder  string
+		}
+		affectedGroups := map[chKey]struct{}{}
+		for i := 1; ; i++ {
+			var pp models.CommissionStructure
+			if err := dec.Decode(&pp); err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("error decoding Commission Structure at row %d: %v", i, err)
+			}
+			pp.Channel = strings.ToLower(strings.TrimSpace(pp.Channel))
+			pp.HolderName = strings.TrimSpace(pp.HolderName)
+			if pp.Channel == "" {
+				return fmt.Errorf("error decoding Commission Structure at row %d: channel is required", i)
+			}
+			if pp.Channel == "direct" {
+				return fmt.Errorf("error decoding Commission Structure at row %d: direct channel cannot have bands", i)
+			}
+			pp.CreatedBy = user.UserName
+			pps = append(pps, pp)
+			affectedGroups[chKey{Channel: pp.Channel, Holder: pp.HolderName}] = struct{}{}
+		}
+		if err := DB.Transaction(func(tx *gorm.DB) error {
+			// Replace rows per (channel, holder_name) group that appears
+			// in the file — other groups are left untouched.
+			for k := range affectedGroups {
+				if err := tx.Where("channel = ? AND holder_name = ?", k.Channel, k.Holder).
+					Delete(&models.CommissionStructure{}).Error; err != nil {
+					return err
+				}
+			}
+			if err := tx.CreateInBatches(&pps, 100).Error; err != nil {
+				return err
+			}
+			for k := range affectedGroups {
+				if err := validateCommissionBandsForChannelHolderTx(tx, k.Channel, k.Holder); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			appLog.Error("Save Commission Structure error: ", err.Error())
+			return fmt.Errorf("failed to save Commission Structure data: %v", err)
+		}
+
 	}
 	// Update the stats table so GetGPTableMetaData reflects the new upload.
 	go refreshGPTableStatByDisplayName(tableType)
@@ -6309,6 +6362,322 @@ func DeleteBroker(id string) error {
 	return nil
 }
 
+// BinderFee CRUD operations
+
+func CreateBinderFee(fee models.BinderFee, appUser models.AppUser) error {
+	fee.CreatedBy = appUser.UserName
+	result := DB.Where(models.BinderFee{
+		BinderholderName: fee.BinderholderName,
+		RiskRateCode:     fee.RiskRateCode,
+	}).FirstOrCreate(&fee)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrDuplicatedKey
+	}
+	return nil
+}
+
+func GetBinderFees() ([]models.BinderFee, error) {
+	var fees []models.BinderFee
+	err := DB.Order("binderholder_name, risk_rate_code").Find(&fees).Error
+	if err != nil {
+		return nil, err
+	}
+	return fees, nil
+}
+
+func GetBinderFee(id string) (models.BinderFee, error) {
+	var fee models.BinderFee
+	err := DB.Where("id = ?", id).First(&fee).Error
+	if err != nil {
+		return fee, err
+	}
+	return fee, nil
+}
+
+func EditBinderFee(id string, payload models.BinderFee) (models.BinderFee, error) {
+	var existing models.BinderFee
+	if err := DB.First(&existing, id).Error; err != nil {
+		return existing, err
+	}
+
+	payload.ID = existing.ID
+
+	if err := DB.Model(&existing).Select("*").
+		Omit("id", "creation_date", "created_by").
+		Updates(payload).Error; err != nil {
+		return existing, err
+	}
+
+	var updated models.BinderFee
+	if err := DB.First(&updated, id).Error; err != nil {
+		return updated, err
+	}
+	return updated, nil
+}
+
+func DeleteBinderFee(id string) error {
+	return DB.Where("id = ?", id).Delete(&models.BinderFee{}).Error
+}
+
+// CommissionStructure CRUD + domain helpers
+
+// sortBandsByLowerBound sorts in-place by lower_bound ascending.
+func sortBandsByLowerBound(bands []models.CommissionStructure) {
+	sort.Slice(bands, func(i, j int) bool {
+		return bands[i].LowerBound < bands[j].LowerBound
+	})
+}
+
+// holderLabel returns a human-readable label for error messages —
+// "default" for empty holders, or the holder_name quoted.
+func holderLabel(holder string) string {
+	if holder == "" {
+		return "default"
+	}
+	return fmt.Sprintf("%q", holder)
+}
+
+// ValidateCommissionBandsForChannelHolder returns nil when the current set of
+// persisted bands for a given (channel, holder_name) group is contiguous
+// from 0, non-overlapping, and each row has applicable_rate <=
+// maximum_commission. Called after any Create/Edit/Delete so the
+// invariant holds transactionally on a per-holder basis.
+func ValidateCommissionBandsForChannelHolder(channel, holderName string) error {
+	channel = strings.ToLower(strings.TrimSpace(channel))
+	if channel == "" {
+		return fmt.Errorf("channel is required")
+	}
+	if channel == "direct" {
+		return fmt.Errorf("direct channel is always 0%% and cannot have bands")
+	}
+
+	var bands []models.CommissionStructure
+	if err := DB.Where("channel = ? AND holder_name = ?", channel, holderName).Find(&bands).Error; err != nil {
+		return err
+	}
+	return validateBandsSlice(channel, holderName, bands)
+}
+
+// validateBandsSlice is the pure validation used by both the exported
+// validator and the transactional validator — keeps the rules in one place.
+func validateBandsSlice(channel, holderName string, bands []models.CommissionStructure) error {
+	if len(bands) == 0 {
+		return nil
+	}
+	sortBandsByLowerBound(bands)
+	for i, b := range bands {
+		if b.LowerBound < 0 {
+			return fmt.Errorf("band %d: lower_bound must be >= 0", b.ID)
+		}
+		if b.UpperBound != nil && *b.UpperBound <= b.LowerBound {
+			return fmt.Errorf("band %d: upper_bound must be greater than lower_bound", b.ID)
+		}
+		if b.ApplicableRate < 0 || b.MaximumCommission < 0 {
+			return fmt.Errorf("band %d: rates must be >= 0", b.ID)
+		}
+		if b.ApplicableRate > b.MaximumCommission {
+			return fmt.Errorf("band %d: applicable_rate (%.6f) exceeds maximum_commission (%.6f)", b.ID, b.ApplicableRate, b.MaximumCommission)
+		}
+		if i == 0 && b.LowerBound != 0 {
+			return fmt.Errorf("first band must start at lower_bound = 0 (channel %q holder %s starts at %.2f)", channel, holderLabel(holderName), b.LowerBound)
+		}
+		if i > 0 {
+			prev := bands[i-1]
+			if prev.UpperBound == nil {
+				return fmt.Errorf("channel %q holder %s has a band after an unbounded band", channel, holderLabel(holderName))
+			}
+			if *prev.UpperBound != b.LowerBound {
+				return fmt.Errorf("gap or overlap between bands (channel %q holder %s): previous ends at %.2f, next starts at %.2f", channel, holderLabel(holderName), *prev.UpperBound, b.LowerBound)
+			}
+		}
+	}
+	return nil
+}
+
+func CreateCommissionBand(band models.CommissionStructure, appUser models.AppUser) error {
+	band.Channel = strings.ToLower(strings.TrimSpace(band.Channel))
+	band.HolderName = strings.TrimSpace(band.HolderName)
+	if band.Channel == "direct" {
+		return fmt.Errorf("direct channel is always 0%% and cannot have bands")
+	}
+	band.CreatedBy = appUser.UserName
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&band).Error; err != nil {
+			return err
+		}
+		if err := validateCommissionBandsForChannelHolderTx(tx, band.Channel, band.HolderName); err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+// GetCommissionBands returns commission bands filtered by channel and/or
+// holder. holderFilterProvided distinguishes between "no filter" (show
+// everything for the channel) and "filter to empty holder" (show only
+// defaults). When allHolders is true, channel rows across every holder
+// are returned regardless of the holderFilterProvided flag.
+func GetCommissionBands(channel, holderName string, holderFilterProvided, allHolders bool) ([]models.CommissionStructure, error) {
+	var bands []models.CommissionStructure
+	q := DB.Order("channel, holder_name, lower_bound")
+	if channel != "" {
+		q = q.Where("channel = ?", strings.ToLower(strings.TrimSpace(channel)))
+	}
+	if !allHolders && holderFilterProvided {
+		q = q.Where("holder_name = ?", strings.TrimSpace(holderName))
+	}
+	if err := q.Find(&bands).Error; err != nil {
+		return nil, err
+	}
+	return bands, nil
+}
+
+func GetCommissionBand(id string) (models.CommissionStructure, error) {
+	var band models.CommissionStructure
+	if err := DB.Where("id = ?", id).First(&band).Error; err != nil {
+		return band, err
+	}
+	return band, nil
+}
+
+func EditCommissionBand(id string, payload models.CommissionStructure) (models.CommissionStructure, error) {
+	payload.Channel = strings.ToLower(strings.TrimSpace(payload.Channel))
+	payload.HolderName = strings.TrimSpace(payload.HolderName)
+	if payload.Channel == "direct" {
+		return payload, fmt.Errorf("direct channel is always 0%% and cannot have bands")
+	}
+
+	var existing models.CommissionStructure
+	if err := DB.First(&existing, id).Error; err != nil {
+		return existing, err
+	}
+
+	payload.ID = existing.ID
+
+	if err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&existing).Select("*").
+			Omit("id", "creation_date", "created_by").
+			Updates(payload).Error; err != nil {
+			return err
+		}
+		// Validate the new group.
+		if err := validateCommissionBandsForChannelHolderTx(tx, payload.Channel, payload.HolderName); err != nil {
+			return err
+		}
+		// If the group changed (channel or holder moved), validate the old
+		// one too — the row we just moved out may have left a gap there.
+		if existing.Channel != payload.Channel || existing.HolderName != payload.HolderName {
+			if err := validateCommissionBandsForChannelHolderTx(tx, existing.Channel, existing.HolderName); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return existing, err
+	}
+
+	var updated models.CommissionStructure
+	if err := DB.First(&updated, id).Error; err != nil {
+		return updated, err
+	}
+	return updated, nil
+}
+
+func DeleteCommissionBand(id string) error {
+	var existing models.CommissionStructure
+	if err := DB.First(&existing, id).Error; err != nil {
+		return err
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("id = ?", id).Delete(&models.CommissionStructure{}).Error; err != nil {
+			return err
+		}
+		// After delete, the remaining bands in the (channel, holder) group
+		// may leave a gap. We validate but DO NOT hard-fail the delete —
+		// operators may be removing bands as a first step of a reshape.
+		// Leave the warning to the frontend contiguity check and the next
+		// Create/Edit call.
+		_ = validateCommissionBandsForChannelHolderTx(tx, existing.Channel, existing.HolderName)
+		return nil
+	})
+}
+
+// validateCommissionBandsForChannelHolderTx is the transactional variant
+// used inside Create/Edit flows — validates one (channel, holder) group.
+func validateCommissionBandsForChannelHolderTx(tx *gorm.DB, channel, holderName string) error {
+	channel = strings.ToLower(strings.TrimSpace(channel))
+	if channel == "" || channel == "direct" {
+		return nil
+	}
+	var bands []models.CommissionStructure
+	if err := tx.Where("channel = ? AND holder_name = ?", channel, holderName).Find(&bands).Error; err != nil {
+		return err
+	}
+	return validateBandsSlice(channel, holderName, bands)
+}
+
+// ComputeProgressiveCommission returns the blended commission loading for
+// the given annualised premium under a marginal (progressive) application
+// of a (channel, holder)'s bands. Lookup order:
+//  1. rows matching (channel, holderName) — use them if any exist.
+//  2. else rows matching (channel, ""), i.e. the channel default — use them.
+//  3. else return 0.
+// Returns 0 for channel="direct" or when no bands are configured.
+//
+// The return value is a decimal fraction (e.g. 0.053 for 5.3%).
+func ComputeProgressiveCommission(channel, holderName string, annualPremium float64) (float64, error) {
+	channel = strings.ToLower(strings.TrimSpace(channel))
+	holderName = strings.TrimSpace(holderName)
+	if channel == "direct" || annualPremium <= 0 {
+		return 0, nil
+	}
+	// 1. Holder-specific.
+	if holderName != "" {
+		var bands []models.CommissionStructure
+		if err := DB.Where("channel = ? AND holder_name = ?", channel, holderName).Find(&bands).Error; err != nil {
+			return 0, err
+		}
+		if len(bands) > 0 {
+			return computeProgressiveCommissionFromBands(bands, annualPremium), nil
+		}
+	}
+	// 2. Channel default.
+	var bands []models.CommissionStructure
+	if err := DB.Where("channel = ? AND holder_name = ?", channel, "").Find(&bands).Error; err != nil {
+		return 0, err
+	}
+	return computeProgressiveCommissionFromBands(bands, annualPremium), nil
+}
+
+// computeProgressiveCommissionFromBands is the pure math used by
+// ComputeProgressiveCommission — no DB access, safe to unit-test in
+// isolation. Returns 0 for empty bands or non-positive premium.
+func computeProgressiveCommissionFromBands(bands []models.CommissionStructure, annualPremium float64) float64 {
+	if annualPremium <= 0 || len(bands) == 0 {
+		return 0
+	}
+	sortBandsByLowerBound(bands)
+	weighted := 0.0
+	for _, b := range bands {
+		if annualPremium <= b.LowerBound {
+			break
+		}
+		upper := annualPremium
+		if b.UpperBound != nil && *b.UpperBound < upper {
+			upper = *b.UpperBound
+		}
+		segment := upper - b.LowerBound
+		if segment <= 0 {
+			continue
+		}
+		weighted += segment * b.ApplicableRate
+	}
+	return weighted / annualPremium
+}
+
 // Reinsurer CRUD operations
 
 func CreateReinsurer(reinsurer models.Reinsurer, appUser models.AppUser) error {
@@ -7311,8 +7680,13 @@ func GetGroupPricingQuoteEducatorBenefits(quoteId int) ([]CategoryEducatorBenefi
 			continue
 		}
 
-		// Get the educator benefit code from the group pricing parameter
-		educatorBenefitCode := groupParameter.EducatorBenefitCode
+		// Determine the educator benefit code from the scheme category
+		// (GLA takes priority, then PTD).
+		educatorBenefitCode := educatorCodeForCategory(&category)
+		if educatorBenefitCode == "" {
+			// Skip categories that don't have an educator benefit configured
+			continue
+		}
 
 		// Get the educator benefit structure using the risk rate code and educator benefit code
 		var educatorBenefitStructure models.EducatorBenefitStructure
@@ -10575,6 +10949,39 @@ func GetPhiDisabilityDefinitions(riskRateCode string) ([]string, error) {
 		return nil, err
 	}
 	return definitions, nil
+}
+
+// GetEducatorBenefitTypes returns the distinct educator benefit codes available
+// for a given risk rate code, used to populate the Educator Benefit Type
+// dropdown under GLA and PTD in the quote form.
+func GetEducatorBenefitTypes(riskRateCode string) ([]string, error) {
+	var codes []string
+	err := DB.Model(&models.EducatorBenefitStructure{}).
+		Where("risk_rate_code = ?", riskRateCode).
+		Distinct("educator_benefit_code").
+		Order("educator_benefit_code").
+		Pluck("educator_benefit_code", &codes).Error
+	if err != nil {
+		return nil, err
+	}
+	return codes, nil
+}
+
+// educatorCodeForCategory returns the educator_benefit_code that should be used
+// for a scheme category's educator benefit calculations. GLA takes priority
+// over PTD when both are enabled, matching how the current pricing code shares
+// a single educator_benefit_structure between the two benefits.
+func educatorCodeForCategory(c *models.SchemeCategory) string {
+	if c == nil {
+		return ""
+	}
+	if c.GlaEducatorBenefit == "Yes" && c.GlaEducatorBenefitType != "" {
+		return c.GlaEducatorBenefitType
+	}
+	if c.PtdEducatorBenefit == "Yes" && c.PtdEducatorBenefitType != "" {
+		return c.PtdEducatorBenefitType
+	}
+	return ""
 }
 
 /// utility functions

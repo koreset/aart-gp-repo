@@ -159,6 +159,39 @@
                   :disabled="!glaBenefit || !selectedSchemeType"
                 ></v-select>
               </v-col>
+              <v-col v-if="glaEducatorBenefit === 'Yes'" cols="4">
+                <v-select
+                  v-model="glaEducatorBenefitType"
+                  v-bind="glaEducatorBenefitTypeAttrs"
+                  variant="outlined"
+                  density="compact"
+                  label="Educator Benefit Type"
+                  placeholder="Select Educator Benefit Type"
+                  :error-messages="errors.gla_educator_benefit_type"
+                  :items="educatorBenefitTypes"
+                  :disabled="!glaBenefit || !selectedSchemeType"
+                ></v-select>
+              </v-col>
+              <v-col cols="4">
+                <v-checkbox
+                  v-model="glaConversionOnWithdrawal"
+                  v-bind="glaConversionOnWithdrawalAttrs"
+                  variant="outlined"
+                  density="compact"
+                  label="Conversion on Withdrawal"
+                  :disabled="!glaBenefit || !selectedSchemeType"
+                ></v-checkbox>
+              </v-col>
+              <v-col cols="4">
+                <v-checkbox
+                  v-model="glaConversionOnRetirement"
+                  v-bind="glaConversionOnRetirementAttrs"
+                  variant="outlined"
+                  density="compact"
+                  label="Conversion on Retirement"
+                  :disabled="!glaBenefit || !selectedSchemeType"
+                ></v-checkbox>
+              </v-col>
             </v-row>
           </template>
         </base-card>
@@ -259,6 +292,29 @@
                   :disabled="!ptdBenefit || !selectedSchemeType"
                 ></v-select>
               </v-col>
+              <v-col v-if="ptdEducatorBenefit === 'Yes'" cols="4">
+                <v-select
+                  v-model="ptdEducatorBenefitType"
+                  v-bind="ptdEducatorBenefitTypeAttrs"
+                  :error-messages="errors.ptd_educator_benefit_type"
+                  variant="outlined"
+                  density="compact"
+                  label="Educator Benefit Type"
+                  placeholder="Select Educator Benefit Type"
+                  :items="educatorBenefitTypes"
+                  :disabled="!ptdBenefit || !selectedSchemeType"
+                ></v-select>
+              </v-col>
+              <v-col cols="4">
+                <v-checkbox
+                  v-model="ptdConversionOnWithdrawal"
+                  v-bind="ptdConversionOnWithdrawalAttrs"
+                  variant="outlined"
+                  density="compact"
+                  label="Conversion on Withdrawal"
+                  :disabled="!ptdBenefit || !selectedSchemeType"
+                ></v-checkbox>
+              </v-col>
             </v-row>
           </template>
         </base-card>
@@ -326,6 +382,16 @@
                       type="number"
                       :disabled="!ciBenefit || !selectedSchemeType"
                     ></v-text-field>
+                  </v-col>
+                  <v-col cols="4">
+                    <v-checkbox
+                      v-model="ciConversionOnWithdrawal"
+                      v-bind="ciConversionOnWithdrawalAttrs"
+                      variant="outlined"
+                      density="compact"
+                      label="Conversion on Withdrawal"
+                      :disabled="!ciBenefit || !selectedSchemeType"
+                    ></v-checkbox>
                   </v-col> </v-row
               ></template>
             </base-card>
@@ -999,6 +1065,9 @@ function onSchemeTypeChange(schemeType) {
     glaTerminalIllnessBenefit.value = data.gla_terminal_illness_benefit || ''
     glaWaitingPeriod.value = data.gla_waiting_period ?? null
     glaEducatorBenefit.value = data.gla_educator_benefit || ''
+    glaEducatorBenefitType.value = data.gla_educator_benefit_type || null
+    glaConversionOnWithdrawal.value = data.gla_conversion_on_withdrawal || false
+    glaConversionOnRetirement.value = data.gla_conversion_on_retirement || false
 
     // Populate PTD fields
     ptdRiskType.value = data.ptd_risk_type || ''
@@ -1007,12 +1076,15 @@ function onSchemeTypeChange(schemeType) {
     ptdDeferredPeriod.value = data.ptd_deferred_period ?? null
     ptdDisabilityDefinition.value = data.ptd_disability_definition || ''
     ptdEducatorBenefit.value = data.ptd_educator_benefit || ''
+    ptdEducatorBenefitType.value = data.ptd_educator_benefit_type || null
+    ptdConversionOnWithdrawal.value = data.ptd_conversion_on_withdrawal || false
 
     // Populate CI fields
     ciBenefitStructure.value = data.ci_benefit_structure || ''
     ciBenefitDefinition.value = data.ci_benefit_definition || ''
     ciCriticalIllnessSalaryMultiple.value =
       data.ci_critical_illness_salary_multiple || 0
+    ciConversionOnWithdrawal.value = data.ci_conversion_on_withdrawal || false
     // Populate SGLA fields
     sglaSalaryMultiple.value = data.sgla_salary_multiple || 0
     // Populate PHI fields
@@ -1071,6 +1143,9 @@ function onSchemeTypeChange(schemeType) {
     glaTerminalIllnessBenefit.value = null
     glaWaitingPeriod.value = null
     glaEducatorBenefit.value = null
+    glaEducatorBenefitType.value = null
+    glaConversionOnWithdrawal.value = false
+    glaConversionOnRetirement.value = false
     glaBenefit.value = false
     ptdBenefit.value = false
     ciBenefit.value = false
@@ -1086,10 +1161,13 @@ function onSchemeTypeChange(schemeType) {
     ptdDeferredPeriod.value = null
     ptdDisabilityDefinition.value = null
     ptdEducatorBenefit.value = null
+    ptdEducatorBenefitType.value = null
+    ptdConversionOnWithdrawal.value = false
     // reset CI fields
     ciBenefitStructure.value = null
     ciBenefitDefinition.value = null
     ciCriticalIllnessSalaryMultiple.value = 0
+    ciConversionOnWithdrawal.value = false
     // reset SGLA fields
     sglaSalaryMultiple.value = 0
     // reset PHI fields
@@ -1150,7 +1228,12 @@ function saveCurrentSchemeCategory() {
           gla_salary_multiple: Number(glaSalaryMultiple.value),
           gla_terminal_illness_benefit: glaTerminalIllnessBenefit.value,
           gla_waiting_period: Number(glaWaitingPeriod.value),
-          gla_educator_benefit: glaEducatorBenefit.value
+          gla_educator_benefit: glaEducatorBenefit.value,
+          ...(glaEducatorBenefit.value === 'Yes' && {
+            gla_educator_benefit_type: glaEducatorBenefitType.value
+          }),
+          gla_conversion_on_withdrawal: !!glaConversionOnWithdrawal.value,
+          gla_conversion_on_retirement: !!glaConversionOnRetirement.value
         }),
         ...(ptdBenefit.value && {
           ptd_risk_type: ptdRiskType.value,
@@ -1158,14 +1241,19 @@ function saveCurrentSchemeCategory() {
           ptd_salary_multiple: Number(ptdSalaryMultiple.value),
           ptd_deferred_period: Number(ptdDeferredPeriod.value),
           ptd_disability_definition: ptdDisabilityDefinition.value,
-          ptd_educator_benefit: ptdEducatorBenefit.value
+          ptd_educator_benefit: ptdEducatorBenefit.value,
+          ...(ptdEducatorBenefit.value === 'Yes' && {
+            ptd_educator_benefit_type: ptdEducatorBenefitType.value
+          }),
+          ptd_conversion_on_withdrawal: !!ptdConversionOnWithdrawal.value
         }),
         ...(ciBenefit.value && {
           ci_benefit_structure: ciBenefitStructure.value,
           ci_benefit_definition: ciBenefitDefinition.value,
           ci_critical_illness_salary_multiple: Number(
             ciCriticalIllnessSalaryMultiple.value
-          )
+          ),
+          ci_conversion_on_withdrawal: !!ciConversionOnWithdrawal.value
         }),
         ...(sglaBenefit.value && {
           sgla_salary_multiple: Number(sglaSalaryMultiple.value)
@@ -1272,6 +1360,7 @@ const phiRiskTypes: any = ref([])
 const ptdRiskTypes: any = ref([])
 const waitingPeriods: any = ref([])
 const glaBenefitTypes: any = ref([])
+const educatorBenefitTypes = ref<string[]>([])
 
 const tieredIncomeReplacementTypes = [
   { title: 'Standard', value: 'standard' },
@@ -1322,6 +1411,18 @@ const validationSchema = yup.object({
     then: (schema) => schema.required('Educator benefit is required'),
     otherwise: (schema) => schema.nullable()
   }),
+  gla_educator_benefit_type: yup
+    .string()
+    .when(['gla_benefit', 'gla_educator_benefit'], {
+      is: (glaBenefit: boolean, glaEdu: string) =>
+        glaBenefit === true && glaEdu === 'Yes',
+      then: (schema) => schema.required('Educator benefit type is required'),
+      otherwise: (schema) => schema.nullable()
+    }),
+  gla_conversion_on_withdrawal: yup.boolean().nullable(),
+  gla_conversion_on_retirement: yup.boolean().nullable(),
+  ptd_conversion_on_withdrawal: yup.boolean().nullable(),
+  ci_conversion_on_withdrawal: yup.boolean().nullable(),
   ptd_benefit: yup.boolean().nullable(),
   ci_benefit: yup.boolean().nullable(),
   sgla_benefit: yup.boolean().nullable(),
@@ -1374,6 +1475,14 @@ const validationSchema = yup.object({
     then: (schema) => schema.required('Educator benefit is required'),
     otherwise: (schema) => schema.nullable()
   }),
+  ptd_educator_benefit_type: yup
+    .string()
+    .when(['ptd_benefit', 'ptd_educator_benefit'], {
+      is: (ptdBenefit: boolean, ptdEdu: string) =>
+        ptdBenefit === true && ptdEdu === 'Yes',
+      then: (schema) => schema.required('Educator benefit type is required'),
+      otherwise: (schema) => schema.nullable()
+    }),
   ci_benefit_structure: yup.string().when('ci_benefit', {
     is: true,
     then: (schema) => schema.required('Benefit structure is required'),
@@ -1611,7 +1720,17 @@ const { handleSubmit, defineField, errors, validate } = useForm({
     gla_waiting_period: groupStore.scheme_category_template.gla_waiting_period,
     gla_educator_benefit:
       groupStore.scheme_category_template.gla_educator_benefit,
+    gla_educator_benefit_type:
+      groupStore.scheme_category_template.gla_educator_benefit_type,
     gla_benefit_type: groupStore.scheme_category_template.gla_benefit_type,
+    gla_conversion_on_withdrawal:
+      groupStore.scheme_category_template.gla_conversion_on_withdrawal,
+    gla_conversion_on_retirement:
+      groupStore.scheme_category_template.gla_conversion_on_retirement,
+    ptd_conversion_on_withdrawal:
+      groupStore.scheme_category_template.ptd_conversion_on_withdrawal,
+    ci_conversion_on_withdrawal:
+      groupStore.scheme_category_template.ci_conversion_on_withdrawal,
 
     gla_benefit: groupStore.scheme_category_template.gla_benefit,
     ptd_benefit: groupStore.scheme_category_template.ptd_benefit,
@@ -1631,6 +1750,8 @@ const { handleSubmit, defineField, errors, validate } = useForm({
       groupStore.scheme_category_template.ptd_disability_definition,
     ptd_educator_benefit:
       groupStore.scheme_category_template.ptd_educator_benefit,
+    ptd_educator_benefit_type:
+      groupStore.scheme_category_template.ptd_educator_benefit_type,
     ci_benefit_structure:
       groupStore.scheme_category_template.ci_benefit_structure,
     ci_benefit_definition:
@@ -1704,7 +1825,22 @@ const [glaWaitingPeriod, glaWaitingPeriodAttrs] =
 const [glaEducatorBenefit, glaEducatorBenefitAttrs] = defineField(
   'gla_educator_benefit'
 )
+const [glaEducatorBenefitType, glaEducatorBenefitTypeAttrs] = defineField(
+  'gla_educator_benefit_type'
+)
 const [glaBenefitType, glaBenefitTypeAttrs] = defineField('gla_benefit_type')
+const [glaConversionOnWithdrawal, glaConversionOnWithdrawalAttrs] = defineField(
+  'gla_conversion_on_withdrawal'
+)
+const [glaConversionOnRetirement, glaConversionOnRetirementAttrs] = defineField(
+  'gla_conversion_on_retirement'
+)
+const [ptdConversionOnWithdrawal, ptdConversionOnWithdrawalAttrs] = defineField(
+  'ptd_conversion_on_withdrawal'
+)
+const [ciConversionOnWithdrawal, ciConversionOnWithdrawalAttrs] = defineField(
+  'ci_conversion_on_withdrawal'
+)
 const [glaBenefit] = defineField('gla_benefit')
 const [ptdBenefit] = defineField('ptd_benefit')
 const [ciBenefit] = defineField('ci_benefit')
@@ -1725,6 +1861,9 @@ const [ptdDisabilityDefinition, ptdDisabilityDefinitionAttrs] = defineField(
 )
 const [ptdEducatorBenefit, ptdEducatorBenefitAttrs] = defineField(
   'ptd_educator_benefit'
+)
+const [ptdEducatorBenefitType, ptdEducatorBenefitTypeAttrs] = defineField(
+  'ptd_educator_benefit_type'
 )
 const [ciBenefitStructure, ciBenefitStructureAttrs] = defineField(
   'ci_benefit_structure'
@@ -1901,6 +2040,18 @@ const requestCustomTable = async (benefit: 'phi' | 'ttd') => {
   }
 }
 
+watch(glaEducatorBenefit, (newVal) => {
+  if (newVal !== 'Yes') {
+    glaEducatorBenefitType.value = null
+  }
+})
+
+watch(ptdEducatorBenefit, (newVal) => {
+  if (newVal !== 'Yes') {
+    ptdEducatorBenefitType.value = null
+  }
+})
+
 watch(phiTieredIncomeReplacementType, (newVal, oldVal) => {
   if (newVal === 'custom') {
     checkCustomTableExists('phi')
@@ -1926,6 +2077,9 @@ onMounted(() => {
   })
   GroupPricingService.getGlaBenefitTypes(rrc).then((response) => {
     glaBenefitTypes.value = response.data
+  })
+  GroupPricingService.getEducatorBenefitTypes(rrc).then((response) => {
+    educatorBenefitTypes.value = response.data
   })
 
   // Load income escalations from the store

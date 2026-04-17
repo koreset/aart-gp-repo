@@ -788,6 +788,150 @@ func DeleteBroker(c *gin.Context) {
 	c.JSON(http.StatusOK, nil)
 }
 
+// BinderFee CRUD operations
+
+func CreateBinderFee(c *gin.Context) {
+	var fee models.BinderFee
+	if err := c.BindJSON(&fee); err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	appUser := c.MustGet("user").(models.AppUser)
+
+	if err := services.CreateBinderFee(fee, appUser); err != nil {
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			c.JSON(http.StatusConflict, gin.H{"error": "A binder fee for this binderholder and risk rate code already exists."})
+		} else {
+			c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+
+	c.JSON(http.StatusCreated, nil)
+}
+
+func GetBinderFees(c *gin.Context) {
+	fees, err := services.GetBinderFees()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, fees)
+}
+
+func GetBinderFee(c *gin.Context) {
+	id := c.Param("id")
+	fee, err := services.GetBinderFee(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, fee)
+}
+
+func EditBinderFee(c *gin.Context) {
+	id := c.Param("id")
+	var input models.BinderFee
+	if err := c.BindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	updated, err := services.EditBinderFee(id, input)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "binder fee not found"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, updated)
+}
+
+func DeleteBinderFee(c *gin.Context) {
+	id := c.Param("id")
+	if err := services.DeleteBinderFee(id); err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, nil)
+}
+
+// CommissionStructure CRUD operations
+
+func CreateCommissionBand(c *gin.Context) {
+	var band models.CommissionStructure
+	if err := c.BindJSON(&band); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	appUser := c.MustGet("user").(models.AppUser)
+
+	if err := services.CreateCommissionBand(band, appUser); err != nil {
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			c.JSON(http.StatusConflict, gin.H{"error": "A band with this lower bound already exists for this channel."})
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
+		return
+	}
+	c.JSON(http.StatusCreated, nil)
+}
+
+func GetCommissionBands(c *gin.Context) {
+	channel := c.Query("channel")
+	// Distinguish between "holder_name param absent" and "holder_name="
+	// (the latter means filter to default rows only).
+	holderName, holderProvided := c.GetQuery("holder_name")
+	allHolders := c.Query("all") == "1"
+	bands, err := services.GetCommissionBands(channel, holderName, holderProvided, allHolders)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, bands)
+}
+
+func GetCommissionBand(c *gin.Context) {
+	id := c.Param("id")
+	band, err := services.GetCommissionBand(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, band)
+}
+
+func EditCommissionBand(c *gin.Context) {
+	id := c.Param("id")
+	var input models.CommissionStructure
+	if err := c.BindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	updated, err := services.EditCommissionBand(id, input)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "commission band not found"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, updated)
+}
+
+func DeleteCommissionBand(c *gin.Context) {
+	id := c.Param("id")
+	if err := services.DeleteCommissionBand(id); err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, nil)
+}
+
 // Reinsurer CRUD operations
 
 func CreateReinsurer(c *gin.Context) {
@@ -2377,6 +2521,16 @@ func GetTTDDisabilityDefinitions(c *gin.Context) {
 func GetPtdDisabilityDefinitions(c *gin.Context) {
 	riskRateCode := c.Param("risk_rate_code")
 	data, err := services.GetPTDDisabilityDefinitions(riskRateCode)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, data)
+}
+
+func GetEducatorBenefitTypes(c *gin.Context) {
+	riskRateCode := c.Param("risk_rate_code")
+	data, err := services.GetEducatorBenefitTypes(riskRateCode)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return

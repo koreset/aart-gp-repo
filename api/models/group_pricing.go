@@ -180,17 +180,23 @@ type SchemeCategory struct {
 	GlaTerminalIllnessBenefit                string  `json:"gla_terminal_illness_benefit"`
 	GlaWaitingPeriod                         int     `json:"gla_waiting_period"`
 	GlaEducatorBenefit                       string  `json:"gla_educator_benefit"`
+	GlaEducatorBenefitType                   string  `json:"gla_educator_benefit_type"`
 	GlaBenefitType                           string  `json:"gla_benefit_type"`
+	GlaConversionOnWithdrawal                bool    `json:"gla_conversion_on_withdrawal"`
+	GlaConversionOnRetirement                bool    `json:"gla_conversion_on_retirement"`
 	PtdRiskType                              string  `json:"ptd_risk_type"`
 	PtdBenefitType                           string  `json:"ptd_benefit_type"`
 	PtdSalaryMultiple                        float64 `json:"ptd_salary_multiple"`
 	PtdDeferredPeriod                        int     `json:"ptd_deferred_period"`
 	PtdDisabilityDefinition                  string  `json:"ptd_disability_definition"`
 	PtdEducatorBenefit                       string  `json:"ptd_educator_benefit"`
+	PtdEducatorBenefitType                   string  `json:"ptd_educator_benefit_type"`
+	PtdConversionOnWithdrawal                bool    `json:"ptd_conversion_on_withdrawal"`
 	CiBenefitStructure                       string  `json:"ci_benefit_structure"`
 	CiBenefitDefinition                      string  `json:"ci_benefit_definition"`
 	CiMaxBenefit                             float64 `json:"ci_max_benefit"`
 	CiCriticalIllnessSalaryMultiple          float64 `json:"ci_critical_illness_salary_multiple"`
+	CiConversionOnWithdrawal                 bool    `json:"ci_conversion_on_withdrawal"`
 	SglaSalaryMultiple                       float64 `json:"sgla_salary_multiple"`
 	SglaMaxBenefit                           float64 `json:"sgla_max_benefit"`
 	PhiRiskType                              string  `json:"phi_risk_type"`
@@ -1268,7 +1274,6 @@ type GroupPricingParameters struct {
 	Basis                              string    `json:"basis" csv:"basis"`
 	RiskRateCode                       string    `json:"risk_rate_code" csv:"risk_rate_code"`
 	TreatyCode                         string    `json:"treaty_code" csv:"treaty_code"`
-	EducatorBenefitCode                string    `json:"educator_benefit_code" csv:"educator_benefit_code"`
 	SpouseAgeGap                       int       `json:"spouse_age_gap" csv:"spouse_age_gap"`
 	ReinsurerProfitLoading             float64   `json:"reinsurer_profit_loading" csv:"reinsurer_profit_loading"`
 	RiskMarginRate                     float64   `json:"risk_margin_rate" csv:"risk_margin_rate"`
@@ -1473,8 +1478,8 @@ type OccupationClass struct {
 type EducatorBenefitStructure struct {
 	ID int `json:"id" gorm:"primary_key"`
 	//Year                                int       `json:"year" csv:"year"`
-	RiskRateCode                        string    `json:"risk_rate_code" csv:"risk_rate_code"`
-	EducatorBenefitCode                 string    `json:"educator_benefit_code" csv:"educator_benefit_code"`
+	RiskRateCode                        string    `json:"risk_rate_code" csv:"risk_rate_code" gorm:"uniqueIndex:idx_educator_rrc_code"`
+	EducatorBenefitCode                 string    `json:"educator_benefit_code" csv:"educator_benefit_code" gorm:"uniqueIndex:idx_educator_rrc_code"`
 	Grade0MaxTuitionPerYear             float64   `json:"grade0_max_tuition_per_year" csv:"grade0_max_tuition_per_year"`
 	Grade0MaxCoverageYears              float64   `json:"grade0_max_coverage_years" csv:"grade0_max_coverage_years"`
 	Grade17MaxTuitionPerYear            float64   `json:"grade17_max_tuition_per_year" csv:"grade17_max_tuition_per_year"`
@@ -1489,6 +1494,37 @@ type EducatorBenefitStructure struct {
 	MaxAccommodationAllowanceAmount     float64   `json:"max_accommodation_allowance_amount" csv:"max_accommodation_allowance_amount"`
 	CreationDate                        time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy                           string    `json:"created_by" csv:"created_by"`
+}
+
+// CommissionStructure defines one band of a channel's sliding-scale
+// commission. Rows are keyed by (channel, lower_bound); bands must be
+// contiguous and non-overlapping within a channel. Rates are stored as
+// decimals (0.075 = 7.5%). Direct staff are not stored — they are treated
+// as flat 0%. A nil UpperBound represents the final "unbounded" band.
+type CommissionStructure struct {
+	ID                int       `json:"id" gorm:"primary_key"`
+	Channel           string    `json:"channel" csv:"channel" gorm:"size:20;uniqueIndex:idx_commission_channel_holder_lower"`
+	HolderName        string    `json:"holder_name" csv:"holder_name" gorm:"size:255;default:'';uniqueIndex:idx_commission_channel_holder_lower"`
+	LowerBound        float64   `json:"lower_bound" csv:"lower_bound" gorm:"uniqueIndex:idx_commission_channel_holder_lower"`
+	UpperBound        *float64  `json:"upper_bound" csv:"upper_bound"`
+	MaximumCommission float64   `json:"maximum_commission" csv:"maximum_commission"`
+	ApplicableRate    float64   `json:"applicable_rate" csv:"applicable_rate"`
+	CreationDate      time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy         string    `json:"created_by" csv:"created_by"`
+}
+
+// BinderFee captures the maximum binder and outsource fees a binderholder has
+// agreed to for a given risk rate code. Uniquely keyed by
+// (binderholder_name, risk_rate_code) so the same binderholder can hold
+// different caps across product lines.
+type BinderFee struct {
+	ID                  int       `json:"id" gorm:"primary_key"`
+	BinderholderName    string    `json:"binderholder_name" csv:"binderholder_name" gorm:"size:255;uniqueIndex:idx_binder_fee_rrc_holder"`
+	RiskRateCode        string    `json:"risk_rate_code" csv:"risk_rate_code" gorm:"size:255;uniqueIndex:idx_binder_fee_rrc_holder"`
+	MaximumBinderFee    float64   `json:"maximum_binder_fee" csv:"maximum_binder_fee"`
+	MaximumOutsourceFee float64   `json:"maximum_outsource_fee" csv:"maximum_outsource_fee"`
+	CreationDate        time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy           string    `json:"created_by" csv:"created_by"`
 }
 
 type EducatorRate struct {

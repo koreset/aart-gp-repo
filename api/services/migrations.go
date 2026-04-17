@@ -406,6 +406,8 @@ func MigrateGroupPricingTables() error {
 		&models.OccupationClass{},
 		&models.EducatorBenefitStructure{},
 		&models.EducatorRate{},
+		&models.BinderFee{},
+		&models.CommissionStructure{},
 		&models.Escalations{},
 		&models.FuneralAidsRate{},
 		&models.FuneralRate{},

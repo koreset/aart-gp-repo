@@ -9,9 +9,18 @@
               <v-tabs v-model="activeTab" color="primary" class="mb-4">
                 <v-tab value="group_pricing">Group Pricing</v-tab>
                 <v-tab value="reinsurance">Reinsurance</v-tab>
+                <v-tab value="binder_fees">Binder Fees</v-tab>
+                <v-tab value="commission_structures"
+                  >Commission Structures</v-tab
+                >
               </v-tabs>
 
-              <template v-if="hasEmpty">
+              <binder-fee-management v-if="activeTab === 'binder_fees'" />
+              <commission-structure-management
+                v-if="activeTab === 'commission_structures'"
+              />
+
+              <template v-if="isRatingTablesTab && hasEmpty">
                 <v-row>
                   <v-col>
                     <v-alert
@@ -27,7 +36,7 @@
                 </v-row>
               </template>
 
-              <v-row>
+              <v-row v-if="isRatingTablesTab">
                 <v-col>
                   <v-data-table
                     :headers="tableHeaders"
@@ -117,7 +126,13 @@
                   </v-data-table>
                 </v-col>
               </v-row>
-              <v-row v-if="tableData.length > 0 && !loadingData">
+              <v-row
+                v-if="
+                  isRatingTablesTab &&
+                  tableData.length > 0 &&
+                  !loadingData
+                "
+              >
                 <v-col>
                   <data-grid
                     :columnDefs="columnDefs"
@@ -130,7 +145,7 @@
                   />
                 </v-col>
               </v-row>
-              <v-row v-if="loadingData">
+              <v-row v-if="isRatingTablesTab && loadingData">
                 <v-col>
                   <p class="mt-3">Loading...</p>
                   <v-progress-linear
@@ -193,6 +208,8 @@ import ConfirmationDialog from '@/renderer/components/ConfirmDialog.vue'
 import DataGrid from '@/renderer/components/tables/DataGrid.vue'
 import FileUpdater from '@/renderer/components/FileUpdater.vue'
 import BaseCard from '@/renderer/components/BaseCard.vue'
+import BinderFeeManagement from '@/renderer/screens/group_pricing/administration/BinderFeeManagement.vue'
+import CommissionStructureManagement from '@/renderer/screens/group_pricing/administration/CommissionStructureManagement.vue'
 
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import formatValues from '@/renderer/utils/format_values'
@@ -237,10 +254,17 @@ const tableHeaders = [
 ]
 
 const viewHeader = computed(() => {
-  return activeTab.value === 'reinsurance'
-    ? 'Reinsurance Rating Tables'
-    : 'Group Pricing Rating Tables'
+  if (activeTab.value === 'reinsurance') return 'Reinsurance Rating Tables'
+  if (activeTab.value === 'binder_fees') return 'Binder Fees'
+  if (activeTab.value === 'commission_structures') return 'Commission Structures'
+  return 'Group Pricing Rating Tables'
 })
+
+const isRatingTablesTab = computed(
+  () =>
+    activeTab.value !== 'binder_fees' &&
+    activeTab.value !== 'commission_structures'
+)
 
 const filteredTables = computed(() => {
   return tables.value.filter(

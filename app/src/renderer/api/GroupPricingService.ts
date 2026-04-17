@@ -199,6 +199,76 @@ export default {
     })
   },
 
+  // Binder Fee CRUD operations
+  createBinderFee(payload) {
+    return Api.post('/group-pricing/binder-fees', payload)
+  },
+  getBinderFees() {
+    return Api.get('/group-pricing/binder-fees')
+  },
+  getBinderFee(id) {
+    return Api.get('/group-pricing/binder-fees/' + id)
+  },
+  updateBinderFee(id, payload) {
+    return Api.put(`/group-pricing/binder-fees/${id}`, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      }
+    })
+  },
+  deleteBinderFee(id) {
+    return Api.delete('/group-pricing/binder-fees/' + id, {
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      }
+    })
+  },
+
+  // Commission structure (sliding-scale per channel) CRUD
+  createCommissionBand(payload) {
+    return Api.post('/group-pricing/commission-structures', payload)
+  },
+  getCommissionBands(
+    channel?: string,
+    holderName?: string | null,
+    allHolders?: boolean
+  ) {
+    const params = new URLSearchParams()
+    if (channel) params.set('channel', channel)
+    // `holderName === undefined` means "don't filter by holder at all".
+    // `holderName === ''` means "show default (empty-holder) rows only".
+    // A non-empty string narrows to that holder.
+    if (holderName !== undefined && holderName !== null) {
+      params.set('holder_name', holderName)
+    }
+    if (allHolders) params.set('all', '1')
+    const qs = params.toString()
+    return Api.get(
+      '/group-pricing/commission-structures' + (qs ? '?' + qs : '')
+    )
+  },
+  getCommissionBand(id) {
+    return Api.get('/group-pricing/commission-structures/' + id)
+  },
+  updateCommissionBand(id, payload) {
+    return Api.put(`/group-pricing/commission-structures/${id}`, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      }
+    })
+  },
+  deleteCommissionBand(id) {
+    return Api.delete('/group-pricing/commission-structures/' + id, {
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      }
+    })
+  },
+
   // Reinsurer CRUD operations
   createReinsurer(reinsurer) {
     return Api.post('/group-pricing/reinsurers', reinsurer)
@@ -589,6 +659,12 @@ export default {
   getPhiDisabilityDefinitions(riskRateCode) {
     return Api.get(
       '/group-pricing/quotes/phi-disability-definitions/risk-rate-code/' +
+        riskRateCode
+    )
+  },
+  getEducatorBenefitTypes(riskRateCode) {
+    return Api.get(
+      '/group-pricing/rate-tables/educator-benefits/risk-rate-code/' +
         riskRateCode
     )
   },

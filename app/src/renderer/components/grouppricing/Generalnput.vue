@@ -299,21 +299,6 @@
             :error-messages="errors.use_global_salary_multiple"
           ></v-checkbox>
         </v-col>
-        <v-col
-          v-if="
-            groupStore.group_pricing_quote.quote_type !== '' &&
-            groupStore.group_pricing_quote.quote_type !== null
-          "
-          cols="4"
-        >
-          <v-checkbox
-            v-model="continuationOption"
-            v-bind="continuationOptionAttrs"
-            variant="outlined"
-            density="compact"
-            label="Continuation Option"
-          ></v-checkbox>
-        </v-col>
       </v-row>
     </v-container>
   </v-form>
@@ -402,7 +387,6 @@ const validationSchema = yup.object({
   }),
   enforce_fcl: yup.boolean().nullable(),
   use_global_salary_multiple: yup.boolean().nullable(),
-  continuation_option: yup.boolean().nullable(),
   free_cover_limit: yup.number().when('enforce_fcl', {
     is: (val) => val === true,
     then: (schema) =>
@@ -437,7 +421,6 @@ const { handleSubmit, defineField, errors, resetForm } = useForm({
     enforce_fcl: groupStore.group_pricing_quote.enforce_fcl,
     use_global_salary_multiple:
       groupStore.group_pricing_quote.use_global_salary_multiple,
-    continuation_option: groupStore.group_pricing_quote.continuation_option,
     risk_rate_code: groupStore.group_pricing_quote.risk_rate_code
   }
 })
@@ -499,8 +482,6 @@ const validateForm = handleSubmit(async (values) => {
     groupStore.group_pricing_quote.enforce_fcl = values.enforce_fcl
     groupStore.group_pricing_quote.use_global_salary_multiple =
       values.use_global_salary_multiple
-    groupStore.group_pricing_quote.continuation_option =
-      values.continuation_option
     groupStore.group_pricing_quote.risk_rate_code = values.risk_rate_code
 
     if (values.enforce_fcl) {
@@ -578,9 +559,6 @@ const [enforceFCL, enforceFCLAttrs] = defineField('enforce_fcl')
 const [useGlobalSalaryMultiple, useGlobalSalaryMultipleAttrs] = defineField(
   'use_global_salary_multiple'
 )
-const [continuationOption, continuationOptionAttrs] = defineField(
-  'continuation_option'
-)
 
 const [riskRateCode, riskRateCodeAttrs] = defineField('risk_rate_code')
 
@@ -620,8 +598,7 @@ watch(
           enforce_fcl: newQuoteData.enforce_fcl || false,
           free_cover_limit: newQuoteData.free_cover_limit,
           exchange_rate: newQuoteData.exchangeRate,
-          use_global_salary_multiple: newQuoteData.use_global_salary_multiple,
-          continuation_option: newQuoteData.continuation_option || false
+          use_global_salary_multiple: newQuoteData.use_global_salary_multiple
         }
       })
     }

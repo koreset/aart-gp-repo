@@ -164,6 +164,24 @@ const router = createRouter({
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {
+      path: '/group-pricing/administration/binder-fees',
+      name: 'group-pricing-binder-fees',
+      component: () =>
+        import('../screens/group_pricing/administration/BinderFeeManagement.vue'),
+      meta: { required_permission: 'navigation:manage_binder_fees' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/administration/commission-structures',
+      name: 'group-pricing-commission-structures',
+      component: () =>
+        import(
+          '../screens/group_pricing/administration/CommissionStructureManagement.vue'
+        ),
+      meta: { required_permission: 'navigation:manage_commission_structures' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
       path: '/group-pricing/claims-management',
       name: 'group-pricing-claims-management',
       component: () =>

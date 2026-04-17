@@ -638,8 +638,7 @@ function buildLetterSection(data: any) {
       'Free Cover Limit',
       formatCurrency(quote.free_cover_limit || 0, quote.currency || 'ZAR')
     ],
-    ['Normal Retirement Age', `${quote.normal_retirement_age || 'N/A'}`],
-    ['Continuation Option', quote.continuation_option ? 'Yes' : 'No']
+    ['Normal Retirement Age', `${quote.normal_retirement_age || 'N/A'}`]
   ]
 
   children.push(

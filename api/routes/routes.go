@@ -94,6 +94,20 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.PUT("brokers/:id", controllers.EditBroker)
 			groupPricing.DELETE("brokers/:id", controllers.DeleteBroker)
 
+			// Binder fee management
+			groupPricing.POST("binder-fees", controllers.CreateBinderFee)
+			groupPricing.GET("binder-fees", controllers.GetBinderFees)
+			groupPricing.GET("binder-fees/:id", controllers.GetBinderFee)
+			groupPricing.PUT("binder-fees/:id", controllers.EditBinderFee)
+			groupPricing.DELETE("binder-fees/:id", controllers.DeleteBinderFee)
+
+			// Commission structure (sliding-scale per channel) management
+			groupPricing.POST("commission-structures", controllers.CreateCommissionBand)
+			groupPricing.GET("commission-structures", controllers.GetCommissionBands)
+			groupPricing.GET("commission-structures/:id", controllers.GetCommissionBand)
+			groupPricing.PUT("commission-structures/:id", controllers.EditCommissionBand)
+			groupPricing.DELETE("commission-structures/:id", controllers.DeleteCommissionBand)
+
 			// Reinsurer management
 			groupPricing.POST("reinsurers", controllers.CreateReinsurer)
 			groupPricing.GET("reinsurers", controllers.GetReinsurers)
@@ -384,6 +398,7 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.GET("quotes/ttd-disability-definitions/risk-rate-code/:risk_rate_code", controllers.GetTTDDisabilityDefinitions)
 			groupPricing.GET("quotes/ptd-disability-definitions/risk-rate-code/:risk_rate_code", controllers.GetPtdDisabilityDefinitions)
 			groupPricing.GET("quotes/phi-disability-definitions/risk-rate-code/:risk_rate_code", controllers.GetPhiDisabilityDefinitions)
+			groupPricing.GET("rate-tables/educator-benefits/risk-rate-code/:risk_rate_code", controllers.GetEducatorBenefitTypes)
 			groupPricing.POST("quotes/indicative-member-data", controllers.UpdateGroupPricingQuoteMemberStats)
 			groupPricing.PATCH("quotes/:id/indicative-member-data", controllers.UpdateGroupPricingQuoteIndicativeFlag)
 			groupPricing.GET("export-csv/:quote_id/table-type/:table_type", controllers.GetTableDataCsvExport)
