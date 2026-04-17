@@ -62,7 +62,10 @@
                   Generate
                 </v-btn>
                 <v-btn
-                  v-if="employerStatement && hasPermission('premiums:generate_statement')"
+                  v-if="
+                    employerStatement &&
+                    hasPermission('premiums:generate_statement')
+                  "
                   variant="outlined"
                   prepend-icon="mdi-download"
                   @click="downloadEmployerCSV"
@@ -70,7 +73,10 @@
                   Download CSV
                 </v-btn>
                 <v-btn
-                  v-if="employerStatement && hasPermission('premiums:generate_statement')"
+                  v-if="
+                    employerStatement &&
+                    hasPermission('premiums:generate_statement')
+                  "
                   variant="outlined"
                   prepend-icon="mdi-file-pdf-box"
                   @click="downloadEmployerPDF"
@@ -266,10 +272,9 @@ import PremiumManagementService from '@/renderer/api/PremiumManagementService'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import { fmtDate } from '@/renderer/utils/formatters'
 import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
-
-const { hasPermission } = usePermissionCheck()
 import jsPDF from 'jspdf'
 import { applyPlugin } from 'jspdf-autotable'
+const { hasPermission } = usePermissionCheck()
 
 applyPlugin(jsPDF)
 

@@ -79,7 +79,9 @@
 
       <!-- Scheme Migration -->
       <v-list-item
-        :class="{ 'disabled-item': !canAccess('navigation:manage_scheme_migration') }"
+        :class="{
+          'disabled-item': !canAccess('navigation:manage_scheme_migration')
+        }"
         prepend-icon="mdi-database-import-outline"
         @click="
           navigate(
@@ -107,10 +109,15 @@
 
       <!-- Claims Analytics -->
       <v-list-item
-        :class="{ 'disabled-item': !canAccess('navigation:view_claims_analytics') }"
+        :class="{
+          'disabled-item': !canAccess('navigation:view_claims_analytics')
+        }"
         prepend-icon="mdi-chart-line"
         @click="
-          navigate('group-pricing-claims-analytics', 'navigation:view_claims_analytics')
+          navigate(
+            'group-pricing-claims-analytics',
+            'navigation:view_claims_analytics'
+          )
         "
       >
         <v-list-item-title>Claims Analytics</v-list-item-title>

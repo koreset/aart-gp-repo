@@ -454,7 +454,9 @@ const handleSchemeNameChange = (schemeName: string | null) => {
   }
 }
 
-const canSetExperienceRating = computed(() => hasPermission('quote:experience_rating'))
+const canSetExperienceRating = computed(() =>
+  hasPermission('quote:experience_rating')
+)
 
 const validateForm = handleSubmit(async (values) => {
   // 'values' contains all the validated form fields
@@ -543,11 +545,15 @@ const [experienceRating, experienceRatingAttrs] =
   defineField('experience_rating')
 
 // Force "No" when user lacks the experience rating permission
-watch(canSetExperienceRating, (allowed) => {
-  if (!allowed) {
-    experienceRating.value = 'No'
-  }
-}, { immediate: true })
+watch(
+  canSetExperienceRating,
+  (allowed) => {
+    if (!allowed) {
+      experienceRating.value = 'No'
+    }
+  },
+  { immediate: true }
+)
 
 const [freeCoverLimit, freeCoverLimitAttrs] = defineField('free_cover_limit')
 

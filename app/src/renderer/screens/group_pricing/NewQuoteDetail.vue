@@ -278,11 +278,22 @@
           <v-tab value="summary">Quote Summary</v-tab>
           <v-tab value="benefits">Benefits & Config</v-tab>
           <v-tab value="data">Data Management</v-tab>
-          <v-tab v-if="hasPermission('quote:view_results')" value="results">Results & Analysis</v-tab>
-          <v-tab v-if="resultSummaries !== null && hasPermission('quote:view_output_summary')" value="outputsummary"
+          <v-tab v-if="hasPermission('quote:view_results')" value="results"
+            >Results & Analysis</v-tab
+          >
+          <v-tab
+            v-if="
+              resultSummaries !== null &&
+              hasPermission('quote:view_output_summary')
+            "
+            value="outputsummary"
             >Output Summary</v-tab
           >
-          <v-tab v-if="hasPermission('quote:view_premium_summary')" value="benefitssummary">Premiums Summary</v-tab>
+          <v-tab
+            v-if="hasPermission('quote:view_premium_summary')"
+            value="benefitssummary"
+            >Premiums Summary</v-tab
+          >
         </v-tabs>
         <v-window v-model="tab">
           <v-window-item value="summary" eager>
@@ -301,17 +312,29 @@
               @indicative-data-updated="handleIndicativeDataUpdate"
             />
           </v-window-item>
-          <v-window-item v-if="hasPermission('quote:view_results')" value="results" eager>
+          <v-window-item
+            v-if="hasPermission('quote:view_results')"
+            value="results"
+            eager
+          >
             <QuoteResults :quote="quote" @quote-updated="loadQuote" />
           </v-window-item>
-          <v-window-item v-if="hasPermission('quote:view_output_summary')" value="outputsummary" eager>
+          <v-window-item
+            v-if="hasPermission('quote:view_output_summary')"
+            value="outputsummary"
+            eager
+          >
             <OutputSummary
               v-if="resultSummaries !== null && resultSummaries.length > 0"
               :quote="quote"
               :resultSummaries="resultSummaries"
             />
           </v-window-item>
-          <v-window-item v-if="hasPermission('quote:view_premium_summary')" value="benefitssummary" eager>
+          <v-window-item
+            v-if="hasPermission('quote:view_premium_summary')"
+            value="benefitssummary"
+            eager
+          >
             <QuoteBenefitSummary
               v-if="resultSummaries !== null"
               :resultSummaries="resultSummaries"

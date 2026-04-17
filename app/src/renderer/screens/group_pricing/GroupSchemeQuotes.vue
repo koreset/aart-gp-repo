@@ -115,7 +115,9 @@
                       </template>
                       <span>Submit for Review</span>
                     </v-tooltip>
-                    <v-tooltip v-if="hasPermission('quote:access_new_business')">
+                    <v-tooltip
+                      v-if="hasPermission('quote:access_new_business')"
+                    >
                       <template #activator="{ props }">
                         <v-btn
                           icon
