@@ -85,3 +85,23 @@ func DeleteBordereauxTemplate(c *gin.Context) {
     }
     c.Status(http.StatusNoContent)
 }
+
+// TestBordereauxTemplate handles POST /bordereaux/templates/:id/test — applies
+// the template's field mappings to a sample of live snapshot data and returns
+// a preview so operators can validate mappings before a full generation.
+func TestBordereauxTemplate(c *gin.Context) {
+    id, err := strconv.Atoi(c.Param("id"))
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+        return
+    }
+    var req services.TestBordereauxTemplateRequest
+    // Body is optional — defaults apply when omitted.
+    _ = c.ShouldBindJSON(&req)
+    result, svcErr := services.TestBordereauxTemplate(id, req)
+    if svcErr != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": svcErr.Error()})
+        return
+    }
+    c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
+}

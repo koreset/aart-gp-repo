@@ -4,6 +4,7 @@ import (
 	"api/log"
 	"api/models"
 	"fmt"
+	"strings"
 )
 
 // resolveEmailByName looks up an OrgUser's email address by their name.
@@ -19,6 +20,34 @@ func resolveEmailByName(name string) string {
 		return ""
 	}
 	return user.Email
+}
+
+// ResolveEscalationTarget resolves an escalation "to" identifier to an email
+// address. Accepts three flavours so UIs and API callers can send whatever
+// they have: a full email address (returned verbatim), an OrgUser display
+// name (exact match), or a role name (e.g. "manager" — matched against
+// org_users.role / gp_role). Returns "" if nothing matches so callers can
+// log a warning without failing the primary escalation action.
+func ResolveEscalationTarget(target string) string {
+	if target == "" {
+		return ""
+	}
+	// Email: already a deliverable address.
+	if strings.Contains(target, "@") {
+		return target
+	}
+	// Name: exact match.
+	if email := resolveEmailByName(target); email != "" {
+		return email
+	}
+	// Role: first user with this role (prefer GPRole then Role so group-pricing
+	// roles win over organisation-wide ones).
+	var user models.OrgUser
+	if err := DB.Where("gp_role = ? OR role = ?", target, target).First(&user).Error; err == nil {
+		return user.Email
+	}
+	log.WithField("target", target).Warn("Could not resolve escalation target to an email")
+	return ""
 }
 
 // NotifyQuoteSubmitted notifies the reviewer that a quote has been submitted for review.
@@ -117,12 +146,19 @@ func NotifySchemeStatusChange(recipientEmail string, schemeName string, schemeID
 // notifyIfNotSender is a helper that resolves recipientName to an email and sends a notification,
 // skipping if the recipient is the sender or cannot be resolved.
 func notifyIfNotSender(recipientName string, sender models.AppUser, req models.CreateNotificationRequest) {
+	_ = notifyIfNotSenderE(recipientName, sender, req)
+}
+
+// notifyIfNotSenderE is the error-returning variant used by hooks whose callers
+// need to log or react to a delivery failure instead of silently swallowing it.
+func notifyIfNotSenderE(recipientName string, sender models.AppUser, req models.CreateNotificationRequest) error {
 	email := resolveEmailByName(recipientName)
 	if email == "" || email == sender.UserEmail {
-		return
+		return nil
 	}
 	req.RecipientEmail = email
-	CreateNotification(req)
+	_, err := CreateNotification(req)
+	return err
 }
 
 // ─── Premium Schedule Hooks ────────────────────────────────────────────────
@@ -219,8 +255,8 @@ func NotifySchemeReinstated(scheme models.GroupScheme, reinstater models.AppUser
 
 // ─── Bordereaux Inbound Hooks ──────────────────────────────────────────────
 
-func NotifySubmissionReviewed(sub models.EmployerSubmission, reviewer models.AppUser) {
-	notifyIfNotSender(sub.SubmittedBy, reviewer, models.CreateNotificationRequest{
+func NotifySubmissionReviewed(sub models.EmployerSubmission, reviewer models.AppUser) error {
+	return notifyIfNotSenderE(sub.SubmittedBy, reviewer, models.CreateNotificationRequest{
 		SenderEmail: reviewer.UserEmail,
 		SenderName:  reviewer.UserName,
 		Type:        "submission_reviewed",
@@ -231,12 +267,12 @@ func NotifySubmissionReviewed(sub models.EmployerSubmission, reviewer models.App
 	})
 }
 
-func NotifySubmissionQueryRaised(sub models.EmployerSubmission, querier models.AppUser) {
+func NotifySubmissionQueryRaised(sub models.EmployerSubmission, querier models.AppUser) error {
 	body := fmt.Sprintf("A query has been raised on submission for '%s'", sub.SchemeName)
 	if sub.QueryNotes != "" {
 		body += fmt.Sprintf(": %s", sub.QueryNotes)
 	}
-	notifyIfNotSender(sub.SubmittedBy, querier, models.CreateNotificationRequest{
+	return notifyIfNotSenderE(sub.SubmittedBy, querier, models.CreateNotificationRequest{
 		SenderEmail: querier.UserEmail,
 		SenderName:  querier.UserName,
 		Type:        "submission_query_raised",
@@ -247,8 +283,8 @@ func NotifySubmissionQueryRaised(sub models.EmployerSubmission, querier models.A
 	})
 }
 
-func NotifySubmissionAccepted(sub models.EmployerSubmission, accepter models.AppUser) {
-	notifyIfNotSender(sub.SubmittedBy, accepter, models.CreateNotificationRequest{
+func NotifySubmissionAccepted(sub models.EmployerSubmission, accepter models.AppUser) error {
+	return notifyIfNotSenderE(sub.SubmittedBy, accepter, models.CreateNotificationRequest{
 		SenderEmail: accepter.UserEmail,
 		SenderName:  accepter.UserName,
 		Type:        "submission_accepted",
@@ -259,12 +295,12 @@ func NotifySubmissionAccepted(sub models.EmployerSubmission, accepter models.App
 	})
 }
 
-func NotifySubmissionRejected(sub models.EmployerSubmission, rejecter models.AppUser, reason string) {
+func NotifySubmissionRejected(sub models.EmployerSubmission, rejecter models.AppUser, reason string) error {
 	body := fmt.Sprintf("Submission for '%s' has been rejected", sub.SchemeName)
 	if reason != "" {
 		body += fmt.Sprintf(": %s", reason)
 	}
-	notifyIfNotSender(sub.SubmittedBy, rejecter, models.CreateNotificationRequest{
+	return notifyIfNotSenderE(sub.SubmittedBy, rejecter, models.CreateNotificationRequest{
 		SenderEmail: rejecter.UserEmail,
 		SenderName:  rejecter.UserName,
 		Type:        "submission_rejected",
@@ -495,4 +531,38 @@ func NotifyClaimPaymentSummary(summary models.ACBReconciliationSummary, user mod
 		ObjectType:     "claim_payment",
 		ObjectID:       0,
 	})
+}
+
+// NotifyDiscrepancyEscalated sends a notification to the assignee when a
+// reconciliation discrepancy is escalated. Returns the delivery error so the
+// caller can log routing problems — the primary escalation action should
+// never fail just because we can't notify someone.
+func NotifyDiscrepancyEscalated(result models.BordereauxReconciliationResult, assigneeEmail string, escalator models.AppUser, reason string) error {
+	if assigneeEmail == "" || assigneeEmail == escalator.UserEmail {
+		return nil
+	}
+	body := fmt.Sprintf(
+		"Discrepancy on %s (record %s) escalated by %s",
+		result.MemberName, result.RecordID, escalator.UserName,
+	)
+	if result.Priority != "" {
+		body += fmt.Sprintf(" [priority: %s]", result.Priority)
+	}
+	if result.DueDate != nil {
+		body += fmt.Sprintf(" — due %s", result.DueDate.Format("2006-01-02 15:04"))
+	}
+	if reason != "" {
+		body += fmt.Sprintf(": %s", reason)
+	}
+	_, err := CreateNotification(models.CreateNotificationRequest{
+		RecipientEmail: assigneeEmail,
+		SenderEmail:    escalator.UserEmail,
+		SenderName:     escalator.UserName,
+		Type:           "discrepancy_escalated",
+		Title:          "Reconciliation discrepancy escalated",
+		Body:           body,
+		ObjectType:     "bordereaux_reconciliation_result",
+		ObjectID:       result.ID,
+	})
+	return err
 }

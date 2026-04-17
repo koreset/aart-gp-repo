@@ -10058,8 +10058,17 @@ func UpdateGroupSchemeClaim(claimID int, payload models.GroupSchemeClaim, user m
 		newStatus := strings.ToLower(payload.Status)
 		if newStatus == "approved" || newStatus == "paid" {
 			var refreshed models.GroupSchemeClaim
-			if err := DB.First(&refreshed, claimID).Error; err == nil {
-				_, _ = GenerateClaimRecovery(refreshed, user)
+			if err := DB.First(&refreshed, claimID).Error; err != nil {
+				appLog.WithFields(map[string]interface{}{
+					"claim_id": claimID,
+					"error":    err.Error(),
+				}).Error("Failed to reload claim for recovery generation")
+			} else if _, err := GenerateClaimRecovery(DB, refreshed, user); err != nil {
+				appLog.WithFields(map[string]interface{}{
+					"claim_id":     claimID,
+					"claim_number": refreshed.ClaimNumber,
+					"error":        err.Error(),
+				}).Error("GenerateClaimRecovery failed on claim status transition")
 			}
 		}
 	}
@@ -10130,12 +10139,24 @@ func UpdateGroupSchemeClaimWithFiles(claimID int, payload models.GroupSchemeClai
 			PerformedBy:    user.UserName,
 		})
 
-		// Auto-generate reinsurer recovery when claim is approved or paid
+		// Auto-generate reinsurer recovery when claim is approved or paid. Use the
+		// active transaction so the recovery row commits (or rolls back) with the
+		// claim update — previously this wrote via the package-level DB and could
+		// leave an orphan recovery if the outer tx rolled back.
 		newStatus := strings.ToLower(payload.Status)
 		if newStatus == "approved" || newStatus == "paid" {
 			var refreshed models.GroupSchemeClaim
-			if err := tx.First(&refreshed, claimID).Error; err == nil {
-				_, _ = GenerateClaimRecovery(refreshed, user)
+			if err := tx.First(&refreshed, claimID).Error; err != nil {
+				appLog.WithFields(map[string]interface{}{
+					"claim_id": claimID,
+					"error":    err.Error(),
+				}).Error("Failed to reload claim for recovery generation")
+			} else if _, err := GenerateClaimRecovery(tx, refreshed, user); err != nil {
+				appLog.WithFields(map[string]interface{}{
+					"claim_id":     claimID,
+					"claim_number": refreshed.ClaimNumber,
+					"error":        err.Error(),
+				}).Error("GenerateClaimRecovery failed on claim status transition")
 			}
 		}
 	}

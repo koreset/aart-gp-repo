@@ -236,27 +236,36 @@ func ImportSchemeConfirmations(ctx context.Context, fileType string, autoProcess
 				confirmationRecords = append(confirmationRecords, confRec)
 			}
 
-			if len(confirmationRecords) > 0 {
-				if err := DB.CreateInBatches(confirmationRecords, 500).Error; err != nil {
-					logger.WithError(err).Error("Failed to persist confirmation records")
-				}
-			}
-
-			if autoProcess {
-				summary, err := ReconcileConfirmation(ctx, &confirmation)
-				if err != nil {
-					logger.WithError(err).Errorf("Reconciliation failed for confirmation %d", confirmation.ID)
-					confirmation.Status = "error"
-					DB.Save(&confirmation)
-				} else {
-					// ReconcileConfirmation already saves the confirmation with updated status
-					if result.AutoProcessResults == nil {
-						result.AutoProcessResults = summary
-					} else {
-						result.AutoProcessResults.Matched += summary.Matched
-						result.AutoProcessResults.Discrepancies += summary.Discrepancies
-						result.AutoProcessResults.Pending += summary.Pending
+			// Persist confirmation records and (optionally) reconcile atomically so
+			// a mid-batch failure cannot leave orphaned confirmation rows with no
+			// reconciliation results.
+			var importSummary *ReconciliationSummary
+			txErr := DB.Transaction(func(tx *gorm.DB) error {
+				if len(confirmationRecords) > 0 {
+					if err := tx.CreateInBatches(confirmationRecords, 500).Error; err != nil {
+						return fmt.Errorf("failed to persist confirmation records: %w", err)
 					}
+				}
+				if autoProcess {
+					summary, err := ReconcileConfirmation(ctx, tx, &confirmation)
+					if err != nil {
+						return err
+					}
+					importSummary = summary
+				}
+				return nil
+			})
+			if txErr != nil {
+				logger.WithError(txErr).Errorf("Confirmation import transaction failed for confirmation %d", confirmation.ID)
+				confirmation.Status = "error"
+				DB.Save(&confirmation)
+			} else if autoProcess && importSummary != nil {
+				if result.AutoProcessResults == nil {
+					result.AutoProcessResults = importSummary
+				} else {
+					result.AutoProcessResults.Matched += importSummary.Matched
+					result.AutoProcessResults.Discrepancies += importSummary.Discrepancies
+					result.AutoProcessResults.Pending += importSummary.Pending
 				}
 			}
 
@@ -269,6 +278,32 @@ func ImportSchemeConfirmations(ctx context.Context, fileType string, autoProcess
 	return result, nil
 }
 
+// defaultReconciliationTolerance is the per-record variance threshold used when
+// a scheme has not configured its own value. Set conservatively so legacy rows
+// continue to match at the old precision.
+const defaultReconciliationTolerance = 0.001
+
+// reconciliationToleranceForScheme returns the scheme-specific tolerance from
+// group_schemes.reconciliation_tolerance, falling back to the codebase default
+// on zero / missing rows. Uses the supplied db handle so callers inside a
+// transaction see the in-flight state.
+func reconciliationToleranceForScheme(db *gorm.DB, schemeID int) float64 {
+	if schemeID <= 0 {
+		return defaultReconciliationTolerance
+	}
+	var tolerance float64
+	if err := db.Model(&models.GroupScheme{}).
+		Where("id = ?", schemeID).
+		Select("reconciliation_tolerance").
+		Row().Scan(&tolerance); err != nil {
+		return defaultReconciliationTolerance
+	}
+	if tolerance <= 0 {
+		return defaultReconciliationTolerance
+	}
+	return tolerance
+}
+
 func getTemplateForBordereaux(bordereaux models.GeneratedBordereaux) (models.BordereauxTemplate, error) {
 	var template models.BordereauxTemplate
 
@@ -279,11 +314,16 @@ func getTemplateForBordereaux(bordereaux models.GeneratedBordereaux) (models.Bor
 	return template, nil
 }
 
-// ReconcileConfirmation performs the matching between confirmation records and bordereaux
-func ReconcileConfirmation(ctx context.Context, confirmation *models.BordereauxConfirmation) (*ReconciliationSummary, error) {
+// ReconcileConfirmation performs the matching between confirmation records and bordereaux.
+// The db parameter allows callers to pass either the package-level DB or an active
+// transaction so confirmation persistence and reconciliation results commit together.
+func ReconcileConfirmation(ctx context.Context, db *gorm.DB, confirmation *models.BordereauxConfirmation) (*ReconciliationSummary, error) {
+	if db == nil {
+		db = DB
+	}
 	// 1. Fetch confirmation records from DB (persisted earlier)
 	var records []models.BordereauxConfirmationRecord
-	if err := DB.Where("bordereaux_confirmation_id = ?", confirmation.ID).Find(&records).Error; err != nil {
+	if err := db.Where("bordereaux_confirmation_id = ?", confirmation.ID).Find(&records).Error; err != nil {
 		return nil, fmt.Errorf("failed to fetch confirmation records: %w", err)
 	}
 
@@ -291,10 +331,13 @@ func ReconcileConfirmation(ctx context.Context, confirmation *models.BordereauxC
 
 	// 2. Fetch the original bordereaux
 	var bordereaux models.GeneratedBordereaux
-	if err := DB.Where("generated_id = ?", confirmation.GeneratedBordereauxID).First(&bordereaux).Error; err != nil {
+	if err := db.Where("generated_id = ?", confirmation.GeneratedBordereauxID).First(&bordereaux).Error; err != nil {
 		// If we don't have a linked bordereaux, we can't do full reconciliation
 		return summary, nil
 	}
+
+	// Per-scheme tolerance overrides the codebase default when configured.
+	tolerance := reconciliationToleranceForScheme(db, confirmation.SchemeID)
 
 	// 3. Fetch original bordereaux data
 	var submittedAmount float64
@@ -303,10 +346,11 @@ func ReconcileConfirmation(ctx context.Context, confirmation *models.BordereauxC
 	// Maps for different types
 	premiumExpectedMap := make(map[string]models.PremiumBordereauxData)
 	claimExpectedMap := make(map[string]models.GroupSchemeClaim)
+	memberExpectedMap := make(map[string]models.MemberBordereauxData)
 
 	if bordereaux.Type == "premium" {
 		var expectedRecords []models.PremiumBordereauxData
-		DB.Where("bordereaux_id = ?", bordereaux.GeneratedID).Find(&expectedRecords)
+		db.Where("bordereaux_id = ?", bordereaux.GeneratedID).Find(&expectedRecords)
 		totalExpected = len(expectedRecords)
 		for _, r := range expectedRecords {
 			submittedAmount += r.TotalAnnualPremium
@@ -324,7 +368,7 @@ func ReconcileConfirmation(ctx context.Context, confirmation *models.BordereauxC
 		// Using BordereauxID if it's stored in GroupSchemeClaim, or filtering by scheme and period
 		// Looking at GroupSchemeClaim model, it doesn't have BordereauxID but has SchemeId.
 		// Usually bordereaux generation for claims would mark them or we filter by period.
-		DB.Where("scheme_id = ? AND creation_date BETWEEN ? AND ?", bordereaux.ID, bordereaux.PeriodStart, bordereaux.PeriodEnd).Find(&expectedRecords)
+		db.Where("scheme_id = ? AND creation_date BETWEEN ? AND ?", bordereaux.ID, bordereaux.PeriodStart, bordereaux.PeriodEnd).Find(&expectedRecords)
 		totalExpected = len(expectedRecords)
 		for _, r := range expectedRecords {
 			submittedAmount += r.ClaimAmount
@@ -335,11 +379,23 @@ func ReconcileConfirmation(ctx context.Context, confirmation *models.BordereauxC
 			claimExpectedMap[key] = r
 		}
 	} else if bordereaux.Type == "member" {
-		// For member bordereaux, we might just be matching records without amounts, but the table shows amounts.
-		// If it's a member bordereaux, submitted amount might be 0 or sum of some other field.
-		// For now let's assume premium and claim are the main ones with amounts.
-		totalExpected = bordereaux.Records
-		submittedAmount = 0 // Or some logic if member bordereaux has financial impact
+		// Member bordereaux are census/roster data — there is no per-member amount to
+		// reconcile, so variance is identity-based (matched / missing / extra) against
+		// the snapshot persisted at generation time.
+		var expectedRecords []models.MemberBordereauxData
+		db.Where("bordereaux_id = ?", bordereaux.GeneratedID).Find(&expectedRecords)
+		totalExpected = len(expectedRecords)
+		for _, r := range expectedRecords {
+			key := r.EmployeeNumber
+			if key == "" {
+				key = r.MemberIdNumber
+			}
+			if key == "" {
+				key = r.MemberName
+			}
+			memberExpectedMap[key] = r
+		}
+		submittedAmount = 0 // member bordereaux carry no reconcilable amount
 	}
 
 	confirmation.SubmittedAmount = submittedAmount
@@ -363,7 +419,7 @@ func ReconcileConfirmation(ctx context.Context, confirmation *models.BordereauxC
 				variance := rec.Amount - expected.TotalAnnualPremium
 				//status := "matched"
 				var status string
-				if math.Abs(variance) > 0.001 {
+				if math.Abs(variance) > tolerance {
 					discrepancyCount++
 					status = "discrepancy"
 				} else {
@@ -400,7 +456,7 @@ func ReconcileConfirmation(ctx context.Context, confirmation *models.BordereauxC
 				matchedCount++
 				variance := rec.Amount - expected.ClaimAmount
 				status := "matched"
-				if math.Abs(variance) > 0.001 {
+				if math.Abs(variance) > tolerance {
 					discrepancyCount++
 					status = "discrepancy"
 				}
@@ -426,6 +482,39 @@ func ReconcileConfirmation(ctx context.Context, confirmation *models.BordereauxC
 					MemberName:               rec.MemberName,
 					Status:                   "extra",
 					Comments:                 "Record not found in submitted bordereaux",
+					CreatedAt:                time.Now(),
+				})
+			}
+		} else if bordereaux.Type == "member" {
+			// Census bordereaux: match incoming rows against the snapshot by identity
+			// (employee number → ID number → name). No amount comparison.
+			memberKey := rec.EmployeeNumber
+			if memberKey == "" {
+				memberKey = rec.IDNumber
+			}
+			if memberKey == "" {
+				memberKey = rec.MemberName
+			}
+			if _, ok := memberExpectedMap[memberKey]; ok {
+				matchedCount++
+				reconciliationResults = append(reconciliationResults, models.BordereauxReconciliationResult{
+					BordereauxConfirmationID: confirmation.ID,
+					GeneratedBordereauxID:    confirmation.GeneratedBordereauxID,
+					RecordID:                 memberKey,
+					MemberName:               rec.MemberName,
+					Status:                   "matched",
+					CreatedAt:                time.Now(),
+				})
+				delete(memberExpectedMap, memberKey)
+			} else {
+				discrepancyCount++
+				reconciliationResults = append(reconciliationResults, models.BordereauxReconciliationResult{
+					BordereauxConfirmationID: confirmation.ID,
+					GeneratedBordereauxID:    confirmation.GeneratedBordereauxID,
+					RecordID:                 memberKey,
+					MemberName:               rec.MemberName,
+					Status:                   "extra",
+					Comments:                 "Member not found in submitted bordereaux",
 					CreatedAt:                time.Now(),
 				})
 			}
@@ -459,11 +548,24 @@ func ReconcileConfirmation(ctx context.Context, confirmation *models.BordereauxC
 				CreatedAt:                time.Now(),
 			})
 		}
+	} else if bordereaux.Type == "member" {
+		for key, expected := range memberExpectedMap {
+			discrepancyCount++
+			reconciliationResults = append(reconciliationResults, models.BordereauxReconciliationResult{
+				BordereauxConfirmationID: confirmation.ID,
+				GeneratedBordereauxID:    confirmation.GeneratedBordereauxID,
+				RecordID:                 key,
+				MemberName:               expected.MemberName,
+				Status:                   "missing",
+				Comments:                 "Member missing from confirmation file",
+				CreatedAt:                time.Now(),
+			})
+		}
 	}
 
 	// Batch insert reconciliation results
 	if len(reconciliationResults) > 0 {
-		if err := DB.CreateInBatches(reconciliationResults, 500).Error; err != nil {
+		if err := db.CreateInBatches(reconciliationResults, 500).Error; err != nil {
 			return nil, fmt.Errorf("failed to persist reconciliation results: %w", err)
 		}
 	}
@@ -495,7 +597,7 @@ func ReconcileConfirmation(ctx context.Context, confirmation *models.BordereauxC
 
 	// Save the updated confirmation
 
-	if err := DB.Save(confirmation).Error; err != nil {
+	if err := db.Save(confirmation).Error; err != nil {
 		return nil, fmt.Errorf("failed to update confirmation: %w", err)
 	}
 
@@ -506,7 +608,7 @@ func ReconcileConfirmation(ctx context.Context, confirmation *models.BordereauxC
 			"progress":     100,
 			"last_updated": time.Now(),
 		}
-		if err := DB.Model(&bordereaux).Updates(updates).Error; err != nil {
+		if err := db.Model(&bordereaux).Updates(updates).Error; err != nil {
 			appLog.WithFields(map[string]interface{}{
 				"generated_id": bordereaux.GeneratedID,
 				"error":        err.Error(),
@@ -709,9 +811,12 @@ func ReconcilePendingConfirmations(ctx context.Context) (int, error) {
 
 	processedCount := 0
 	for i := range pendingConfirmations {
-		_, err := ReconcileConfirmation(ctx, &pendingConfirmations[i])
-		if err != nil {
-			appLog.WithContext(ctx).WithError(err).Errorf("Batch reconciliation failed for confirmation %d", pendingConfirmations[i].ID)
+		txErr := DB.Transaction(func(tx *gorm.DB) error {
+			_, err := ReconcileConfirmation(ctx, tx, &pendingConfirmations[i])
+			return err
+		})
+		if txErr != nil {
+			appLog.WithContext(ctx).WithError(txErr).Errorf("Batch reconciliation failed for confirmation %d", pendingConfirmations[i].ID)
 			pendingConfirmations[i].Status = "error"
 			DB.Save(&pendingConfirmations[i])
 			continue
@@ -2691,6 +2796,41 @@ func GetGeneratedBordereauxByGeneratedID(generatedID string) (models.GeneratedBo
 		return record, err
 	}
 	return record, nil
+}
+
+// ErrBordereauxNotFound is returned when a generated bordereaux row matching
+// a filename cannot be located. Callers should map this to HTTP 404.
+var ErrBordereauxNotFound = errors.New("bordereaux not found")
+
+// ErrBordereauxNotAuthorized is returned when the requesting user is not the
+// creator, reviewer or approver of the bordereaux. Callers map this to 403.
+var ErrBordereauxNotAuthorized = errors.New("not authorized to access this bordereaux")
+
+// AuthorizeBordereauxDownload looks up the generated bordereaux by file name,
+// confirms the user may access it (creator, reviewer, or approver), writes a
+// download audit entry, and returns the record. 404 on missing row prevents
+// filename enumeration against the reports directory.
+func AuthorizeBordereauxDownload(fileName string, user models.AppUser) (models.GeneratedBordereaux, error) {
+	var gen models.GeneratedBordereaux
+	if err := DB.Where("file_name = ?", fileName).First(&gen).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return gen, ErrBordereauxNotFound
+		}
+		return gen, err
+	}
+	if gen.CreatedBy != user.UserEmail &&
+		gen.ReviewedBy != user.UserName &&
+		gen.ApprovedBy != user.UserName {
+		return gen, ErrBordereauxNotAuthorized
+	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "generated_bordereaux",
+		EntityID:  gen.GeneratedID,
+		Action:    "DOWNLOAD",
+		ChangedBy: user.UserName,
+	}, gen, gen)
+	return gen, nil
 }
 
 // AddBordereauxTimelineEntry adds a new timeline entry to a generated bordereaux

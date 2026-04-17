@@ -5,11 +5,13 @@ import (
 	"api/models"
 	"api/services"
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -53,7 +55,8 @@ func GetBordereauxFields(c *gin.Context) {
 	c.JSON(http.StatusOK, fields)
 }
 
-// DownloadBordereaux serves a generated bordereaux file from data/reports
+// DownloadBordereaux serves a generated bordereaux file from data/reports.
+// Access is limited to the record's creator, reviewer, or approver.
 func DownloadBordereaux(c *gin.Context) {
 	fileName := c.Param("filename")
 	if fileName == "" {
@@ -69,6 +72,19 @@ func DownloadBordereaux(c *gin.Context) {
 	absFilePath, _ := filepath.Abs(filePath)
 	if !strings.HasPrefix(absFilePath, absReportDir) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return
+	}
+
+	user := c.MustGet("user").(models.AppUser)
+	if _, err := services.AuthorizeBordereauxDownload(fileName, user); err != nil {
+		switch {
+		case errors.Is(err, services.ErrBordereauxNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
+		case errors.Is(err, services.ErrBordereauxNotAuthorized):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
 		return
 	}
 
@@ -314,6 +330,66 @@ func GetBordereauxDashboardStats(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, stats)
+}
+
+// GetBordereauxComplianceReport handles GET /group-pricing/bordereaux/compliance-report
+// Query params: from=YYYY-MM-DD, to=YYYY-MM-DD. Streams an xlsx workbook with
+// Summary, Open Discrepancies, Overdue Deadlines, Escalations, and Large Claim
+// Notices sheets.
+func GetBordereauxComplianceReport(c *gin.Context) {
+	var from, to time.Time
+	if v := c.Query("from"); v != "" {
+		if t, err := time.Parse("2006-01-02", v); err == nil {
+			from = t
+		}
+	}
+	if v := c.Query("to"); v != "" {
+		if t, err := time.Parse("2006-01-02", v); err == nil {
+			to = t.Add(24*time.Hour - time.Second)
+		}
+	}
+	file, filename, err := services.GenerateComplianceReport(from, to)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	if err := file.Write(c.Writer); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+}
+
+// GetBordereauxAnalytics handles GET /group-pricing/bordereaux/analytics
+// Query params: period=last_7_days|last_30_days|last_quarter|last_year|ytd,
+// from=YYYY-MM-DD, to=YYYY-MM-DD, scheme_id=<int>.
+func GetBordereauxAnalytics(c *gin.Context) {
+	filter := services.BordereauxAnalyticsFilters{
+		Period: c.Query("period"),
+	}
+	if v := c.Query("scheme_id"); v != "" {
+		if id, err := strconv.Atoi(v); err == nil {
+			filter.SchemeID = id
+		}
+	}
+	if v := c.Query("from"); v != "" {
+		if t, err := time.Parse("2006-01-02", v); err == nil {
+			filter.From = t
+		}
+	}
+	if v := c.Query("to"); v != "" {
+		if t, err := time.Parse("2006-01-02", v); err == nil {
+			// extend 'to' to end-of-day so the range is inclusive
+			filter.To = t.Add(24*time.Hour - time.Second)
+		}
+	}
+	resp, err := services.GetBordereauxAnalytics(filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 // GetBordereauxConfirmations handles GET /group-pricing/bordereaux/confirmations

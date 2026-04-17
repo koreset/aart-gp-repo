@@ -139,9 +139,27 @@ type BordereauxReconciliationResult struct {
 	ExpectedValue            string    `json:"expected_value"`
 	ActualValue              string    `json:"actual_value"`
 	Variance                 float64   `json:"variance"`
-	Status                   string    `json:"status"` // matched, discrepancy, missing, extra
+	Status                   string    `json:"status"` // matched, discrepancy, missing, extra, escalated, resolved
 	IsResolved               bool      `json:"is_resolved"`
 	Comments                 string    `json:"comments"`
+	// Escalation workflow fields — populated by EscalateDiscrepancy.
+	AssignedTo  string     `json:"assigned_to" gorm:"default:''"`
+	Priority    string     `json:"priority" gorm:"default:''"` // low | medium | high
+	EscalatedBy string     `json:"escalated_by" gorm:"default:''"`
+	EscalatedAt *time.Time `json:"escalated_at"`
+	DueDate     *time.Time `json:"due_date"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+// BordereauxConfirmationNote is a free-text annotation on a confirmation.
+// Previously these were stored as synthetic BordereauxReconciliationResult rows
+// with Field="_note"; this dedicated table removes the need to filter "_note"
+// rows out of every consumer of the results table.
+type BordereauxConfirmationNote struct {
+	ID                       int       `json:"id" gorm:"primaryKey"`
+	BordereauxConfirmationID int       `json:"bordereaux_confirmation_id" gorm:"index"`
+	Note                     string    `json:"note" gorm:"type:text"`
+	CreatedBy                string    `json:"created_by" gorm:"default:''"`
 	CreatedAt                time.Time `json:"created_at"`
 }
 

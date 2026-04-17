@@ -33,6 +33,13 @@ var (
 	// MockBAVAsync flips the mock provider into async mode. Only consulted
 	// when BAVProvider == "mock"; wired via MOCK_BAV_ASYNC.
 	MockBAVAsync bool
+
+	// BordereauxFileRetentionDays is the age (in days) after which generated
+	// bordereaux output files and terminal-status inbound confirmation/submission
+	// uploads are deleted from disk by the retention sweeper. DB rows are kept;
+	// only the on-disk artefact is removed. Configured via
+	// BORDEREAUX_FILE_RETENTION_DAYS, default 90.
+	BordereauxFileRetentionDays int
 )
 
 func init() {
@@ -75,5 +82,11 @@ func init() {
 	switch strings.ToLower(os.Getenv("MOCK_BAV_ASYNC")) {
 	case "1", "true", "yes", "on":
 		MockBAVAsync = true
+	}
+
+	if n, err := strconv.Atoi(os.Getenv("BORDEREAUX_FILE_RETENTION_DAYS")); err == nil && n > 0 {
+		BordereauxFileRetentionDays = n
+	} else {
+		BordereauxFileRetentionDays = 90
 	}
 }

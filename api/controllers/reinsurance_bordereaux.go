@@ -5,6 +5,7 @@ import (
 	"api/services"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -73,6 +74,25 @@ func GetRIBordereauxRunByID(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": run})
+}
+
+// DiffRIBordereauxRun handles GET /group-pricing/reinsurance/bordereaux/:run_id/diff
+// Optional query param `against` selects the run to compare against; when
+// omitted, the run's ParentRunID is used so "what changed in this amendment?"
+// is the natural default.
+func DiffRIBordereauxRun(c *gin.Context) {
+	runID := c.Param("run_id")
+	if runID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "run_id is required"})
+		return
+	}
+	against := c.Query("against")
+	diff, err := services.DiffRIBordereauxRuns(runID, against)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": diff})
 }
 
 // GetRIBordereauxMemberRows handles GET /group-pricing/reinsurance/bordereaux/:run_id/members
@@ -194,6 +214,77 @@ func UpdateLargeClaimNotice(c *gin.Context) {
 		return
 	}
 	notice, err := services.UpdateLargeClaimNotice(id, req, user)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": notice})
+}
+
+// AcceptLargeClaimNotice handles POST /reinsurance/bordereaux/large-claims/:id/accept
+func AcceptLargeClaimNotice(c *gin.Context) {
+	user := c.MustGet("user").(models.AppUser)
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	var req services.LargeClaimResponseRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	notice, err := services.AcceptLargeClaimNotice(id, req, user)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": notice})
+}
+
+// RejectLargeClaimNotice handles POST /reinsurance/bordereaux/large-claims/:id/reject
+func RejectLargeClaimNotice(c *gin.Context) {
+	user := c.MustGet("user").(models.AppUser)
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	var req services.LargeClaimResponseRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(req.Reason) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "reason is required when rejecting a notice"})
+		return
+	}
+	notice, err := services.RejectLargeClaimNotice(id, req, user)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": notice})
+}
+
+// QueryLargeClaimNotice handles POST /reinsurance/bordereaux/large-claims/:id/query
+func QueryLargeClaimNotice(c *gin.Context) {
+	user := c.MustGet("user").(models.AppUser)
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	var req services.LargeClaimResponseRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(req.QueryDetails) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "query_details is required"})
+		return
+	}
+	notice, err := services.QueryLargeClaimNotice(id, req, user)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

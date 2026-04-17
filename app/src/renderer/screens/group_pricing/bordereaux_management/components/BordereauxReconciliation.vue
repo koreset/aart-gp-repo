@@ -1265,6 +1265,9 @@ import * as ExcelJS from 'exceljs'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import * as pako from 'pako'
+import { useFlashStore } from '@/renderer/store/flash'
+
+const flash = useFlashStore()
 
 // Reactive data
 const loading = ref(false)
@@ -1452,15 +1455,21 @@ const runAutoReconciliation = async () => {
     const response = await GroupPricingService.runAutoReconciliation()
 
     if (response.data.success) {
-      // Refresh data to get updated reconciliation status
       await fetchReconciliationItems()
+      flash.show('Auto-reconciliation complete', 'success')
     } else {
-      console.error('Auto-reconciliation failed:', response.data.error)
-      // TODO: Show error notification
+      flash.show(
+        response.data.error || 'Auto-reconciliation failed',
+        'error'
+      )
     }
-  } catch (error) {
-    console.error('Error running auto-reconciliation:', error)
-    // TODO: Show error notification
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to run auto-reconciliation',
+      'error'
+    )
   } finally {
     autoReconciling.value = false
   }
@@ -1638,15 +1647,10 @@ const performImport = async () => {
       await GroupPricingService.importSchemeConfirmations(formData)
 
     if (response.data.success) {
-      // Show success message
-      // TODO: Replace with actual snackbar/notification system
-
-      // Update reconciliation stats based on import results
       if (response.data.imported_count) {
         reconciliationStats.value.pending += response.data.imported_count
       }
 
-      // If auto-processing was enabled, trigger reconciliation
       if (importData.value.auto_process && response.data.auto_process_results) {
         reconciliationStats.value.matched +=
           response.data.auto_process_results.matched || 0
@@ -1657,7 +1661,6 @@ const performImport = async () => {
           (response.data.auto_process_results.discrepancies || 0)
       }
 
-      // Reset form data
       importData.value = {
         scheme_id: null,
         file_type: '',
@@ -1665,19 +1668,27 @@ const performImport = async () => {
         auto_process: true
       }
 
-      // Close dialog
       showImportDialog.value = false
-
-      // Refresh the reconciliation data
       await refreshReconciliation()
+
+      const importedCount = response.data.imported_count ?? 0
+      flash.show(
+        `Imported ${importedCount} confirmation file${importedCount === 1 ? '' : 's'}`,
+        'success'
+      )
     } else {
-      // Handle API error
-      console.error('Import failed:', response.data.error)
-      // TODO: Show error notification
+      flash.show(
+        response.data.error || 'Confirmation import failed',
+        'error'
+      )
     }
-  } catch (error) {
-    console.error('Error importing files:', error)
-    // TODO: Show error notification
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to import confirmation files',
+      'error'
+    )
   } finally {
     importing.value = false
     compressing.value = false
@@ -1736,10 +1747,16 @@ const resolveDetailedDiscrepancy = async (detailItem: any) => {
       resolution: 'accept_expected',
       notes: 'Resolved from discrepancy detail view'
     })
-  } catch (error) {
-    console.error('Error resolving detailed discrepancy:', error)
+    flash.show('Discrepancy resolved', 'success')
+  } catch (error: any) {
     detailItem.is_resolved = false
     detailItem.status = 'discrepancy'
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to resolve discrepancy',
+      'error'
+    )
   }
 }
 
@@ -1754,8 +1771,14 @@ const addDiscrepancyComment = async (detailItem: any) => {
     if (response.data?.data) {
       detailItem.comments = response.data.data.comments
     }
-  } catch (error) {
-    console.error('Error adding comment:', error)
+    flash.show('Comment added', 'success')
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to add comment',
+      'error'
+    )
   }
 }
 
@@ -1770,8 +1793,14 @@ const editComment = async (detailItem: any) => {
   try {
     await GroupPricingService.addDiscrepancyComment(detailItem.id, { comment })
     detailItem.comments = comment
-  } catch (error) {
-    console.error('Error editing comment:', error)
+    flash.show('Comment updated', 'success')
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to update comment',
+      'error'
+    )
   }
   showCommentDialog.value = false
 }
@@ -1797,16 +1826,20 @@ const escalateDiscrepancy = async (item: any) => {
     )
     showDiscrepancyDialog.value = false
     await refreshReconciliation()
-  } catch (error) {
-    console.error('Error escalating discrepancy:', error)
+    flash.show('Discrepancy escalated', 'success')
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to escalate discrepancy',
+      'error'
+    )
   }
 }
 
 const exportDiscrepancyReport = async (item: any) => {
-  console.log('Exporting discrepancy report for:', item)
   if (!item || !discrepancyDetails.value.length) {
-    console.error('No discrepancy data to export.')
-    // TODO: Show a user-friendly notification
+    flash.show('No discrepancy data to export', 'warning')
     return
   }
 
@@ -1926,9 +1959,12 @@ const exportDiscrepancyReport = async (item: any) => {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    console.log('Discrepancy report generated successfully.')
-  } catch (error) {
-    console.error('Error generating Excel file:', error)
+    flash.show('Discrepancy report generated', 'success')
+  } catch (error: any) {
+    flash.show(
+      error.message || 'Failed to generate discrepancy report',
+      'error'
+    )
   }
 }
 
@@ -1939,8 +1975,14 @@ const manualMatch = async (item: any) => {
       notes: 'Manually matched'
     })
     await refreshReconciliation()
-  } catch (error) {
-    console.error('Error manual matching:', error)
+    flash.show('Marked as manually matched', 'success')
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to mark as manually matched',
+      'error'
+    )
   }
 }
 
@@ -1951,8 +1993,14 @@ const resolveDiscrepancy = async (item: any) => {
       notes: 'Discrepancy resolved'
     })
     await refreshReconciliation()
-  } catch (error) {
-    console.error('Error resolving discrepancy:', error)
+    flash.show('Discrepancy resolved', 'success')
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to resolve discrepancy',
+      'error'
+    )
   }
 }
 
@@ -1960,8 +2008,14 @@ const confirmReconciliation = async (item: any) => {
   try {
     await GroupPricingService.confirmReconciliation(item.id)
     await refreshReconciliation()
-  } catch (error) {
-    console.error('Error confirming reconciliation:', error)
+    flash.show('Reconciliation confirmed', 'success')
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to confirm reconciliation',
+      'error'
+    )
   }
 }
 
@@ -1969,11 +2023,19 @@ const exportReconciliation = async (item: any) => {
   try {
     const response = await GroupPricingService.getDiscrepancyDetails(item.id)
     const data = response.data?.data || response.data || []
-    if (!data.length) return
+    if (!data.length) {
+      flash.show('No reconciliation data to export', 'warning')
+      return
+    }
     // Re-use the existing Excel export from exportDiscrepancyReport
     await exportDiscrepancyReport(item)
-  } catch (error) {
-    console.error('Error exporting reconciliation:', error)
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to export reconciliation',
+      'error'
+    )
   }
 }
 
@@ -1981,8 +2043,14 @@ const reprocessItem = async (item: any) => {
   try {
     await GroupPricingService.reprocessReconciliation(item.id)
     await refreshReconciliation()
-  } catch (error) {
-    console.error('Error reprocessing:', error)
+    flash.show('Reconciliation reprocessed', 'success')
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to reprocess reconciliation',
+      'error'
+    )
   }
 }
 
@@ -1991,8 +2059,14 @@ const addNote = async (item: any) => {
   if (!note) return
   try {
     await GroupPricingService.addReconciliationNote(item.id, { note })
-  } catch (error) {
-    console.error('Error adding note:', error)
+    flash.show('Note added', 'success')
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to add note',
+      'error'
+    )
   }
 }
 
@@ -2012,7 +2086,6 @@ const deleteReconciliationItem = async () => {
     )
 
     if (response.status === 200) {
-      // Remove the item from local data
       const index = reconciliationItems.value.findIndex(
         (item) => item.id === itemToDelete.value.id
       )
@@ -2020,25 +2093,25 @@ const deleteReconciliationItem = async () => {
         reconciliationItems.value.splice(index, 1)
       }
 
-      // Update reconciliation statistics
       updateReconciliationStats()
 
-      // Close dialog and reset
       showDeleteDialog.value = false
       itemToDelete.value = null
 
-      // TODO: Show success notification
-      console.log('Reconciliation item deleted successfully')
+      flash.show('Reconciliation item deleted', 'success')
     } else {
-      console.error(
-        'Failed to delete reconciliation item:',
-        response.data.error
+      flash.show(
+        response.data.error || 'Failed to delete reconciliation item',
+        'error'
       )
-      // TODO: Show error notification
     }
-  } catch (error) {
-    console.error('Error deleting reconciliation item:', error)
-    // TODO: Show error notification
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to delete reconciliation item',
+      'error'
+    )
   } finally {
     deleting.value = false
   }

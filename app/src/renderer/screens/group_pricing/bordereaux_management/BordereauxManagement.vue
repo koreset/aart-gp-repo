@@ -577,7 +577,12 @@
           >
             Close
           </v-btn>
-          <v-btn color="teal" variant="flat" @click="generateComplianceReport">
+          <v-btn
+            color="teal"
+            variant="flat"
+            :loading="generatingComplianceReport"
+            @click="generateComplianceReport"
+          >
             Generate Report
           </v-btn>
         </v-card-actions>
@@ -595,6 +600,10 @@ import DataGrid from '@/renderer/components/tables/DataGrid.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { useStatusBarStore } from '@/renderer/store/statusBar'
 import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
+import { useFlashStore } from '@/renderer/store/flash'
+
+const flash = useFlashStore()
+const generatingComplianceReport = ref(false)
 
 const { hasPermission } = usePermissionCheck()
 const statusBarStore = useStatusBarStore()
@@ -893,10 +902,40 @@ const openComplianceDialog = () => {
   complianceDialog.value = true
 }
 
-const generateComplianceReport = () => {
-  // TODO: Implement compliance report generation
-  console.log('Generating compliance report...')
-  complianceDialog.value = false
+const generateComplianceReport = async () => {
+  if (generatingComplianceReport.value) return
+  try {
+    generatingComplianceReport.value = true
+    flash.show('Generating compliance report…', 'info')
+    const response =
+      await GroupPricingService.downloadBordereauxComplianceReport({})
+    const blob = new Blob([response.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const disposition = (response.headers as any)?.['content-disposition'] || ''
+    const match = /filename=([^;]+)/.exec(disposition)
+    link.download = match
+      ? match[1].trim().replace(/^"|"$/g, '')
+      : `bordereaux_compliance_${new Date().toISOString().slice(0, 10)}.xlsx`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    flash.show('Compliance report downloaded', 'success')
+    complianceDialog.value = false
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to generate compliance report',
+      'error'
+    )
+  } finally {
+    generatingComplianceReport.value = false
+  }
 }
 
 // Utility methods

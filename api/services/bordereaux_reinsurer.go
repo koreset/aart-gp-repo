@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // CreateReinsurerAcceptance creates a new acceptance record for a submitted bordereaux
@@ -210,8 +212,12 @@ func GetRecoveryStats(generatedID string) (models.RecoveryStats, error) {
 
 // GenerateClaimRecovery calculates the ceded portion of an approved/paid claim using the
 // scheme's active treaty and creates a ReinsurerRecovery record for tracking. This is the
-// downstream link between claim notifications and actual recovery amounts.
-func GenerateClaimRecovery(claim models.GroupSchemeClaim, user models.AppUser) (*models.ReinsurerRecovery, error) {
+// downstream link between claim notifications and actual recovery amounts. The db parameter
+// lets callers pass an active transaction so the recovery commits with the claim update.
+func GenerateClaimRecovery(db *gorm.DB, claim models.GroupSchemeClaim, user models.AppUser) (*models.ReinsurerRecovery, error) {
+	if db == nil {
+		db = DB
+	}
 	if claim.ClaimAmount <= 0 {
 		return nil, nil // nothing to recover
 	}
@@ -231,7 +237,7 @@ func GenerateClaimRecovery(claim models.GroupSchemeClaim, user models.AppUser) (
 
 	// Check for existing recovery on this claim to avoid duplicates
 	var existing int64
-	DB.Model(&models.ReinsurerRecovery{}).
+	db.Model(&models.ReinsurerRecovery{}).
 		Where("claim_reference = ?", claim.ClaimNumber).
 		Count(&existing)
 	if existing > 0 {
@@ -251,12 +257,12 @@ func GenerateClaimRecovery(claim models.GroupSchemeClaim, user models.AppUser) (
 		Notes:              fmt.Sprintf("Auto-generated on claim %s (status: %s). Ceded %.2f%%.", claim.ClaimNumber, claim.Status, pct),
 		RecordedBy:         user.UserName,
 	}
-	if err := DB.Create(&rec).Error; err != nil {
+	if err := db.Create(&rec).Error; err != nil {
 		return nil, fmt.Errorf("failed to create recovery record: %w", err)
 	}
 
 	// Write audit trail
-	_ = writeAudit(DB, AuditContext{
+	_ = writeAudit(db, AuditContext{
 		Area:      "group-pricing",
 		Entity:    "reinsurer_recoveries",
 		EntityID:  strconv.Itoa(rec.ID),

@@ -919,10 +919,13 @@ const refreshSubmissions = async () => {
   try {
     const response = await GroupPricingService.getBordereauxActivity()
     submissions.value = response.data || []
-    console.log('Fetched submissions:', submissions.value)
-  } catch (error) {
-    console.error('Failed to fetch bordereaux submissions:', error)
-    // TODO: Show error notification to user
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to fetch bordereaux submissions',
+      'error'
+    )
   } finally {
     loading.value = false
   }
@@ -934,13 +937,86 @@ const viewSubmission = (item: any) => {
 }
 
 const submitToScheme = async (item: any) => {
-  // TODO: Implement submission to scheme
-  console.log('Submitting to scheme:', item.bordereaux_id)
+  if (!item?.id) return
+  if (item.status !== 'approved') {
+    flash.show(
+      'Bordereaux must be approved before it can be submitted to the scheme',
+      'warning'
+    )
+    return
+  }
+  try {
+    loading.value = true
+    const response = await GroupPricingService.submitBordereauxBatch({
+      bordereaux_ids: [item.id],
+      delivery_method: 'email',
+      message: '',
+      submission_date: new Date().toISOString()
+    })
+    if (response.status === 200) {
+      const idx = submissions.value.findIndex((s) => s.id === item.id)
+      if (idx !== -1) {
+        submissions.value[idx].status = 'submitted'
+        submissions.value[idx].submission_date = new Date().toISOString()
+        submissions.value[idx].last_updated = new Date().toISOString()
+        submissions.value[idx].progress = 66
+      }
+      flash.show(
+        `Bordereaux ${item.generated_id || item.id} submitted to scheme`,
+        'success'
+      )
+      await refreshSubmissions()
+    }
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to submit bordereaux to scheme',
+      'error'
+    )
+  } finally {
+    loading.value = false
+  }
 }
 
 const checkStatus = async (item: any) => {
-  // TODO: Implement status check
-  console.log('Checking status for:', item.bordereaux_id)
+  const generatedId = item?.generated_id
+  if (!generatedId) {
+    flash.show('Cannot check status: missing generated_id', 'error')
+    return
+  }
+  try {
+    loading.value = true
+    const response = await GroupPricingService.getBordereauxById(generatedId)
+    const fresh = response.data
+    if (fresh) {
+      const idx = submissions.value.findIndex((s) => s.id === item.id)
+      if (idx !== -1) {
+        submissions.value[idx] = { ...submissions.value[idx], ...fresh }
+      }
+      if (selectedSubmission.value?.id === item.id) {
+        selectedSubmission.value = {
+          ...selectedSubmission.value,
+          ...fresh
+        }
+      }
+      flash.show(
+        `Status: ${fresh.status}${
+          typeof fresh.progress === 'number' ? ` (${fresh.progress}%)` : ''
+        }`,
+        'info'
+      )
+    }
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to fetch bordereaux status',
+      'error'
+    )
+  } finally {
+    loading.value = false
+  }
 }
 
 const downloadFile = async (item: any) => {

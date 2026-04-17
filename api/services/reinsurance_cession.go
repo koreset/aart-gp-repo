@@ -853,6 +853,131 @@ func UpdateLargeClaimNotice(id int, req models.UpdateLargeClaimNoticeRequest, us
 	return notice, nil
 }
 
+// LargeClaimResponseRequest is shared by the accept / reject / query endpoints.
+// Empty fields are ignored so callers only pass what's relevant.
+type LargeClaimResponseRequest struct {
+	Notes          string `json:"notes"`
+	AcceptedAmount float64 `json:"accepted_amount"`
+	QueryDetails   string `json:"query_details"`
+	Reason         string `json:"reason"`
+}
+
+// AcceptLargeClaimNotice records a reinsurer's acceptance of a large-claim
+// cession. Sets ResponseStatus=accepted and flips Status to acknowledged so
+// the ceding-side dashboards reflect that the notice has been responded to.
+// Idempotent in the sense that re-accepting just refreshes RespondedAt / notes.
+func AcceptLargeClaimNotice(id int, req LargeClaimResponseRequest, user models.AppUser) (models.LargeClaimNotice, error) {
+	var notice models.LargeClaimNotice
+	if err := DB.First(&notice, id).Error; err != nil {
+		return notice, fmt.Errorf("notice %d not found: %w", id, err)
+	}
+	before := notice
+	now := time.Now()
+
+	notice.ResponseStatus = "accepted"
+	notice.RespondedAt = &now
+	notice.RespondedBy = user.UserName
+	notice.Status = "acknowledged"
+	if notice.AcknowledgedAt == nil {
+		notice.AcknowledgedAt = &now
+	}
+	if req.Notes != "" {
+		notice.ResponseNotes = appendResponseNote(notice.ResponseNotes, user.UserName, "accepted", req.Notes)
+	}
+	if req.AcceptedAmount > 0 {
+		notice.EstimatedCededAmount = req.AcceptedAmount
+	}
+	notice.UpdatedAt = now
+	if err := DB.Save(&notice).Error; err != nil {
+		return notice, fmt.Errorf("failed to accept notice: %w", err)
+	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "large_claim_notices",
+		EntityID:  fmt.Sprintf("%d", notice.ID),
+		Action:    "UPDATE",
+		ChangedBy: user.UserName,
+	}, before, notice)
+	return notice, nil
+}
+
+// RejectLargeClaimNotice records a reinsurer's rejection of a cession. The
+// reason is mandatory (validated at the controller layer); it is appended to
+// ResponseNotes for audit trail alongside who rejected and when.
+func RejectLargeClaimNotice(id int, req LargeClaimResponseRequest, user models.AppUser) (models.LargeClaimNotice, error) {
+	var notice models.LargeClaimNotice
+	if err := DB.First(&notice, id).Error; err != nil {
+		return notice, fmt.Errorf("notice %d not found: %w", id, err)
+	}
+	before := notice
+	now := time.Now()
+
+	notice.ResponseStatus = "rejected"
+	notice.RespondedAt = &now
+	notice.RespondedBy = user.UserName
+	notice.Status = "acknowledged"
+	if notice.AcknowledgedAt == nil {
+		notice.AcknowledgedAt = &now
+	}
+	if req.Reason != "" {
+		notice.ResponseNotes = appendResponseNote(notice.ResponseNotes, user.UserName, "rejected", req.Reason)
+	}
+	notice.UpdatedAt = now
+	if err := DB.Save(&notice).Error; err != nil {
+		return notice, fmt.Errorf("failed to reject notice: %w", err)
+	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "large_claim_notices",
+		EntityID:  fmt.Sprintf("%d", notice.ID),
+		Action:    "UPDATE",
+		ChangedBy: user.UserName,
+	}, before, notice)
+	return notice, nil
+}
+
+// QueryLargeClaimNotice records a reinsurer's query on the notice. Does not
+// set ResponseStatus — the reinsurer has not decided yet; Status moves to
+// "queried" so the ceding team knows to reply.
+func QueryLargeClaimNotice(id int, req LargeClaimResponseRequest, user models.AppUser) (models.LargeClaimNotice, error) {
+	var notice models.LargeClaimNotice
+	if err := DB.First(&notice, id).Error; err != nil {
+		return notice, fmt.Errorf("notice %d not found: %w", id, err)
+	}
+	before := notice
+	now := time.Now()
+
+	notice.Status = "queried"
+	notice.RespondedAt = &now
+	notice.RespondedBy = user.UserName
+	if req.QueryDetails != "" {
+		notice.QueryDetails = req.QueryDetails
+	}
+	notice.UpdatedAt = now
+	if err := DB.Save(&notice).Error; err != nil {
+		return notice, fmt.Errorf("failed to record query: %w", err)
+	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "large_claim_notices",
+		EntityID:  fmt.Sprintf("%d", notice.ID),
+		Action:    "UPDATE",
+		ChangedBy: user.UserName,
+	}, before, notice)
+	return notice, nil
+}
+
+// appendResponseNote builds a timestamped entry for ResponseNotes so the full
+// history is preserved across multiple interactions rather than overwritten.
+func appendResponseNote(existing, user, action, body string) string {
+	entry := fmt.Sprintf("[%s] %s %s: %s",
+		time.Now().Format("2006-01-02 15:04"), user, action, body)
+	if existing == "" {
+		return entry
+	}
+	return existing + "\n" + entry
+}
+
 // GetLargeClaimStats returns count summary of large claim notices
 func GetLargeClaimStats(treatyID int) (models.LargeClaimStats, error) {
 	var notices []models.LargeClaimNotice

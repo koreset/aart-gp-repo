@@ -1345,6 +1345,12 @@ type GroupScheme struct {
 	CommencementDate       time.Time           `json:"commencement_date" csv:"commencement_date"`
 	SchemeQuoteStatus      string              `json:"scheme_quote_status"`
 	HasTreatyLink          bool                `json:"has_treaty_link" gorm:"-"`
+	// ReconciliationTolerance is the absolute variance (in the same currency units
+	// as claim/premium amounts) below which a confirmation line is treated as
+	// "matched" rather than "discrepancy" during bordereaux reconciliation. Zero
+	// falls back to the codebase default (0.001) so existing schemes keep their
+	// current behaviour until operators tune the value.
+	ReconciliationTolerance float64             `json:"reconciliation_tolerance" gorm:"default:0"`
 }
 
 type GroupPricingInsurerDetail struct {

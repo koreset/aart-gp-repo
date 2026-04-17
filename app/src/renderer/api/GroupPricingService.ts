@@ -1057,6 +1057,15 @@ export default {
   deleteBordereauxTemplate(templateId) {
     return Api.delete(`/group-pricing/bordereaux/templates/${templateId}`)
   },
+  testBordereauxTemplate(
+    templateId,
+    data: { sample_size?: number; scheme_id?: number } = {}
+  ) {
+    return Api.post(
+      `/group-pricing/bordereaux/templates/${templateId}/test`,
+      data
+    )
+  },
 
   activateBordereauxTemplate(templateId) {
     return Api.patch(
@@ -1146,8 +1155,8 @@ export default {
     return Api.get('/group-pricing/bordereaux/dashboard/stats')
   },
 
-  getBordereauxById(bordereauxId) {
-    return Api.get(`/group-pricing/bordereaux/${bordereauxId}`)
+  getBordereauxById(generatedId) {
+    return Api.get(`/group-pricing/bordereaux/generated/${generatedId}`)
   },
 
   submitBordereauxBatch(submissionData) {
@@ -1220,6 +1229,23 @@ export default {
       data
     )
   },
+  listBordereauxEscalations(params: {
+    assigned_to?: string
+    priority?: string
+    overdue_only?: boolean
+  } = {}) {
+    return Api.get('/group-pricing/bordereaux/reconciliation/escalations', {
+      params
+    })
+  },
+  getBordereauxAnalytics(params: {
+    period?: string
+    from?: string
+    to?: string
+    scheme_id?: number
+  } = {}) {
+    return Api.get('/group-pricing/bordereaux/analytics', { params })
+  },
   addDiscrepancyComment(resultId, data) {
     return Api.post(
       `/group-pricing/bordereaux/reconciliation/results/${resultId}/comment`,
@@ -1242,9 +1268,20 @@ export default {
       data
     )
   },
+  getReconciliationNotes(confirmationId) {
+    return Api.get(
+      `/group-pricing/bordereaux/confirmations/${confirmationId}/notes`
+    )
+  },
 
   downloadBordereaux(filename) {
     return Api.get(`/group-pricing/bordereaux/download/${filename}`, {
+      responseType: 'blob'
+    })
+  },
+  downloadBordereauxComplianceReport(params: { from?: string; to?: string } = {}) {
+    return Api.get('/group-pricing/bordereaux/compliance-report', {
+      params,
       responseType: 'blob'
     })
   },
@@ -1524,6 +1561,11 @@ export default {
   getRIBordereauxClaimsRows(runId) {
     return Api.get(`/group-pricing/reinsurance/bordereaux/${runId}/claims`)
   },
+  diffRIBordereauxRun(runId, against?: string) {
+    return Api.get(`/group-pricing/reinsurance/bordereaux/${runId}/diff`, {
+      params: against ? { against } : {}
+    })
+  },
   validateRIBordereaux(runId) {
     return Api.post(`/group-pricing/reinsurance/bordereaux/${runId}/validate`)
   },
@@ -1568,6 +1610,27 @@ export default {
   updateLargeClaimNotice(id, data) {
     return Api.patch(
       `/group-pricing/reinsurance/bordereaux/large-claims/${id}`,
+      data
+    )
+  },
+  acceptLargeClaimNotice(
+    id,
+    data: { notes?: string; accepted_amount?: number } = {}
+  ) {
+    return Api.post(
+      `/group-pricing/reinsurance/bordereaux/large-claims/${id}/accept`,
+      data
+    )
+  },
+  rejectLargeClaimNotice(id, data: { reason: string; notes?: string }) {
+    return Api.post(
+      `/group-pricing/reinsurance/bordereaux/large-claims/${id}/reject`,
+      data
+    )
+  },
+  queryLargeClaimNotice(id, data: { query_details: string }) {
+    return Api.post(
+      `/group-pricing/reinsurance/bordereaux/large-claims/${id}/query`,
       data
     )
   },

@@ -1,6 +1,7 @@
 package services
 
 import (
+	appLog "api/log"
 	"api/models"
 	"fmt"
 	"time"
@@ -198,4 +199,50 @@ func graceExpiryDate(dueDate string, graceDays int) string {
 		return dueDate
 	}
 	return t.AddDate(0, 0, graceDays).Format("2006-01-02")
+}
+
+// SweepOverdueDeadlines flips any pending deadline whose grace window has passed
+// to "overdue". Designed to be called from a background ticker so overdue state
+// is set in the DB even if nobody opens the calendar UI. The per-row grace
+// period rules out a single cross-database UPDATE, so we fetch candidates and
+// bulk-update matching IDs.
+func SweepOverdueDeadlines() {
+	var pending []models.BordereauxDeadline
+	if err := DB.Where("status = ? AND due_date != ''", "pending").Find(&pending).Error; err != nil {
+		appLog.Warn("Overdue deadline sweep fetch failed: " + err.Error())
+		return
+	}
+	today := time.Now().Format("2006-01-02")
+	overdueIDs := make([]int, 0, len(pending))
+	for _, d := range pending {
+		if graceExpiryDate(d.DueDate, d.GracePeriodDays) < today {
+			overdueIDs = append(overdueIDs, d.ID)
+		}
+	}
+	if len(overdueIDs) == 0 {
+		return
+	}
+	result := DB.Model(&models.BordereauxDeadline{}).
+		Where("id IN ?", overdueIDs).
+		Update("status", "overdue")
+	if result.Error != nil {
+		appLog.Warn("Overdue deadline sweep update failed: " + result.Error.Error())
+		return
+	}
+	if result.RowsAffected > 0 {
+		appLog.WithField("count", result.RowsAffected).Info("Marked bordereaux deadlines as overdue")
+	}
+}
+
+// StartDeadlineOverdueSweeper runs a background goroutine that marks overdue
+// bordereaux deadlines every 15 minutes. Mirrors StartNotificationOverdueSweeper.
+func StartDeadlineOverdueSweeper() {
+	go func() {
+		ticker := time.NewTicker(15 * time.Minute)
+		defer ticker.Stop()
+		for {
+			SweepOverdueDeadlines()
+			<-ticker.C
+		}
+	}()
 }

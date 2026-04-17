@@ -140,6 +140,12 @@ type LargeClaimNotice struct {
 	AcknowledgedAt *time.Time `json:"acknowledged_at"`
 	QueryDetails   string     `json:"query_details" gorm:"type:text"`
 	ResponseNotes  string     `json:"response_notes" gorm:"type:text"`
+	// Reinsurer response workflow fields (P2-5). ResponseStatus captures the
+	// reinsurer's decision on the cession and is separate from Status (which
+	// tracks the send/ack lifecycle). Empty until the reinsurer responds.
+	ResponseStatus string     `json:"response_status" gorm:"default:''"` // accepted | rejected | ""
+	RespondedAt    *time.Time `json:"responded_at"`
+	RespondedBy    string     `json:"responded_by" gorm:"default:''"`
 	CreatedBy      string     `json:"created_by" gorm:"default:''"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`

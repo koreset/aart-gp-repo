@@ -598,6 +598,160 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <v-dialog v-model="showPreviewDialog" max-width="900">
+      <v-card v-if="previewTemplate">
+        <v-card-title class="text-h6">
+          {{ previewTemplate.name }}
+          <v-chip size="small" class="ms-2">{{ previewTemplate.type }}</v-chip>
+          <v-chip size="small" class="ms-2">{{ previewTemplate.status }}</v-chip>
+        </v-card-title>
+        <v-card-text>
+          <p v-if="previewTemplate.description" class="mb-4">
+            {{ previewTemplate.description }}
+          </p>
+          <h4 class="text-subtitle-1 font-weight-bold mb-2">
+            Field Mappings ({{ (previewTemplate.field_mappings || []).length }})
+          </h4>
+          <v-data-table
+            v-if="(previewTemplate.field_mappings || []).length"
+            :headers="[
+              { title: 'Source Field', key: 'source_field' },
+              { title: 'Target Field', key: 'target_field' },
+              { title: 'Required', key: 'required' }
+            ]"
+            :items="previewTemplate.field_mappings"
+            :items-per-page="20"
+            density="compact"
+            class="mb-4"
+          >
+            <template #[`item.required`]="{ item }">
+              <v-icon v-if="(item as any).required" color="success" size="small">
+                mdi-check
+              </v-icon>
+            </template>
+          </v-data-table>
+          <div v-else class="text-medium-emphasis mb-4">
+            No field mappings defined.
+          </div>
+          <h4 class="text-subtitle-1 font-weight-bold mb-2">
+            Validation Rules
+          </h4>
+          <v-list density="compact">
+            <v-list-item
+              v-for="(value, key) in previewTemplate.validation_rules || {}"
+              :key="key"
+            >
+              <v-list-item-title class="d-flex align-center">
+                <v-icon
+                  :color="value ? 'success' : 'grey'"
+                  size="small"
+                  class="me-2"
+                >
+                  {{ value ? 'mdi-check-circle' : 'mdi-circle-outline' }}
+                </v-icon>
+                {{ key }}
+              </v-list-item-title>
+            </v-list-item>
+          </v-list>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn variant="text" @click="showPreviewDialog = false">Close</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="showTestDialog" max-width="1100">
+      <v-card>
+        <v-card-title class="text-h6">
+          Template Test: {{ testTemplateName }}
+        </v-card-title>
+        <v-card-text>
+          <div v-if="testing" class="d-flex align-center" style="gap: 12px">
+            <v-progress-circular indeterminate size="20" />
+            <span>Running test with a sample of live data…</span>
+          </div>
+          <div v-else-if="testResult">
+            <v-alert
+              v-if="testResult.unknown_fields?.length"
+              type="warning"
+              variant="tonal"
+              class="mb-3"
+            >
+              Unknown source fields:
+              {{ testResult.unknown_fields.join(', ') }}
+            </v-alert>
+            <v-alert
+              v-if="testResult.missing_in_data?.length"
+              type="info"
+              variant="tonal"
+              class="mb-3"
+            >
+              Fields with no values in the sample:
+              {{ testResult.missing_in_data.join(', ') }}
+            </v-alert>
+            <p class="text-caption text-medium-emphasis mb-3">
+              Sample size: {{ testResult.sample_size }} ·
+              Source: {{ testResult.sample_source }}
+            </p>
+            <h4 class="text-subtitle-1 font-weight-bold mb-2">Preview Rows</h4>
+            <div
+              v-if="!testResult.preview_rows?.length"
+              class="text-medium-emphasis"
+            >
+              No preview rows — the source table may be empty. Generate a
+              bordereaux first to create sample data.
+            </div>
+            <v-data-table
+              v-else
+              :headers="
+                Object.keys(testResult.preview_rows[0] || {}).map((k) => ({
+                  title: k,
+                  key: k
+                }))
+              "
+              :items="testResult.preview_rows"
+              :items-per-page="10"
+              density="compact"
+            />
+          </div>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn variant="text" @click="showTestDialog = false">Close</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="showDeleteDialog" max-width="480" persistent>
+      <v-card>
+        <v-card-title class="text-h6">Delete template?</v-card-title>
+        <v-card-text>
+          Are you sure you want to delete
+          <strong>{{ templateToDelete?.name }}</strong
+          >? This cannot be undone.
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn
+            variant="text"
+            :disabled="deleting"
+            @click="showDeleteDialog = false"
+          >
+            Cancel
+          </v-btn>
+          <v-btn
+            color="error"
+            variant="flat"
+            :loading="deleting"
+            @click="confirmDeleteTemplate"
+          >
+            Delete
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
@@ -605,6 +759,20 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
+import { useFlashStore } from '@/renderer/store/flash'
+
+const flash = useFlashStore()
+const showDeleteDialog = ref(false)
+const deleting = ref(false)
+const templateToDelete: any = ref(null)
+
+// Preview + test dialog state (P2-1)
+const showPreviewDialog = ref(false)
+const previewTemplate: any = ref(null)
+const showTestDialog = ref(false)
+const testing = ref(false)
+const testResult: any = ref(null)
+const testTemplateName = ref('')
 
 // Reactive data
 const loading = ref(false)
@@ -840,8 +1008,13 @@ const refreshTemplates = async () => {
       insurers: stats.insurers.size,
       usage: stats.usage
     }
-  } catch (error) {
-    console.error('Error fetching templates:', error)
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to fetch templates',
+      'error'
+    )
     templates.value = []
   } finally {
     loading.value = false
@@ -860,8 +1033,13 @@ const fetchBordereauFields = async (bordereauType: string) => {
       await GroupPricingService.getBordereauxFields(bordereauType)
     console.log('Fetched bordereaux fields:', response.data)
     bordereauFields.value = response.data || []
-  } catch (error) {
-    console.error('Error fetching bordereaux fields:', error)
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to load bordereaux fields',
+      'error'
+    )
     bordereauFields.value = []
   } finally {
     loadingFields.value = false
@@ -901,8 +1079,8 @@ const editTemplate = (template: any) => {
 }
 
 const viewTemplate = (template: any) => {
-  // TODO: Implement template preview
-  console.log('Viewing template:', template.name)
+  previewTemplate.value = template
+  showPreviewDialog.value = true
 }
 
 const duplicateTemplate = (template: any) => {
@@ -923,14 +1101,44 @@ const duplicateTemplate = (template: any) => {
   showEditorDialog.value = true
 }
 
+const runTemplateTest = async (templateId: number, displayName: string) => {
+  try {
+    testing.value = true
+    testTemplateName.value = displayName
+    testResult.value = null
+    showTestDialog.value = true
+    const response = await GroupPricingService.testBordereauxTemplate(
+      templateId,
+      { sample_size: 5 }
+    )
+    testResult.value = response.data?.data ?? response.data
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to run template test',
+      'error'
+    )
+    showTestDialog.value = false
+  } finally {
+    testing.value = false
+  }
+}
+
 const testTemplate = (template: any) => {
-  // TODO: Implement template testing
-  console.log('Testing template:', template.name)
+  if (!template?.id) {
+    flash.show('Save the template before testing', 'warning')
+    return
+  }
+  runTemplateTest(template.id, template.name)
 }
 
 const testCurrentTemplate = () => {
-  // TODO: Test template being edited
-  console.log('Testing current template')
+  if (!editingTemplate.value?.id) {
+    flash.show('Save the template before testing', 'warning')
+    return
+  }
+  runTemplateTest(editingTemplate.value.id, editingTemplate.value.name)
 }
 
 const addFieldMapping = () => {
@@ -1003,14 +1211,14 @@ const saveTemplate = async () => {
     editingTemplate.value = null
     bordereauFields.value = []
 
-    // Show success message (you might want to add a toast/notification here)
-    console.log('Template saved successfully:', response.data.name)
+    flash.show(`Template '${response.data.name}' saved`, 'success')
   } catch (error: any) {
-    console.error('Error saving template:', error)
-    // You might want to add error handling/notification here
-    alert(
-      'Error saving template: ' +
-        (error.data?.message || error.message || 'Unknown error')
+    flash.show(
+      error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        'Failed to save template',
+      'error'
     )
   } finally {
     saving.value = false
@@ -1023,19 +1231,44 @@ const cancelEdit = () => {
   bordereauFields.value = []
 }
 
+const downloadJSON = (payload: unknown, filename: string) => {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: 'application/json'
+  })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+const slugify = (value: string): string =>
+  (value || 'template')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '') || 'template'
+
 const exportTemplate = (template: any) => {
-  // TODO: Export template configuration
-  console.log('Exporting template:', template.name)
+  if (!template) return
+  downloadJSON(template, `${slugify(template.name)}.bordereaux-template.json`)
+  flash.show(`Exported '${template.name}'`, 'success')
 }
 
 const exportTemplates = () => {
-  // TODO: Export all templates
-  console.log('Exporting all templates')
+  if (!templates.value.length) {
+    flash.show('No templates to export', 'warning')
+    return
+  }
+  downloadJSON(templates.value, 'bordereaux-templates.json')
+  flash.show(`Exported ${templates.value.length} templates`, 'success')
 }
 
-const versionHistory = (template: any) => {
-  // TODO: Show version history
-  console.log('Version history for:', template.name)
+const versionHistory = (_template: any) => {
+  // Version history requires a dedicated history table + audit wiring — not yet built.
+  flash.show('Template version history is not available yet', 'info')
 }
 
 const activateTemplate = async (template: any) => {
@@ -1077,14 +1310,14 @@ const activateTemplate = async (template: any) => {
       }
     }
 
-    console.log('Template activated successfully:', template.name)
-    // TODO: Show success notification
+    flash.show(`Template '${template.name}' activated`, 'success')
   } catch (error: any) {
-    console.error('Error activating template:', error)
-    // TODO: Show error notification
-    alert(
-      'Error activating template: ' +
-        (error.data?.message || error.message || 'Unknown error')
+    flash.show(
+      error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        'Failed to activate template',
+      'error'
     )
   } finally {
     updatingStatus.value = false
@@ -1130,14 +1363,14 @@ const deactivateTemplate = async (template: any) => {
       }
     }
 
-    console.log('Template deactivated successfully:', template.name)
-    // TODO: Show success notification
+    flash.show(`Template '${template.name}' deactivated`, 'success')
   } catch (error: any) {
-    console.error('Error deactivating template:', error)
-    // TODO: Show error notification
-    alert(
-      'Error deactivating template: ' +
-        (error.data?.message || error.message || 'Unknown error')
+    flash.show(
+      error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        'Failed to deactivate template',
+      'error'
     )
   } finally {
     updatingStatus.value = false
@@ -1145,10 +1378,36 @@ const deactivateTemplate = async (template: any) => {
 }
 
 const deleteTemplate = (template: any) => {
-  const index = templates.value.findIndex((t) => t.id === template.id)
-  if (index !== -1) {
-    templates.value.splice(index, 1)
-    console.log('Deleted template:', template.name)
+  templateToDelete.value = template
+  showDeleteDialog.value = true
+}
+
+const confirmDeleteTemplate = async () => {
+  const template = templateToDelete.value
+  if (!template?.id) {
+    showDeleteDialog.value = false
+    return
+  }
+  try {
+    deleting.value = true
+    await GroupPricingService.deleteBordereauxTemplate(template.id)
+    const index = templates.value.findIndex((t) => t.id === template.id)
+    if (index !== -1) {
+      templates.value.splice(index, 1)
+    }
+    flash.show(`Template '${template.name}' deleted`, 'success')
+    showDeleteDialog.value = false
+    templateToDelete.value = null
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        'Failed to delete template',
+      'error'
+    )
+  } finally {
+    deleting.value = false
   }
 }
 

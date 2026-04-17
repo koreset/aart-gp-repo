@@ -758,6 +758,9 @@ import { useRouter } from 'vue-router'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import ConfirmDialog from '@/renderer/components/ConfirmDialog.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
+import { useFlashStore } from '@/renderer/store/flash'
+
+const flash = useFlashStore()
 
 interface BordereauxFormData {
   type: string
@@ -1120,11 +1123,15 @@ const generateBordereaux = async () => {
     } else {
       throw new Error(response.data.error || 'Failed to submit job')
     }
-  } catch (error) {
-    console.error('Job submission failed:', error)
+  } catch (error: any) {
     progressDialog.value = false
     loading.value = false
-    // TODO: Show error dialog with proper error message
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to submit bordereaux generation job',
+      'error'
+    )
   }
 }
 
@@ -1198,9 +1205,13 @@ const downloadFile = async () => {
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
     }
-  } catch (error) {
-    console.error('Download failed:', error)
-    // TODO: Show error dialog
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to download bordereaux',
+      'error'
+    )
   }
 }
 
@@ -1290,17 +1301,17 @@ const saveConfiguration = async () => {
       await GroupPricingService.saveBordereauxConfiguration(configurationData)
 
     if (response.status === 201) {
-      // Refresh saved configurations list
       await fetchSavedConfigurations()
       closeSaveConfigDialog()
-
-      // Show success message
-      console.log('Configuration saved successfully')
-      // TODO: Add toast notification
+      flash.show(`Configuration '${configurationData.name}' saved`, 'success')
     }
-  } catch (error) {
-    console.error('Failed to save configuration:', error)
-    // TODO: Show error dialog
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to save configuration',
+      'error'
+    )
   }
 }
 
@@ -1322,17 +1333,17 @@ const updateConfiguration = async () => {
     )
 
     if (response.status === 200) {
-      // Refresh saved configurations list
       await fetchSavedConfigurations()
       closeSaveConfigDialog()
-
-      // Show success message
-      console.log('Configuration updated successfully')
-      // TODO: Add toast notification
+      flash.show(`Configuration '${configurationData.name}' updated`, 'success')
     }
-  } catch (error) {
-    console.error('Failed to update configuration:', error)
-    // TODO: Show error dialog
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to update configuration',
+      'error'
+    )
   }
 }
 
@@ -1353,18 +1364,19 @@ const deleteConfiguration = async () => {
     )
 
     if (response.status === 200) {
-      // Remove from local list
       savedConfigurations.value = savedConfigurations.value.filter(
         (c) => c.id !== selectedConfigurationId.value
       )
       selectedConfigurationId.value = null
-
-      console.log('Configuration deleted successfully')
-      // TODO: Add toast notification
+      flash.show(`Configuration '${configName}' deleted`, 'success')
     }
-  } catch (error) {
-    console.error('Failed to delete configuration:', error)
-    // TODO: Show error dialog
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error ||
+        error.message ||
+        'Failed to delete configuration',
+      'error'
+    )
   }
 }
 

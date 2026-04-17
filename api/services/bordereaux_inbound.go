@@ -1,6 +1,7 @@
 package services
 
 import (
+	appLog "api/log"
 	"api/models"
 	"bufio"
 	"encoding/csv"
@@ -17,6 +18,20 @@ import (
 	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )
+
+// logNotifyFailure reports a background notification failure so silent drops are
+// visible in server logs. Called from fire-and-forget goroutines that wrap the
+// bordereaux inbound notification hooks.
+func logNotifyFailure(event string, submissionID int, err error) {
+	if err == nil {
+		return
+	}
+	appLog.WithFields(map[string]interface{}{
+		"event":         event,
+		"submission_id": submissionID,
+		"error":         err.Error(),
+	}).Error("submission notification delivery failed")
+}
 
 // CreateEmployerSubmission creates a new inbound employer submission record with status=pending_receipt.
 func CreateEmployerSubmission(req models.CreateSubmissionRequest, user models.AppUser) (models.EmployerSubmission, error) {
@@ -326,7 +341,9 @@ func ReviewEmployerSubmission(id int, notes string, user models.AppUser) (models
 	if err := DB.Save(&sub).Error; err != nil {
 		return sub, fmt.Errorf("failed to update submission: %w", err)
 	}
-	go NotifySubmissionReviewed(sub, user)
+	go func() {
+		logNotifyFailure("submission_reviewed", sub.ID, NotifySubmissionReviewed(sub, user))
+	}()
 	return sub, nil
 }
 
@@ -345,7 +362,9 @@ func RaiseSubmissionQuery(id int, queryNotes string, user models.AppUser) (model
 	if err := DB.Save(&sub).Error; err != nil {
 		return sub, fmt.Errorf("failed to update submission: %w", err)
 	}
-	go NotifySubmissionQueryRaised(sub, user)
+	go func() {
+		logNotifyFailure("submission_query_raised", sub.ID, NotifySubmissionQueryRaised(sub, user))
+	}()
 	return sub, nil
 }
 
@@ -380,7 +399,9 @@ func AcceptEmployerSubmission(id int, notes string, user models.AppUser) (models
 		_ = saveRegisterDiffSnapshot(liveResult, sub.ID, user)
 	}
 
-	go NotifySubmissionAccepted(sub, user)
+	go func() {
+		logNotifyFailure("submission_accepted", sub.ID, NotifySubmissionAccepted(sub, user))
+	}()
 	return sub, nil
 }
 
@@ -403,7 +424,9 @@ func RejectEmployerSubmission(id int, reason string, user models.AppUser) (model
 	if err := DB.Save(&sub).Error; err != nil {
 		return sub, fmt.Errorf("failed to update submission: %w", err)
 	}
-	go NotifySubmissionRejected(sub, user, reason)
+	go func() {
+		logNotifyFailure("submission_rejected", sub.ID, NotifySubmissionRejected(sub, user, reason))
+	}()
 	return sub, nil
 }
 
