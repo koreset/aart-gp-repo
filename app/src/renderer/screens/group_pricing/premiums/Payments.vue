@@ -49,7 +49,7 @@
               >Refresh</v-btn
             >
             <v-btn
-              v-if="hasPermission('premiums:record_payment')"
+              v-if="hasPermission('premiums:bulk_import')"
               variant="outlined"
               color="primary"
               prepend-icon="mdi-upload"

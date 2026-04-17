@@ -48,6 +48,7 @@
               </v-col>
               <v-col cols="12" md="5" class="d-flex align-center ga-2">
                 <v-btn
+                  v-if="hasPermission('premiums:generate_statement')"
                   color="primary"
                   prepend-icon="mdi-file-find"
                   :loading="loadingEmployer"
@@ -61,7 +62,7 @@
                   Generate
                 </v-btn>
                 <v-btn
-                  v-if="employerStatement"
+                  v-if="employerStatement && hasPermission('premiums:generate_statement')"
                   variant="outlined"
                   prepend-icon="mdi-download"
                   @click="downloadEmployerCSV"
@@ -69,7 +70,7 @@
                   Download CSV
                 </v-btn>
                 <v-btn
-                  v-if="employerStatement"
+                  v-if="employerStatement && hasPermission('premiums:generate_statement')"
                   variant="outlined"
                   prepend-icon="mdi-file-pdf-box"
                   @click="downloadEmployerPDF"
@@ -181,6 +182,7 @@
               </v-col>
               <v-col cols="12" md="5" class="d-flex align-center">
                 <v-btn
+                  v-if="hasPermission('premiums:generate_statement')"
                   color="primary"
                   prepend-icon="mdi-file-find"
                   :loading="loadingBroker"
@@ -263,6 +265,9 @@ import { ref, computed, onMounted } from 'vue'
 import PremiumManagementService from '@/renderer/api/PremiumManagementService'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import { fmtDate } from '@/renderer/utils/formatters'
+import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
+
+const { hasPermission } = usePermissionCheck()
 import jsPDF from 'jspdf'
 import { applyPlugin } from 'jspdf-autotable'
 

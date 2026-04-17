@@ -22,6 +22,7 @@
               </v-col>
               <v-col cols="8">
                 <v-btn
+                  v-if="hasPermission('quote:access_new_business')"
                   class="mt-1"
                   color="primary"
                   size="small"
@@ -114,7 +115,7 @@
                       </template>
                       <span>Submit for Review</span>
                     </v-tooltip>
-                    <v-tooltip>
+                    <v-tooltip v-if="hasPermission('quote:access_new_business')">
                       <template #activator="{ props }">
                         <v-btn
                           icon
@@ -276,6 +277,7 @@ import { useGroupPricingStore } from '@/renderer/store/group_pricing'
 import ConfirmDialog from '@/renderer/components/ConfirmDialog.vue'
 import ProbabilityBadge from '@/renderer/components/ProbabilityBadge.vue'
 import { useNotifications } from '@/renderer/composables/useNotifications'
+import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
 
 interface Quote {
   id: number
@@ -306,6 +308,7 @@ const {
   showError,
   hideNotification
 } = useNotifications()
+const { hasPermission } = usePermissionCheck()
 const groupStore = useGroupPricingStore()
 const router = useRouter()
 const appStore = useAppStore()

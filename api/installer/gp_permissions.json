@@ -79,6 +79,31 @@
     "name": "GR Experience Rating",
     "description": "Can perform experience rating on quotes."
   },
+  {
+    "slug": "quote:view_results",
+    "name": "View Results & Analysis",
+    "description": "Can view the Results & Analysis tab on quotes."
+  },
+  {
+    "slug": "quote:view_output_summary",
+    "name": "View Output Summary",
+    "description": "Can view the Output Summary tab on quotes."
+  },
+  {
+    "slug": "quote:view_premium_summary",
+    "name": "View Premium Summary",
+    "description": "Can view the Premiums Summary tab on quotes."
+  },
+  {
+    "slug": "quote:generate_on_risk_letter",
+    "name": "Generate On Risk Letter",
+    "description": "Can generate On Risk letters for accepted quotes."
+  },
+  {
+    "slug": "quote:generate_pdf",
+    "name": "Generate Quote PDF",
+    "description": "Can generate PDF output for quotes."
+  },
 
   {
     "slug": "navigation:view_metadata",
@@ -154,6 +179,36 @@
     "slug": "navigation:view_claims_analytics",
     "name": "View Claims Analytics Navigation",
     "description": "Can navigate to claims analytics."
+  },
+  {
+    "slug": "navigation:manage_scheme_migration",
+    "name": "Manage Scheme Migration Navigation",
+    "description": "Can navigate to scheme migration."
+  },
+  {
+    "slug": "navigation:view_phi",
+    "name": "View PHI Navigation",
+    "description": "Can navigate to PHI section."
+  },
+  {
+    "slug": "navigation:view_phi_tables",
+    "name": "View PHI Tables Navigation",
+    "description": "Can navigate to PHI tables."
+  },
+  {
+    "slug": "navigation:view_phi_run_settings",
+    "name": "View PHI Run Settings Navigation",
+    "description": "Can navigate to PHI run settings."
+  },
+  {
+    "slug": "navigation:view_phi_shock_settings",
+    "name": "View PHI Shock Settings Navigation",
+    "description": "Can navigate to PHI shock settings."
+  },
+  {
+    "slug": "navigation:view_phi_run_results",
+    "name": "View PHI Run Results Navigation",
+    "description": "Can navigate to PHI run results."
   },
 
   {
@@ -263,6 +318,31 @@
     "slug": "premiums:view",
     "name": "View Premiums",
     "description": "Can view premium data and dashboards."
+  },
+  {
+    "slug": "premiums:submit_for_review",
+    "name": "Submit Schedule for Review",
+    "description": "Can submit premium schedules for review."
+  },
+  {
+    "slug": "premiums:approve_schedule",
+    "name": "Approve Premium Schedule",
+    "description": "Can approve reviewed premium schedules."
+  },
+  {
+    "slug": "premiums:void_schedule",
+    "name": "Void Premium Schedule",
+    "description": "Can void finalized or invoiced premium schedules."
+  },
+  {
+    "slug": "premiums:adjustment_note",
+    "name": "Create Adjustment Note",
+    "description": "Can create credit or debit adjustment notes on invoices."
+  },
+  {
+    "slug": "premiums:bulk_import",
+    "name": "Bulk Import Payments",
+    "description": "Can bulk import payments via CSV."
   },
   {
     "slug": "premiums:generate_schedule",

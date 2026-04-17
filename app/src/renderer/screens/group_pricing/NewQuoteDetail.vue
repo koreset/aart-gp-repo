@@ -161,6 +161,7 @@
               <template #activator="{ props: tooltipProps }">
                 <div v-bind="tooltipProps" class="d-inline-block">
                   <v-btn
+                    v-if="hasPermission('quote:approve')"
                     class="mr-2"
                     size="small"
                     color="primary"
@@ -184,6 +185,7 @@
               <template #activator="{ props: tooltipProps }">
                 <div v-bind="tooltipProps" class="d-inline-block">
                   <v-btn
+                    v-if="hasPermission('quote:accept')"
                     class="mr-2"
                     :disabled="
                       quote.status !== 'approved' || quote.status === 'InForce'
@@ -205,6 +207,7 @@
               <template #activator="{ props: tooltipProps }">
                 <div v-bind="tooltipProps" class="d-inline-block">
                   <v-btn
+                    v-if="hasPermission('quote:generate_on_risk_letter')"
                     :disabled="
                       (quote.status !== 'accepted' &&
                         quote.status !== 'in_force' &&
@@ -230,6 +233,7 @@
               <template #activator="{ props: tooltipProps }">
                 <div v-bind="tooltipProps" class="d-inline-block">
                   <v-btn
+                    v-if="hasPermission('quote:generate_on_risk_letter')"
                     :disabled="
                       (quote.status !== 'accepted' &&
                         quote.status !== 'in_force' &&
@@ -257,6 +261,7 @@
               <template #activator="{ props: tooltipProps }">
                 <div v-bind="tooltipProps" class="d-inline-block">
                   <v-btn
+                    v-if="hasPermission('quote:generate_pdf')"
                     :disabled="hasEmptyQuoteTables"
                     size="small"
                     rounded
@@ -273,11 +278,11 @@
           <v-tab value="summary">Quote Summary</v-tab>
           <v-tab value="benefits">Benefits & Config</v-tab>
           <v-tab value="data">Data Management</v-tab>
-          <v-tab value="results">Results & Analysis</v-tab>
-          <v-tab v-if="resultSummaries !== null" value="outputsummary"
+          <v-tab v-if="hasPermission('quote:view_results')" value="results">Results & Analysis</v-tab>
+          <v-tab v-if="resultSummaries !== null && hasPermission('quote:view_output_summary')" value="outputsummary"
             >Output Summary</v-tab
           >
-          <v-tab value="benefitssummary">Premiums Summary</v-tab>
+          <v-tab v-if="hasPermission('quote:view_premium_summary')" value="benefitssummary">Premiums Summary</v-tab>
         </v-tabs>
         <v-window v-model="tab">
           <v-window-item value="summary" eager>
@@ -296,17 +301,17 @@
               @indicative-data-updated="handleIndicativeDataUpdate"
             />
           </v-window-item>
-          <v-window-item value="results" eager>
+          <v-window-item v-if="hasPermission('quote:view_results')" value="results" eager>
             <QuoteResults :quote="quote" @quote-updated="loadQuote" />
           </v-window-item>
-          <v-window-item value="outputsummary" eager>
+          <v-window-item v-if="hasPermission('quote:view_output_summary')" value="outputsummary" eager>
             <OutputSummary
               v-if="resultSummaries !== null && resultSummaries.length > 0"
               :quote="quote"
               :resultSummaries="resultSummaries"
             />
           </v-window-item>
-          <v-window-item value="benefitssummary" eager>
+          <v-window-item v-if="hasPermission('quote:view_premium_summary')" value="benefitssummary" eager>
             <QuoteBenefitSummary
               v-if="resultSummaries !== null"
               :resultSummaries="resultSummaries"
@@ -492,6 +497,7 @@ import { ref, watch, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import BaseCard from '@/renderer/components/BaseCard.vue'
+import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
 
 // Import Child Components
 import QuoteSummaryData from './QuoteSummaryData.vue'
@@ -507,6 +513,8 @@ import OutputSummary from './OutputSummary.vue'
 import { VDateInput } from 'vuetify/labs/VDateInput'
 import { useOnRiskLetterGeneration } from '@/renderer/composables/useOnRiskLetterGeneration'
 import { useCalculationProgress } from '@/renderer/composables/useCalculationProgress'
+
+const { hasPermission } = usePermissionCheck()
 
 const {
   isGenerating: isGeneratingOnRiskLetter,

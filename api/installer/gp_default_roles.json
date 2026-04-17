@@ -8,26 +8,32 @@
     "role_name": "Scheme Administrator",
     "description": "Manages schemes, members, lodges claims, and handles inbound bordereaux.",
     "permissions": [
-      "navigation:view_gp_dashboard", "navigation:view_schemes", "navigation:manage_members",
+      "navigation:view_gp_dashboard", "navigation:view_quotes", "navigation:view_schemes",
+      "navigation:manage_members",
       "navigation:manage_beneficiaries", "navigation:view_claims", "navigation:manage_claims",
-      "navigation:manage_bordereaux",
+      "navigation:manage_bordereaux", "navigation:manage_scheme_migration",
+      "quote:access_new_business",
       "scheme:access", "scheme:maintain",
       "members:view", "members:create", "members:edit",
       "claims:access", "claims:lodge",
-      "bordereaux:view", "bordereaux:submit_inbound"
+      "bordereaux:view", "bordereaux:submit_inbound", "bordereaux:generate_outbound",
+      "reinsurance:view"
     ]
   },
   {
     "role_name": "Senior Scheme Administrator",
     "description": "Scheme Administrator with approval and creation/deletion authority.",
     "permissions": [
-      "navigation:view_gp_dashboard", "navigation:view_schemes", "navigation:manage_members",
+      "navigation:view_gp_dashboard", "navigation:view_quotes", "navigation:view_schemes",
+      "navigation:manage_members",
       "navigation:manage_beneficiaries", "navigation:view_claims", "navigation:manage_claims",
-      "navigation:manage_bordereaux",
+      "navigation:manage_bordereaux", "navigation:manage_scheme_migration",
+      "quote:access_new_business",
       "scheme:access", "scheme:maintain", "scheme:create", "scheme:delete", "scheme:approve_changes",
       "members:view", "members:create", "members:edit", "members:delete",
       "claims:access", "claims:lodge",
-      "bordereaux:view", "bordereaux:submit_inbound", "bordereaux:process_inbound"
+      "bordereaux:view", "bordereaux:submit_inbound", "bordereaux:process_inbound",
+      "bordereaux:generate_outbound", "reinsurance:view"
     ]
   },
   {
@@ -38,6 +44,8 @@
       "navigation:group_tables", "navigation:results",
       "quote:access_new_business", "quote:access_renewal", "quote:approve", "quote:accept",
       "quote:experience_rating",
+      "quote:view_results", "quote:view_output_summary", "quote:view_premium_summary",
+      "quote:generate_on_risk_letter", "quote:generate_pdf",
       "scheme:access",
       "reports:view", "reports:generate", "reports:export"
     ]
@@ -49,18 +57,26 @@
       "navigation:view_gp_dashboard", "navigation:view_quotes", "navigation:view_schemes",
       "navigation:group_tables", "navigation:results",
       "quote:access_new_business", "quote:access_renewal", "quote:approve", "quote:accept",
+      "quote:view_results", "quote:view_output_summary", "quote:view_premium_summary",
+      "quote:generate_on_risk_letter", "quote:generate_pdf",
       "scheme:access",
       "reports:view", "reports:generate", "reports:export"
     ]
   },
   {
     "role_name": "Actuarial Analyst",
-    "description": "Read-only quotes access, tables, metadata, reports, and experience analysis.",
+    "description": "Read-only quotes access, tables, metadata, reports, PHI, and experience analysis.",
     "permissions": [
       "navigation:view_gp_dashboard", "navigation:view_quotes", "navigation:group_tables",
-      "navigation:view_metadata", "navigation:results",
+      "navigation:view_metadata", "navigation:results", "navigation:manage_bordereaux",
+      "navigation:view_phi", "navigation:view_phi_tables", "navigation:view_phi_run_settings",
+      "navigation:view_phi_shock_settings", "navigation:view_phi_run_results",
       "metadata:access",
-      "quote:experience_rating",
+      "quote:experience_rating", "quote:approve", "quote:accept",
+      "quote:view_results", "quote:view_output_summary", "quote:view_premium_summary",
+      "quote:generate_on_risk_letter", "quote:generate_pdf",
+      "bordereaux:view", "bordereaux:submit_inbound", "bordereaux:generate_outbound",
+      "reinsurance:view",
       "reports:view", "reports:generate", "reports:export",
       "reports:run_ibnr", "reports:run_experience"
     ]
@@ -70,24 +86,36 @@
     "description": "Can lodge claims only.",
     "permissions": [
       "navigation:view_gp_dashboard", "navigation:view_claims", "navigation:manage_claims",
-      "claims:access", "claims:lodge"
+      "navigation:view_claims_analytics", "navigation:manage_bordereaux",
+      "claims:access", "claims:lodge", "claims:view_analytics",
+      "bordereaux:view", "bordereaux:generate_outbound",
+      "reinsurance:view"
     ]
   },
   {
     "role_name": "Claims Assessor (Junior)",
-    "description": "Can lodge and assess claims, view medical information.",
+    "description": "Can lodge, assess, approve/decline claims, submit payments, and view medical information.",
     "permissions": [
       "navigation:view_gp_dashboard", "navigation:view_claims", "navigation:manage_claims",
-      "claims:access", "claims:lodge", "claims:assess", "claims:view_medical"
+      "navigation:view_claims_analytics", "navigation:manage_bordereaux",
+      "claims:access", "claims:lodge", "claims:assess", "claims:approve", "claims:reject",
+      "claims:pay", "claims:view_medical", "claims:view_analytics",
+      "claims_pay:create_schedule",
+      "bordereaux:view", "bordereaux:generate_outbound",
+      "reinsurance:view"
     ]
   },
   {
     "role_name": "Senior Claims Assessor",
-    "description": "Junior assessor plus approve, reject, and refer to committee.",
+    "description": "Junior assessor plus approve, reject, refer to committee, and submit payments.",
     "permissions": [
       "navigation:view_gp_dashboard", "navigation:view_claims", "navigation:manage_claims",
+      "navigation:view_claims_analytics", "navigation:manage_bordereaux",
       "claims:access", "claims:lodge", "claims:assess", "claims:approve", "claims:reject",
-      "claims:view_medical", "claims:refer_committee"
+      "claims:pay", "claims:view_medical", "claims:refer_committee", "claims:view_analytics",
+      "claims_pay:create_schedule",
+      "bordereaux:view", "bordereaux:generate_outbound",
+      "reinsurance:view"
     ]
   },
   {
@@ -95,14 +123,16 @@
     "description": "Full claims authority including payments, analytics, and committee decisions.",
     "permissions": [
       "navigation:view_gp_dashboard", "navigation:view_claims", "navigation:manage_claims",
-      "navigation:view_claims_analytics",
+      "navigation:view_claims_analytics", "navigation:manage_bordereaux",
       "claims:access", "claims:lodge", "claims:assess", "claims:approve", "claims:reject",
       "claims:pay", "claims:reopen", "claims:view_medical",
       "claims:refer_committee", "claims:committee_decide",
       "claims:view_analytics",
       "claims_pay:create_schedule", "claims_pay:generate_acb", "claims_pay:authorise_payment",
       "claims_pay:upload_response", "claims_pay:reconcile", "claims_pay:retry_failed",
-      "claims_pay:manage_bank_profiles"
+      "claims_pay:manage_bank_profiles",
+      "bordereaux:view", "bordereaux:generate_outbound",
+      "reinsurance:view"
     ]
   },
   {
@@ -111,7 +141,8 @@
     "permissions": [
       "navigation:view_gp_dashboard", "navigation:view_premium_dashboard",
       "navigation:manage_invoices", "navigation:manage_payments", "navigation:view_statements",
-      "premiums:view", "premiums:record_payment", "premiums:generate_statement"
+      "premiums:view", "premiums:generate_invoice", "premiums:record_payment",
+      "premiums:adjustment_note", "premiums:bulk_import", "premiums:generate_statement"
     ]
   },
   {
@@ -122,8 +153,11 @@
       "navigation:manage_premium_schedules", "navigation:manage_invoices",
       "navigation:manage_payments", "navigation:manage_premium_reconciliation",
       "navigation:manage_arrears", "navigation:view_statements",
-      "premiums:view", "premiums:generate_schedule", "premiums:finalize_schedule",
-      "premiums:generate_invoice", "premiums:record_payment", "premiums:void_payment",
+      "premiums:view", "premiums:generate_schedule", "premiums:submit_for_review",
+      "premiums:approve_schedule", "premiums:finalize_schedule",
+      "premiums:generate_invoice", "premiums:void_schedule",
+      "premiums:record_payment", "premiums:void_payment",
+      "premiums:adjustment_note", "premiums:bulk_import",
       "premiums:reconcile", "premiums:manage_arrears", "premiums:approve_suspension",
       "premiums:generate_statement",
       "claims_pay:generate_acb"
@@ -162,26 +196,32 @@
       "navigation:manage_payments", "navigation:manage_premium_reconciliation",
       "navigation:manage_arrears", "navigation:view_statements",
       "navigation:view_claims_analytics", "navigation:results",
+      "navigation:view_phi", "navigation:view_phi_tables", "navigation:view_phi_run_settings",
+      "navigation:view_phi_shock_settings", "navigation:view_phi_run_results",
+      "navigation:manage_scheme_migration",
       "claims:access", "premiums:view", "bordereaux:view", "reinsurance:view",
       "reports:view", "admin:view_audit_logs"
     ]
   },
   {
     "role_name": "Broker",
-    "description": "Views dashboard, quotes, schemes, and statements.",
+    "description": "Views dashboard, quotes, schemes, statements, and lodges claims.",
     "permissions": [
       "navigation:view_gp_dashboard", "navigation:view_quotes", "navigation:view_schemes",
-      "navigation:view_statements",
+      "navigation:view_claims", "navigation:manage_claims", "navigation:view_statements",
+      "quote:access_new_business",
+      "claims:access", "claims:lodge",
       "premiums:view", "premiums:generate_statement"
     ]
   },
   {
     "role_name": "Employer HR",
-    "description": "Views dashboard, members, submits inbound bordereaux, views statements.",
+    "description": "Views dashboard, members, submits inbound bordereaux, views statements, and lodges claims.",
     "permissions": [
       "navigation:view_gp_dashboard", "navigation:manage_members", "navigation:manage_bordereaux",
-      "navigation:view_statements",
+      "navigation:view_claims", "navigation:manage_claims", "navigation:view_statements",
       "members:view",
+      "claims:access", "claims:lodge",
       "bordereaux:view", "bordereaux:submit_inbound",
       "premiums:view", "premiums:generate_statement"
     ]

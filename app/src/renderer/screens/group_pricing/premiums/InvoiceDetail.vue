@@ -77,6 +77,7 @@
                   Mark as Sent
                 </v-btn>
                 <v-btn
+                  v-if="hasPermission('premiums:adjustment_note')"
                   variant="outlined"
                   size="small"
                   prepend-icon="mdi-note-plus-outline"
@@ -94,6 +95,7 @@
                 </v-btn>
                 <v-spacer />
                 <v-btn
+                  v-if="hasPermission('premiums:record_payment')"
                   color="primary"
                   size="small"
                   prepend-icon="mdi-cash-plus"
@@ -354,6 +356,9 @@ import { ref, computed, onMounted } from 'vue'
 import PremiumManagementService from '@/renderer/api/PremiumManagementService'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import PageHeader from '@/renderer/components/PageHeader.vue'
+import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
+
+const { hasPermission } = usePermissionCheck()
 
 const props = defineProps<{ invoiceId: string }>()
 

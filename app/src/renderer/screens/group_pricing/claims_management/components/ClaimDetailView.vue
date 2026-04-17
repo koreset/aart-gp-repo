@@ -126,6 +126,7 @@
           <v-card-text>
             <div class="d-flex mt-4 flex-column gap-2">
               <v-btn
+                v-if="hasPermission('claims:assess')"
                 rounded
                 color="primary"
                 variant="outlined"

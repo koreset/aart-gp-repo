@@ -245,6 +245,7 @@
             placeholder="Choose a claims experience?"
             :error-messages="errors.experience_rating"
             :items="groupStore.claimsExperiences"
+            :disabled="!canSetExperienceRating"
           ></v-select>
         </v-col>
         <v-col
@@ -324,11 +325,11 @@ import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { useForm } from 'vee-validate'
 import * as yup from 'yup'
 import { onMounted, ref, watch, computed } from 'vue'
-// import { useGroupUserPermissionsStore } from '@/renderer/store/group_user'
+import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
 
 const emit = defineEmits(['fetch-quote-by-scheme'])
 
-// const permissionsStore = useGroupUserPermissionsStore()
+const { hasPermission } = usePermissionCheck()
 const groupStore = useGroupPricingStore()
 const industries = ref(['Administration', 'NGO', 'Banks'])
 const brokerList = ref([])
@@ -453,22 +454,7 @@ const handleSchemeNameChange = (schemeName: string | null) => {
   }
 }
 
-// const checkExperienceRatingPermission = () => {
-//   const permissions: any = permissionsStore.getPermissions
-
-//   // Check if the user has the 'quote:experience_rating' permission
-//   const hasPermission = permissions.permissions?.some(
-//     (permission: any) => permission.slug === 'quote:experience_rating'
-//   )
-
-//   // If user doesn't have permission, disable the field and set default value
-//   if (!hasPermission) {
-//     experienceRating.value = 'No'
-//   }
-
-//   // Return true to disable the field if user doesn't have permission
-//   return !hasPermission
-// }
+const canSetExperienceRating = computed(() => hasPermission('quote:experience_rating'))
 
 const validateForm = handleSubmit(async (values) => {
   // 'values' contains all the validated form fields
@@ -555,6 +541,14 @@ const [selectedSchemeCategories, selectedSchemeCategoriesAttrs] = defineField(
 const [currency, currencyAttrs] = defineField('currency')
 const [experienceRating, experienceRatingAttrs] =
   defineField('experience_rating')
+
+// Force "No" when user lacks the experience rating permission
+watch(canSetExperienceRating, (allowed) => {
+  if (!allowed) {
+    experienceRating.value = 'No'
+  }
+}, { immediate: true })
+
 const [freeCoverLimit, freeCoverLimitAttrs] = defineField('free_cover_limit')
 
 const formattedFreeCoverLimit = computed({

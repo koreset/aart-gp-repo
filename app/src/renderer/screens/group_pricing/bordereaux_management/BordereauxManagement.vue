@@ -88,6 +88,7 @@
 
             <!-- Main Actions Grid -->
             <!-- Outbound Section -->
+            <template v-if="hasPermission('bordereaux:generate_outbound')">
             <div
               class="text-subtitle-2 font-weight-bold mb-2 text-medium-emphasis text-uppercase"
               >Outbound</div
@@ -220,7 +221,10 @@
               </v-col>
             </v-row>
 
+            </template>
+
             <v-divider class="my-4"></v-divider>
+            <template v-if="hasPermission('bordereaux:submit_inbound')">
             <div
               class="text-subtitle-2 font-weight-bold mb-2 text-medium-emphasis text-uppercase"
               >Inbound</div
@@ -270,7 +274,10 @@
               </v-col>
             </v-row>
 
+            </template>
+
             <v-divider class="my-4"></v-divider>
+            <template v-if="hasPermission('reinsurance:view')">
             <div
               class="text-subtitle-2 font-weight-bold mb-2 text-medium-emphasis text-uppercase"
               >Reinsurance</div
@@ -452,6 +459,8 @@
               </v-col>
             </v-row>
 
+            </template>
+
             <!-- Recent Activity -->
             <v-row>
               <v-col cols="12">
@@ -588,7 +597,9 @@ import StatCard from '@/renderer/components/StatCard.vue'
 import DataGrid from '@/renderer/components/tables/DataGrid.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { useStatusBarStore } from '@/renderer/store/statusBar'
+import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
 
+const { hasPermission } = usePermissionCheck()
 const statusBarStore = useStatusBarStore()
 
 const router = useRouter()

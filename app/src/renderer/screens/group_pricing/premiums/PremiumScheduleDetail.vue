@@ -157,6 +157,7 @@
                       Regenerate
                     </v-btn>
                     <v-btn
+                      v-if="hasPermission('premiums:submit_for_review')"
                       color="info"
                       size="small"
                       prepend-icon="mdi-send"
@@ -179,6 +180,7 @@
                   <!-- Reviewed actions -->
                   <template v-else-if="detail?.status === 'reviewed'">
                     <v-btn
+                      v-if="hasPermission('premiums:approve_schedule')"
                       color="success"
                       size="small"
                       prepend-icon="mdi-check"
@@ -210,6 +212,7 @@
                   <!-- Approved actions -->
                   <template v-else-if="detail?.status === 'approved'">
                     <v-btn
+                      v-if="hasPermission('premiums:finalize_schedule')"
                       color="primary"
                       size="small"
                       prepend-icon="mdi-check-circle"
@@ -241,6 +244,7 @@
                   <!-- Finalized actions -->
                   <template v-else-if="detail?.status === 'finalized'">
                     <v-btn
+                      v-if="hasPermission('premiums:generate_invoice')"
                       color="primary"
                       size="small"
                       prepend-icon="mdi-file-document"
@@ -250,6 +254,7 @@
                       Generate Invoice
                     </v-btn>
                     <v-btn
+                      v-if="hasPermission('premiums:void_schedule')"
                       color="error"
                       size="small"
                       variant="outlined"
@@ -263,6 +268,7 @@
                   <!-- Invoiced actions -->
                   <template v-else-if="detail?.status === 'invoiced'">
                     <v-btn
+                      v-if="hasPermission('premiums:void_schedule')"
                       color="error"
                       size="small"
                       variant="outlined"
@@ -483,6 +489,9 @@ import PremiumManagementService from '@/renderer/api/PremiumManagementService'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import PageHeader from '@/renderer/components/PageHeader.vue'
 import { fmtDate, fmtCurrency } from '@/renderer/utils/formatters'
+import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
+
+const { hasPermission } = usePermissionCheck()
 
 const props = defineProps<{ scheduleId: string }>()
 

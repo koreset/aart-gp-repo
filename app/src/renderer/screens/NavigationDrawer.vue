@@ -79,12 +79,12 @@
 
       <!-- Scheme Migration -->
       <v-list-item
-        :class="{ 'disabled-item': !canAccess('navigation:manage_members') }"
+        :class="{ 'disabled-item': !canAccess('navigation:manage_scheme_migration') }"
         prepend-icon="mdi-database-import-outline"
         @click="
           navigate(
             'group-pricing-scheme-migration',
-            'navigation:manage_members'
+            'navigation:manage_scheme_migration'
           )
         "
       >
@@ -107,10 +107,10 @@
 
       <!-- Claims Analytics -->
       <v-list-item
-        :class="{ 'disabled-item': !canAccess('navigation:manage_claims') }"
+        :class="{ 'disabled-item': !canAccess('navigation:view_claims_analytics') }"
         prepend-icon="mdi-chart-line"
         @click="
-          navigate('group-pricing-claims-analytics', 'navigation:manage_claims')
+          navigate('group-pricing-claims-analytics', 'navigation:view_claims_analytics')
         "
       >
         <v-list-item-title>Claims Analytics</v-list-item-title>
@@ -137,31 +137,68 @@
         <template #activator="{ props }">
           <v-list-item
             v-bind="props"
+            :class="{ 'disabled-item': !canAccess('navigation:view_phi') }"
             prepend-icon="mdi-heart-pulse"
             title="PHI"
           ></v-list-item>
         </template>
         <v-list-item
+          :class="{
+            'disabled-item': !canAccess('navigation:view_phi_tables')
+          }"
           prepend-icon="mdi-table-heart"
-          @click="navigateGroup('group-pricing-phi-tables', 'PHI')"
+          @click="
+            navigateGroup(
+              'group-pricing-phi-tables',
+              'PHI',
+              'navigation:view_phi_tables'
+            )
+          "
         >
           <v-list-item-title>Tables</v-list-item-title>
         </v-list-item>
         <v-list-item
+          :class="{
+            'disabled-item': !canAccess('navigation:view_phi_run_settings')
+          }"
           prepend-icon="mdi-cog-play-outline"
-          @click="navigateGroup('group-pricing-phi-run-settings', 'PHI')"
+          @click="
+            navigateGroup(
+              'group-pricing-phi-run-settings',
+              'PHI',
+              'navigation:view_phi_run_settings'
+            )
+          "
         >
           <v-list-item-title>Run Settings</v-list-item-title>
         </v-list-item>
         <v-list-item
+          :class="{
+            'disabled-item': !canAccess('navigation:view_phi_shock_settings')
+          }"
           prepend-icon="mdi-weather-lightning"
-          @click="navigateGroup('group-pricing-phi-shock-settings', 'PHI')"
+          @click="
+            navigateGroup(
+              'group-pricing-phi-shock-settings',
+              'PHI',
+              'navigation:view_phi_shock_settings'
+            )
+          "
         >
           <v-list-item-title>Shock Settings</v-list-item-title>
         </v-list-item>
         <v-list-item
+          :class="{
+            'disabled-item': !canAccess('navigation:view_phi_run_results')
+          }"
           prepend-icon="mdi-chart-bar"
-          @click="navigateGroup('group-pricing-phi-run-results', 'PHI')"
+          @click="
+            navigateGroup(
+              'group-pricing-phi-run-results',
+              'PHI',
+              'navigation:view_phi_run_results'
+            )
+          "
         >
           <v-list-item-title>Run Results</v-list-item-title>
         </v-list-item>
