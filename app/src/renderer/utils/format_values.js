@@ -50,7 +50,7 @@ export const formatValues = (params) => {
 
   if (isFloat(params.value)) {
     if (Math.abs(params.value) / 100 > 1) {
-      return params.value.toLocaleString()
+      return params.value.toLocaleString('en-US')
     } else {
       return params.value.toFixed(3)
     }
@@ -64,7 +64,7 @@ export const formatValues = (params) => {
       header !== 'policy_number' &&
       header !== 'created'
     ) {
-      return params.value.toLocaleString()
+      return params.value.toLocaleString('en-US')
     } else {
       return params.value
     }

@@ -608,10 +608,37 @@ type MemberRatingResult struct {
 	Discount                        float64   `json:"discount" csv:"discount"`
 	TotalLoading                    float64   `json:"total_loading" csv:"total_loading"`
 
+	// Region loadings (resolved per member from RegionLoading table)
+	GlaRegionLoading     float64 `json:"gla_region_loading" csv:"gla_region_loading"`
+	GlaAidsRegionLoading float64 `json:"gla_aids_region_loading" csv:"gla_aids_region_loading"`
+	PtdRegionLoading     float64 `json:"ptd_region_loading" csv:"ptd_region_loading"`
+	CiRegionLoading      float64 `json:"ci_region_loading" csv:"ci_region_loading"`
+	TtdRegionLoading     float64 `json:"ttd_region_loading" csv:"ttd_region_loading"`
+	PhiRegionLoading     float64 `json:"phi_region_loading" csv:"phi_region_loading"`
+	FunRegionLoading     float64 `json:"fun_region_loading" csv:"fun_region_loading"`
+	FunAidsRegionLoading float64 `json:"fun_aids_region_loading" csv:"fun_aids_region_loading"`
+
+	// Industry loadings (resolved per member from IndustryLoading table)
+	GlaIndustryLoading float64 `json:"gla_industry_loading" csv:"gla_industry_loading"`
+	PtdIndustryLoading float64 `json:"ptd_industry_loading" csv:"ptd_industry_loading"`
+	CiIndustryLoading  float64 `json:"ci_industry_loading" csv:"ci_industry_loading"`
+	TtdIndustryLoading float64 `json:"ttd_industry_loading" csv:"ttd_industry_loading"`
+	PhiIndustryLoading float64 `json:"phi_industry_loading" csv:"phi_industry_loading"`
+
+	// Contingency loadings (resolved per member from GeneralLoading table)
+	GlaContingencyLoading float64 `json:"gla_contingency_loading" csv:"gla_contingency_loading"`
+	PtdContingencyLoading float64 `json:"ptd_contingency_loading" csv:"ptd_contingency_loading"`
+	CiContingencyLoading  float64 `json:"ci_contingency_loading" csv:"ci_contingency_loading"`
+	TtdContingencyLoading float64 `json:"ttd_contingency_loading" csv:"ttd_contingency_loading"`
+	PhiContingencyLoading float64 `json:"phi_contingency_loading" csv:"phi_contingency_loading"`
+	FunContingencyLoading float64 `json:"fun_contingency_loading" csv:"fun_contingency_loading"`
+
+	// Continuation loading (resolved per member from GeneralLoading table)
+	ContinuationLoading float64 `json:"continuation_loading" csv:"continuation_loading"`
+
 	GlaQx                          float64 `json:"gla_qx" csv:"gla_qx"`
 	GlaAidsQx                      float64 `json:"gla_aids_qx" csv:"gla_aids_qx"`
 	BaseGlaRate                    float64 `json:"base_gla_rate" csv:"base_gla_rate"`
-	GlaLoading                     float64 `json:"gla_loading" csv:"gla_loading"`
 	GlaTerminalIllnessLoading      float64 `json:"gla_terminal_illness_loading" csv:"gla_terminal_illness_loading"`
 	LoadedGlaRate                  float64 `json:"loaded_gla_rate" csv:"loaded_gla_rate"`
 	GlaWeightedExperienceCrudeRate float64 `json:"gla_weighted_experience_crude_rate" csv:"gla_weighted_experience_crude_rate"`
@@ -630,7 +657,6 @@ type MemberRatingResult struct {
 	PtdSumAssured           float64 `json:"ptd_sum_assured" csv:"ptd_sum_assured"`
 	PtdCappedSumAssured     float64 `json:"ptd_capped_sum_assured" csv:"ptd_capped_sum_assured"`
 	BasePtdRate             float64 `json:"base_ptd_rate" csv:"base_ptd_rate"`
-	PtdLoading              float64 `json:"ptd_loading" csv:"ptd_loading"`
 	LoadedPtdRate           float64 `json:"loaded_ptd_rate" csv:"loaded_ptd_rate"`
 	PtdExperienceAdjustment float64 `json:"ptd_experience_adjustment" csv:"ptd_experience_adjustment"`
 	ExpAdjLoadedPtdRate     float64 `json:"exp_adj_loaded_ptd_rate" csv:"exp_adj_loaded_ptd_rate"`
@@ -642,7 +668,6 @@ type MemberRatingResult struct {
 	CiSumAssured           float64 `json:"ci_sum_assured" csv:"ci_sum_assured"`
 	CiCappedSumAssured     float64 `json:"ci_capped_sum_assured" csv:"ci_capped_sum_assured"`
 	BaseCiRate             float64 `json:"base_ci_rate" csv:"base_ci_rate"`
-	CiLoading              float64 `json:"ci_loading" csv:"ci_loading"`
 	LoadedCiRate           float64 `json:"loaded_ci_rate" csv:"loaded_ci_rate"`
 	CiExperienceAdjustment float64 `json:"ci_experience_adjustment" csv:"ci_experience_adjustment"`
 	ExpAdjLoadedCiRate     float64 `json:"exp_adj_loaded_ci_rate" csv:"exp_adj_loaded_ci_rate"`
@@ -668,7 +693,6 @@ type MemberRatingResult struct {
 	TtdNumberOfMonthlyPayments float64 `json:"ttd_number_of_monthly_payments" csv:"ttd_number_of_monthly_payments"`
 	IncomeReplacementRatio     float64 `json:"income_replacement_ratio" csv:"income_replacement_ratio"`
 	BaseTtdRate                float64 `json:"base_ttd_rate" csv:"base_ttd_rate"`
-	TtdLoading                 float64 `json:"ttd_loading" csv:"ttd_loading"`
 	LoadedTtdRate              float64 `json:"loaded_ttd_rate" csv:"loaded_ttd_rate"`
 	TtdExperienceAdjustment    float64 `json:"ttd_experience_adjustment" csv:"ttd_experience_adjustment"`
 	ExpAdjLoadedTtdRate        float64 `json:"exp_adj_loaded_ttd_rate" csv:"exp_adj_loaded_ttd_rate"`
@@ -686,7 +710,6 @@ type MemberRatingResult struct {
 	PhiAnnuityFactor        float64 `json:"phi_annuity_factor" csv:"phi_annuity_factor"`
 	BasePhiRate             float64 `json:"base_phi_rate" csv:"base_phi_rate"`
 	PhiSalaryLevel          float64 `json:"phi_salary_level" csv:"phi_salary_level"`
-	PhiLoading              float64 `json:"phi_loading" csv:"phi_loading"`
 	LoadedPhiRate           float64 `json:"loaded_phi_rate" csv:"loaded_phi_rate"`
 	PhiExperienceAdjustment float64 `json:"phi_experience_adjustment" csv:"phi_experience_adjustment"`
 	ExpAdjLoadedPhiRate     float64 `json:"exp_adj_loaded_phi_rate" csv:"exp_adj_loaded_phi_rate"`
