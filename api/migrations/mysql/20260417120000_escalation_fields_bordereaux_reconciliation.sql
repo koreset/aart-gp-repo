@@ -39,6 +39,12 @@ SET @s = (SELECT IF(
 ));
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+-- GORM's MySQL AutoMigrate maps `string` with no size tag to LONGTEXT, which
+-- cannot be part of a regular index. Narrow the column before creating the
+-- composite index. Safe no-op if the column is already VARCHAR(64).
+ALTER TABLE bordereaux_reconciliation_results
+    MODIFY COLUMN status VARCHAR(64) NOT NULL DEFAULT '';
+
 SET @s = (SELECT IF(
     EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_NAME='bordereaux_reconciliation_results' AND INDEX_NAME='idx_brr_status_due_date' AND TABLE_SCHEMA = DATABASE()),
     'SELECT 1;',

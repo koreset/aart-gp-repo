@@ -139,7 +139,7 @@ type BordereauxReconciliationResult struct {
 	ExpectedValue            string    `json:"expected_value"`
 	ActualValue              string    `json:"actual_value"`
 	Variance                 float64   `json:"variance"`
-	Status                   string    `json:"status"` // matched, discrepancy, missing, extra, escalated, resolved
+	Status                   string    `json:"status" gorm:"size:64"` // matched, discrepancy, missing, extra, escalated, resolved
 	IsResolved               bool      `json:"is_resolved"`
 	Comments                 string    `json:"comments"`
 	// Escalation workflow fields — populated by EscalateDiscrepancy.
