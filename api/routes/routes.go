@@ -206,7 +206,9 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.POST("claims/payment-schedules/:schedule_id/proof", controllers.UploadPaymentProof)
 			groupPricing.GET("claims/payment-schedules/:schedule_id/proof", controllers.GetPaymentProofs)
 			groupPricing.GET("claims/payment-schedules/proof/:proof_id/download", controllers.DownloadPaymentProof)
-			// Bank account verification (VerifyNow)
+			// Bank account verification (provider-agnostic; see services/bav).
+			// v1 kept for one release to avoid a lockstep api+app deploy; v2
+			// below returns the canonical bav.VerifyResult shape.
 			groupPricing.POST("claims/verify-bank-account", controllers.VerifyBankAccount)
 			// ACB Bank profiles
 			groupPricing.POST("claims/bank-profiles", controllers.CreateBankProfile)
@@ -548,6 +550,20 @@ func ConfigureRouter(router *gin.Engine) {
 		}
 
 	}
+
+	// v2 endpoints emit canonical provider-agnostic shapes. Added incrementally
+	// as endpoints are rewritten; v1 equivalents are retained for one release
+	// so api and app can deploy independently.
+	apiv2 := router.Group("/v2", GetActiveUser())
+	{
+		apiv2.POST("group-pricing/claims/verify-bank-account", controllers.VerifyBankAccountV2)
+		apiv2.POST("group-pricing/claims/verify-bank-account/status/:job_id", controllers.VerifyBankAccountV2Status)
+	}
+
+	// BAV webhook endpoint. Scaffolded behind its own route group because
+	// webhooks are unauthenticated HTTP — HMAC-verified inside the handler.
+	// Inert (501) until Phase 7 wires a real async provider.
+	router.POST("/bav/webhook/:provider", controllers.BAVWebhook)
 
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 

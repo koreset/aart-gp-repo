@@ -1,11 +1,15 @@
 package main
 
 import (
+	"api/config"
 	"api/docs"
 	"api/globals"
 	"api/log"
 	"api/routes"
 	"api/services"
+	"api/services/bav"
+	"api/services/bav/audit"
+	"api/services/bav/providers"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -13,6 +17,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/autotls"
@@ -241,6 +246,27 @@ func startApplication(initTables bool, s service.Service) {
 
 	// Initialize Redis (optional)
 	services.InitRedis()
+
+	// Wire the Bank Account Verification provider registry from env-var config.
+	bavRegistry, err := providers.NewRegistry(providers.Config{
+		Provider:          config.BAVProvider,
+		APIKey:            config.BAVAPIKey,
+		BaseURL:           config.BAVBaseURL,
+		Mode:              config.VerifyNowMode,
+		OAuthClientID:     config.BAVOAuthClientID,
+		OAuthClientSecret: config.BAVOAuthClientSecret,
+		OAuthTokenURL:     config.BAVOAuthTokenURL,
+		Timeout:           time.Duration(config.BAVTimeoutSeconds) * time.Second,
+		MockAsync:         config.MockBAVAsync,
+	})
+	if err != nil {
+		log.WithField("error", err.Error()).Error("Failed to build BAV provider registry")
+		fmt.Println(err)
+		return
+	}
+	bavRegistry.WithLogger(audit.NewGormLogger(services.DB))
+	bav.SetDefault(bavRegistry)
+	log.WithField("provider", config.BAVProvider).Info("Bank Account Verification provider wired")
 
 	// Initialize database and tables
 	log.Info("Setting up database tables")

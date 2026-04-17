@@ -3,6 +3,8 @@ package config
 import (
 	"log"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -14,9 +16,23 @@ var (
 	DbPassword string
 	DbName     string
 
-	CheckIDApiKey    string
-	VerifyNowApiKey  string
-	VerifyNowMode    string
+	CheckIDApiKey   string
+	VerifyNowApiKey string
+	VerifyNowMode   string
+
+	// BAV (Bank Account Verification) — provider-agnostic configuration.
+	// BAVProvider selects the active adapter ("verifynow", "lexisnexis", ...).
+	// All other BAV* vars are consumed by adapters that need them.
+	BAVProvider          string
+	BAVAPIKey            string
+	BAVBaseURL           string
+	BAVOAuthClientID     string
+	BAVOAuthClientSecret string
+	BAVOAuthTokenURL     string
+	BAVTimeoutSeconds    int
+	// MockBAVAsync flips the mock provider into async mode. Only consulted
+	// when BAVProvider == "mock"; wired via MOCK_BAV_ASYNC.
+	MockBAVAsync bool
 )
 
 func init() {
@@ -36,7 +52,28 @@ func init() {
 	if VerifyNowMode == "" {
 		VerifyNowMode = "production"
 	}
+
+	BAVProvider = os.Getenv("BAV_PROVIDER")
+	BAVAPIKey = os.Getenv("BAV_API_KEY")
+	BAVBaseURL = os.Getenv("BAV_BASE_URL")
+	BAVOAuthClientID = os.Getenv("BAV_OAUTH_CLIENT_ID")
+	BAVOAuthClientSecret = os.Getenv("BAV_OAUTH_CLIENT_SECRET")
+	BAVOAuthTokenURL = os.Getenv("BAV_OAUTH_TOKEN_URL")
+	if n, err := strconv.Atoi(os.Getenv("BAV_TIMEOUT_SECONDS")); err == nil && n > 0 {
+		BAVTimeoutSeconds = n
+	} else {
+		BAVTimeoutSeconds = 45
+	}
+
+	if BAVAPIKey == "" {
+		BAVAPIKey = VerifyNowApiKey
+	}
+	if BAVProvider == "" {
+		BAVProvider = "verifynow"
+	}
+
+	switch strings.ToLower(os.Getenv("MOCK_BAV_ASYNC")) {
+	case "1", "true", "yes", "on":
+		MockBAVAsync = true
+	}
 }
-
-
-

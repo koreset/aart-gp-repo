@@ -3,7 +3,7 @@ package controllers
 import (
 	"api/models"
 	"api/services"
-	"api/utils"
+	"api/services/bav"
 	"errors"
 	"net/http"
 	"strconv"
@@ -371,7 +371,10 @@ func RetryFailedPayments(c *gin.Context) {
 	Created(c, fileRecord)
 }
 
-// verifyBankAccountRequest is the frontend-facing request for bank account verification.
+// verifyBankAccountRequest is the frontend-facing request for bank account
+// verification. ClaimID and Attempt are optional: when present the audit log
+// can tie the call to a specific claim draft and retry counter; when absent
+// the registry derives a stable idempotency key from the banking fields.
 type verifyBankAccountRequest struct {
 	FirstName         string `json:"first_name" binding:"required"`
 	Surname           string `json:"surname"`
@@ -380,6 +383,63 @@ type verifyBankAccountRequest struct {
 	BankAccountNumber string `json:"bank_account_number" binding:"required"`
 	BankBranchCode    string `json:"bank_branch_code" binding:"required"`
 	BankAccountType   string `json:"bank_account_type" binding:"required"`
+	ClaimID           *int   `json:"claim_id"`
+	Attempt           int    `json:"attempt"`
+}
+
+// toBavRequest maps the HTTP-layer DTO onto the canonical bav.VerifyRequest.
+func (r verifyBankAccountRequest) toBavRequest() bav.VerifyRequest {
+	return bav.VerifyRequest{
+		FirstName:         r.FirstName,
+		Surname:           r.Surname,
+		IdentityNumber:    r.IdentityNumber,
+		IdentityType:      r.IdentityType,
+		BankAccountNumber: r.BankAccountNumber,
+		BankBranchCode:    r.BankBranchCode,
+		BankAccountType:   r.BankAccountType,
+		ClaimID:           r.ClaimID,
+		Attempt:           r.Attempt,
+	}
+}
+
+// legacyVerifyResponse preserves the v1 wire shape the frontend consumes.
+// Phase 4 replaces this with the canonical bav.VerifyResult shape under /v2.
+type legacyVerifyResponse struct {
+	Success   bool                        `json:"success"`
+	RequestID string                      `json:"requestId"`
+	Service   string                      `json:"service"`
+	Results   legacyVerifyResponseResults `json:"results"`
+}
+
+type legacyVerifyResponseResults struct {
+	IdentityAndAccountVerified bool                           `json:"identity_and_account_verified"`
+	Summary                    string                         `json:"summary"`
+	VerificationResults        legacyVerifyVerificationResult `json:"verification_results"`
+}
+
+type legacyVerifyVerificationResult struct {
+	Status           string `json:"Status"`
+	AccountFound     string `json:"accountFound"`
+	AccountOpen      string `json:"accountOpen"`
+	IdentityMatch    string `json:"identityMatch"`
+	AccountTypeMatch string `json:"accountTypeMatch"`
+	AcceptsCredits   string `json:"acceptsCredits"`
+	AcceptsDebits    string `json:"acceptsDebits"`
+}
+
+// triToLegacy maps the canonical TriState onto the "Yes"/"No"/"Unknown"
+// strings the v1 wire shape uses. The legacy frontend at
+// ClaimRegistrationForm.vue branches on literal "Yes" so these spellings
+// must be preserved until the v2 cutover completes.
+func triToLegacy(t bav.TriState) string {
+	switch t {
+	case bav.TriYes:
+		return "Yes"
+	case bav.TriNo:
+		return "No"
+	default:
+		return "Unknown"
+	}
 }
 
 // VerifyBankAccount handles POST /group-pricing/claims/verify-bank-account
@@ -390,15 +450,84 @@ func VerifyBankAccount(c *gin.Context) {
 		return
 	}
 
-	result, err := utils.VerifyBankAccount(utils.VerifyBankAccountRequest{
-		FirstName:         req.FirstName,
-		Surname:           req.Surname,
-		IdentityNumber:    req.IdentityNumber,
-		IdentityType:      req.IdentityType,
-		BankAccountNumber: req.BankAccountNumber,
-		BankBranchCode:    req.BankBranchCode,
-		BankAccountType:   req.BankAccountType,
+	result, err := bav.Verify(c.Request.Context(), req.toBavRequest())
+	if err != nil {
+		InternalError(c, err)
+		return
+	}
+
+	OK(c, legacyVerifyResponse{
+		Success:   result.Status == bav.StatusComplete,
+		RequestID: result.ProviderRequestID,
+		Service:   "bank-account-verification",
+		Results: legacyVerifyResponseResults{
+			IdentityAndAccountVerified: result.Verified,
+			Summary:                    result.Summary,
+			VerificationResults: legacyVerifyVerificationResult{
+				Status:           result.ProviderStatusText,
+				AccountFound:     triToLegacy(result.AccountFound),
+				AccountOpen:      triToLegacy(result.AccountOpen),
+				IdentityMatch:    triToLegacy(result.IdentityMatch),
+				AccountTypeMatch: triToLegacy(result.AccountTypeMatch),
+				AcceptsCredits:   triToLegacy(result.AcceptsCredits),
+				AcceptsDebits:    triToLegacy(result.AcceptsDebits),
+			},
+		},
 	})
+}
+
+// VerifyBankAccountV2Status handles
+// POST /v2/group-pricing/claims/verify-bank-account/status/:job_id and resolves
+// the current state of a pending async verification. Sync providers (VerifyNow)
+// return 501 via ErrNotSupported.
+func VerifyBankAccountV2Status(c *gin.Context) {
+	jobID := c.Param("job_id")
+	if jobID == "" {
+		BadRequestMsg(c, "job_id is required")
+		return
+	}
+	result, err := bav.Poll(c.Request.Context(), jobID)
+	if err != nil {
+		if errors.Is(err, bav.ErrNotSupported) {
+			c.JSON(http.StatusNotImplemented, models.PremiumResponse{
+				Success: false,
+				Message: "active BAV provider does not support async polling",
+			})
+			return
+		}
+		if errors.Is(err, bav.ErrInvalidInput) {
+			NotFound(c, "unknown job_id")
+			return
+		}
+		InternalError(c, err)
+		return
+	}
+	OK(c, result)
+}
+
+// BAVWebhook handles POST /bav/webhook/:provider. Scaffolded for Phase 6 but
+// inert — HMAC verification and per-provider dispatch land in Phase 7 when
+// a real async provider is wired in. Responding 501 makes accidental traffic
+// loud rather than silently accepted.
+func BAVWebhook(c *gin.Context) {
+	provider := c.Param("provider")
+	c.JSON(http.StatusNotImplemented, models.PremiumResponse{
+		Success: false,
+		Message: "BAV webhook is not configured for provider: " + provider,
+	})
+}
+
+// VerifyBankAccountV2 handles POST /v2/group-pricing/claims/verify-bank-account
+// and emits the canonical bav.VerifyResult shape. The legacy v1 endpoint will
+// be removed one release after v2 ships.
+func VerifyBankAccountV2(c *gin.Context) {
+	var req verifyBankAccountRequest
+	if err := c.BindJSON(&req); err != nil {
+		BadRequest(c, err)
+		return
+	}
+
+	result, err := bav.Verify(c.Request.Context(), req.toBavRequest())
 	if err != nil {
 		InternalError(c, err)
 		return

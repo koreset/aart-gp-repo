@@ -420,6 +420,27 @@
                 >
                   Verification in progress...
                 </v-alert>
+
+                <!--
+                  Per-check TriState breakdown. 'unknown' renders with a
+                  warning question mark so users can distinguish "bank
+                  could not confirm" from a hard "no".
+                -->
+                <div
+                  v-if="verificationChecks.length > 0"
+                  class="mt-3 d-flex flex-wrap ga-2"
+                >
+                  <v-chip
+                    v-for="check in verificationChecks"
+                    :key="check.label"
+                    :color="check.color"
+                    size="small"
+                    variant="tonal"
+                  >
+                    <v-icon start size="small">{{ check.icon }}</v-icon>
+                    {{ check.label }}: {{ check.stateLabel }}
+                  </v-chip>
+                </div>
               </div>
             </v-expand-transition>
           </v-card-text>
@@ -659,6 +680,11 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
+import {
+  triStateIcon,
+  type VerifyResult,
+  type TriState
+} from '@/renderer/types/bav'
 
 interface Props {
   schemes: Array<any>
@@ -1263,8 +1289,50 @@ const accountTypeMap: Record<string, string> = {
   '3': 'Transmission'
 }
 
+const lastVerification = ref<VerifyResult | null>(null)
+
+// describeIssue maps a TriState for a specific check to a short problem
+// message. 'no' is a hard negative; 'unknown' is flagged so the user knows
+// the bank couldn't confirm the check either way.
+const describeIssue = (
+  label: string,
+  notFoundMsg: string,
+  t: TriState
+): string | null => {
+  if (t === 'no') return notFoundMsg
+  if (t === 'unknown') return `${label}: bank could not confirm`
+  return null
+}
+
+// Async poll configuration for providers that return status=pending.
+// 3s interval / 60s ceiling matches the Phase 6 plan.
+const BAV_POLL_INTERVAL_MS = 3000
+const BAV_POLL_TIMEOUT_MS = 60_000
+
 /**
- * Verify banking details via VerifyNow bank account verification API.
+ * pollUntilResolved repeatedly hits the status endpoint every
+ * BAV_POLL_INTERVAL_MS ms until the result is no longer pending or the
+ * BAV_POLL_TIMEOUT_MS deadline is reached. Returns the last observed result.
+ */
+const pollUntilResolved = async (
+  jobId: string,
+  initial: VerifyResult
+): Promise<VerifyResult> => {
+  let current = initial
+  const deadline = Date.now() + BAV_POLL_TIMEOUT_MS
+  while (current.status === 'pending' && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, BAV_POLL_INTERVAL_MS))
+    const res = await GroupPricingService.getBankVerificationStatus(jobId)
+    current = res.data?.data as VerifyResult
+    lastVerification.value = current
+  }
+  return current
+}
+
+/**
+ * Verify banking details via the provider-agnostic BAV v2 endpoint.
+ * Handles sync providers (immediate complete/failed) and async providers
+ * (status=pending → poll until resolved or timeout).
  */
 const verifyBankingDetails = async () => {
   if (!canVerifyBanking.value) return
@@ -1272,6 +1340,7 @@ const verifyBankingDetails = async () => {
   bankVerifying.value = true
   formData.value.bank_verification_status = 'pending'
   bankVerificationError.value = ''
+  lastVerification.value = null
 
   try {
     const nameParts = (formData.value.account_holder_name || '')
@@ -1296,44 +1365,84 @@ const verifyBankingDetails = async () => {
         formData.value.bank_account_type
     })
 
-    const data = res.data?.data || res.data
-    if (data.success && data.results?.identity_and_account_verified) {
+    let result = res.data?.data as VerifyResult
+    lastVerification.value = result
+
+    if (result.status === 'pending' && result.providerJobId) {
+      result = await pollUntilResolved(result.providerJobId, result)
+    }
+
+    if (result.status === 'pending') {
+      formData.value.bank_verification_status = 'failed'
+      bankVerificationError.value =
+        'Verification is still in progress. Please try again in a few minutes.'
+      return
+    }
+
+    if (result.verified) {
       const now = new Date()
       formData.value.bank_verification_status = 'verified'
       formData.value.bank_verification_date =
         now.toISOString().split('T')[0] +
         ' ' +
         now.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })
-      formData.value.bank_verification_reference = data.requestId || ''
+      formData.value.bank_verification_reference = result.providerRequestId
     } else {
       formData.value.bank_verification_status = 'failed'
-      const vr = data.results?.verification_results
-      if (vr) {
-        const issues: string[] = []
-        if (vr.accountFound !== 'Yes') issues.push('Account not found')
-        if (vr.accountOpen !== 'Yes') issues.push('Account is not active')
-        if (vr.identityMatch !== 'Yes')
-          issues.push('Identity does not match account holder')
-        if (vr.accountTypeMatch !== 'Yes') issues.push('Account type mismatch')
-        bankVerificationError.value =
-          issues.length > 0
-            ? issues.join('. ') + '.'
-            : data.results?.summary || 'Verification failed.'
-      } else {
-        bankVerificationError.value =
-          data.results?.summary || 'Verification failed.'
-      }
+      const issues = [
+        describeIssue('Account found', 'Account not found', result.accountFound),
+        describeIssue('Account open', 'Account is not active', result.accountOpen),
+        describeIssue(
+          'Identity match',
+          'Identity does not match account holder',
+          result.identityMatch
+        ),
+        describeIssue(
+          'Account type',
+          'Account type mismatch',
+          result.accountTypeMatch
+        )
+      ].filter((x): x is string => x !== null)
+      bankVerificationError.value =
+        issues.length > 0
+          ? issues.join('. ') + '.'
+          : result.summary || 'Verification failed.'
     }
   } catch (error: any) {
     formData.value.bank_verification_status = 'failed'
     bankVerificationError.value =
-      error?.response?.data?.error ||
+      error?.response?.data?.message ||
+      error?.data?.message ||
       error?.message ||
       'Verification service unavailable. Please try again or verify manually.'
   } finally {
     bankVerifying.value = false
   }
 }
+
+// verificationChecks surfaces the per-field TriState results for display.
+// Each row uses triStateIcon() to pick a tick / cross / question icon so
+// 'unknown' is visually distinct from a hard 'no'.
+const verificationChecks = computed(() => {
+  const r = lastVerification.value
+  if (!r) return []
+  const rows: Array<{ label: string; state: TriState }> = [
+    { label: 'Account found', state: r.accountFound },
+    { label: 'Account open', state: r.accountOpen },
+    { label: 'Identity match', state: r.identityMatch },
+    { label: 'Account type match', state: r.accountTypeMatch },
+    { label: 'Accepts credits', state: r.acceptsCredits }
+  ]
+  return rows.map((row) => {
+    const presentation = triStateIcon(row.state)
+    return {
+      label: row.label,
+      icon: presentation.icon,
+      color: presentation.color,
+      stateLabel: presentation.label
+    }
+  })
+})
 
 // Required document types for current benefit
 const requiredDocumentTypes = computed(() => {

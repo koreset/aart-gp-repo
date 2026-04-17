@@ -1602,8 +1602,19 @@ export default {
       responseType: 'blob'
     })
   },
-  verifyBankAccount(data) {
-    return Api.post('/group-pricing/claims/verify-bank-account', data)
+  verifyBankAccount(data: import('@/renderer/types/bav').VerifyBankAccountRequest) {
+    return Api.post<{
+      success: boolean
+      data: import('@/renderer/types/bav').VerifyResult
+    }>('/v2/group-pricing/claims/verify-bank-account', data)
+  },
+  getBankVerificationStatus(jobId: string) {
+    return Api.post<{
+      success: boolean
+      data: import('@/renderer/types/bav').VerifyResult
+    }>(
+      `/v2/group-pricing/claims/verify-bank-account/status/${encodeURIComponent(jobId)}`
+    )
   },
   getOrgUsers(organization) {
     const json = JSON.stringify(organization)
