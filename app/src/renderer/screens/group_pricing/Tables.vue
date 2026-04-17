@@ -127,11 +127,7 @@
                 </v-col>
               </v-row>
               <v-row
-                v-if="
-                  isRatingTablesTab &&
-                  tableData.length > 0 &&
-                  !loadingData
-                "
+                v-if="isRatingTablesTab && tableData.length > 0 && !loadingData"
               >
                 <v-col>
                   <data-grid
@@ -256,7 +252,8 @@ const tableHeaders = [
 const viewHeader = computed(() => {
   if (activeTab.value === 'reinsurance') return 'Reinsurance Rating Tables'
   if (activeTab.value === 'binder_fees') return 'Binder Fees'
-  if (activeTab.value === 'commission_structures') return 'Commission Structures'
+  if (activeTab.value === 'commission_structures')
+    return 'Commission Structures'
   return 'Group Pricing Rating Tables'
 })
 

@@ -1475,6 +1475,13 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.ExpTotalGlaAnnualRiskPremium += mr.ExpAdjGlaRiskPremium
 		mdrs.ExpTotalGlaAnnualOfficePremium += mr.ExpAdjGlaOfficePremium
 
+		mdrs.TotalAdditionalAccidentalGlaRiskRate += mr.LoadedAdditionalAccidentalGlaRate
+		mdrs.ExpTotalAdditionalAccidentalGlaRiskRate += mr.ExpAdjLoadedAdditionalAccidentalGlaRate
+		mdrs.TotalAdditionalAccidentalGlaAnnualRiskPremium += mr.AdditionalAccidentalGlaRiskPremium
+		mdrs.TotalAdditionalAccidentalGlaAnnualOfficePremium += mr.AdditionalAccidentalGlaOfficePremium
+		mdrs.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium += mr.ExpAdjAdditionalAccidentalGlaRiskPremium
+		mdrs.ExpTotalAdditionalAccidentalGlaAnnualOfficePremium += mr.ExpAdjAdditionalAccidentalGlaOfficePremium
+
 		mdrs.TotalPtdRiskRate += mr.LoadedPtdRate
 		mdrs.ExpTotalPtdRiskRate += mr.ExpAdjLoadedPtdRate
 		mdrs.TotalPtdAnnualRiskPremium += mr.PtdRiskPremium
@@ -1517,6 +1524,8 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 
 		mdrs.TotalGlaSumAssured += mr.GlaSumAssured
 		mdrs.TotalGlaCappedSumAssured += mr.GlaCappedSumAssured
+		mdrs.TotalAdditionalAccidentalGlaSumAssured += mr.AdditionalAccidentalGlaSumAssured
+		mdrs.TotalAdditionalAccidentalGlaCappedSumAssured += mr.AdditionalAccidentalGlaCappedSumAssured
 		mdrs.TotalPtdSumAssured += mr.PtdSumAssured
 		mdrs.TotalPtdCappedSumAssured += mr.PtdCappedSumAssured
 		mdrs.TotalCiSumAssured += mr.CiSumAssured
@@ -1540,6 +1549,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 
 		if mdrs.MemberCount == 1 {
 			mdrs.MinGlaSumAssured = mr.GlaSumAssured
+			mdrs.MinAdditionalAccidentalGlaSumAssured = mr.AdditionalAccidentalGlaSumAssured
 			mdrs.MinPtdSumAssured = mr.PtdSumAssured
 			mdrs.MinCiSumAssured = mr.CiSumAssured
 			mdrs.MinSglaSumAssured = mr.SpouseGlaSumAssured
@@ -1547,6 +1557,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 			mdrs.MinTtdIncome = mr.TtdIncome
 		} else {
 			mdrs.MinGlaSumAssured = math.Min(mdrs.MinGlaSumAssured, mr.GlaSumAssured)
+			mdrs.MinAdditionalAccidentalGlaSumAssured = math.Min(mdrs.MinAdditionalAccidentalGlaSumAssured, mr.AdditionalAccidentalGlaSumAssured)
 			mdrs.MinPtdSumAssured = math.Min(mdrs.MinPtdSumAssured, mr.PtdSumAssured)
 			mdrs.MinCiSumAssured = math.Min(mdrs.MinCiSumAssured, mr.CiSumAssured)
 			mdrs.MinSglaSumAssured = math.Min(mdrs.MinSglaSumAssured, mr.SpouseGlaSumAssured)
@@ -1555,6 +1566,8 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		}
 		mdrs.MaxGlaSumAssured = math.Max(mdrs.MaxGlaSumAssured, mr.GlaSumAssured)
 		mdrs.MaxGlaCappedSumAssured = math.Max(mdrs.MaxGlaCappedSumAssured, mr.GlaCappedSumAssured)
+		mdrs.MaxAdditionalAccidentalGlaSumAssured = math.Max(mdrs.MaxAdditionalAccidentalGlaSumAssured, mr.AdditionalAccidentalGlaSumAssured)
+		mdrs.MaxAdditionalAccidentalGlaCappedSumAssured = math.Max(mdrs.MaxAdditionalAccidentalGlaCappedSumAssured, mr.AdditionalAccidentalGlaCappedSumAssured)
 		mdrs.MaxPtdSumAssured = math.Max(mdrs.MaxPtdSumAssured, mr.PtdSumAssured)
 		mdrs.MaxPtdCappedSumAssured = math.Max(mdrs.MaxPtdCappedSumAssured, mr.PtdCappedSumAssured)
 		mdrs.MaxCiSumAssured = math.Max(mdrs.MaxCiSumAssured, mr.CiSumAssured)
@@ -1662,6 +1675,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 
 	if mdrs.MemberCount > 0 {
 		mdrs.AverageGlaCappedSumAssured = mdrs.TotalGlaCappedSumAssured / mdrs.MemberCount
+		mdrs.AverageAdditionalAccidentalGlaCappedSumAssured = mdrs.TotalAdditionalAccidentalGlaCappedSumAssured / mdrs.MemberCount
 		mdrs.AveragePtdCappedSumAssured = mdrs.TotalPtdCappedSumAssured / mdrs.MemberCount
 		mdrs.AverageCiCappedSumAssured = mdrs.TotalCiCappedSumAssured / mdrs.MemberCount
 		mdrs.AveragePhiCappedIncome = mdrs.TotalPhiCappedIncome / mdrs.MemberCount
@@ -1678,6 +1692,11 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.ProportionGlaOfficePremiumSalary = mdrs.TotalGlaAnnualOfficePremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
 		mdrs.ExpProportionGlaAnnualRiskPremiumSalary = mdrs.ExpTotalGlaAnnualRiskPremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
 		mdrs.ExpProportionGlaOfficePremiumSalary = mdrs.ExpTotalGlaAnnualOfficePremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
+
+		mdrs.ProportionAdditionalAccidentalGlaAnnualRiskPremiumSalary = mdrs.TotalAdditionalAccidentalGlaAnnualRiskPremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
+		mdrs.ProportionAdditionalAccidentalGlaOfficePremiumSalary = mdrs.TotalAdditionalAccidentalGlaAnnualOfficePremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
+		mdrs.ExpProportionAdditionalAccidentalGlaAnnualRiskPremiumSalary = mdrs.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
+		mdrs.ExpProportionAdditionalAccidentalGlaOfficePremiumSalary = mdrs.ExpTotalAdditionalAccidentalGlaAnnualOfficePremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
 
 		mdrs.ProportionPtdAnnualRiskPremiumSalary = mdrs.TotalPtdAnnualRiskPremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
 		mdrs.ProportionPtdOfficePremiumSalary = mdrs.TotalPtdAnnualOfficePremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
@@ -1725,6 +1744,13 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.ExpGlaOfficeRatePer1000SA = mdrs.ExpTotalGlaAnnualOfficePremium * 1000.0 / mdrs.TotalGlaCappedSumAssured
 	}
 
+	if mdrs.TotalAdditionalAccidentalGlaCappedSumAssured > 0 {
+		mdrs.AdditionalAccidentalGlaRiskRatePer1000SA = mdrs.TotalAdditionalAccidentalGlaAnnualRiskPremium * 1000.0 / mdrs.TotalAdditionalAccidentalGlaCappedSumAssured
+		mdrs.AdditionalAccidentalGlaOfficeRatePer1000SA = mdrs.TotalAdditionalAccidentalGlaAnnualOfficePremium * 1000.0 / mdrs.TotalAdditionalAccidentalGlaCappedSumAssured
+		mdrs.ExpAdditionalAccidentalGlaRiskRatePer1000SA = mdrs.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium * 1000.0 / mdrs.TotalAdditionalAccidentalGlaCappedSumAssured
+		mdrs.ExpAdditionalAccidentalGlaOfficeRatePer1000SA = mdrs.ExpTotalAdditionalAccidentalGlaAnnualOfficePremium * 1000.0 / mdrs.TotalAdditionalAccidentalGlaCappedSumAssured
+	}
+
 	if mdrs.TotalPtdCappedSumAssured > 0 {
 		mdrs.PtdRiskRatePer1000SA = mdrs.TotalPtdAnnualRiskPremium * 1000.0 / mdrs.TotalPtdCappedSumAssured
 		mdrs.PtdOfficeRatePer1000SA = mdrs.TotalPtdAnnualOfficePremium * 1000.0 / mdrs.TotalPtdCappedSumAssured
@@ -1751,7 +1777,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 
 	mdrs.IfStatus = groupQuote.Status
 	mdrs.QuoteType = groupQuote.QuoteType
-	mdrs.TotalAnnualPremium = mdrs.ExpTotalGlaAnnualOfficePremium + mdrs.ExpTotalPtdAnnualOfficePremium + mdrs.ExpTotalTtdAnnualOfficePremium + mdrs.ExpTotalPhiAnnualOfficePremium + mdrs.ExpTotalCiAnnualOfficePremium + mdrs.ExpTotalSglaAnnualOfficePremium + mdrs.ExpTotalFunAnnualOfficePremium
+	mdrs.TotalAnnualPremium = mdrs.ExpTotalGlaAnnualOfficePremium + mdrs.ExpTotalAdditionalAccidentalGlaAnnualOfficePremium + mdrs.ExpTotalPtdAnnualOfficePremium + mdrs.ExpTotalTtdAnnualOfficePremium + mdrs.ExpTotalPhiAnnualOfficePremium + mdrs.ExpTotalCiAnnualOfficePremium + mdrs.ExpTotalSglaAnnualOfficePremium + mdrs.ExpTotalFunAnnualOfficePremium
 	mdrs.TotalSumAssured = mdrs.TotalGlaSumAssured //+ mdrs.TotalPtdSumAssured + mdrs.TotalCiSumAssured + mdrs.TotalSpouseGlaSumAssured
 	mdrs.PremiumRatesGuaranteedPeriodMonths = groupParameter.PremiumRatesGuaranteedPeriodMonths
 	mdrs.QuoteValidityPeriodMonths = groupParameter.QuoteValidityPeriodMonths
@@ -2027,6 +2053,24 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 
 	memberDataPointResult.ExpAdjLoadedGlaRate = memberDataPointResult.LoadedGlaRate * memberDataPointResult.GlaExperienceAdjustment
 
+	// Additional Accidental GLA — optional sub-benefit that re-uses every GLA
+	// parameter (sum assured, loadings, experience adjustment) but prices
+	// against a different benefit_type row in gla_rates. Skipped when the
+	// additional benefit type equals the main GLA benefit type — that case
+	// would duplicate the main GLA premium.
+	if schemeCategory.GlaBenefit && schemeCategory.AdditionalAccidentalGlaBenefit &&
+		len(schemeCategory.AdditionalAccidentalGlaBenefitType) > 0 &&
+		schemeCategory.AdditionalAccidentalGlaBenefitType != schemeCategory.GlaBenefitType {
+		memberDataPointResult.AdditionalAccidentalGlaSumAssured = memberDataPointResult.GlaSumAssured
+		memberDataPointResult.AdditionalAccidentalGlaCappedSumAssured = memberDataPointResult.GlaCappedSumAssured
+		memberDataPointResult.AdditionalAccidentalGlaQx = GetAdditionalAccidentalGlaRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, schemeCategory)
+		memberDataPointResult.AdditionalAccidentalGlaAidsQx = memberDataPointResult.GlaAidsQx
+		memberDataPointResult.BaseAdditionalAccidentalGlaRate = memberDataPointResult.AdditionalAccidentalGlaQx*(1+memberDataPointResult.GlaIndustryLoading+memberDataPointResult.GlaRegionLoading) + memberDataPointResult.AdditionalAccidentalGlaAidsQx*(1+memberDataPointResult.GlaAidsRegionLoading)
+		memberDataPointResult.LoadedAdditionalAccidentalGlaRate = memberDataPointResult.BaseAdditionalAccidentalGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.ContinuationLoading)
+		memberDataPointResult.AdditionalAccidentalGlaExperienceAdjustment = memberDataPointResult.GlaExperienceAdjustment
+		memberDataPointResult.ExpAdjLoadedAdditionalAccidentalGlaRate = memberDataPointResult.LoadedAdditionalAccidentalGlaRate * memberDataPointResult.AdditionalAccidentalGlaExperienceAdjustment
+	}
+
 	if schemeCategory.PtdBenefit {
 		ptdRate := GetPtdRate(&originalMemberDataPointResult, groupParameter, groupQuote, schemeCategory, mpIncomeLevel)
 		if schemeCategory.PtdBenefitType == "Accelerated" {
@@ -2078,6 +2122,9 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	memberDataPointResult.GlaRiskPremium = memberDataPointResult.LoadedGlaRate * memberDataPointResult.GlaCappedSumAssured
 	memberDataPointResult.ExpAdjGlaRiskPremium = memberDataPointResult.ExpAdjLoadedGlaRate * memberDataPointResult.GlaCappedSumAssured
 
+	memberDataPointResult.AdditionalAccidentalGlaRiskPremium = memberDataPointResult.LoadedAdditionalAccidentalGlaRate * memberDataPointResult.AdditionalAccidentalGlaCappedSumAssured
+	memberDataPointResult.ExpAdjAdditionalAccidentalGlaRiskPremium = memberDataPointResult.ExpAdjLoadedAdditionalAccidentalGlaRate * memberDataPointResult.AdditionalAccidentalGlaCappedSumAssured
+
 	memberDataPointResult.PtdRiskPremium = memberDataPointResult.LoadedPtdRate * memberDataPointResult.PtdCappedSumAssured
 	memberDataPointResult.ExpAdjPtdRiskPremium = memberDataPointResult.ExpAdjLoadedPtdRate * memberDataPointResult.PtdCappedSumAssured
 
@@ -2096,6 +2143,9 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 
 	memberDataPointResult.GlaOfficePremium = memberDataPointResult.GlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjGlaOfficePremium = memberDataPointResult.ExpAdjGlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+
+	memberDataPointResult.AdditionalAccidentalGlaOfficePremium = memberDataPointResult.AdditionalAccidentalGlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.ExpAdjAdditionalAccidentalGlaOfficePremium = memberDataPointResult.ExpAdjAdditionalAccidentalGlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 
 	memberDataPointResult.PtdOfficePremium = memberDataPointResult.PtdRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjPtdOfficePremium = memberDataPointResult.ExpAdjPtdRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
@@ -5347,6 +5397,39 @@ func GetGlaRate(memberResultData *models.MemberRatingResult, groupPricingParamet
 	}
 	GroupPricingCache.Set(cacheKey, qx, 1)
 	//time.Sleep(5 * time.Millisecond)
+	return qx
+}
+
+// GetAdditionalAccidentalGlaRate looks up the qx from gla_rates using the
+// benefit type configured for the optional Additional Accidental GLA layer.
+// The additional layer re-uses every other GLA parameter (risk rate code,
+// waiting period, income level, age, gender); only the benefit_type differs.
+func GetAdditionalAccidentalGlaRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, groupQuote models.GroupPricingQuote, schemeCategory models.SchemeCategory) float64 {
+	tableName := "gla_rates"
+	var keyString strings.Builder
+
+	keyString.WriteString(schemeCategory.SchemeCategory + "_")
+	keyString.WriteString(groupPricingParameter.RiskRateCode + "_")
+	keyString.WriteString(strconv.Itoa(memberResultData.AgeNextBirthday) + "_")
+	keyString.WriteString(strconv.Itoa(incomeLevel) + "_")
+	keyString.WriteString(memberResultData.Gender[:1] + "_")
+	keyString.WriteString(strconv.Itoa(schemeCategory.GlaWaitingPeriod) + "_")
+	keyString.WriteString(schemeCategory.AdditionalAccidentalGlaBenefitType + "_")
+	key := keyString.String()
+	cacheKey := "additional_accidental_" + tableName + "_" + key
+	cached, found := GroupPricingCache.Get(cacheKey)
+
+	if found {
+		result := cached.(float64)
+		return result
+	}
+	var qx float64
+	query := "risk_rate_code=? and age_next_birthday=? and income_level=? and gender=? and waiting_period=? and benefit_type=?"
+	err := DB.Table(tableName).Where(query, groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, incomeLevel, memberResultData.Gender, schemeCategory.GlaWaitingPeriod, schemeCategory.AdditionalAccidentalGlaBenefitType).Pluck("qx", &qx).Error
+	if err != nil {
+		fmt.Println(err)
+	}
+	GroupPricingCache.Set(cacheKey, qx, 1)
 	return qx
 }
 

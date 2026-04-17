@@ -193,6 +193,44 @@
                 ></v-checkbox>
               </v-col>
             </v-row>
+            <v-divider class="my-4"></v-divider>
+            <div class="text-subtitle-2 mb-2">Additional Accidental GLA</div>
+            <v-row>
+              <v-col cols="4">
+                <v-switch
+                  v-model="additionalAccidentalGlaBenefit"
+                  color="primary"
+                  label="Enable Additional Accidental GLA"
+                  density="compact"
+                  :disabled="
+                    !glaBenefit ||
+                    !selectedSchemeType ||
+                    glaBenefitTypes.length < 2
+                  "
+                  :hint="
+                    glaBenefitTypes.length < 2
+                      ? 'At least two GLA benefit types are required for this risk rate code.'
+                      : ''
+                  "
+                  persistent-hint
+                ></v-switch>
+              </v-col>
+              <v-col v-if="additionalAccidentalGlaBenefit" cols="4">
+                <v-select
+                  v-model="additionalAccidentalGlaBenefitType"
+                  v-bind="additionalAccidentalGlaBenefitTypeAttrs"
+                  variant="outlined"
+                  density="compact"
+                  label="Additional Accidental Benefit Type"
+                  placeholder="Select Benefit Type"
+                  :error-messages="
+                    errors.additional_accidental_gla_benefit_type
+                  "
+                  :items="additionalAccidentalGlaBenefitTypes"
+                  :disabled="!glaBenefit || !selectedSchemeType"
+                ></v-select>
+              </v-col>
+            </v-row>
           </template>
         </base-card>
       </v-window-item>
@@ -1068,6 +1106,10 @@ function onSchemeTypeChange(schemeType) {
     glaEducatorBenefitType.value = data.gla_educator_benefit_type || null
     glaConversionOnWithdrawal.value = data.gla_conversion_on_withdrawal || false
     glaConversionOnRetirement.value = data.gla_conversion_on_retirement || false
+    additionalAccidentalGlaBenefit.value =
+      data.additional_accidental_gla_benefit || false
+    additionalAccidentalGlaBenefitType.value =
+      data.additional_accidental_gla_benefit_type || null
 
     // Populate PTD fields
     ptdRiskType.value = data.ptd_risk_type || ''
@@ -1146,6 +1188,8 @@ function onSchemeTypeChange(schemeType) {
     glaEducatorBenefitType.value = null
     glaConversionOnWithdrawal.value = false
     glaConversionOnRetirement.value = false
+    additionalAccidentalGlaBenefit.value = false
+    additionalAccidentalGlaBenefitType.value = null
     glaBenefit.value = false
     ptdBenefit.value = false
     ciBenefit.value = false
@@ -1233,7 +1277,13 @@ function saveCurrentSchemeCategory() {
             gla_educator_benefit_type: glaEducatorBenefitType.value
           }),
           gla_conversion_on_withdrawal: !!glaConversionOnWithdrawal.value,
-          gla_conversion_on_retirement: !!glaConversionOnRetirement.value
+          gla_conversion_on_retirement: !!glaConversionOnRetirement.value,
+          additional_accidental_gla_benefit:
+            !!additionalAccidentalGlaBenefit.value,
+          ...(additionalAccidentalGlaBenefit.value && {
+            additional_accidental_gla_benefit_type:
+              additionalAccidentalGlaBenefitType.value
+          })
         }),
         ...(ptdBenefit.value && {
           ptd_risk_type: ptdRiskType.value,
@@ -1421,6 +1471,25 @@ const validationSchema = yup.object({
     }),
   gla_conversion_on_withdrawal: yup.boolean().nullable(),
   gla_conversion_on_retirement: yup.boolean().nullable(),
+  additional_accidental_gla_benefit: yup.boolean().nullable(),
+  additional_accidental_gla_benefit_type: yup
+    .string()
+    .nullable()
+    .when(['gla_benefit', 'additional_accidental_gla_benefit'], {
+      is: (glaBenefit: boolean, add: boolean) =>
+        glaBenefit === true && add === true,
+      then: (schema) =>
+        schema
+          .required('Additional accidental GLA benefit type is required')
+          .test(
+            'different-from-gla',
+            'Must differ from the main GLA benefit type',
+            function (value) {
+              return !value || value !== this.parent.gla_benefit_type
+            }
+          ),
+      otherwise: (schema) => schema.nullable()
+    }),
   ptd_conversion_on_withdrawal: yup.boolean().nullable(),
   ci_conversion_on_withdrawal: yup.boolean().nullable(),
   ptd_benefit: yup.boolean().nullable(),
@@ -1727,6 +1796,11 @@ const { handleSubmit, defineField, errors, validate } = useForm({
       groupStore.scheme_category_template.gla_conversion_on_withdrawal,
     gla_conversion_on_retirement:
       groupStore.scheme_category_template.gla_conversion_on_retirement,
+    additional_accidental_gla_benefit:
+      groupStore.scheme_category_template.additional_accidental_gla_benefit,
+    additional_accidental_gla_benefit_type:
+      groupStore.scheme_category_template
+        .additional_accidental_gla_benefit_type,
     ptd_conversion_on_withdrawal:
       groupStore.scheme_category_template.ptd_conversion_on_withdrawal,
     ci_conversion_on_withdrawal:
@@ -1834,6 +1908,16 @@ const [glaConversionOnWithdrawal, glaConversionOnWithdrawalAttrs] = defineField(
 )
 const [glaConversionOnRetirement, glaConversionOnRetirementAttrs] = defineField(
   'gla_conversion_on_retirement'
+)
+const [additionalAccidentalGlaBenefit] = defineField(
+  'additional_accidental_gla_benefit'
+)
+const [
+  additionalAccidentalGlaBenefitType,
+  additionalAccidentalGlaBenefitTypeAttrs
+] = defineField('additional_accidental_gla_benefit_type')
+const additionalAccidentalGlaBenefitTypes = computed(() =>
+  glaBenefitTypes.value.filter((bt: string) => bt !== glaBenefitType.value)
 )
 const [ptdConversionOnWithdrawal, ptdConversionOnWithdrawalAttrs] = defineField(
   'ptd_conversion_on_withdrawal'
@@ -2043,6 +2127,33 @@ const requestCustomTable = async (benefit: 'phi' | 'ttd') => {
 watch(glaEducatorBenefit, (newVal) => {
   if (newVal !== 'Yes') {
     glaEducatorBenefitType.value = null
+  }
+})
+
+// Keep the Additional Accidental GLA selection consistent: clear it when the
+// main GLA is turned off, when only one benefit type is available, or when the
+// main GLA benefit type happens to match the currently selected additional one.
+watch(
+  [glaBenefit, glaBenefitType, glaBenefitTypes],
+  () => {
+    if (!glaBenefit.value || (glaBenefitTypes.value?.length ?? 0) < 2) {
+      additionalAccidentalGlaBenefit.value = false
+      additionalAccidentalGlaBenefitType.value = null
+      return
+    }
+    if (
+      additionalAccidentalGlaBenefitType.value &&
+      additionalAccidentalGlaBenefitType.value === glaBenefitType.value
+    ) {
+      additionalAccidentalGlaBenefitType.value = null
+    }
+  },
+  { deep: true }
+)
+
+watch(additionalAccidentalGlaBenefit, (newVal) => {
+  if (!newVal) {
+    additionalAccidentalGlaBenefitType.value = null
   }
 })
 

@@ -184,6 +184,8 @@ type SchemeCategory struct {
 	GlaBenefitType                           string  `json:"gla_benefit_type"`
 	GlaConversionOnWithdrawal                bool    `json:"gla_conversion_on_withdrawal"`
 	GlaConversionOnRetirement                bool    `json:"gla_conversion_on_retirement"`
+	AdditionalAccidentalGlaBenefit           bool    `json:"additional_accidental_gla_benefit"`
+	AdditionalAccidentalGlaBenefitType       string  `json:"additional_accidental_gla_benefit_type"`
 	PtdRiskType                              string  `json:"ptd_risk_type"`
 	PtdBenefitType                           string  `json:"ptd_benefit_type"`
 	PtdSalaryMultiple                        float64 `json:"ptd_salary_multiple"`
@@ -660,6 +662,21 @@ type MemberRatingResult struct {
 	GlaOfficePremium               float64 `json:"gla_office_premium" csv:"gla_office_premium"`
 	ExpAdjGlaOfficePremium         float64 `json:"exp_adj_gla_office_premium" csv:"exp_adj_gla_office_premium"`
 
+	AdditionalAccidentalGlaSumAssured                   float64 `json:"additional_accidental_gla_sum_assured" csv:"additional_accidental_gla_sum_assured"`
+	AdditionalAccidentalGlaCappedSumAssured             float64 `json:"additional_accidental_gla_capped_sum_assured" csv:"additional_accidental_gla_capped_sum_assured"`
+	AdditionalAccidentalGlaQx                           float64 `json:"additional_accidental_gla_qx" csv:"additional_accidental_gla_qx"`
+	AdditionalAccidentalGlaAidsQx                       float64 `json:"additional_accidental_gla_aids_qx" csv:"additional_accidental_gla_aids_qx"`
+	BaseAdditionalAccidentalGlaRate                     float64 `json:"base_additional_accidental_gla_rate" csv:"base_additional_accidental_gla_rate"`
+	LoadedAdditionalAccidentalGlaRate                   float64 `json:"loaded_additional_accidental_gla_rate" csv:"loaded_additional_accidental_gla_rate"`
+	AdditionalAccidentalGlaWeightedExperienceCrudeRate  float64 `json:"additional_accidental_gla_weighted_experience_crude_rate" csv:"additional_accidental_gla_weighted_experience_crude_rate"`
+	AdditionalAccidentalGlaTheoreticalRate              float64 `json:"additional_accidental_gla_theoretical_rate" csv:"additional_accidental_gla_theoretical_rate"`
+	AdditionalAccidentalGlaExperienceAdjustment         float64 `json:"additional_accidental_gla_experience_adjustment" csv:"additional_accidental_gla_experience_adjustment"`
+	ExpAdjLoadedAdditionalAccidentalGlaRate             float64 `json:"exp_adj_loaded_additional_accidental_gla_rate" csv:"exp_adj_loaded_additional_accidental_gla_rate"`
+	AdditionalAccidentalGlaRiskPremium                  float64 `json:"additional_accidental_gla_risk_premium" csv:"additional_accidental_gla_risk_premium"`
+	ExpAdjAdditionalAccidentalGlaRiskPremium            float64 `json:"exp_adj_additional_accidental_gla_risk_premium" csv:"exp_adj_additional_accidental_gla_risk_premium"`
+	AdditionalAccidentalGlaOfficePremium                float64 `json:"additional_accidental_gla_office_premium" csv:"additional_accidental_gla_office_premium"`
+	ExpAdjAdditionalAccidentalGlaOfficePremium          float64 `json:"exp_adj_additional_accidental_gla_office_premium" csv:"exp_adj_additional_accidental_gla_office_premium"`
+
 	PtdSumAssured           float64 `json:"ptd_sum_assured" csv:"ptd_sum_assured"`
 	PtdCappedSumAssured     float64 `json:"ptd_capped_sum_assured" csv:"ptd_capped_sum_assured"`
 	BasePtdRate             float64 `json:"base_ptd_rate" csv:"base_ptd_rate"`
@@ -807,6 +824,27 @@ type MemberRatingResultSummary struct {
 	ExpTotalGlaAnnualOfficePremium          float64 `json:"exp_total_gla_annual_office_premium" csv:"exp_total_gla_annual_office_premium"`
 	ExpGlaOfficeRatePer1000SA               float64 `json:"exp_gla_office_rate_per_1000_sa" csv:"exp_gla_office_rate_per_1000_sa"`
 	ExpProportionGlaOfficePremiumSalary     float64 `json:"exp_proportion_gla_office_premium_salary" csv:"exp_proportion_gla_office_premium_salary"`
+
+	MinAdditionalAccidentalGlaSumAssured                        float64 `json:"min_additional_accidental_gla_sum_assured" csv:"min_additional_accidental_gla_sum_assured"`
+	MaxAdditionalAccidentalGlaSumAssured                        float64 `json:"max_additional_accidental_gla_sum_assured" csv:"max_additional_accidental_gla_sum_assured"`
+	MaxAdditionalAccidentalGlaCappedSumAssured                  float64 `json:"max_additional_accidental_gla_capped_sum_assured" csv:"max_additional_accidental_gla_capped_sum_assured"`
+	TotalAdditionalAccidentalGlaSumAssured                      float64 `json:"total_additional_accidental_gla_sum_assured" csv:"total_additional_accidental_gla_sum_assured"`
+	TotalAdditionalAccidentalGlaCappedSumAssured                float64 `json:"total_additional_accidental_gla_capped_sum_assured" csv:"total_additional_accidental_gla_capped_sum_assured"`
+	AverageAdditionalAccidentalGlaCappedSumAssured              float64 `json:"average_additional_accidental_gla_capped_sum_assured" csv:"average_additional_accidental_gla_capped_sum_assured"`
+	TotalAdditionalAccidentalGlaRiskRate                        float64 `json:"total_additional_accidental_gla_risk_rate" csv:"total_additional_accidental_gla_risk_rate"`
+	TotalAdditionalAccidentalGlaAnnualRiskPremium               float64 `json:"total_additional_accidental_gla_annual_risk_premium" csv:"total_additional_accidental_gla_annual_risk_premium"`
+	AdditionalAccidentalGlaRiskRatePer1000SA                    float64 `json:"additional_accidental_gla_risk_rate_per_1000_sa" csv:"additional_accidental_gla_risk_rate_per_1000_sa"`
+	ProportionAdditionalAccidentalGlaAnnualRiskPremiumSalary    float64 `json:"proportion_additional_accidental_gla_annual_risk_premium_salary" csv:"proportion_additional_accidental_gla_annual_risk_premium_salary"`
+	TotalAdditionalAccidentalGlaAnnualOfficePremium             float64 `json:"total_additional_accidental_gla_annual_office_premium" csv:"total_additional_accidental_gla_annual_office_premium"`
+	AdditionalAccidentalGlaOfficeRatePer1000SA                  float64 `json:"additional_accidental_gla_office_rate_per_1000_sa" csv:"additional_accidental_gla_office_rate_per_1000_sa"`
+	ProportionAdditionalAccidentalGlaOfficePremiumSalary        float64 `json:"proportion_additional_accidental_gla_office_premium_salary" csv:"proportion_additional_accidental_gla_office_premium_salary"`
+	ExpTotalAdditionalAccidentalGlaRiskRate                     float64 `json:"exp_total_additional_accidental_gla_risk_rate" csv:"exp_total_additional_accidental_gla_risk_rate"`
+	ExpTotalAdditionalAccidentalGlaAnnualRiskPremium            float64 `json:"exp_total_additional_accidental_gla_annual_risk_premium" csv:"exp_total_additional_accidental_gla_annual_risk_premium"`
+	ExpAdditionalAccidentalGlaRiskRatePer1000SA                 float64 `json:"exp_additional_accidental_gla_risk_rate_per_1000_sa" csv:"exp_additional_accidental_gla_risk_rate_per_1000_sa"`
+	ExpProportionAdditionalAccidentalGlaAnnualRiskPremiumSalary float64 `json:"exp_proportion_additional_accidental_gla_annual_risk_premium_salary" csv:"exp_proportion_additional_accidental_gla_annual_risk_premium_salary"`
+	ExpTotalAdditionalAccidentalGlaAnnualOfficePremium          float64 `json:"exp_total_additional_accidental_gla_annual_office_premium" csv:"exp_total_additional_accidental_gla_annual_office_premium"`
+	ExpAdditionalAccidentalGlaOfficeRatePer1000SA               float64 `json:"exp_additional_accidental_gla_office_rate_per_1000_sa" csv:"exp_additional_accidental_gla_office_rate_per_1000_sa"`
+	ExpProportionAdditionalAccidentalGlaOfficePremiumSalary     float64 `json:"exp_proportion_additional_accidental_gla_office_premium_salary" csv:"exp_proportion_additional_accidental_gla_office_premium_salary"`
 
 	MinPtdSumAssured                        float64 `json:"min_ptd_sum_assured" csv:"min_ptd_sum_assured"`
 	MaxPtdSumAssured                        float64 `json:"max_ptd_sum_assured" csv:"max_ptd_sum_assured"`

@@ -1390,8 +1390,16 @@ const verifyBankingDetails = async () => {
     } else {
       formData.value.bank_verification_status = 'failed'
       const issues = [
-        describeIssue('Account found', 'Account not found', result.accountFound),
-        describeIssue('Account open', 'Account is not active', result.accountOpen),
+        describeIssue(
+          'Account found',
+          'Account not found',
+          result.accountFound
+        ),
+        describeIssue(
+          'Account open',
+          'Account is not active',
+          result.accountOpen
+        ),
         describeIssue(
           'Identity match',
           'Identity does not match account holder',

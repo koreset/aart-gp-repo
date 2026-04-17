@@ -175,9 +175,7 @@ const router = createRouter({
       path: '/group-pricing/administration/commission-structures',
       name: 'group-pricing-commission-structures',
       component: () =>
-        import(
-          '../screens/group_pricing/administration/CommissionStructureManagement.vue'
-        ),
+        import('../screens/group_pricing/administration/CommissionStructureManagement.vue'),
       meta: { required_permission: 'navigation:manage_commission_structures' },
       beforeEnter: (to, from) => checkPermissions(to, from)
     },

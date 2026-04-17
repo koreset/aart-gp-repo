@@ -1741,7 +1741,9 @@ export default {
       responseType: 'blob'
     })
   },
-  verifyBankAccount(data: import('@/renderer/types/bav').VerifyBankAccountRequest) {
+  verifyBankAccount(
+    data: import('@/renderer/types/bav').VerifyBankAccountRequest
+  ) {
     return Api.post<{
       success: boolean
       data: import('@/renderer/types/bav').VerifyResult

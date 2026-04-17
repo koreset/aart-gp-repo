@@ -449,6 +449,18 @@ const convertExcelDataToGridData = () => {
       percentSalary: `${roundUpToTwoDecimalsAccounting(resultSummary.exp_proportion_gla_office_premium_salary * 100)}%`
     })
 
+    if (resultSummary.total_additional_accidental_gla_capped_sum_assured > 0) {
+      gridData.push({
+        category,
+        benefit: 'Additional Accidental GLA',
+        totalSumAssured:
+          resultSummary.total_additional_accidental_gla_capped_sum_assured,
+        annualPremium:
+          resultSummary.exp_total_additional_accidental_gla_annual_office_premium,
+        percentSalary: `${roundUpToTwoDecimalsAccounting((resultSummary.exp_proportion_additional_accidental_gla_office_premium_salary || 0) * 100)}%`
+      })
+    }
+
     gridData.push({
       category,
       benefit: ptdBenefitTitle.value,

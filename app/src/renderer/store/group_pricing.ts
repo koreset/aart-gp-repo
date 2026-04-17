@@ -43,6 +43,8 @@ export const useGroupPricingStore = defineStore('groupPricing', {
       gla_benefit_type: null,
       gla_conversion_on_withdrawal: false,
       gla_conversion_on_retirement: false,
+      additional_accidental_gla_benefit: false,
+      additional_accidental_gla_benefit_type: null,
       ptd_risk_type: null,
       ptd_benefit_type: null,
       ptd_salary_multiple: 0,
