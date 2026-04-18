@@ -8,6 +8,7 @@ import Api from '@/renderer/api/Api'
 import { useWebSocket } from '@/renderer/composables/useWebSocket'
 import { useNotificationStore } from '@/renderer/store/notifications'
 import { useConversationStore } from '@/renderer/store/conversations'
+import { loadUserPermissions } from '@/renderer/composables/useLoadPermissions'
 
 const router = useRouter()
 const route = useRoute()
@@ -119,10 +120,18 @@ onBeforeMount(async () => {
 
 // Register a dynamic axios interceptor that attaches the user's entitlements
 // as a header so the backend can enforce entitlement gates per route group.
+// Also forwards the active license_id so RequirePermission resolves the
+// caller's role by license (matching loadUserPermissions on bootstrap)
+// instead of by JWT email — which can disagree if the email map is stale.
 Api.interceptors.request.use((config) => {
   const ents: string[] = appStore.getEntitlements() || []
   if (ents.length > 0) {
     config.headers['X-Entitlements'] = ents.join(',')
+  }
+  const licenseData: any = appStore.getLicenseData
+  const licenseId = licenseData?.data?.id || licenseData?.id
+  if (licenseId) {
+    config.headers['X-License-Id'] = licenseId
   }
   return config
 })
@@ -139,16 +148,26 @@ onMounted(async () => {
     appStore.setLicense(result)
   }
 
+  console.log('License data loaded:', result)
+
+  const licenseId = result?.data?.id || result?.id
+
+  // Fire permission fetch in parallel with entitlements — both depend on the
+  // license ID but are otherwise independent. Fail-closed-during-load in
+  // usePermissionCheck means we want this populated as early as possible.
+  const permissionsPromise = loadUserPermissions(licenseId)
+
   // check if there are any entitlements
   let entitlements: any = appStore.entitlements
 
   if (entitlements.length === 0) {
-    const licenseId = result?.data?.id || result?.id
     const licenseKey =
       result?.data?.attributes?.key || result?.attributes?.key || result?.key
     await getEntitlements(licenseId, licenseKey)
     entitlements = appStore.entitlements
   }
+
+  await permissionsPromise
 
   loadingEntitlements.value = false
 

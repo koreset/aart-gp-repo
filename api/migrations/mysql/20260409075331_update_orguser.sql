@@ -73,28 +73,6 @@ PREPARE stmt FROM @s;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Add or modify column for field: ValRole
--- MySQL: Add or modify column
-SET @s = (SELECT IF(
-    EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='org_users' AND COLUMN_NAME='val_role' AND TABLE_SCHEMA = DATABASE()),
-    'ALTER TABLE org_users MODIFY COLUMN val_role VARCHAR(255);',
-    'ALTER TABLE org_users ADD COLUMN val_role VARCHAR(255);'
-));
-PREPARE stmt FROM @s;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- Add or modify column for field: ValRoleId
--- MySQL: Add or modify column
-SET @s = (SELECT IF(
-    EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='org_users' AND COLUMN_NAME='val_role_id' AND TABLE_SCHEMA = DATABASE()),
-    'ALTER TABLE org_users MODIFY COLUMN val_role_id INT;',
-    'ALTER TABLE org_users ADD COLUMN val_role_id INT;'
-));
-PREPARE stmt FROM @s;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
 -- Add or modify column for field: Organisation
 -- MySQL: Add or modify column
 SET @s = (SELECT IF(

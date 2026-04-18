@@ -67,26 +67,6 @@ BEGIN
     END IF;
 END $$;
 
--- Add or modify column for field: ValRole
-ALTER TABLE org_users ADD COLUMN IF NOT EXISTS val_role VARCHAR(255);
--- Update column type if it exists
-DO $$
-BEGIN
-    IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='org_users' AND column_name='val_role') THEN
-        ALTER TABLE org_users ALTER COLUMN val_role TYPE VARCHAR(255);
-    END IF;
-END $$;
-
--- Add or modify column for field: ValRoleId
-ALTER TABLE org_users ADD COLUMN IF NOT EXISTS val_role_id INTEGER;
--- Update column type if it exists
-DO $$
-BEGIN
-    IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='org_users' AND column_name='val_role_id') THEN
-        ALTER TABLE org_users ALTER COLUMN val_role_id TYPE INTEGER;
-    END IF;
-END $$;
-
 -- Add or modify column for field: Organisation
 ALTER TABLE org_users ADD COLUMN IF NOT EXISTS organisation VARCHAR(255);
 -- Update column type if it exists

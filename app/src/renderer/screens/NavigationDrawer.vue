@@ -416,7 +416,6 @@
 <script setup lang="ts">
 import { watchEffect, ref, onMounted, watch } from 'vue'
 import { useGroupUserPermissionsStore } from '@/renderer/store/group_user'
-import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { useRouter } from 'vue-router'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { useAppStore } from '@/renderer/store/app'
@@ -485,18 +484,13 @@ watch(
 
 loadExpandedGroups()
 
-/**
- * Check if user has the given permission slug.
- * Returns true if:
- *  - permissions haven't loaded yet (graceful)
- *  - no role assigned (empty permissions)
- *  - user has system:admin
- *  - user has the specific permission
- */
+// Check if user has the given permission slug. Fails closed while loading,
+// opens when the user has no role (bootstrap), otherwise strict check with
+// a system:admin bypass.
 const canAccess = (permission: string): boolean => {
-  if (!permissionsStore.loaded) return true
+  if (!permissionsStore.loaded) return false
+  if (!permissionsStore.hasRole) return true
   const perms = permissionsStore.permissions
-  if (Object.keys(perms).length === 0) return true
   if (perms['system:admin']) return true
   return !!perms[permission]
 }
@@ -527,32 +521,6 @@ const appVersion = ref('')
 
 onMounted(async () => {
   appVersion.value = await window.mainApi?.sendSync('msgGetAppVersion')
-
-  const result = await window.mainApi?.sendSync('msgGetUserLicense')
-  console.log('[RBAC] Fetching role for license:', result?.data?.id)
-  GroupPricingService.getRoleForUser(result?.data?.id)
-    .then((response: any) => {
-      console.log(
-        '[RBAC] getRoleForUser response:',
-        JSON.stringify(response.data)
-      )
-      const role = response.data?.data ?? response.data
-      if (role && role.permissions && Array.isArray(role.permissions)) {
-        const permMap: Record<string, boolean> = {}
-        for (const perm of role.permissions) {
-          permMap[perm.slug] = true
-        }
-        console.log('[RBAC] Permission map:', JSON.stringify(permMap))
-        permissionsStore.setPermissions(permMap)
-      } else {
-        console.log('[RBAC] No permissions found in role response')
-        permissionsStore.markLoaded()
-      }
-    })
-    .catch((error: any) => {
-      console.error('[RBAC] Error fetching user role:', error)
-      permissionsStore.markLoaded()
-    })
 })
 
 const internalDrawer = ref(navProps.drawer)

@@ -10,6 +10,10 @@ export const useGroupUserPermissionsStore = defineStore(
     // --- State ---
     const permissions = ref<UserPermissionsMap>({})
     const loaded = ref(false)
+    // True once we know the user has a role assigned. When loaded && !hasRole,
+    // the app is in bootstrap mode (fresh install, no role yet) and gates
+    // should open so an initial admin can be configured.
+    const hasRole = ref(false)
 
     // Internal resolve function for the loading promise
     let _resolve: (() => void) | null = null
@@ -32,6 +36,7 @@ export const useGroupUserPermissionsStore = defineStore(
     // --- Actions ---
     const setPermissions = (newPermissions: UserPermissionsMap) => {
       permissions.value = newPermissions
+      hasRole.value = true
       loaded.value = true
       if (_resolve) {
         _resolve()
@@ -40,6 +45,7 @@ export const useGroupUserPermissionsStore = defineStore(
     }
 
     const markLoaded = () => {
+      hasRole.value = false
       loaded.value = true
       if (_resolve) {
         _resolve()
@@ -49,6 +55,7 @@ export const useGroupUserPermissionsStore = defineStore(
 
     const clearPermissions = () => {
       permissions.value = {}
+      hasRole.value = false
       loaded.value = false
     }
 
@@ -64,6 +71,7 @@ export const useGroupUserPermissionsStore = defineStore(
     return {
       permissions,
       loaded,
+      hasRole,
       setPermissions,
       markLoaded,
       hasPermission,

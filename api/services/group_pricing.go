@@ -10995,6 +10995,59 @@ func GetRoleForUserLicense(licenseId string) (models.GPUserRole, error) {
 	return role, nil
 }
 
+// GetPermissionsForLicense resolves the permission slugs held by the user
+// associated with the given license_id. Mirrors GetPermissionsForEmail and
+// is the preferred lookup — it matches the frontend's loadUserPermissions
+// behaviour, so frontend and backend can never disagree about which role
+// applies to the active user.
+func GetPermissionsForLicense(licenseId string) (hasRole bool, slugs []string, err error) {
+	var orgUser models.OrgUser
+	if err = DB.Where("license_id = ?", licenseId).First(&orgUser).Error; err != nil {
+		return false, nil, nil
+	}
+	if orgUser.GPRoleId == 0 {
+		return false, nil, nil
+	}
+
+	var role models.GPUserRole
+	if err = DB.Where("id = ?", orgUser.GPRoleId).Preload("Permissions").First(&role).Error; err != nil {
+		return false, nil, err
+	}
+
+	slugs = make([]string, 0, len(role.Permissions))
+	for _, p := range role.Permissions {
+		slugs = append(slugs, p.Slug)
+	}
+	return true, slugs, nil
+}
+
+// GetPermissionsForEmail resolves the permission slugs held by the user with
+// the given email. Returns hasRole=false when the user has no role assigned —
+// callers treat that as bootstrap mode (fresh install, open) mirroring the
+// frontend usePermissionCheck behaviour.
+func GetPermissionsForEmail(email string) (hasRole bool, slugs []string, err error) {
+	var orgUser models.OrgUser
+	if err = DB.Where("email = ?", email).First(&orgUser).Error; err != nil {
+		// No org_user row yet — treat as no-role (bootstrap) rather than a
+		// hard failure. A missing user is expected during initial setup.
+		return false, nil, nil
+	}
+	if orgUser.GPRoleId == 0 {
+		return false, nil, nil
+	}
+
+	var role models.GPUserRole
+	if err = DB.Where("id = ?", orgUser.GPRoleId).Preload("Permissions").First(&role).Error; err != nil {
+		return false, nil, err
+	}
+
+	slugs = make([]string, 0, len(role.Permissions))
+	for _, p := range role.Permissions {
+		slugs = append(slugs, p.Slug)
+	}
+	return true, slugs, nil
+}
+
 func getBaseBenefitMaps() []models.GroupBenefitMapper {
 	// Define the base list of benefits
 	baseBenefits := []models.GroupBenefitMapper{

@@ -455,6 +455,73 @@ const getProviderIcon = (type: string) => {
   return icons[type] || 'mdi-domain'
 }
 
+// Decode a JWT's payload (no signature verification — the token has already
+// been issued by the auth provider; we only need its claims to enforce the
+// license-binding check below). Mirrors the helper used in the main process
+// IPC handler so behaviour stays consistent.
+const decodeJwtPayload = (token: string): any => {
+  try {
+    const part = token.split('.')[1]
+    if (!part) return null
+    const base64 = part.replace(/-/g, '+').replace(/_/g, '/')
+    const decoded = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => `%${('00' + c.charCodeAt(0).toString(16)).slice(-2)}`)
+        .join('')
+    )
+    return JSON.parse(decoded)
+  } catch (e) {
+    console.error('Failed to decode JWT:', e)
+    return null
+  }
+}
+
+// Enforces that the email on the issued token matches the email registered
+// to this machine's license. Returns null on success, or a human-readable
+// error string on mismatch / malformed token. If the license has no
+// user_email metadata, the binding is treated as unconfigured and allowed.
+const assertLicenseEmail = (token: string | undefined): string | null => {
+  if (!token) {
+    return 'Could not verify your account against the installed license.'
+  }
+  const license: any = window.mainApi?.sendSync('msgGetUserLicense')
+  // License payloads come through with and without a `data` wrapper
+  // depending on the activation endpoint/version, so normalise both shapes.
+  const attrs = license?.data?.attributes || license?.attributes
+  const meta = attrs?.metadata
+  const licenseEmail: string | undefined =
+    meta?.userEmail ||
+    meta?.user_email ||
+    meta?.email ||
+    meta?.user?.email
+  const claims = decodeJwtPayload(token)
+  const tokenEmail: string | undefined =
+    claims?.user?.Email ||
+    claims?.user?.email ||
+    claims?.user?.userEmail ||
+    claims?.Email ||
+    claims?.email
+
+  console.log('[LicenseBinding] license metadata:', license?.data?.attributes?.metadata)
+  console.log('[LicenseBinding] token user claim:', claims?.user)
+  console.log(
+    '[LicenseBinding] resolved licenseEmail=%s tokenEmail=%s',
+    licenseEmail,
+    tokenEmail
+  )
+
+  if (!licenseEmail) return null
+  if (!tokenEmail) {
+    return 'Could not verify your account against the installed license.'
+  }
+
+  if (tokenEmail.trim().toLowerCase() !== licenseEmail.trim().toLowerCase()) {
+    return `This license is registered to ${licenseEmail}. Sign in with that account to use this installation.`
+  }
+  return null
+}
+
 // SSO Authentication
 const loginWithSSO = async () => {
   if (!selectedProvider.value) return
@@ -466,6 +533,12 @@ const loginWithSSO = async () => {
     const result = await authService.login(selectedProvider.value)
 
     if (result.success) {
+      const bindingError = assertLicenseEmail(result.token)
+      if (bindingError) {
+        showSnackbar(bindingError, 'error')
+        return
+      }
+
       showSnackbar('Login successful! Redirecting...', 'success')
 
       // Store authenticated user
@@ -519,6 +592,12 @@ const login = async () => {
     const result = await authService.login(selectedProvider.value, credentials)
 
     if (result.success) {
+      const bindingError = assertLicenseEmail(result.token)
+      if (bindingError) {
+        showSnackbar(bindingError, 'error')
+        return
+      }
+
       showSnackbar('Login successful! Redirecting...', 'success')
 
       // Store authenticated user

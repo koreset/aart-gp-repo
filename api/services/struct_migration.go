@@ -878,12 +878,6 @@ func getStructType(structName string) (reflect.Type, error) {
 	case "GPUserRole":
 		return reflect.TypeOf(models.GPUserRole{}), nil
 
-	// -- Valuation User Management
-	case "ValUserRole":
-		return reflect.TypeOf(models.ValUserRole{}), nil
-	case "ValPermission":
-		return reflect.TypeOf(models.ValPermission{}), nil
-
 	default:
 		// If we couldn't find the struct, return an error
 		return nil, fmt.Errorf("struct %s not found in package %s", structName, modelsPackage)

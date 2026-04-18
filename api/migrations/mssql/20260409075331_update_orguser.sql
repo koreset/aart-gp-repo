@@ -76,28 +76,6 @@ BEGIN
     ALTER TABLE org_users ALTER COLUMN gp_role_id INT;
 END;
 
--- Add or modify column for field: ValRole
--- SQL Server: Add column if it doesn't exist
-IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'org_users' AND COLUMN_NAME = 'val_role')
-BEGIN
-    ALTER TABLE org_users ADD val_role NVARCHAR(255);
-END;
-ELSE
-BEGIN
-    ALTER TABLE org_users ALTER COLUMN val_role NVARCHAR(255);
-END;
-
--- Add or modify column for field: ValRoleId
--- SQL Server: Add column if it doesn't exist
-IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'org_users' AND COLUMN_NAME = 'val_role_id')
-BEGIN
-    ALTER TABLE org_users ADD val_role_id INT;
-END;
-ELSE
-BEGIN
-    ALTER TABLE org_users ALTER COLUMN val_role_id INT;
-END;
-
 -- Add or modify column for field: Organisation
 -- SQL Server: Add column if it doesn't exist
 IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'org_users' AND COLUMN_NAME = 'organisation')

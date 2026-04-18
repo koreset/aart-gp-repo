@@ -15,8 +15,6 @@ type OrgUser struct {
 	Role         string `json:"role"`
 	GPRole       string `json:"gp_role"`
 	GPRoleId     int    `json:"gp_role_id"`
-	ValRole      string `json:"val_role"`
-	ValRoleId    int    `json:"val_role_id"`
 	Organisation string `json:"organisation"`
 }
 

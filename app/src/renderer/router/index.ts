@@ -9,10 +9,10 @@ const checkPermissions = async (to: any, _from: any) => {
   const store = useGroupUserPermissionsStore()
   const required = to.meta.required_permission as string | undefined
   if (!required) return true
-  // Wait for permissions to be fetched before checking
   await store.waitUntilLoaded()
-  // If no role is assigned (no permissions), allow access (graceful degradation)
-  if (!store.loaded || Object.keys(store.permissions).length === 0) return true
+  // Bootstrap mode: user has no role assigned (fresh install) — allow
+  // access so an initial admin can be configured.
+  if (!store.hasRole) return true
   if (store.hasPermission('system:admin')) return true
   if (store.hasPermission(required)) return true
   return { name: 'group-pricing-dashboard' }
@@ -340,27 +340,29 @@ const router = createRouter({
       path: '/group-pricing/phi/tables',
       name: 'group-pricing-phi-tables',
       component: () => import('../screens/group_pricing/phi/Tables.vue'),
-      meta: { required_permission: 'navigation:group-pricing_phi_tables' }
+      meta: { required_permission: 'navigation:view_phi_tables' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {
       path: '/group-pricing/phi/shock-settings',
       name: 'group-pricing-phi-shock-settings',
       component: () => import('../screens/group_pricing/phi/ShockSettings.vue'),
-      meta: {
-        required_permission: 'navigation:group-pricing_phi_shock_settings'
-      }
+      meta: { required_permission: 'navigation:view_phi_shock_settings' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {
       path: '/group-pricing/phi/run-settings',
       name: 'group-pricing-phi-run-settings',
       component: () => import('../screens/group_pricing/phi/RunSettings.vue'),
-      meta: { required_permission: 'navigation:group-pricing_phi_run_settings' }
+      meta: { required_permission: 'navigation:view_phi_run_settings' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {
       path: '/group-pricing/phi/run-results',
       name: 'group-pricing-phi-run-results',
       component: () => import('../screens/group_pricing/phi/RunResults.vue'),
-      meta: { required_permission: 'navigation:group-pricing_phi_run_results' }
+      meta: { required_permission: 'navigation:view_phi_run_results' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {
       path: '/group-pricing/phi/run-detail/:jobId',

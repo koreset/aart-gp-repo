@@ -395,13 +395,15 @@ func ConfigureRouter(router *gin.Engine) {
 				submissions.POST("/:id/upload-new-joiner-details", controllers.UploadNewJoinerDetails)
 				submissions.POST("/:id/sync-new-joiners", controllers.SyncNewJoiners)
 			}
-			groupPricing.GET("user-management/permissions", controllers.GetGPPermissions)
-			groupPricing.GET("user-management/roles", controllers.GetGPUserRoles)
-			groupPricing.POST("user-management/roles", controllers.CreateGPUserRole)
-			groupPricing.DELETE("user-management/roles/:role_id", controllers.DeleteGPUserRole)
-			groupPricing.GET("user-management/roles/:role_id/permissions", controllers.GetRolePermissions)
-			groupPricing.PUT("user-management/users/assign_role", controllers.AssignRoleToUser)
-			groupPricing.POST("user-management/users/remove_role", controllers.RemoveRoleFromUser)
+			groupPricing.GET("user-management/permissions", RequirePermission("system:manage_roles"), controllers.GetGPPermissions)
+			groupPricing.GET("user-management/roles", RequirePermission("system:manage_roles"), controllers.GetGPUserRoles)
+			groupPricing.POST("user-management/roles", RequirePermission("system:manage_roles"), controllers.CreateGPUserRole)
+			groupPricing.DELETE("user-management/roles/:role_id", RequirePermission("system:manage_roles"), controllers.DeleteGPUserRole)
+			groupPricing.GET("user-management/roles/:role_id/permissions", RequirePermission("system:manage_roles"), controllers.GetRolePermissions)
+			groupPricing.PUT("user-management/users/assign_role", RequirePermission("system:manage_users"), controllers.AssignRoleToUser)
+			groupPricing.POST("user-management/users/remove_role", RequirePermission("system:manage_users"), controllers.RemoveRoleFromUser)
+			// GetRoleForUser is used by every authenticated client during bootstrap
+			// to discover its own permissions — gating it would deadlock the system.
 			groupPricing.GET("user-management/users/license/:license_id/role", controllers.GetRoleForUser)
 			groupPricing.GET("quotes/get-industries", controllers.GetGroupPricingIndustriesForQuotes)
 			groupPricing.GET("quotes/benefit-escalations", controllers.GetBenefitEscalationOptions)

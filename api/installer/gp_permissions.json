@@ -136,6 +136,16 @@
     "description": "Can navigate to bordereaux management."
   },
   {
+    "slug": "navigation:manage_binder_fees",
+    "name": "Manage Binder Fees Navigation",
+    "description": "Can navigate to binder fee management."
+  },
+  {
+    "slug": "navigation:manage_commission_structures",
+    "name": "Manage Commission Structures Navigation",
+    "description": "Can navigate to commission structure management."
+  },
+  {
     "slug": "navigation:manage_users",
     "name": "Manage Users Navigation",
     "description": "Can navigate to user management."

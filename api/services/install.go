@@ -125,38 +125,12 @@ func BaseData(initTables bool) {
 	}
 
 	// Seed default GP roles (only if no roles exist yet)
-	seedDefaultRoles()
+	gpDefaultRoles := seedDefaultRoles()
 
-	// Valuation User Permissions
-	file, err = installer.Files.Open("val_permissions.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	body, err = io.ReadAll(file)
-	valPermissions := make([]models.ValPermission, 0)
-
-	_ = json.Unmarshal(body, &valPermissions)
-
-	var valCount int64
-	DB.Model(&models.ValPermission{}).Count(&valCount)
-	if valCount == 0 {
-		DB.Where("id > 0").Delete(&models.ValPermission{})
-		err = DB.CreateInBatches(valPermissions, 100).Error
-	} else {
-		for _, vp := range valPermissions {
-			var valPermission models.ValPermission
-			DB.Where("slug = ?", vp.Slug).First(&valPermission)
-			if valPermission.ID == 0 {
-				err = DB.Create(&vp).Error
-				if err != nil {
-					fmt.Println(err)
-				}
-			}
-		}
-	}
-
-	// Seed default valuation roles
-	seedValDefaultRoles()
+	// Reconcile navigation:* perms on existing default roles to match the JSON.
+	// Why: seedDefaultRoles only assigns perms when a role has none, so changes
+	// to gp_default_roles.json never reach existing installs without this sync.
+	syncDefaultRoleNavigation(gpDefaultRoles)
 
 	//ModelPointVariables
 	file, err = installer.Files.Open("model_point_variables.json")
@@ -426,22 +400,22 @@ type DefaultRole struct {
 	Permissions []string `json:"permissions"`
 }
 
-func seedDefaultRoles() {
+func seedDefaultRoles() []DefaultRole {
 	file, err := installer.Files.Open("gp_default_roles.json")
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to open gp_default_roles.json")
-		return
+		return nil
 	}
 	body, err := io.ReadAll(file)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to read gp_default_roles.json")
-		return
+		return nil
 	}
 
 	var defaultRoles []DefaultRole
 	if err := json.Unmarshal(body, &defaultRoles); err != nil {
 		log.Error().Err(err).Msg("Failed to parse gp_default_roles.json")
-		return
+		return nil
 	}
 
 	for _, dr := range defaultRoles {
@@ -478,58 +452,111 @@ func seedDefaultRoles() {
 	}
 
 	log.Info().Msg("Default role seeding complete")
+	return defaultRoles
 }
 
-func seedValDefaultRoles() {
-	file, err := installer.Files.Open("val_default_roles.json")
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to open val_default_roles.json")
-		return
-	}
-	body, err := io.ReadAll(file)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to read val_default_roles.json")
+// managedNavSlugs are the navigation:* permissions whose membership on default
+// roles is reconciled from gp_default_roles.json on every startup. Slugs not
+// listed here (including non-drawer slugs like navigation:results, and any
+// feature slugs) are left untouched on existing roles.
+var managedNavSlugs = []string{
+	"navigation:view_gp_dashboard",
+	"navigation:group_tables",
+	"navigation:view_metadata",
+	"navigation:view_quotes",
+	"navigation:view_schemes",
+	"navigation:manage_members",
+	"navigation:manage_scheme_migration",
+	"navigation:manage_claims",
+	"navigation:view_claims_analytics",
+	"navigation:manage_bordereaux",
+	"navigation:view_phi",
+	"navigation:view_phi_tables",
+	"navigation:view_phi_run_settings",
+	"navigation:view_phi_shock_settings",
+	"navigation:view_phi_run_results",
+	"navigation:view_premium_dashboard",
+	"navigation:manage_premium_schedules",
+	"navigation:manage_invoices",
+	"navigation:manage_payments",
+	"navigation:manage_premium_reconciliation",
+	"navigation:manage_arrears",
+	"navigation:view_statements",
+	"navigation:manage_users",
+}
+
+func syncDefaultRoleNavigation(defaultRoles []DefaultRole) {
+	if len(defaultRoles) == 0 {
 		return
 	}
 
-	var defaultRoles []DefaultRole
-	if err := json.Unmarshal(body, &defaultRoles); err != nil {
-		log.Error().Err(err).Msg("Failed to parse val_default_roles.json")
-		return
+	managed := make(map[string]bool, len(managedNavSlugs))
+	for _, slug := range managedNavSlugs {
+		managed[slug] = true
 	}
 
 	for _, dr := range defaultRoles {
-		var role models.ValUserRole
-		DB.Where("role_name = ?", dr.RoleName).Preload("Permissions").First(&role)
+		var role models.GPUserRole
+		if err := DB.Where("role_name = ?", dr.RoleName).Preload("Permissions").First(&role).Error; err != nil {
+			// Role doesn't exist (seedDefaultRoles failed to create it, or the
+			// install is brand-new and role was just made with the right perms).
+			// Either way, nothing to reconcile here.
+			continue
+		}
 
-		if role.ID == 0 {
-			role = models.ValUserRole{
-				RoleName:    dr.RoleName,
-				Description: dr.Description,
+		desiredManagedSlugs := make([]string, 0, len(dr.Permissions))
+		for _, slug := range dr.Permissions {
+			if managed[slug] {
+				desiredManagedSlugs = append(desiredManagedSlugs, slug)
 			}
-			if err := DB.Create(&role).Error; err != nil {
-				log.Error().Err(err).Msgf("Failed to create val role: %s", dr.RoleName)
+		}
+
+		currentSlugs := make(map[string]bool, len(role.Permissions))
+		untouched := make([]models.GPPermission, 0, len(role.Permissions))
+		for _, p := range role.Permissions {
+			currentSlugs[p.Slug] = true
+			if !managed[p.Slug] {
+				untouched = append(untouched, p)
+			}
+		}
+
+		needsChange := false
+		desiredSet := make(map[string]bool, len(desiredManagedSlugs))
+		for _, slug := range desiredManagedSlugs {
+			desiredSet[slug] = true
+			if !currentSlugs[slug] {
+				needsChange = true
+			}
+		}
+		if !needsChange {
+			for slug := range currentSlugs {
+				if managed[slug] && !desiredSet[slug] {
+					needsChange = true
+					break
+				}
+			}
+		}
+		if !needsChange {
+			continue
+		}
+
+		var desiredPerms []models.GPPermission
+		if len(desiredManagedSlugs) > 0 {
+			if err := DB.Where("slug IN ?", desiredManagedSlugs).Find(&desiredPerms).Error; err != nil {
+				log.Error().Err(err).Msgf("Failed to load desired nav permissions for role: %s", dr.RoleName)
 				continue
 			}
-			log.Info().Msgf("Created default val role: %s", dr.RoleName)
 		}
 
-		if len(role.Permissions) == 0 && len(dr.Permissions) > 0 {
-			var perms []models.ValPermission
-			DB.Where("slug IN ?", dr.Permissions).Find(&perms)
-			if len(perms) > 0 {
-				if err := DB.Model(&role).Association("Permissions").Replace(&perms); err != nil {
-					log.Error().Err(err).Msgf("Failed to associate permissions for val role: %s", dr.RoleName)
-				} else {
-					log.Info().Msgf("Associated %d permissions to val role: %s", len(perms), dr.RoleName)
-				}
-			} else {
-				log.Warn().Msgf("No matching permissions found for val role: %s", dr.RoleName)
-			}
+		final := append(untouched, desiredPerms...)
+		if err := DB.Model(&role).Association("Permissions").Replace(final); err != nil {
+			log.Error().Err(err).Msgf("Failed to sync nav permissions for role: %s", dr.RoleName)
+			continue
 		}
+		log.Info().Msgf("Synced navigation permissions for role: %s (%d nav, %d preserved)", dr.RoleName, len(desiredPerms), len(untouched))
 	}
 
-	log.Info().Msg("Default valuation role seeding complete")
+	log.Info().Msg("Default role navigation sync complete")
 }
 
 //func AddOtherTableData(product models.Product) {

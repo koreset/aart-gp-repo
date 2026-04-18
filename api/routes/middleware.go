@@ -3,6 +3,7 @@ package routes
 import (
 	"api/log"
 	"api/models"
+	"api/services"
 	"context"
 	"net/http"
 	"strings"
@@ -217,6 +218,88 @@ func GetActiveUser() gin.HandlerFunc {
 			c.Writer.Write([]byte("this action is unauthorized. No valid or licensed user in the header"))
 			return
 		}
+	}
+}
+
+// userPermissionsCacheKey holds the result of looking up the caller's
+// permissions on the Gin context, so a request passing through multiple
+// RequirePermission middlewares hits the DB once.
+const userPermissionsCacheKey = "__userPermissions"
+
+type userPermissions struct {
+	hasRole bool
+	slugs   map[string]bool
+}
+
+// resolveUserPermissions looks up (and caches on c) the active user's
+// permission set. Never panics — on any lookup error it logs and returns a
+// zero value so the caller can decide how to fail.
+//
+// Lookup priority: X-License-Id header (matches the frontend's
+// loadUserPermissions, which resolves by license_id). Falls back to the JWT
+// email if the header is missing — supports older clients and avoids
+// breaking non-Electron callers.
+func resolveUserPermissions(c *gin.Context) userPermissions {
+	if cached, ok := c.Get(userPermissionsCacheKey); ok {
+		if up, ok := cached.(userPermissions); ok {
+			return up
+		}
+	}
+
+	up := userPermissions{slugs: map[string]bool{}}
+
+	var hasRole bool
+	var slugs []string
+	var err error
+
+	if licenseId := strings.TrimSpace(c.GetHeader("X-License-Id")); licenseId != "" {
+		hasRole, slugs, err = services.GetPermissionsForLicense(licenseId)
+	} else {
+		email, _ := c.Get("userEmail")
+		emailStr, _ := email.(string)
+		if emailStr == "" {
+			c.Set(userPermissionsCacheKey, up)
+			return up
+		}
+		hasRole, slugs, err = services.GetPermissionsForEmail(emailStr)
+	}
+
+	if err != nil {
+		log.WithField("error", err.Error()).Error("RequirePermission: failed to resolve user permissions")
+		c.Set(userPermissionsCacheKey, up)
+		return up
+	}
+	up.hasRole = hasRole
+	for _, s := range slugs {
+		up.slugs[s] = true
+	}
+	c.Set(userPermissionsCacheKey, up)
+	return up
+}
+
+// RequirePermission returns a middleware that enforces the given permission
+// slug. Matches the frontend's usePermissionCheck semantics:
+//   - user has no role assigned → allow (fresh-install bootstrap)
+//   - user has system:admin → allow
+//   - user has the specific slug → allow
+//   - otherwise 403.
+func RequirePermission(slug string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		up := resolveUserPermissions(c)
+
+		if !up.hasRole {
+			c.Next()
+			return
+		}
+		if up.slugs["system:admin"] || up.slugs[slug] {
+			c.Next()
+			return
+		}
+
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "You do not have the required permission: " + slug,
+		})
 	}
 }
 
