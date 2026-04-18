@@ -6,7 +6,10 @@
       "Bash(yarn type-check *)",
       "Bash(npx vue-tsc *)",
       "Bash(yarn vitest:*)",
-      "Bash(go vet:*)"
+      "Bash(go vet:*)",
+      "Bash(find *)",
+      "Bash(git checkout *)",
+      "Bash(go mod *)"
     ]
   }
 }

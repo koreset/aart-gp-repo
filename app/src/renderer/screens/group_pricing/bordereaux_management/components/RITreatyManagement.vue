@@ -1103,6 +1103,9 @@ import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import DataGrid from '@/renderer/components/tables/DataGrid.vue'
+import { useBordereauxStore } from '@/renderer/store/bordereaux'
+
+const bordereauxStore = useBordereauxStore()
 
 const treaties = ref([])
 const brokers = ref([])
@@ -1989,8 +1992,7 @@ async function confirmDelete() {
 async function loadAvailableSchemes() {
   if (availableSchemes.value.length > 0) return
   try {
-    const res = await GroupPricingService.getSchemesInforce()
-    availableSchemes.value = res.data || []
+    availableSchemes.value = await bordereauxStore.loadSchemes()
   } catch {}
 }
 

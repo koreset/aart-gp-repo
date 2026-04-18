@@ -4,6 +4,7 @@ import (
 	appLog "api/log"
 	"api/models"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -67,6 +68,13 @@ func CreateBordereauxDeadline(req models.CreateDeadlineRequest, user models.AppU
 	if err := DB.Create(&dl).Error; err != nil {
 		return dl, fmt.Errorf("failed to create deadline: %w", err)
 	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "bordereaux_deadlines",
+		EntityID:  strconv.Itoa(dl.ID),
+		Action:    "CREATE",
+		ChangedBy: user.UserName,
+	}, struct{}{}, dl)
 	return dl, nil
 }
 
@@ -122,26 +130,40 @@ func UpdateDeadlineStatus(id int, req models.UpdateDeadlineStatusRequest, user m
 	if err := DB.First(&dl, id).Error; err != nil {
 		return dl, fmt.Errorf("deadline not found: %w", err)
 	}
+	before := dl
 
 	switch req.Status {
-	case "waived":
+	case StatusDeadlineWaived:
+		if err := ValidateDeadlineTransition(dl.Status, StatusDeadlineWaived); err != nil {
+			return dl, err
+		}
 		now := time.Now()
-		dl.Status = "waived"
+		dl.Status = StatusDeadlineWaived
 		dl.WaivedBy = user.UserName
 		dl.WaivedAt = &now
 		dl.WaiverReason = req.WaiverReason
-	case "pending":
-		dl.Status = "pending"
+	case StatusDeadlinePending:
+		if err := ValidateDeadlineTransition(dl.Status, StatusDeadlinePending); err != nil {
+			return dl, err
+		}
+		dl.Status = StatusDeadlinePending
 		dl.WaivedBy = ""
 		dl.WaivedAt = nil
 		dl.WaiverReason = ""
 	default:
-		return dl, fmt.Errorf("invalid status '%s': must be 'waived' or 'pending'", req.Status)
+		return dl, fmt.Errorf("invalid status '%s': must be '%s' or '%s'", req.Status, StatusDeadlineWaived, StatusDeadlinePending)
 	}
 
 	if err := DB.Save(&dl).Error; err != nil {
 		return dl, fmt.Errorf("failed to update deadline: %w", err)
 	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "bordereaux_deadlines",
+		EntityID:  strconv.Itoa(dl.ID),
+		Action:    "UPDATE",
+		ChangedBy: user.UserName,
+	}, before, dl)
 	return dl, nil
 }
 
@@ -154,9 +176,30 @@ func LinkDeadlineToSubmission(schemeID, month, year, submissionID int) {
 	if err != nil {
 		return // no deadline configured — not an error
 	}
-	dl.Status = "received"
+	if vErr := ValidateDeadlineTransition(dl.Status, StatusDeadlineReceived); vErr != nil {
+		// Submission landed against a waived or already-received deadline — log
+		// the attempted transition and leave the existing status intact.
+		appLog.WithFields(map[string]interface{}{
+			"deadline_id":   dl.ID,
+			"current":       dl.Status,
+			"submission_id": submissionID,
+			"error":         vErr.Error(),
+		}).Warn("Skipping deadline status update on submission link")
+		return
+	}
+	before := dl
+	dl.Status = StatusDeadlineReceived
 	dl.LinkedSubmissionID = &submissionID
 	DB.Save(&dl)
+	// Auto-link triggered by an upload — attributed to "system" since the
+	// submission workflow is the actor, not an interactive user action.
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "bordereaux_deadlines",
+		EntityID:  strconv.Itoa(dl.ID),
+		Action:    "UPDATE",
+		ChangedBy: "system",
+	}, before, dl)
 }
 
 // GetDeadlineStats returns aggregate counts across all deadlines, refreshing overdue statuses first.

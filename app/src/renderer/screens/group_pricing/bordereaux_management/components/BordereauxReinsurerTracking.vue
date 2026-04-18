@@ -162,6 +162,8 @@
                   table-title="Reinsurer Acceptances"
                   :show-export="true"
                   density="compact"
+                  :loading="loading"
+                  no-rows-message="No reinsurer acceptances yet — add one via the button above."
                 />
               </v-window-item>
 
@@ -200,6 +202,8 @@
                   table-title="Recovery Tracking"
                   :show-export="true"
                   density="compact"
+                  :loading="loading"
+                  no-rows-message="No recovery records in this period."
                 />
               </v-window-item>
             </v-window>

@@ -143,6 +143,8 @@
                 }"
                 :pagination="true"
                 :pagination-page-size="20"
+                :loading="loading"
+                no-rows-message="No RI bordereaux runs yet for the selected filters."
               />
             </div>
           </template>

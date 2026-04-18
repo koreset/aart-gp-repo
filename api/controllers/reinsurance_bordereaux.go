@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"api/log"
 	"api/models"
 	"api/services"
 	"net/http"
@@ -357,7 +358,9 @@ func ValidateRIBordereaux(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "run_id is required"})
 		return
 	}
-	summary, err := services.ValidateRIBordereaux(runID)
+	user := c.MustGet("user").(models.AppUser)
+	ctx := log.ContextWithUserInfo(c.Request.Context(), user.UserEmail, user.UserName)
+	summary, err := services.ValidateRIBordereaux(ctx, runID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

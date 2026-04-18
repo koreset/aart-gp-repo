@@ -20,10 +20,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
 
 	"gorm.io/gorm"
 )
+
+// newFileToken returns a short, collision-free token suitable for embedding in
+// a generated bordereaux filename. Replaces earlier time.Now().Unix()/UnixNano()
+// suffixes which would collide under concurrent writes.
+func newFileToken() string {
+	// First 12 hex chars of a v4 UUID (~48 bits) — plenty of uniqueness for
+	// filenames without producing an unwieldy path.
+	return strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
+}
 
 // ImportSchemeConfirmationsResult represents the result of the import and reconciliation process
 type ImportSchemeConfirmationsResult struct {
@@ -1109,15 +1119,34 @@ func GenerateBordereaux(ctx context.Context, req GenerateBordereauxRequest) (any
 	// Normalize type
 	t := strings.ToLower(strings.TrimSpace(req.Type))
 
+	sendBordereauxProgress(ctx, BordereauxProgressEvent{
+		Type:     t,
+		Phase:    "start",
+		Progress: 5,
+		Message:  fmt.Sprintf("Preparing %s bordereaux generation", t),
+	})
+
 	if req.GeneratePerScheme && len(req.SchemeIDs) > 0 {
 		var results []BordereauxReportMeta
-		for _, id := range req.SchemeIDs {
+		totalSchemes := len(req.SchemeIDs)
+		for idx, id := range req.SchemeIDs {
 			singleReq := req
 			singleReq.SchemeIDs = []int{id}
 			singleReq.GeneratePerScheme = false // prevent recursion if any
 
 			var res BordereauxReportMeta
 			var err error
+
+			// Per-scheme progress: 5% → 85% linearly across the scheme loop,
+			// leaving 85..100% for zipping and finalisation.
+			perSchemeProgress := 5 + int(float64(idx)/float64(totalSchemes)*80)
+			sendBordereauxProgress(ctx, BordereauxProgressEvent{
+				Type:     t,
+				Phase:    "generating",
+				Progress: perSchemeProgress,
+				Message:  fmt.Sprintf("Generating for scheme %d of %d", idx+1, totalSchemes),
+				Scheme:   fmt.Sprintf("%d", id),
+			})
 
 			switch t {
 			case "", "member":
@@ -1130,25 +1159,50 @@ func GenerateBordereaux(ctx context.Context, req GenerateBordereauxRequest) (any
 				singleReq.Type = "claim"
 				res, err = GenerateClaimBordereaux(ctx, singleReq)
 			default:
+				sendBordereauxProgress(ctx, BordereauxProgressEvent{
+					Type:     t,
+					Phase:    "failed",
+					Progress: 100,
+					Message:  fmt.Sprintf("Unsupported bordereaux type: %s", req.Type),
+				})
 				return nil, fmt.Errorf("unsupported bordereaux type: %s", req.Type)
 			}
 
 			if err != nil {
 				// Should we continue or fail fast? Failing fast for now.
+				sendBordereauxProgress(ctx, BordereauxProgressEvent{
+					Type:     t,
+					Phase:    "failed",
+					Progress: 100,
+					Message:  fmt.Sprintf("Failed for scheme %d: %v", id, err),
+				})
 				return nil, fmt.Errorf("failed for scheme %d: %w", id, err)
 			}
 			results = append(results, res)
 		}
 		if len(results) == 1 {
+			sendBordereauxProgress(ctx, BordereauxProgressEvent{
+				Type: t, Phase: "completed", Progress: 100,
+				Message: "Generation complete",
+			})
 			return results[0], nil
 		}
 
+		sendBordereauxProgress(ctx, BordereauxProgressEvent{
+			Type: t, Phase: "zipping", Progress: 90,
+			Message: fmt.Sprintf("Zipping %d generated files", len(results)),
+		})
+
 		// Zip results if multiple
-		zipFileName := fmt.Sprintf("bordereaux_%s_%d.zip", t, time.Now().Unix())
+		zipFileName := fmt.Sprintf("bordereaux_%s_%s.zip", t, newFileToken())
 		reportDir := filepath.Join("data", "reports")
 		zipPath := filepath.Join(reportDir, zipFileName)
 
 		if err := createZipArchive(zipPath, results); err != nil {
+			sendBordereauxProgress(ctx, BordereauxProgressEvent{
+				Type: t, Phase: "failed", Progress: 100,
+				Message: fmt.Sprintf("Zip failed: %v", err),
+			})
 			return nil, fmt.Errorf("failed to create zip archive: %w", err)
 		}
 
@@ -1225,24 +1279,54 @@ func GenerateBordereaux(ctx context.Context, req GenerateBordereauxRequest) (any
 			},
 		})
 
+		sendBordereauxProgress(ctx, BordereauxProgressEvent{
+			Type: t, Phase: "completed", Progress: 100,
+			Message: fmt.Sprintf("Generation complete (%d schemes)", len(results)),
+		})
 		return zipMeta, nil
 	}
 
 	if !req.GeneratePerScheme && len(req.SchemeIDs) > 0 {
+		sendBordereauxProgress(ctx, BordereauxProgressEvent{
+			Type: t, Phase: "generating", Progress: 30,
+			Message: "Generating combined bordereaux",
+		})
+		var out any
+		var err error
 		switch t {
 		case "", "member":
 			req.Type = "member"
-			return GenerateMemberBordereaux(ctx, req)
+			out, err = GenerateMemberBordereaux(ctx, req)
 		case "premium", "premiums":
 			req.Type = "premium"
-			return GeneratePremiumBordereaux(ctx, req)
+			out, err = GeneratePremiumBordereaux(ctx, req)
 		case "claim", "claims":
 			req.Type = "claim"
-			return GenerateClaimBordereaux(ctx, req)
+			out, err = GenerateClaimBordereaux(ctx, req)
 		default:
+			sendBordereauxProgress(ctx, BordereauxProgressEvent{
+				Type: t, Phase: "failed", Progress: 100,
+				Message: fmt.Sprintf("Unsupported bordereaux type: %s", req.Type),
+			})
 			return BordereauxReportMeta{}, fmt.Errorf("unsupported bordereaux type: %s", req.Type)
 		}
+		if err != nil {
+			sendBordereauxProgress(ctx, BordereauxProgressEvent{
+				Type: t, Phase: "failed", Progress: 100,
+				Message: err.Error(),
+			})
+			return out, err
+		}
+		sendBordereauxProgress(ctx, BordereauxProgressEvent{
+			Type: t, Phase: "completed", Progress: 100,
+			Message: "Generation complete",
+		})
+		return out, nil
 	}
+	sendBordereauxProgress(ctx, BordereauxProgressEvent{
+		Type: t, Phase: "failed", Progress: 100,
+		Message: fmt.Sprintf("Unsupported bordereaux type: %s", req.Type),
+	})
 	return nil, fmt.Errorf("unsupported bordereaux type: %s", req.Type)
 
 }
@@ -1635,7 +1719,7 @@ func GenerateMemberBordereaux(ctx context.Context, req GenerateBordereauxRequest
 	if format == "csv" {
 		ext = ".csv"
 	}
-	fileName := fmt.Sprintf("bordereaux_member_%d%02d_%d%s", start.Year(), int(start.Month()), time.Now().Unix(), ext)
+	fileName := fmt.Sprintf("bordereaux_member_%d%02d_%s%s", start.Year(), int(start.Month()), newFileToken(), ext)
 	outPath := filepath.Join(reportDir, fileName)
 	downloadURL := fmt.Sprintf("/group-pricing/bordereaux/download/%s", fileName)
 
@@ -2408,7 +2492,7 @@ func GenerateClaimBordereaux(ctx context.Context, req GenerateBordereauxRequest)
 	}
 	reportDir := filepath.Join("data", "reports")
 	_ = os.MkdirAll(reportDir, 0o755)
-	fileName := fmt.Sprintf("bordereaux_claim_%d%02d_%d.xlsx", start.Year(), int(start.Month()), time.Now().Unix())
+	fileName := fmt.Sprintf("bordereaux_claim_%d%02d_%s.xlsx", start.Year(), int(start.Month()), newFileToken())
 	if format == "csv" {
 		fileName = strings.TrimSuffix(fileName, ".xlsx") + ".csv"
 	}
@@ -2977,8 +3061,8 @@ func SubmitBordereauxBatch(ctx context.Context, req BordereauxBatchSubmitRequest
 				return fmt.Errorf("bordereaux %d not found: %w", id, err)
 			}
 
-			if bordereaux.Status != "approved" {
-				return fmt.Errorf("bordereaux %d cannot be submitted: status is '%s', must be 'approved'", id, bordereaux.Status)
+			if err := ValidateGeneratedBordereauxTransition(bordereaux.Status, StatusGeneratedSubmitted); err != nil {
+				return fmt.Errorf("bordereaux %d: %w", id, err)
 			}
 
 			// Retrieve GroupScheme to get contact email
@@ -3020,6 +3104,7 @@ func SubmitBordereauxBatch(ctx context.Context, req BordereauxBatchSubmitRequest
 				return fmt.Errorf("failed to create timeline entry: %w", err)
 			}
 
+			before := bordereaux
 			// Update bordereaux status and submission date
 			updates := map[string]interface{}{
 				"status":          "submitted",
@@ -3030,7 +3115,17 @@ func SubmitBordereauxBatch(ctx context.Context, req BordereauxBatchSubmitRequest
 			if err := tx.Model(&bordereaux).Updates(updates).Error; err != nil {
 				return fmt.Errorf("failed to update bordereaux status: %w", err)
 			}
-
+			// Reload so the audit "after" reflects the persisted state.
+			var after models.GeneratedBordereaux
+			if err := tx.First(&after, bordereaux.ID).Error; err == nil {
+				_ = writeAudit(tx, AuditContext{
+					Area:      "group-pricing",
+					Entity:    "generated_bordereaux",
+					EntityID:  bordereaux.GeneratedID,
+					Action:    "UPDATE",
+					ChangedBy: user.UserName,
+				}, before, after)
+			}
 			return nil
 		})
 
@@ -3058,11 +3153,12 @@ func ReviewGeneratedBordereaux(generatedID string, notes string, user models.App
 	if err := DB.Where("generated_id = ?", generatedID).First(&brd).Error; err != nil {
 		return brd, fmt.Errorf("bordereaux not found: %w", err)
 	}
-	if brd.Status != "draft" && brd.Status != "generated" {
-		return brd, fmt.Errorf("cannot review bordereaux with status '%s': must be 'draft' or 'generated'", brd.Status)
+	if err := ValidateGeneratedBordereauxTransition(brd.Status, StatusGeneratedReviewed); err != nil {
+		return brd, err
 	}
+	before := brd
 	now := time.Now()
-	brd.Status = "reviewed"
+	brd.Status = StatusGeneratedReviewed
 	brd.ReviewedBy = user.UserName
 	brd.ReviewedAt = &now
 	brd.LastUpdated = now
@@ -3072,6 +3168,13 @@ func ReviewGeneratedBordereaux(generatedID string, notes string, user models.App
 	if err := DB.Save(&brd).Error; err != nil {
 		return brd, fmt.Errorf("failed to save review: %w", err)
 	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "generated_bordereaux",
+		EntityID:  brd.GeneratedID,
+		Action:    "UPDATE",
+		ChangedBy: user.UserName,
+	}, before, brd)
 	timeline := models.BordereauxTimeline{
 		GeneratedBordereauxID: brd.GeneratedID,
 		Date:                  now,
@@ -3090,17 +3193,25 @@ func ApproveGeneratedBordereaux(generatedID string, notes string, user models.Ap
 	if err := DB.Where("generated_id = ?", generatedID).First(&brd).Error; err != nil {
 		return brd, fmt.Errorf("bordereaux not found: %w", err)
 	}
-	if brd.Status != "reviewed" {
-		return brd, fmt.Errorf("cannot approve bordereaux with status '%s': must be 'reviewed'", brd.Status)
+	if err := ValidateGeneratedBordereauxTransition(brd.Status, StatusGeneratedApproved); err != nil {
+		return brd, err
 	}
+	before := brd
 	now := time.Now()
-	brd.Status = "approved"
+	brd.Status = StatusGeneratedApproved
 	brd.ApprovedBy = user.UserName
 	brd.ApprovedAt = &now
 	brd.LastUpdated = now
 	if err := DB.Save(&brd).Error; err != nil {
 		return brd, fmt.Errorf("failed to save approval: %w", err)
 	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "generated_bordereaux",
+		EntityID:  brd.GeneratedID,
+		Action:    "UPDATE",
+		ChangedBy: user.UserName,
+	}, before, brd)
 	timeline := models.BordereauxTimeline{
 		GeneratedBordereauxID: brd.GeneratedID,
 		Date:                  now,
@@ -3119,16 +3230,24 @@ func ReturnOutboundToDraft(generatedID string, reason string, user models.AppUse
 	if err := DB.Where("generated_id = ?", generatedID).First(&brd).Error; err != nil {
 		return brd, fmt.Errorf("bordereaux not found: %w", err)
 	}
-	if brd.Status != "reviewed" && brd.Status != "approved" {
-		return brd, fmt.Errorf("cannot return bordereaux with status '%s' to draft: must be 'reviewed' or 'approved'", brd.Status)
+	if err := ValidateGeneratedBordereauxTransition(brd.Status, StatusGeneratedDraft); err != nil {
+		return brd, err
 	}
+	before := brd
 	now := time.Now()
-	brd.Status = "draft"
+	brd.Status = StatusGeneratedDraft
 	brd.ReturnReason = reason
 	brd.LastUpdated = now
 	if err := DB.Save(&brd).Error; err != nil {
 		return brd, fmt.Errorf("failed to return to draft: %w", err)
 	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "generated_bordereaux",
+		EntityID:  brd.GeneratedID,
+		Action:    "UPDATE",
+		ChangedBy: user.UserName,
+	}, before, brd)
 	timeline := models.BordereauxTimeline{
 		GeneratedBordereauxID: brd.GeneratedID,
 		Date:                  now,

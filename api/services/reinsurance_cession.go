@@ -566,11 +566,11 @@ func SubmitRIBordereaux(req models.SubmitRIBordereauxRequest, user models.AppUse
 	if err := DB.Where("run_id = ?", req.RunID).First(&run).Error; err != nil {
 		return run, fmt.Errorf("run not found: %w", err)
 	}
-	if run.Status != "validated" {
-		return run, fmt.Errorf("run must be validated before submission (current status: %s)", run.Status)
+	if err := ValidateRIBordereauxRunTransition(run.Status, StatusRIRunSubmitted); err != nil {
+		return run, err
 	}
 	now := time.Now()
-	run.Status = "submitted"
+	run.Status = StatusRIRunSubmitted
 	run.SubmittedAt = &now
 	run.SubmittedBy = user.UserName
 	run.UpdatedAt = now
@@ -587,8 +587,11 @@ func AcknowledgeRIBordereaux(runID string, user models.AppUser) (models.RIBorder
 	if err := DB.Where("run_id = ?", runID).First(&run).Error; err != nil {
 		return run, fmt.Errorf("run not found: %w", err)
 	}
+	if err := ValidateRIBordereauxRunTransition(run.Status, StatusRIRunAcknowledged); err != nil {
+		return run, err
+	}
 	now := time.Now()
-	run.Status = "acknowledged"
+	run.Status = StatusRIRunAcknowledged
 	run.AcknowledgedAt = &now
 	run.AcknowledgedBy = user.UserName
 	run.UpdatedAt = now
@@ -605,8 +608,12 @@ func AcknowledgeRIBordereauxReceipt(runID string, req models.AcknowledgeReceiptR
 	if err := DB.Where("run_id = ?", runID).First(&run).Error; err != nil {
 		return run, fmt.Errorf("run not found: %w", err)
 	}
-	if run.Status != "submitted" && run.Status != "acknowledged" {
-		return run, fmt.Errorf("receipt can only be logged for submitted or acknowledged runs (current: %s)", run.Status)
+	// Receipt acknowledgement is a no-op if the run is already acknowledged;
+	// otherwise require a legal transition into acknowledged.
+	if run.Status != StatusRIRunAcknowledged {
+		if err := ValidateRIBordereauxRunTransition(run.Status, StatusRIRunAcknowledged); err != nil {
+			return run, err
+		}
 	}
 	receivedDate := req.ReceivedDate
 	if receivedDate == "" {
@@ -616,7 +623,7 @@ func AcknowledgeRIBordereauxReceipt(runID string, req models.AcknowledgeReceiptR
 	run.ReceivedDate = receivedDate
 	run.AcknowledgedBy = user.UserName
 	run.AcknowledgedAt = &now
-	run.Status = "acknowledged"
+	run.Status = StatusRIRunAcknowledged
 	run.UpdatedAt = now
 	if err := DB.Save(&run).Error; err != nil {
 		return run, fmt.Errorf("failed to log receipt acknowledgement: %w", err)
@@ -824,12 +831,18 @@ func UpdateLargeClaimNotice(id int, req models.UpdateLargeClaimNoticeRequest, us
 		return notice, fmt.Errorf("notice %d not found: %w", id, err)
 	}
 	if req.Status != "" {
+		if !IsKnownLargeClaimNoticeStatus(req.Status) {
+			return notice, fmt.Errorf("unknown large-claim notice status %q", req.Status)
+		}
+		if err := ValidateLargeClaimNoticeTransition(notice.Status, req.Status); err != nil {
+			return notice, err
+		}
 		notice.Status = req.Status
-		if req.Status == "sent" && notice.SentAt == nil {
+		if req.Status == StatusNoticeSent && notice.SentAt == nil {
 			now := time.Now()
 			notice.SentAt = &now
 		}
-		if req.Status == "acknowledged" && notice.AcknowledgedAt == nil {
+		if req.Status == StatusNoticeAcknowledged && notice.AcknowledgedAt == nil {
 			now := time.Now()
 			notice.AcknowledgedAt = &now
 		}
@@ -871,13 +884,18 @@ func AcceptLargeClaimNotice(id int, req LargeClaimResponseRequest, user models.A
 	if err := DB.First(&notice, id).Error; err != nil {
 		return notice, fmt.Errorf("notice %d not found: %w", id, err)
 	}
+	if notice.Status != StatusNoticeAcknowledged {
+		if err := ValidateLargeClaimNoticeTransition(notice.Status, StatusNoticeAcknowledged); err != nil {
+			return notice, err
+		}
+	}
 	before := notice
 	now := time.Now()
 
-	notice.ResponseStatus = "accepted"
+	notice.ResponseStatus = ResponseNoticeAccepted
 	notice.RespondedAt = &now
 	notice.RespondedBy = user.UserName
-	notice.Status = "acknowledged"
+	notice.Status = StatusNoticeAcknowledged
 	if notice.AcknowledgedAt == nil {
 		notice.AcknowledgedAt = &now
 	}
@@ -909,13 +927,18 @@ func RejectLargeClaimNotice(id int, req LargeClaimResponseRequest, user models.A
 	if err := DB.First(&notice, id).Error; err != nil {
 		return notice, fmt.Errorf("notice %d not found: %w", id, err)
 	}
+	if notice.Status != StatusNoticeAcknowledged {
+		if err := ValidateLargeClaimNoticeTransition(notice.Status, StatusNoticeAcknowledged); err != nil {
+			return notice, err
+		}
+	}
 	before := notice
 	now := time.Now()
 
-	notice.ResponseStatus = "rejected"
+	notice.ResponseStatus = ResponseNoticeRejected
 	notice.RespondedAt = &now
 	notice.RespondedBy = user.UserName
-	notice.Status = "acknowledged"
+	notice.Status = StatusNoticeAcknowledged
 	if notice.AcknowledgedAt == nil {
 		notice.AcknowledgedAt = &now
 	}
@@ -944,10 +967,15 @@ func QueryLargeClaimNotice(id int, req LargeClaimResponseRequest, user models.Ap
 	if err := DB.First(&notice, id).Error; err != nil {
 		return notice, fmt.Errorf("notice %d not found: %w", id, err)
 	}
+	if notice.Status != StatusNoticeQueried {
+		if err := ValidateLargeClaimNoticeTransition(notice.Status, StatusNoticeQueried); err != nil {
+			return notice, err
+		}
+	}
 	before := notice
 	now := time.Now()
 
-	notice.Status = "queried"
+	notice.Status = StatusNoticeQueried
 	notice.RespondedAt = &now
 	notice.RespondedBy = user.UserName
 	if req.QueryDetails != "" {

@@ -23,7 +23,7 @@ The five most-production-blocking items are listed in Section 8. A prioritized r
 
 ---
 
-## 0. Implementation Status (session of 2026-04-17)
+## 0. Implementation Status (sessions of 2026-04-17 and 2026-04-18)
 
 Items in the roadmap below have been worked through. Status marks reflect code in this branch, not yet deployed or covered by tests unless noted.
 
@@ -60,7 +60,20 @@ Items in the roadmap below have been worked through. Status marks reflect code i
 | P2-4 Reconciliation notes column | ✅ Done | New `BordereauxConfirmationNote` table + migration; `AddReconciliationNote` writes there instead of fabricating a `_note` synthetic reconciliation row; new `GET /bordereaux/confirmations/:id/notes`; legacy filter kept as a safety net. |
 | P2-5 Reinsurer response on large-claim notices | ✅ Done | `LargeClaimNotice` gains `response_status` / `responded_at` / `responded_by` (with migration); three new endpoints `POST large-claims/:id/{accept,reject,query}` with audit entries and note history via `appendResponseNote`. |
 | P2-6 RI run amendment diff | ✅ Done | New `DiffRIBordereauxRuns` produces header / member-row / claim-row diffs with add/remove/change grouping; `GET /reinsurance/bordereaux/:run_id/diff?against=<run_id>`; defaults to `ParentRunID` when `against` omitted. |
-| P2-7 Status strings → enums + transition guards | ⏳ Pending | Intentionally deferred — wide-reaching refactor across ~15 models and their services; deserves its own branch. |
+| P2-7 Status strings → enums + transition guards | ✅ Done | New `services/status_transitions.go` declares per-entity status constants + transition maps + validators (`ValidateGeneratedBordereauxTransition`, etc.). Guards wired at all identity-mutation sites for GeneratedBordereaux / BordereauxReconciliationResult / BordereauxDeadline / EmployerSubmission / LargeClaimNotice / RIBordereauxRun / ClaimNotificationLog. Fixed the verbatim-copy bug in `UpdateLargeClaimNotice` — now rejects unknown statuses and illegal transitions. Bulk sweeper paths intentionally bypass guards. |
+
+### P3 — Quality
+
+| Item | Status | Notes |
+|---|---|---|
+| P3-1 Pinia store for bordereaux state | ✅ Done | New `store/bordereaux.ts` caches `schemes`, `templates`, `configurations`, `dashboardStats`, `fieldsByType`. Cache-first loaders with in-flight dedup + `force: true` escape hatch + `invalidate*` helpers called at mutation sites. `BordereauxManagement`, `BordereauxGenerationForm`, `BordereauxTemplateManager`, `BordereauxReconciliation`, `RITreatyManagement` all rewired. |
+| P3-2 WebSocket job progress | ✅ Done | Two new `WSMessageType` values (`bordereaux_progress`, `ri_validation_progress`); `sendBordereauxProgress` / `sendRIValidationProgress` emit at milestones of `GenerateBordereaux` (per-scheme loop, zip, complete) and `ValidateRIBordereaux` (L1 / L2 / L3 / complete). `BordereauxGenerationForm.vue` subscribes via `useWebSocket` and binds the progress dialog to live payloads + phase chip. RI validation UI not wired (no existing progress surface). |
+| P3-3 Confirmation dialogs on destructive actions | ✅ Done | Template activate/deactivate both prompt via `ConfirmDialog` before firing the API. Generation form: save-configuration prompts on duplicate name; update-configuration prompts before overwriting. |
+| P3-4 Extract months array + apply i18n | ⏳ Pending | Not started. Shared `months` arrays duplicate in `RIBordereauxGeneration.vue:405`, `BordereauxGenerationForm.vue:925`, `BordereauxClaimNotifications.vue:510`; module strings are English-only despite 13 locale directories. |
+| P3-5 Audit writes on state changes | ✅ Done | `writeAudit` added to the outbound lifecycle (`Review` / `Approve` / `ReturnToDraft` / `SubmitBatch`), inbound lifecycle (`CreateEmployerSubmission` + `Upload` + `Review` / `RaiseQuery` / `Accept` / `Reject`), deadline lifecycle (`Create` + `UpdateStatus` + `LinkToSubmission` as system), and template CRUD (signatures now take `user`). Bulk sweeper paths intentionally uninstrumented. |
+| P3-6 Cross-field validation on generation form | ✅ Done (narrow) | Three rules: `endAfterStart` (custom period), `templateMatchesType`, and `showZeroRecordsWarning`. Template dropdown filtered to matching types; type change auto-clears stale template selection. Template Manager and Claim Notifications validation gaps (§2.6 siblings) deferred. |
+| P3-7 Empty/loading states on data grids | ✅ Done | Shared `DataGrid` wrapper gained optional `loading` + `noRowsMessage` props with overlay management (`applyOverlay`). Three direct `ag-grid-vue` usages (`RIBordereauxGeneration`, `RIClaimsBordereaux` notices + cat, `BordereauxClaimNotifications`) wired with inline overlay templates + grid-ready handlers + watchers. `BordereauxReinsurerTracking` both grids bound via new props. |
+| P3-8 UUID-based filename generation | ✅ Done | New `newFileToken()` helper (12-char UUID slice); replaces `time.Now().UnixNano()` in submission uploads and `time.Now().Unix()` in the three generated-bordereaux filename builders (zip, member, claim). Premium path already used `generatedID`. `google/uuid` promoted from indirect to direct in go.mod. |
 
 ### Outside the bordereaux module
 
@@ -68,7 +81,7 @@ Items in the roadmap below have been worked through. Status marks reflect code i
 |---|---|---|
 | GAP-22 (auth & authorization disabled) | ⏳ Pending | Explored and planned in this session but deferred; see `api/docs/gap_analysis.md` for the original framing. JWT signature validation is the load-bearing first step. |
 
-### Migrations added this session
+### Migrations added across both sessions
 
 | File | Purpose |
 |---|---|
@@ -79,6 +92,8 @@ Items in the roadmap below have been worked through. Status marks reflect code i
 
 All present in `api/migrations/{postgresql,mysql,mssql}/`. Run in timestamp order.
 
+The pre-existing `20260417080000_create_bav_verification_log.sql` (not mine) had a multi-statement-per-line bug in the MySQL variant that blocked the runner; fixed in-place by splitting each `PREPARE` / `EXECUTE` / `DEALLOCATE` onto its own line. My own four migrations use the same split format.
+
 ### New background workers
 
 Registered in `main.go` alongside the existing sweepers:
@@ -87,10 +102,21 @@ Registered in `main.go` alongside the existing sweepers:
 
 ### Known follow-ups
 
-- Template **version history** (P2-1 residual) needs a history table + audit wiring — currently returns an honest "not available yet" flash.
-- **P2-7** status enums + transition guards — deferred refactor.
-- **P1-7 / GAP-22** frontend permission enforcement can't be meaningfully tightened until JWT signature verification and route-level enforcement land.
-- Export Report on `BordereauxAnalyticsDashboard` was removed (was a no-op); an xlsx export can be added as a follow-up if analysts need one beyond the compliance report.
+**Explicit roadmap**
+- **P3-4 — i18n + `months` constant.** Extract shared months array (duplicated in `RIBordereauxGeneration.vue`, `BordereauxGenerationForm.vue`, `BordereauxClaimNotifications.vue`), thread `$t()` across the bordereaux components, populate 13 locale files. Mechanical, not started.
+
+**Narrative-section gaps (below the roadmap but called out in §2–§6)**
+- **§2.10 context-menu DOM lifecycle** in `RIBordereauxGeneration.vue:530–608` — manual `create/destroy` on the run context menu without `onBeforeUnmount` cleanup. Small one-file fix.
+- **§3.8 confirmation-to-bordereaux fragile matching** — first match wins on `(scheme_id, period)` when multiple generated bordereaux exist. Needs explicit `generated_id` on the confirmation payload or ambiguity detection.
+- **§3.10 remaining hardcoded values** — claim-notification SLA fallback of 30 days in `bordereaux_claim_notifications.go:236–241` still hardcoded (the reconciliation tolerance was handled in P2-3 and the filename `UnixNano` race in P3-8).
+- **§4.4 UI cross-reference** — `BordereauxReconciliation.vue` doesn't let users click through from a reconciled scheme to the linked `PremiumSchedule` (the `LinkedPremiumScheduleID` exists on `EmployerSubmission`).
+- **§5 data-model gaps** — `BordereauxTemplate` has no version field / soft delete (see dedicated follow-up below); `BordereauxDeadline` has no reminder-schedule fields; `ClaimNotificationLog` has no reminder schedule; `EmployerSubmission` has no idempotency key on apply-exits / apply-amendments (re-applying an accepted submission double-syncs); `RIBordereauxRun` has no `last_validated_at` timestamp.
+- **X-04 rate limiting** — no throttle on `GenerateBordereaux` or `ValidateRIBordereaux` endpoints; a logged-in user can kick off arbitrary parallel runs.
+
+**Stand-alone projects (need their own planning pass)**
+- **Template version history** (P2-1 residual). UI currently returns an honest "not available yet" flash; full implementation requires a `bordereaux_template_versions` history table plus a viewer UI. See detailed scope notes below.
+- **P1-7 / GAP-22** — frontend permission enforcement can't be meaningfully tightened until backend JWT signature verification and route-level enforcement land. Explored in this session and parked.
+- **Export Report on `BordereauxAnalyticsDashboard`** — removed as a no-op. An xlsx export similar to the compliance report can be added if analysts need one.
 
 ---
 

@@ -161,6 +161,9 @@
                   :row-data="notifications"
                   :default-col-def="defaultColDef"
                   :loading="loading"
+                  :overlay-loading-template="loadingOverlay"
+                  overlay-no-rows-template='<span class=\'ag-overlay-no-rows-center\'>No claim notifications match these filters.</span>'
+                  @grid-ready="onGridReady"
                 />
               </v-card-text>
             </v-card>
@@ -458,6 +461,20 @@ import PremiumManagementService from '@/renderer/api/PremiumManagementService'
 
 const loading = ref(false)
 const saving = ref(false)
+const loadingOverlay =
+  '<span class="ag-overlay-loading-center">Loading…</span>'
+const gridApi = ref<any>(null)
+const onGridReady = (p: any) => {
+  gridApi.value = p.api
+  applyOverlay()
+}
+const applyOverlay = () => {
+  if (!gridApi.value) return
+  if (loading.value) gridApi.value.showLoadingOverlay()
+  else if (!notifications.value?.length) gridApi.value.showNoRowsOverlay()
+  else gridApi.value.hideOverlay()
+}
+watch(loading, applyOverlay)
 const generating = ref(false)
 const actionLoading = ref(false)
 const schemesLoading = ref(false)
@@ -465,6 +482,7 @@ const exporting = ref(false)
 const addDialog = ref(false)
 const generateDialog = ref(false)
 const notifications = ref<any[]>([])
+watch(notifications, applyOverlay, { deep: true })
 const inForceSchemes = ref<any[]>([])
 const schemeClaims = ref<any[]>([])
 const schemeClaimsLoading = ref(false)

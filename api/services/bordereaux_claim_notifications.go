@@ -119,12 +119,12 @@ func MarkNotificationSent(id int, notes string, user models.AppUser) (models.Cla
 	if err := DB.First(&n, id).Error; err != nil {
 		return n, fmt.Errorf("notification not found")
 	}
-	if n.Status != "pending" && n.Status != "overdue" {
-		return n, fmt.Errorf("only pending or overdue notifications can be marked as sent (current status: %s)", n.Status)
+	if err := ValidateClaimNotificationLogTransition(n.Status, StatusClaimNotifSent); err != nil {
+		return n, err
 	}
 	before := n
 	now := time.Now()
-	n.Status = "sent"
+	n.Status = StatusClaimNotifSent
 	n.SentAt = &now
 	if notes != "" {
 		if n.Notes != "" {
@@ -152,12 +152,12 @@ func MarkNotificationAcknowledged(id int, notes string, user models.AppUser) (mo
 	if err := DB.First(&n, id).Error; err != nil {
 		return n, fmt.Errorf("notification not found")
 	}
-	if n.Status != "sent" {
-		return n, fmt.Errorf("only sent notifications can be acknowledged (current status: %s)", n.Status)
+	if err := ValidateClaimNotificationLogTransition(n.Status, StatusClaimNotifAcknowledged); err != nil {
+		return n, err
 	}
 	before := n
 	now := time.Now()
-	n.Status = "acknowledged"
+	n.Status = StatusClaimNotifAcknowledged
 	n.AcknowledgedAt = &now
 	if notes != "" {
 		if n.Notes != "" {

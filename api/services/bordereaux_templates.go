@@ -2,14 +2,25 @@ package services
 
 import (
 	"api/models"
+	"strconv"
 	"time"
 
 	"gorm.io/gorm"
 )
 
-func CreateBordereauxTemplate(t *models.BordereauxTemplate) error {
+func CreateBordereauxTemplate(t *models.BordereauxTemplate, user models.AppUser) error {
 	t.CreatedAt = time.Now()
-	return DB.Create(t).Error
+	if err := DB.Create(t).Error; err != nil {
+		return err
+	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "bordereaux_templates",
+		EntityID:  strconv.Itoa(t.ID),
+		Action:    "CREATE",
+		ChangedBy: user.UserName,
+	}, struct{}{}, *t)
+	return nil
 }
 
 func GetBordereauxTemplates() ([]models.BordereauxTemplate, error) {
@@ -24,7 +35,8 @@ func GetBordereauxTemplateByID(id int) (models.BordereauxTemplate, error) {
 	return t, err
 }
 
-func UpdateBordereauxTemplate(id int, payload models.BordereauxTemplate) (models.BordereauxTemplate, error) {
+func UpdateBordereauxTemplate(id int, payload models.BordereauxTemplate, user models.AppUser) (models.BordereauxTemplate, error) {
+	before, _ := GetBordereauxTemplateByID(id)
 	// Ensure we update the specific record
 	payload.ID = id
 	payload.UpdatedAt = time.Now()
@@ -33,11 +45,32 @@ func UpdateBordereauxTemplate(id int, payload models.BordereauxTemplate) (models
 		return payload, err
 	}
 	// Return the latest state
-	return GetBordereauxTemplateByID(id)
+	updated, err := GetBordereauxTemplateByID(id)
+	if err == nil {
+		_ = writeAudit(DB, AuditContext{
+			Area:      "group-pricing",
+			Entity:    "bordereaux_templates",
+			EntityID:  strconv.Itoa(id),
+			Action:    "UPDATE",
+			ChangedBy: user.UserName,
+		}, before, updated)
+	}
+	return updated, err
 }
 
-func DeleteBordereauxTemplate(id int) error {
-	return DB.Where("id = ?", id).Delete(&models.BordereauxTemplate{}).Error
+func DeleteBordereauxTemplate(id int, user models.AppUser) error {
+	before, _ := GetBordereauxTemplateByID(id)
+	if err := DB.Where("id = ?", id).Delete(&models.BordereauxTemplate{}).Error; err != nil {
+		return err
+	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "bordereaux_templates",
+		EntityID:  strconv.Itoa(id),
+		Action:    "DELETE",
+		ChangedBy: user.UserName,
+	}, before, struct{}{})
+	return nil
 }
 
 func IncrementTemplateUsage(id int) error {
