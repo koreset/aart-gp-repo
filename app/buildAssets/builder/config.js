@@ -2,7 +2,7 @@
 const dotenv = require('dotenv')
 
 const baseConfig = {
-  productName: 'AART Group Pricing',
+  productName: 'AART Group Risk',
   appId: 'za.co.adsolutions.aart-gp',
   asar: true,
   extends: null,
