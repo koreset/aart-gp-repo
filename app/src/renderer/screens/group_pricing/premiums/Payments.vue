@@ -61,7 +61,7 @@
               v-if="hasPermission('premiums:record_payment')"
               color="primary"
               prepend-icon="mdi-plus"
-              @click="recordDialog = true"
+              @click="openRecordDialog"
             >
               Record Payment
             </v-btn>
@@ -112,15 +112,28 @@
                 density="compact"
                 prepend-inner-icon="mdi-office-building-outline"
                 :loading="schemesLoading"
+                @update:model-value="onSchemeSelected"
               />
             </v-col>
             <v-col cols="12" md="6">
-              <v-text-field
-                v-model.number="payForm.invoice_id"
-                label="Invoice ID (optional)"
-                type="number"
+              <v-autocomplete
+                v-model="payForm.invoice_id"
+                label="Apply to invoice (optional)"
+                :items="openInvoicesForScheme"
+                item-title="label"
+                item-value="id"
                 variant="outlined"
                 density="compact"
+                :loading="invoicesLoading"
+                :disabled="!payForm.scheme_id"
+                :no-data-text="
+                  payForm.scheme_id
+                    ? 'No open invoices for this scheme'
+                    : 'Select a scheme first'
+                "
+                clearable
+                hint="Leave blank to record as unallocated — auto-match will handle it"
+                persistent-hint
               />
             </v-col>
             <v-col cols="12" md="6">
@@ -288,6 +301,12 @@ const loading = ref(false)
 const savingPayment = ref(false)
 const schemesLoading = ref(false)
 const inForceSchemes = ref<{ id: number; name: string }[]>([])
+const invoicesLoading = ref(false)
+// Open invoices (status 'sent' or 'partial') for the currently selected scheme,
+// formatted for display in the "Apply to invoice" autocomplete.
+const openInvoicesForScheme = ref<
+  { id: number; label: string; balance: number }[]
+>([])
 const importing = ref(false)
 const voiding = ref(false)
 const recordDialog = ref(false)
@@ -456,6 +475,56 @@ function showSnack(msg: string, color = 'success') {
 const resetData = () => {
   bulkDialog.value = false
   importResult.value = null
+}
+
+// Resets the Record Payment form and opens the dialog, also preloading open
+// invoices for the currently selected scheme (if any).
+function openRecordDialog() {
+  payForm.value = {
+    scheme_id: payForm.value.scheme_id,
+    invoice_id: null,
+    payment_date: today,
+    method: 'eft',
+    amount: 0,
+    bank_reference: '',
+    notes: ''
+  }
+  openInvoicesForScheme.value = []
+  recordDialog.value = true
+  if (payForm.value.scheme_id) {
+    onSchemeSelected(payForm.value.scheme_id)
+  }
+}
+
+// Fetches open invoices (status 'sent' or 'partial') for a scheme and formats
+// them for the Record Payment autocomplete. Called when the user selects or
+// changes the scheme in the dialog.
+async function onSchemeSelected(schemeId: number | null) {
+  // Reset the invoice pick whenever the scheme changes.
+  payForm.value.invoice_id = null
+  openInvoicesForScheme.value = []
+  if (!schemeId) return
+  invoicesLoading.value = true
+  try {
+    const res = await PremiumManagementService.getInvoices({
+      scheme_id: schemeId
+    })
+    const all = (res.data?.data ?? res.data ?? []) as any[]
+    openInvoicesForScheme.value = all
+      .filter((inv) => inv.status === 'sent' || inv.status === 'partial')
+      .map((inv) => ({
+        id: inv.id,
+        balance: inv.balance,
+        label: `${inv.invoice_number} · ${inv.issue_date} · ${fmtCurrency(
+          inv.balance
+        )} outstanding`
+      }))
+  } catch (e) {
+    console.error('Failed to load open invoices', e)
+    showSnack('Failed to load invoices for scheme', 'error')
+  } finally {
+    invoicesLoading.value = false
+  }
 }
 
 async function loadInForceSchemes() {

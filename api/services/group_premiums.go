@@ -430,8 +430,11 @@ func RecordPayment(req models.RecordPaymentRequest, user models.AppUser) (models
 			if err := tx.First(&invoice, *payment.InvoiceID).Error; err == nil {
 				invoice.PaidAmount += payment.Amount
 				invoice.Balance = invoice.NetPayable - invoice.PaidAmount
-				if invoice.Balance <= 0 {
+				// Use AutoCloseTolerance so sub-rand rounding residues close
+				// out as 'paid' instead of lingering as 'partial'.
+				if invoice.Balance <= AutoCloseTolerance {
 					invoice.Status = "paid"
+					invoice.Balance = 0
 				} else {
 					invoice.Status = "partial"
 				}
@@ -443,20 +446,49 @@ func RecordPayment(req models.RecordPaymentRequest, user models.AppUser) (models
 				if err := tx.Save(&payment).Error; err != nil {
 					return err
 				}
+
+				// Sync v2 reconciliation ledger: ensure reconciliation items
+				// exist for both sides, record the PaymentAllocation, and
+				// recalculate both items from the ledger. Without this, the
+				// invoice's ReconciliationItem would keep showing the full
+				// original amount as unallocated.
+				if _, err := getOrCreateInvoiceItemTx(tx, invoice); err != nil {
+					return err
+				}
+				if _, err := getOrCreatePaymentItemTx(tx, payment); err != nil {
+					return err
+				}
+				alloc := models.PaymentAllocation{
+					PaymentID:       payment.ID,
+					InvoiceID:       *payment.InvoiceID,
+					AllocatedAmount: payment.Amount,
+					AllocationType:  "payment",
+					Reference:       "Direct match on payment recording",
+					AllocatedBy:     user.UserName,
+				}
+				if err := tx.Create(&alloc).Error; err != nil {
+					return err
+				}
+				if err := recalcReconciliationItem(tx, "payment", payment.ID); err != nil {
+					return err
+				}
+				if err := recalcReconciliationItem(tx, "invoice", *payment.InvoiceID); err != nil {
+					return err
+				}
 			}
 		} else {
 			payment.Status = "unmatched"
 			if err := tx.Save(&payment).Error; err != nil {
 				return err
 			}
+			// Unmatched payment: create the reconciliation item so it shows
+			// up in the Unallocated Payments workspace for auto-match.
+			if _, err := getOrCreatePaymentItemTx(tx, payment); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
-
-	// Create reconciliation item for the new payment
-	if err == nil {
-		EnsureReconciliationItemForPayment(payment)
-	}
 
 	return payment, err
 }
@@ -1197,8 +1229,9 @@ func CreateAdjustmentNote(req models.AdjustmentNoteRequest, user models.AppUser)
 		} else {
 			invoice.Balance += req.Amount
 		}
-		if invoice.Balance <= 0 {
+		if invoice.Balance <= AutoCloseTolerance {
 			invoice.Status = "paid"
+			invoice.Balance = 0
 		}
 		return tx.Save(&invoice).Error
 	})
@@ -1434,8 +1467,9 @@ func AutoMatchPayments(user models.AppUser) (models.AutoMatchResult, error) {
 		err := DB.Transaction(func(tx *gorm.DB) error {
 			invoice.PaidAmount += p.Amount
 			invoice.Balance = invoice.NetPayable - invoice.PaidAmount
-			if invoice.Balance <= 0 {
+			if invoice.Balance <= AutoCloseTolerance {
 				invoice.Status = "paid"
+				invoice.Balance = 0
 			} else {
 				invoice.Status = "partial"
 			}
@@ -1481,8 +1515,9 @@ func ManualMatchPayment(req models.ManualMatchRequest, user models.AppUser) (mod
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		invoice.PaidAmount += payment.Amount
 		invoice.Balance = invoice.NetPayable - invoice.PaidAmount
-		if invoice.Balance <= 0 {
+		if invoice.Balance <= AutoCloseTolerance {
 			invoice.Status = "paid"
+			invoice.Balance = 0
 		} else {
 			invoice.Status = "partial"
 		}
@@ -1655,6 +1690,32 @@ func GetArrearsHistory(schemeID int) ([]models.ArrearsHistory, error) {
 	var history []models.ArrearsHistory
 	err := DB.Where("scheme_id = ?", schemeID).Order("created_at DESC").Find(&history).Error
 	return history, err
+}
+
+// GetPaymentPlans returns all payment plans for a scheme, each with its
+// ordered instalments. Plans are ordered newest-first.
+func GetPaymentPlans(schemeID int) ([]models.PaymentPlanWithInstalments, error) {
+	var plans []models.PaymentPlan
+	if err := DB.Where("scheme_id = ?", schemeID).
+		Order("created_at DESC").
+		Find(&plans).Error; err != nil {
+		return nil, err
+	}
+
+	result := make([]models.PaymentPlanWithInstalments, 0, len(plans))
+	for _, p := range plans {
+		var instalments []models.PaymentPlanInstalment
+		if err := DB.Where("plan_id = ?", p.ID).
+			Order("date ASC").
+			Find(&instalments).Error; err != nil {
+			return nil, err
+		}
+		result = append(result, models.PaymentPlanWithInstalments{
+			PaymentPlan: p,
+			Instalments: instalments,
+		})
+	}
+	return result, nil
 }
 
 // ---------------------------------------------------------------------------

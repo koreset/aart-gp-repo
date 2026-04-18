@@ -1229,21 +1229,25 @@ export default {
       data
     )
   },
-  listBordereauxEscalations(params: {
-    assigned_to?: string
-    priority?: string
-    overdue_only?: boolean
-  } = {}) {
+  listBordereauxEscalations(
+    params: {
+      assigned_to?: string
+      priority?: string
+      overdue_only?: boolean
+    } = {}
+  ) {
     return Api.get('/group-pricing/bordereaux/reconciliation/escalations', {
       params
     })
   },
-  getBordereauxAnalytics(params: {
-    period?: string
-    from?: string
-    to?: string
-    scheme_id?: number
-  } = {}) {
+  getBordereauxAnalytics(
+    params: {
+      period?: string
+      from?: string
+      to?: string
+      scheme_id?: number
+    } = {}
+  ) {
     return Api.get('/group-pricing/bordereaux/analytics', { params })
   },
   addDiscrepancyComment(resultId, data) {
@@ -1279,7 +1283,9 @@ export default {
       responseType: 'blob'
     })
   },
-  downloadBordereauxComplianceReport(params: { from?: string; to?: string } = {}) {
+  downloadBordereauxComplianceReport(
+    params: { from?: string; to?: string } = {}
+  ) {
     return Api.get('/group-pricing/bordereaux/compliance-report', {
       params,
       responseType: 'blob'

@@ -490,6 +490,7 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.POST("premiums/schemes/:scheme_id/suspend", controllers.SuspendSchemeCover)
 			groupPricing.POST("premiums/schemes/:scheme_id/reinstate", controllers.ReinstateSchemeCover)
 			groupPricing.GET("premiums/schemes/:scheme_id/arrears-history", controllers.GetArrearsHistory)
+			groupPricing.GET("premiums/schemes/:scheme_id/payment-plans", controllers.GetPaymentPlans)
 
 			// Premiums — Statements
 			groupPricing.GET("premiums/statements/employer/:scheme_id", controllers.GetEmployerStatement)

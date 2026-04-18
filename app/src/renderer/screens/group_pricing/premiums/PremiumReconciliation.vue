@@ -162,6 +162,7 @@
                 </v-card-title>
                 <v-card-text class="pa-0">
                   <ag-grid-vue
+                    :key="`payments-${gridReloadKey}`"
                     class="ag-theme-balham"
                     style="height: 400px; width: 100%"
                     :column-defs="paymentItemCols"
@@ -189,6 +190,7 @@
                 </v-card-title>
                 <v-card-text class="pa-0">
                   <ag-grid-vue
+                    :key="`invoices-${gridReloadKey}`"
                     class="ag-theme-balham"
                     style="height: 400px; width: 100%"
                     :column-defs="invoiceItemCols"
@@ -540,6 +542,9 @@ const summary = ref({
 
 const paymentItems = ref<any[]>([])
 const invoiceItems = ref<any[]>([])
+// Bumped on each loadItems() to force AG Grid to remount with fresh rowData,
+// sidestepping cases where :row-data array replacement isn't picked up.
+const gridReloadKey = ref(0)
 const selectedPaymentItems = ref<any[]>([])
 const selectedInvoiceItems = ref<any[]>([])
 const previewResult = ref<any>(null)
@@ -692,10 +697,14 @@ const ruleCols = [
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function fmtCurrency(val: number) {
+  // Reconciliation workspace shows cents: sub-rand residues from payment vs
+  // invoice rounding must be visible, otherwise users see "R 0" for what is
+  // actually a small overpayment/underpayment and can't reason about it.
   return new Intl.NumberFormat('en-ZA', {
     style: 'currency',
     currency: 'ZAR',
-    maximumFractionDigits: 0
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   }).format(val ?? 0)
 }
 
@@ -754,12 +763,17 @@ async function loadItems() {
         status: ''
       })
     ])
-    paymentItems.value = (payRes.data.data ?? []).filter((i: any) =>
-      ['open', 'partial'].includes(i.status)
+    paymentItems.value = (payRes.data.data ?? []).filter(
+      (i: any) =>
+        i.item_type === 'payment' && ['open', 'partial'].includes(i.status)
     )
-    invoiceItems.value = (invRes.data.data ?? []).filter((i: any) =>
-      ['open', 'partial'].includes(i.status)
+    invoiceItems.value = (invRes.data.data ?? []).filter(
+      (i: any) =>
+        i.item_type === 'invoice' && ['open', 'partial'].includes(i.status)
     )
+    // Force both AG Grids to remount with fresh data. Without this, the grids
+    // can retain their previous row model even after the bound arrays change.
+    gridReloadKey.value++
   } catch (e) {
     console.error('Failed to load items', e)
   } finally {

@@ -11,6 +11,14 @@ import (
 	"gorm.io/gorm"
 )
 
+// AutoCloseTolerance is the maximum remaining amount (in ZAR) at which a
+// reconciliation item is considered fully matched. Set to R 1.00 so that
+// sub-rand residues from payment-vs-invoice rounding auto-close instead of
+// leaving items in 'partial' status forever. Floating-point safety margins
+// on exceed-balance checks (e.g. `requested > balance + 0.005`) keep their
+// half-cent epsilons — they guard against FP drift, not rounding residues.
+const AutoCloseTolerance = 1.0
+
 // ---------------------------------------------------------------------------
 // Auto-Match Engine
 // ---------------------------------------------------------------------------
@@ -144,7 +152,7 @@ func RunAutoMatch(req models.RunAutoMatchRequest, user models.AppUser) (interfac
 			if pi, ok := paymentItemMap[prop.PaymentID]; ok {
 				pi.AllocatedAmount += prop.Amount
 				pi.UnallocatedAmount = pi.OriginalAmount - pi.AllocatedAmount
-				if pi.UnallocatedAmount <= 0.005 {
+				if pi.UnallocatedAmount <= AutoCloseTolerance {
 					pi.Status = "matched"
 					pi.UnallocatedAmount = 0
 				} else {
@@ -161,7 +169,7 @@ func RunAutoMatch(req models.RunAutoMatchRequest, user models.AppUser) (interfac
 			if ii, ok := invoiceItemMap[prop.InvoiceID]; ok {
 				ii.AllocatedAmount += prop.Amount
 				ii.UnallocatedAmount = ii.OriginalAmount - ii.AllocatedAmount
-				if ii.UnallocatedAmount <= 0.005 {
+				if ii.UnallocatedAmount <= AutoCloseTolerance {
 					ii.Status = "matched"
 					ii.UnallocatedAmount = 0
 				} else {
@@ -273,7 +281,7 @@ func AllocatePayment(req models.AllocatePaymentRequest, user models.AppUser) ([]
 			}
 			invoiceItem.AllocatedAmount += line.Amount
 			invoiceItem.UnallocatedAmount = invoiceItem.OriginalAmount - invoiceItem.AllocatedAmount
-			if invoiceItem.UnallocatedAmount <= 0.005 {
+			if invoiceItem.UnallocatedAmount <= AutoCloseTolerance {
 				invoiceItem.Status = "matched"
 				invoiceItem.UnallocatedAmount = 0
 			} else {
@@ -289,7 +297,7 @@ func AllocatePayment(req models.AllocatePaymentRequest, user models.AppUser) ([]
 		// Update payment reconciliation item
 		paymentItem.AllocatedAmount += totalRequested
 		paymentItem.UnallocatedAmount = paymentItem.OriginalAmount - paymentItem.AllocatedAmount
-		if paymentItem.UnallocatedAmount <= 0.005 {
+		if paymentItem.UnallocatedAmount <= AutoCloseTolerance {
 			paymentItem.Status = "matched"
 			paymentItem.UnallocatedAmount = 0
 		} else {
@@ -414,7 +422,7 @@ func WriteOffBalance(req models.WriteOffRequest, user models.AppUser) (models.Pa
 		// Update reconciliation item
 		item.AllocatedAmount += req.Amount
 		item.UnallocatedAmount = item.OriginalAmount - item.AllocatedAmount
-		if item.UnallocatedAmount <= 0.005 {
+		if item.UnallocatedAmount <= AutoCloseTolerance {
 			item.Status = "written_off"
 			item.UnallocatedAmount = 0
 		}
@@ -474,7 +482,7 @@ func RefundOverpayment(req models.RefundRequest, user models.AppUser) (models.Pa
 
 		item.AllocatedAmount += req.Amount
 		item.UnallocatedAmount = item.OriginalAmount - item.AllocatedAmount
-		if item.UnallocatedAmount <= 0.005 {
+		if item.UnallocatedAmount <= AutoCloseTolerance {
 			item.Status = "refunded"
 			item.UnallocatedAmount = 0
 		}
@@ -499,18 +507,22 @@ func GetReconciliationSummary() (models.ReconciliationSummary, error) {
 		Where("item_type = ? AND status IN ?", "payment", []string{"open", "partial"}).
 		Select("COALESCE(SUM(unallocated_amount), 0)").
 		Scan(&summary.TotalUnallocatedPayments)
+	var unallocatedPaymentCount int64
 	DB.Model(&models.ReconciliationItem{}).
 		Where("item_type = ? AND status IN ?", "payment", []string{"open", "partial"}).
-		Count(new(int64)).Scan(&summary.UnallocatedPaymentCount)
+		Count(&unallocatedPaymentCount)
+	summary.UnallocatedPaymentCount = int(unallocatedPaymentCount)
 
 	// Unpaid invoices
 	DB.Model(&models.ReconciliationItem{}).
 		Where("item_type = ? AND status IN ?", "invoice", []string{"open", "partial"}).
 		Select("COALESCE(SUM(unallocated_amount), 0)").
 		Scan(&summary.TotalUnpaidInvoices)
+	var unpaidInvoiceCount int64
 	DB.Model(&models.ReconciliationItem{}).
 		Where("item_type = ? AND status IN ?", "invoice", []string{"open", "partial"}).
-		Count(new(int64)).Scan(&summary.UnpaidInvoiceCount)
+		Count(&unpaidInvoiceCount)
+	summary.UnpaidInvoiceCount = int(unpaidInvoiceCount)
 
 	// Suspense items
 	DB.Model(&models.ReconciliationItem{}).
@@ -872,7 +884,12 @@ func BackfillReconciliationItems() {
 	}
 
 	// Also backfill allocation records for payments that were already matched
-	// via the legacy 1:1 system (payment.invoice_id is set)
+	// via the legacy 1:1 system (payment.invoice_id is set). Track which
+	// reconciliation items need a recalc afterwards so they reflect the
+	// newly-created allocations.
+	touchedPaymentIDs := map[int]struct{}{}
+	touchedInvoiceIDs := map[int]struct{}{}
+
 	for _, p := range payments {
 		if p.Status != "matched" || p.InvoiceID == nil {
 			continue
@@ -883,23 +900,51 @@ func BackfillReconciliationItems() {
 		DB.Model(&models.PaymentAllocation{}).
 			Where("payment_id = ? AND invoice_id = ?", p.ID, *p.InvoiceID).
 			Count(&allocCount)
-		if allocCount > 0 {
-			continue
+		if allocCount == 0 {
+			alloc := models.PaymentAllocation{
+				PaymentID:       p.ID,
+				InvoiceID:       *p.InvoiceID,
+				AllocatedAmount: p.Amount,
+				AllocationType:  "payment",
+				Reference:       "Backfilled from legacy match",
+				AllocatedBy:     "system",
+			}
+			if err := DB.Create(&alloc).Error; err != nil {
+				appLog.WithField("error", err.Error()).Warn("Backfill: failed to create allocation")
+				continue
+			}
 		}
 
-		alloc := models.PaymentAllocation{
-			PaymentID:       p.ID,
-			InvoiceID:       *p.InvoiceID,
-			AllocatedAmount: p.Amount,
-			AllocationType:  "payment",
-			Reference:       "Backfilled from legacy match",
-			AllocatedBy:     "system",
-		}
-		DB.Create(&alloc)
+		// Always track for recalc, even if the allocation already existed —
+		// pre-fix records may have an allocation but a stale reconciliation
+		// item that still reports the full balance as unallocated.
+		touchedPaymentIDs[p.ID] = struct{}{}
+		touchedInvoiceIDs[*p.InvoiceID] = struct{}{}
 	}
 
-	if invoiceCount > 0 || paymentCount > 0 {
-		appLog.Infof("Reconciliation backfill: created %d invoice items, %d payment items", invoiceCount, paymentCount)
+	// Recalculate each affected reconciliation item from the allocation
+	// ledger so allocated/unallocated/status are in sync with reality.
+	recalcCount := 0
+	for pid := range touchedPaymentIDs {
+		if err := recalcReconciliationItem(DB, "payment", pid); err != nil {
+			appLog.WithField("error", err.Error()).WithField("payment_id", pid).
+				Warn("Backfill: recalc payment item failed")
+			continue
+		}
+		recalcCount++
+	}
+	for iid := range touchedInvoiceIDs {
+		if err := recalcReconciliationItem(DB, "invoice", iid); err != nil {
+			appLog.WithField("error", err.Error()).WithField("invoice_id", iid).
+				Warn("Backfill: recalc invoice item failed")
+			continue
+		}
+		recalcCount++
+	}
+
+	if invoiceCount > 0 || paymentCount > 0 || recalcCount > 0 {
+		appLog.Infof("Reconciliation backfill: created %d invoice items, %d payment items, recalculated %d",
+			invoiceCount, paymentCount, recalcCount)
 	}
 }
 
@@ -1081,7 +1126,7 @@ func matchByExactReference(
 			continue
 		}
 		paymentRemaining := pi.UnallocatedAmount - matchedPayments[p.ID]
-		if paymentRemaining <= 0.005 {
+		if paymentRemaining <= AutoCloseTolerance {
 			continue
 		}
 
@@ -1095,7 +1140,7 @@ func matchByExactReference(
 			continue
 		}
 		invoiceRemaining := invItem.UnallocatedAmount - matchedInvoices[inv.ID]
-		if invoiceRemaining <= 0.005 {
+		if invoiceRemaining <= AutoCloseTolerance {
 			continue
 		}
 
@@ -1142,7 +1187,7 @@ func matchBySchemeAmount(
 			continue
 		}
 		paymentRemaining := pi.UnallocatedAmount - matchedPayments[p.ID]
-		if paymentRemaining <= 0.005 {
+		if paymentRemaining <= AutoCloseTolerance {
 			continue
 		}
 
@@ -1164,7 +1209,7 @@ func matchBySchemeAmount(
 					continue
 				}
 				invoiceRemaining := invItem.UnallocatedAmount - matchedInvoices[inv.ID]
-				if invoiceRemaining <= 0.005 {
+				if invoiceRemaining <= AutoCloseTolerance {
 					continue
 				}
 
@@ -1213,7 +1258,7 @@ func matchBySchemeAmountTolerance(
 			continue
 		}
 		paymentRemaining := pi.UnallocatedAmount - matchedPayments[p.ID]
-		if paymentRemaining <= 0.005 {
+		if paymentRemaining <= AutoCloseTolerance {
 			continue
 		}
 
@@ -1229,7 +1274,7 @@ func matchBySchemeAmountTolerance(
 				continue
 			}
 			invoiceRemaining := invItem.UnallocatedAmount - matchedInvoices[inv.ID]
-			if invoiceRemaining <= 0.005 {
+			if invoiceRemaining <= AutoCloseTolerance {
 				continue
 			}
 
@@ -1269,7 +1314,7 @@ func allocateAcrossInvoices(
 	remaining := paymentRemaining
 
 	for _, inv := range invoices {
-		if remaining <= 0.005 {
+		if remaining <= AutoCloseTolerance {
 			break
 		}
 		invItem, exists := invoiceItemMap[inv.ID]
@@ -1277,7 +1322,7 @@ func allocateAcrossInvoices(
 			continue
 		}
 		invoiceRemaining := invItem.UnallocatedAmount - matchedInvoices[inv.ID]
-		if invoiceRemaining <= 0.005 {
+		if invoiceRemaining <= AutoCloseTolerance {
 			continue
 		}
 
@@ -1322,7 +1367,7 @@ func applyAllocationToInvoice(tx *gorm.DB, invoiceID int, amount float64) error 
 	invoice.PaidAmount += amount
 	invoice.Balance = invoice.NetPayable - invoice.PaidAmount
 
-	if invoice.Balance <= 0.005 {
+	if invoice.Balance <= AutoCloseTolerance {
 		invoice.Status = "paid"
 		invoice.Balance = 0
 	} else if invoice.PaidAmount > 0 {
@@ -1343,7 +1388,7 @@ func updatePaymentStatus(tx *gorm.DB, paymentID int, itemMap map[int]*models.Rec
 	// Check whether fully allocated via reconciliation item
 	if itemMap != nil {
 		if pi, ok := itemMap[paymentID]; ok {
-			if pi.UnallocatedAmount <= 0.005 {
+			if pi.UnallocatedAmount <= AutoCloseTolerance {
 				payment.Status = "matched"
 			} else {
 				payment.Status = "unmatched"
@@ -1355,7 +1400,7 @@ func updatePaymentStatus(tx *gorm.DB, paymentID int, itemMap map[int]*models.Rec
 	// Fallback: check from DB
 	var item models.ReconciliationItem
 	if err := tx.Where("payment_id = ?", paymentID).First(&item).Error; err == nil {
-		if item.UnallocatedAmount <= 0.005 {
+		if item.UnallocatedAmount <= AutoCloseTolerance {
 			payment.Status = "matched"
 		} else {
 			payment.Status = "unmatched"
@@ -1386,6 +1431,33 @@ func getOrCreatePaymentItem(payment models.Payment) (*models.ReconciliationItem,
 		Status:            "open",
 	}
 	err = DB.Create(&item).Error
+	return &item, err
+}
+
+// getOrCreatePaymentItemTx mirrors getOrCreatePaymentItem but participates in
+// an existing transaction — used when we need to create the payment
+// reconciliation item alongside a PaymentAllocation in the same tx.
+func getOrCreatePaymentItemTx(tx *gorm.DB, payment models.Payment) (*models.ReconciliationItem, error) {
+	var item models.ReconciliationItem
+	err := tx.Where("payment_id = ?", payment.ID).First(&item).Error
+	if err == nil {
+		return &item, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	item = models.ReconciliationItem{
+		ItemType:          "payment",
+		PaymentID:         &payment.ID,
+		SchemeID:          payment.SchemeID,
+		SchemeName:        payment.SchemeName,
+		OriginalAmount:    payment.Amount,
+		AllocatedAmount:   0,
+		UnallocatedAmount: payment.Amount,
+		Status:            "open",
+	}
+	err = tx.Create(&item).Error
 	return &item, err
 }
 
@@ -1444,7 +1516,7 @@ func recalcReconciliationItem(tx *gorm.DB, entityType string, entityID int) erro
 
 	item.AllocatedAmount = totalAllocated
 	item.UnallocatedAmount = item.OriginalAmount - totalAllocated
-	if item.UnallocatedAmount <= 0.005 {
+	if item.UnallocatedAmount <= AutoCloseTolerance {
 		item.Status = "matched"
 		item.UnallocatedAmount = 0
 	} else if totalAllocated > 0 {

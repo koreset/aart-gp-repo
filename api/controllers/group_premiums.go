@@ -451,6 +451,19 @@ func GetArrearsHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, models.PremiumResponse{Success: true, Data: history})
 }
 
+// GetPaymentPlans returns all payment plans (with instalments) for a scheme.
+func GetPaymentPlans(c *gin.Context) {
+	schemeID, _ := strconv.Atoi(c.Param("scheme_id"))
+
+	plans, err := services.GetPaymentPlans(schemeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.PremiumResponse{Success: false, Message: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.PremiumResponse{Success: true, Data: plans})
+}
+
 // GetEmployerStatement returns a ledger statement for a scheme.
 func GetEmployerStatement(c *gin.Context) {
 	schemeID, _ := strconv.Atoi(c.Param("scheme_id"))

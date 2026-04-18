@@ -348,6 +348,14 @@ type PaymentPlanRequest struct {
 	Notes       string                  `json:"notes"`
 }
 
+// PaymentPlanWithInstalments is a payment plan plus its ordered instalments.
+// Returned by GetPaymentPlans so the UI can display plan details without
+// needing a second round-trip per plan.
+type PaymentPlanWithInstalments struct {
+	PaymentPlan
+	Instalments []PaymentPlanInstalment `json:"instalments"`
+}
+
 // ArrearsHistoryItem records a single event in a scheme's arrears history.
 type ArrearsHistoryItem struct {
 	EventType   string   `json:"event_type"`

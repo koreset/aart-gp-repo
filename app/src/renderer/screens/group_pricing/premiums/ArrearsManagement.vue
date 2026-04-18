@@ -314,6 +314,84 @@
         </v-card-title>
         <v-divider />
         <v-card-text>
+          <!-- Payment Plans section -->
+          <div v-if="paymentPlans.length" class="mb-4">
+            <div class="text-subtitle-2 mb-2">Payment Plans</div>
+            <v-card
+              v-for="plan in paymentPlans"
+              :key="plan.id"
+              variant="outlined"
+              class="mb-2"
+            >
+              <v-card-title
+                class="text-body-2 d-flex align-center justify-space-between pa-2"
+              >
+                <div>
+                  <v-chip
+                    :color="plan.status === 'active' ? 'primary' : 'grey'"
+                    size="x-small"
+                    class="mr-2"
+                    >{{ plan.status }}</v-chip
+                  >
+                  <span class="text-caption"
+                    >Plan #{{ plan.id }} · {{ plan.instalments?.length ?? 0 }}
+                    instalment{{
+                      (plan.instalments?.length ?? 0) === 1 ? '' : 's'
+                    }}
+                    · Total {{ fmtCurrency(planSum(plan)) }}</span
+                  >
+                </div>
+                <v-btn
+                  size="x-small"
+                  variant="text"
+                  :icon="
+                    expandedPlans[plan.id]
+                      ? 'mdi-chevron-up'
+                      : 'mdi-chevron-down'
+                  "
+                  @click="expandedPlans[plan.id] = !expandedPlans[plan.id]"
+                />
+              </v-card-title>
+              <v-divider v-if="expandedPlans[plan.id]" />
+              <v-card-text v-if="expandedPlans[plan.id]" class="pa-2">
+                <div v-if="plan.notes" class="text-caption mb-2 text-grey">
+                  {{ plan.notes }}
+                </div>
+                <v-table density="compact" class="text-caption">
+                  <thead>
+                    <tr>
+                      <th class="text-left">Date</th>
+                      <th class="text-right">Amount</th>
+                      <th class="text-left">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="inst in plan.instalments"
+                      :key="inst.id"
+                    >
+                      <td>{{ inst.date }}</td>
+                      <td class="text-right">{{ fmtCurrency(inst.amount) }}</td>
+                      <td>
+                        <v-chip
+                          :color="instalmentColor(inst.status)"
+                          size="x-small"
+                          >{{ inst.status }}</v-chip
+                        >
+                      </td>
+                    </tr>
+                  </tbody>
+                </v-table>
+              </v-card-text>
+            </v-card>
+          </div>
+
+          <!-- Event timeline -->
+          <div
+            v-if="paymentPlans.length && historyItems.length"
+            class="text-subtitle-2 mb-2"
+            >Events</div
+          >
           <v-timeline v-if="historyItems.length" density="compact" side="end">
             <v-timeline-item
               v-for="h in historyItems"
@@ -334,7 +412,9 @@
             v-else-if="historyLoading"
             type="list-item-two-line@5"
           />
-          <div v-else class="text-body-2 text-grey text-center mt-4"
+          <div
+            v-else-if="!paymentPlans.length"
+            class="text-body-2 text-grey text-center mt-4"
             >No history found.</div
           >
         </v-card-text>
@@ -391,6 +471,8 @@ const snackbarColor = ref('success')
 const arrearsRecords = ref<any[]>([])
 const selectedScheme = ref<any>(null)
 const historyItems = ref<any[]>([])
+const paymentPlans = ref<any[]>([])
+const expandedPlans = ref<Record<number, boolean>>({})
 const reminderMessage = ref('')
 const planInstalments = ref<Array<{ date: string; amount: number }>>([])
 const planNotes = ref('')
@@ -471,6 +553,7 @@ const columnDefs = [
     ? [
         {
           headerName: 'Actions',
+          colId: 'actions',
           cellRenderer: (params: any) => {
             const s = params.data?.status
             const btn = (action: string, label: string, color = '#333') =>
@@ -491,7 +574,7 @@ const columnDefs = [
 ]
 
 function onCellClicked(e: any) {
-  if (e.column?.getColId() !== 'Actions') return
+  if (e.column?.getColId() !== 'actions') return
   const action = (e.event?.target as HTMLElement)?.dataset?.action
   if (!action) return
   selectedScheme.value = e.data
@@ -509,9 +592,15 @@ function onCellClicked(e: any) {
     historyDrawer.value = true
     historyLoading.value = true
     historyItems.value = []
-    PremiumManagementService.getArrearsHistory(e.data.scheme_id)
-      .then((res: any) => {
-        historyItems.value = res.data.data ?? []
+    paymentPlans.value = []
+    expandedPlans.value = {}
+    Promise.all([
+      PremiumManagementService.getArrearsHistory(e.data.scheme_id),
+      PremiumManagementService.getPaymentPlans(e.data.scheme_id)
+    ])
+      .then(([histRes, plansRes]: any[]) => {
+        historyItems.value = histRes.data.data ?? []
+        paymentPlans.value = plansRes.data.data ?? []
       })
       .finally(() => {
         historyLoading.value = false
@@ -533,6 +622,22 @@ function eventColor(type: string) {
     REINSTATED: 'success'
   }
   return map[type] ?? 'grey'
+}
+
+function planSum(plan: any) {
+  return (plan.instalments ?? []).reduce(
+    (sum: number, i: any) => sum + (Number(i.amount) || 0),
+    0
+  )
+}
+
+function instalmentColor(status: string) {
+  const map: Record<string, string> = {
+    pending: 'warning',
+    paid: 'success',
+    overdue: 'error'
+  }
+  return map[status] ?? 'grey'
 }
 
 async function loadArrears() {

@@ -8,8 +8,8 @@
               <div>
                 <span class="headline">Bordereaux Analytics</span>
                 <p class="text-subtitle-1 text-medium-emphasis mt-2">
-                  Live metrics aggregated from generated bordereaux, confirmations,
-                  and group-scheme claims.
+                  Live metrics aggregated from generated bordereaux,
+                  confirmations, and group-scheme claims.
                 </p>
               </div>
               <div class="d-flex align-center gap-2">
@@ -62,7 +62,9 @@
                           {{ periodLabel }}
                         </p>
                       </div>
-                      <v-icon size="50" color="primary">mdi-currency-usd</v-icon>
+                      <v-icon size="50" color="primary"
+                        >mdi-currency-usd</v-icon
+                      >
                     </div>
                   </v-card-text>
                 </v-card>
@@ -86,7 +88,9 @@
                           claims / premium, {{ periodLabel }}
                         </p>
                       </div>
-                      <v-icon size="50" color="success">mdi-scale-balance</v-icon>
+                      <v-icon size="50" color="success"
+                        >mdi-scale-balance</v-icon
+                      >
                     </div>
                   </v-card-text>
                 </v-card>
@@ -146,7 +150,11 @@
                     Monthly Premium vs Claim Volume
                   </v-card-title>
                   <v-card-text>
-                    <div v-if="loading" class="d-flex align-center justify-center" style="height: 320px">
+                    <div
+                      v-if="loading"
+                      class="d-flex align-center justify-center"
+                      style="height: 320px"
+                    >
                       <v-progress-circular indeterminate color="primary" />
                     </div>
                     <ag-charts
@@ -161,9 +169,7 @@
                     >
                       <div class="text-center">
                         <v-icon size="60" color="grey">mdi-chart-line</v-icon>
-                        <p class="text-grey mt-2">
-                          No data in this period
-                        </p>
+                        <p class="text-grey mt-2"> No data in this period </p>
                       </div>
                     </div>
                   </v-card-text>

@@ -604,7 +604,9 @@
         <v-card-title class="text-h6">
           {{ previewTemplate.name }}
           <v-chip size="small" class="ms-2">{{ previewTemplate.type }}</v-chip>
-          <v-chip size="small" class="ms-2">{{ previewTemplate.status }}</v-chip>
+          <v-chip size="small" class="ms-2">{{
+            previewTemplate.status
+          }}</v-chip>
         </v-card-title>
         <v-card-text>
           <p v-if="previewTemplate.description" class="mb-4">
@@ -626,7 +628,11 @@
             class="mb-4"
           >
             <template #[`item.required`]="{ item }">
-              <v-icon v-if="(item as any).required" color="success" size="small">
+              <v-icon
+                v-if="(item as any).required"
+                color="success"
+                size="small"
+              >
                 mdi-check
               </v-icon>
             </template>
@@ -692,8 +698,8 @@
               {{ testResult.missing_in_data.join(', ') }}
             </v-alert>
             <p class="text-caption text-medium-emphasis mb-3">
-              Sample size: {{ testResult.sample_size }} ·
-              Source: {{ testResult.sample_source }}
+              Sample size: {{ testResult.sample_size }} · Source:
+              {{ testResult.sample_source }}
             </p>
             <h4 class="text-subtitle-1 font-weight-bold mb-2">Preview Rows</h4>
             <div

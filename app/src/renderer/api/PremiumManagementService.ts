@@ -358,6 +358,12 @@ const PremiumManagementService = {
     )
   },
 
+  getPaymentPlans(schemeId: number) {
+    return Api.get(
+      `/group-pricing/premiums/schemes/${schemeId}/payment-plans`
+    )
+  },
+
   // ─── Statements ─────────────────────────────────────────────────────────────
 
   getEmployerStatement(
