@@ -142,6 +142,9 @@
                     }"
                     :pagination="true"
                     :pagination-page-size="25"
+                    :overlay-loading-template="loadingOverlay"
+                    :overlay-no-rows-template="`<span class='ag-overlay-no-rows-center'>No large-claim notices in this period.</span>`"
+                    @grid-ready="onNoticesGridReady"
                   />
                 </div>
               </v-tabs-window-item>
@@ -251,6 +254,9 @@
                     }"
                     :pagination="true"
                     :pagination-page-size="25"
+                    :overlay-loading-template="loadingOverlay"
+                    :overlay-no-rows-template="`<span class='ag-overlay-no-rows-center'>No cat events recorded for these filters.</span>`"
+                    @grid-ready="onCatGridReady"
                   />
                 </div>
               </v-tabs-window-item>
@@ -347,12 +353,39 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { AgGridVue } from 'ag-grid-vue3'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 
 const activeTab = ref('notices')
+
+// AG-Grid overlay plumbing: the templates render when the grid calls
+// showLoadingOverlay / showNoRowsOverlay. The per-grid watchers below flip
+// between overlays based on the matching loading ref.
+const loadingOverlay = '<span class="ag-overlay-loading-center">Loading…</span>'
+const noticesGridApi = ref(null)
+const catGridApi = ref(null)
+const onNoticesGridReady = (p) => {
+  noticesGridApi.value = p.api
+  applyNoticesOverlay()
+}
+const onCatGridReady = (p) => {
+  catGridApi.value = p.api
+  applyCatOverlay()
+}
+const applyNoticesOverlay = () => {
+  if (!noticesGridApi.value) return
+  if (loading.value) noticesGridApi.value.showLoadingOverlay()
+  else if (!notices.value?.length) noticesGridApi.value.showNoRowsOverlay()
+  else noticesGridApi.value.hideOverlay()
+}
+const applyCatOverlay = () => {
+  if (!catGridApi.value) return
+  if (catLoading.value) catGridApi.value.showLoadingOverlay()
+  else if (!catRows.value?.length) catGridApi.value.showNoRowsOverlay()
+  else catGridApi.value.hideOverlay()
+}
 
 const notices = ref([])
 const activeTreaties = ref([])
@@ -375,9 +408,14 @@ const updatingNotice = ref(null)
 const updateForm = ref({ status: '', query_details: '', response_notes: '' })
 const snackbar = ref({ show: false, message: '', color: 'success' })
 
+watch(loading, applyNoticesOverlay)
+watch(notices, applyNoticesOverlay, { deep: true })
+
 // Cat Event Register state
 const catRows = ref([])
 const catLoading = ref(false)
+watch(catLoading, applyCatOverlay)
+watch(catRows, applyCatOverlay, { deep: true })
 const catFilters = ref({
   cat_event_code: '',
   treaty_id: null,

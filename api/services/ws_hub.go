@@ -21,6 +21,8 @@ const (
 	WSPresence               WSMessageType = "presence"
 	WSTyping                 WSMessageType = "typing"
 	WSCalculationProgress    WSMessageType = "calculation_progress"
+	WSBordereauxProgress     WSMessageType = "bordereaux_progress"
+	WSRIValidationProgress   WSMessageType = "ri_validation_progress"
 )
 
 // CalculationProgress reports quote calculation progress to the frontend.

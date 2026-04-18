@@ -324,7 +324,7 @@
       <v-card>
         <v-card-title>Write Off Balance</v-card-title>
         <v-card-text>
-          <p class="mb-3" v-if="selectedItem">
+          <p v-if="selectedItem" class="mb-3">
             Unallocated:
             <strong>{{ fmtCurrency(selectedItem.unallocated_amount) }}</strong>
           </p>
@@ -357,7 +357,7 @@
       <v-card>
         <v-card-title>Refund Overpayment</v-card-title>
         <v-card-text>
-          <p class="mb-3" v-if="selectedPaymentItem">
+          <p v-if="selectedPaymentItem" class="mb-3">
             Unallocated:
             <strong>{{
               fmtCurrency(selectedPaymentItem.unallocated_amount)

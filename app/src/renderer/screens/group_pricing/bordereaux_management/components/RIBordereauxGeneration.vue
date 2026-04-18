@@ -143,6 +143,8 @@
                 }"
                 :pagination="true"
                 :pagination-page-size="20"
+                :loading="loading"
+                no-rows-message="No RI bordereaux runs yet for the selected filters."
               />
             </div>
           </template>
@@ -295,7 +297,7 @@
         </v-card-title>
         <v-card-text>
           <!-- Summary chips -->
-          <v-row class="mb-3" v-if="validationSummary">
+          <v-row v-if="validationSummary" class="mb-3">
             <v-col cols="auto">
               <v-chip
                 color="error"

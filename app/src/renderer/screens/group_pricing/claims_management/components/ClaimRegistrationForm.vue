@@ -1355,7 +1355,7 @@ const verifyBankingDetails = async () => {
 
     const res = await GroupPricingService.verifyBankAccount({
       first_name: firstName,
-      surname: surname,
+      surname,
       identity_number: idNumber,
       identity_type: identityType,
       bank_account_number: formData.value.bank_account_number,

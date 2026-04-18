@@ -57,6 +57,13 @@ func CreateEmployerSubmission(req models.CreateSubmissionRequest, user models.Ap
 	if err := DB.Create(&sub).Error; err != nil {
 		return sub, fmt.Errorf("failed to create submission: %w", err)
 	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "employer_submissions",
+		EntityID:  strconv.Itoa(sub.ID),
+		Action:    "CREATE",
+		ChangedBy: user.UserName,
+	}, struct{}{}, sub)
 	return sub, nil
 }
 
@@ -73,7 +80,10 @@ func UploadEmployerSubmission(id int, file multipart.File, header *multipart.Fil
 		return sub, fmt.Errorf("failed to create upload directory: %w", err)
 	}
 
-	safeFilename := fmt.Sprintf("%d_%s", time.Now().UnixNano(), header.Filename)
+	// UUID prefix avoids collisions under concurrent uploads (clock resolution
+	// isn't reliably nanosecond-precise on virtualised hosts) and removes a
+	// predictable-filename enumeration vector.
+	safeFilename := fmt.Sprintf("%s_%s", newFileToken(), header.Filename)
 	filePath := filepath.Join(uploadDir, safeFilename)
 
 	dst, err := os.Create(filePath)
@@ -112,6 +122,7 @@ func UploadEmployerSubmission(id int, file multipart.File, header *multipart.Fil
 		}
 	}
 
+	before := sub
 	now := time.Now()
 	sub.FileName = header.Filename
 	sub.FilePath = filePath
@@ -125,6 +136,13 @@ func UploadEmployerSubmission(id int, file multipart.File, header *multipart.Fil
 	if err := DB.Save(&sub).Error; err != nil {
 		return sub, fmt.Errorf("failed to update submission: %w", err)
 	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "employer_submissions",
+		EntityID:  strconv.Itoa(sub.ID),
+		Action:    "UPDATE",
+		ChangedBy: user.UserName,
+	}, before, sub)
 
 	// Auto-link matching deadline (non-fatal if none configured)
 	LinkDeadlineToSubmission(sub.SchemeID, sub.Month, sub.Year, sub.ID)
@@ -327,12 +345,13 @@ func ReviewEmployerSubmission(id int, notes string, user models.AppUser) (models
 	if err := DB.First(&sub, id).Error; err != nil {
 		return sub, fmt.Errorf("submission not found: %w", err)
 	}
-	if sub.Status != "received" {
-		return sub, fmt.Errorf("submission must be in 'received' status to review (current: %s)", sub.Status)
+	if err := ValidateEmployerSubmissionTransition(sub.Status, StatusSubmissionUnderReview); err != nil {
+		return sub, err
 	}
+	before := sub
 
 	now := time.Now()
-	sub.Status = "under_review"
+	sub.Status = StatusSubmissionUnderReview
 	sub.ReviewedBy = user.UserName
 	sub.ReviewedAt = &now
 	if notes != "" {
@@ -341,6 +360,13 @@ func ReviewEmployerSubmission(id int, notes string, user models.AppUser) (models
 	if err := DB.Save(&sub).Error; err != nil {
 		return sub, fmt.Errorf("failed to update submission: %w", err)
 	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "employer_submissions",
+		EntityID:  strconv.Itoa(sub.ID),
+		Action:    "UPDATE",
+		ChangedBy: user.UserName,
+	}, before, sub)
 	go func() {
 		logNotifyFailure("submission_reviewed", sub.ID, NotifySubmissionReviewed(sub, user))
 	}()
@@ -353,15 +379,23 @@ func RaiseSubmissionQuery(id int, queryNotes string, user models.AppUser) (model
 	if err := DB.First(&sub, id).Error; err != nil {
 		return sub, fmt.Errorf("submission not found: %w", err)
 	}
-	if sub.Status != "under_review" {
-		return sub, fmt.Errorf("submission must be 'under_review' to raise a query (current: %s)", sub.Status)
+	if err := ValidateEmployerSubmissionTransition(sub.Status, StatusSubmissionQueriesRaised); err != nil {
+		return sub, err
 	}
+	before := sub
 
-	sub.Status = "queries_raised"
+	sub.Status = StatusSubmissionQueriesRaised
 	sub.QueryNotes = queryNotes
 	if err := DB.Save(&sub).Error; err != nil {
 		return sub, fmt.Errorf("failed to update submission: %w", err)
 	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "employer_submissions",
+		EntityID:  strconv.Itoa(sub.ID),
+		Action:    "UPDATE",
+		ChangedBy: user.UserName,
+	}, before, sub)
 	go func() {
 		logNotifyFailure("submission_query_raised", sub.ID, NotifySubmissionQueryRaised(sub, user))
 	}()
@@ -374,12 +408,13 @@ func AcceptEmployerSubmission(id int, notes string, user models.AppUser) (models
 	if err := DB.First(&sub, id).Error; err != nil {
 		return sub, fmt.Errorf("submission not found: %w", err)
 	}
-	if sub.Status != "under_review" && sub.Status != "queries_raised" {
-		return sub, fmt.Errorf("submission must be 'under_review' or 'queries_raised' to accept (current: %s)", sub.Status)
+	if err := ValidateEmployerSubmissionTransition(sub.Status, StatusSubmissionAccepted); err != nil {
+		return sub, err
 	}
+	before := sub
 
 	now := time.Now()
-	sub.Status = "accepted"
+	sub.Status = StatusSubmissionAccepted
 	sub.AcceptedBy = user.UserName
 	sub.AcceptedAt = &now
 	if notes != "" {
@@ -392,6 +427,13 @@ func AcceptEmployerSubmission(id int, notes string, user models.AppUser) (models
 	if err := DB.Save(&sub).Error; err != nil {
 		return sub, fmt.Errorf("failed to update submission: %w", err)
 	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "employer_submissions",
+		EntityID:  strconv.Itoa(sub.ID),
+		Action:    "UPDATE",
+		ChangedBy: user.UserName,
+	}, before, sub)
 
 	// Auto-snapshot the register diff at the moment of acceptance so historical records are preserved
 	// even after subsequent member register updates (e.g. February sync overwriting January state).
@@ -411,19 +453,26 @@ func RejectEmployerSubmission(id int, reason string, user models.AppUser) (model
 	if err := DB.First(&sub, id).Error; err != nil {
 		return sub, fmt.Errorf("submission not found: %w", err)
 	}
-	allowed := map[string]bool{"received": true, "under_review": true, "queries_raised": true}
-	if !allowed[sub.Status] {
-		return sub, fmt.Errorf("cannot reject a submission in '%s' status", sub.Status)
+	if err := ValidateEmployerSubmissionTransition(sub.Status, StatusSubmissionRejected); err != nil {
+		return sub, err
 	}
+	before := sub
 
 	now := time.Now()
-	sub.Status = "rejected"
+	sub.Status = StatusSubmissionRejected
 	sub.RejectedBy = user.UserName
 	sub.RejectedAt = &now
 	sub.RejectionReason = reason
 	if err := DB.Save(&sub).Error; err != nil {
 		return sub, fmt.Errorf("failed to update submission: %w", err)
 	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "employer_submissions",
+		EntityID:  strconv.Itoa(sub.ID),
+		Action:    "UPDATE",
+		ChangedBy: user.UserName,
+	}, before, sub)
 	go func() {
 		logNotifyFailure("submission_rejected", sub.ID, NotifySubmissionRejected(sub, user, reason))
 	}()

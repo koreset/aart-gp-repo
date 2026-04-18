@@ -1496,7 +1496,7 @@ const provinceBarOptions = computed<any>(() => {
         type: 'bar',
         direction: 'horizontal',
         xKey: 'region',
-        yKey: yKey,
+        yKey,
         yName: isCount ? 'Members' : 'Total Salary',
         fill: '#006f9b',
         stroke: '#000000',
