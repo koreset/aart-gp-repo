@@ -11,7 +11,9 @@ SET @sql := (
         'ALTER TABLE scheme_categories ADD COLUMN gla_conversion_on_withdrawal TINYINT(1) DEFAULT 0;'
     )
 );
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 SET @sql := (
     SELECT IF(
@@ -20,7 +22,9 @@ SET @sql := (
         'ALTER TABLE scheme_categories ADD COLUMN gla_conversion_on_retirement TINYINT(1) DEFAULT 0;'
     )
 );
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 SET @sql := (
     SELECT IF(
@@ -29,7 +33,9 @@ SET @sql := (
         'ALTER TABLE scheme_categories ADD COLUMN ptd_conversion_on_withdrawal TINYINT(1) DEFAULT 0;'
     )
 );
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 SET @sql := (
     SELECT IF(
@@ -38,4 +44,6 @@ SET @sql := (
         'ALTER TABLE scheme_categories ADD COLUMN ci_conversion_on_withdrawal TINYINT(1) DEFAULT 0;'
     )
 );
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

@@ -29,4 +29,6 @@ SET @sql := (
         'CREATE UNIQUE INDEX idx_binder_fee_rrc_holder ON binder_fees (risk_rate_code, binderholder_name);'
     )
 );
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

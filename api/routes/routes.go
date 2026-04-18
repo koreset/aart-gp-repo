@@ -28,6 +28,7 @@ func ConfigureRouter(router *gin.Engine) {
 
 	{
 
+		apiv1.POST("org-users", controllers.GetOrgUsers)
 
 		valuationJobs := apiv1.Group("/valuations/jobs")
 		{

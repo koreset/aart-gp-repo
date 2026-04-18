@@ -30,4 +30,6 @@ SET @sql := (
         'CREATE UNIQUE INDEX idx_commission_channel_lower ON commission_structures (channel, lower_bound);'
     )
 );
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

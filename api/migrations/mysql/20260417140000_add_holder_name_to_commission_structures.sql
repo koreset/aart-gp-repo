@@ -16,7 +16,9 @@ SET @sql := (
         'ALTER TABLE commission_structures ADD COLUMN holder_name VARCHAR(255) DEFAULT "";'
     )
 );
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- 2. Backfill NULLs so contents are consistent.
 UPDATE commission_structures SET holder_name = '' WHERE holder_name IS NULL;
@@ -34,7 +36,9 @@ SET @sql := (
         'SELECT 1;'
     )
 );
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- 4. Create the new (channel, holder_name, lower_bound) unique index if missing.
 SET @sql := (
@@ -49,4 +53,6 @@ SET @sql := (
         'CREATE UNIQUE INDEX idx_commission_channel_holder_lower ON commission_structures (channel, holder_name, lower_bound);'
     )
 );
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
