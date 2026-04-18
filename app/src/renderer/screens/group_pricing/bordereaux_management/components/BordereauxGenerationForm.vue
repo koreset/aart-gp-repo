@@ -1088,9 +1088,9 @@ const canGenerate = computed(() => {
 const showZeroRecordsWarning = computed(() => {
   return Boolean(
     formData.value.type &&
-      formData.value.scheme_ids.length > 0 &&
-      hasValidDateRange.value &&
-      estimatedRecords.value === 0
+    formData.value.scheme_ids.length > 0 &&
+    hasValidDateRange.value &&
+    estimatedRecords.value === 0
   )
 })
 
@@ -1555,22 +1555,25 @@ watch(
     updateEstimatedRecords()
   }
 )
-watch(() => formData.value.type, (newType) => {
-  updateEstimatedRecords()
-  // If the previously selected template doesn't match the new type, clear it
-  // so the user isn't silently holding a mismatched selection.
-  const current = availableTemplates.value.find(
-    (t: any) => t.id === formData.value.template_id
-  )
-  if (
-    newType &&
-    current &&
-    current.type &&
-    String(current.type).toLowerCase() !== String(newType).toLowerCase()
-  ) {
-    formData.value.template_id = null
+watch(
+  () => formData.value.type,
+  (newType) => {
+    updateEstimatedRecords()
+    // If the previously selected template doesn't match the new type, clear it
+    // so the user isn't silently holding a mismatched selection.
+    const current = availableTemplates.value.find(
+      (t: any) => t.id === formData.value.template_id
+    )
+    if (
+      newType &&
+      current &&
+      current.type &&
+      String(current.type).toLowerCase() !== String(newType).toLowerCase()
+    ) {
+      formData.value.template_id = null
+    }
   }
-})
+)
 
 onMounted(async () => {
   updateEstimatedRecords()

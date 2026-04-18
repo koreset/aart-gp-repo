@@ -162,7 +162,7 @@
                   :default-col-def="defaultColDef"
                   :loading="loading"
                   :overlay-loading-template="loadingOverlay"
-                  overlay-no-rows-template='<span class=\'ag-overlay-no-rows-center\'>No claim notifications match these filters.</span>'
+                  :overlay-no-rows-template="`<span class='ag-overlay-no-rows-center'>No claim notifications match these filters.</span>`"
                   @grid-ready="onGridReady"
                 />
               </v-card-text>
@@ -461,8 +461,7 @@ import PremiumManagementService from '@/renderer/api/PremiumManagementService'
 
 const loading = ref(false)
 const saving = ref(false)
-const loadingOverlay =
-  '<span class="ag-overlay-loading-center">Loading…</span>'
+const loadingOverlay = '<span class="ag-overlay-loading-center">Loading…</span>'
 const gridApi = ref<any>(null)
 const onGridReady = (p: any) => {
   gridApi.value = p.api

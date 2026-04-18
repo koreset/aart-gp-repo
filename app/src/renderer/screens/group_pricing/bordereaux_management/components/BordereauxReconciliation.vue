@@ -1460,10 +1460,7 @@ const runAutoReconciliation = async () => {
       await fetchReconciliationItems()
       flash.show('Auto-reconciliation complete', 'success')
     } else {
-      flash.show(
-        response.data.error || 'Auto-reconciliation failed',
-        'error'
-      )
+      flash.show(response.data.error || 'Auto-reconciliation failed', 'error')
     }
   } catch (error: any) {
     flash.show(
@@ -1679,10 +1676,7 @@ const performImport = async () => {
         'success'
       )
     } else {
-      flash.show(
-        response.data.error || 'Confirmation import failed',
-        'error'
-      )
+      flash.show(response.data.error || 'Confirmation import failed', 'error')
     }
   } catch (error: any) {
     flash.show(
@@ -1776,9 +1770,7 @@ const addDiscrepancyComment = async (detailItem: any) => {
     flash.show('Comment added', 'success')
   } catch (error: any) {
     flash.show(
-      error.response?.data?.error ||
-        error.message ||
-        'Failed to add comment',
+      error.response?.data?.error || error.message || 'Failed to add comment',
       'error'
     )
   }
@@ -2064,9 +2056,7 @@ const addNote = async (item: any) => {
     flash.show('Note added', 'success')
   } catch (error: any) {
     flash.show(
-      error.response?.data?.error ||
-        error.message ||
-        'Failed to add note',
+      error.response?.data?.error || error.message || 'Failed to add note',
       'error'
     )
   }

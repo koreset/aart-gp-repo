@@ -59,11 +59,15 @@ export const useBordereauxStore = defineStore('bordereaux', {
     configurationsLoading: null as Promise<BordereauxConfiguration[]> | null,
 
     dashboardStats: null as BordereauxDashboardStats | null,
-    dashboardStatsLoading: null as Promise<BordereauxDashboardStats | null> | null,
+    dashboardStatsLoading:
+      null as Promise<BordereauxDashboardStats | null> | null,
 
     // Field catalogue is type-scoped (member | premium | claim) so we cache by key.
     fieldsByType: {} as Record<string, BordereauxFieldDef[]>,
-    fieldsByTypeLoading: {} as Record<string, Promise<BordereauxFieldDef[]> | null>
+    fieldsByTypeLoading: {} as Record<
+      string,
+      Promise<BordereauxFieldDef[]> | null
+    >
   }),
 
   actions: {
@@ -154,9 +158,8 @@ export const useBordereauxStore = defineStore('bordereaux', {
       }
       const pending = (async () => {
         try {
-          const res = await GroupPricingService.getBordereauxFields(
-            bordereauType
-          )
+          const res =
+            await GroupPricingService.getBordereauxFields(bordereauType)
           const fields = (res.data ?? []) as BordereauxFieldDef[]
           this.fieldsByType[bordereauType] = fields
           return fields

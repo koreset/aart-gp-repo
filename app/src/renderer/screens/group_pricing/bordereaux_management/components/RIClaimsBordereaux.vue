@@ -143,7 +143,7 @@
                     :pagination="true"
                     :pagination-page-size="25"
                     :overlay-loading-template="loadingOverlay"
-                    overlay-no-rows-template='<span class=\'ag-overlay-no-rows-center\'>No large-claim notices in this period.</span>'
+                    :overlay-no-rows-template="`<span class='ag-overlay-no-rows-center'>No large-claim notices in this period.</span>`"
                     @grid-ready="onNoticesGridReady"
                   />
                 </div>
@@ -255,7 +255,7 @@
                     :pagination="true"
                     :pagination-page-size="25"
                     :overlay-loading-template="loadingOverlay"
-                    overlay-no-rows-template='<span class=\'ag-overlay-no-rows-center\'>No cat events recorded for these filters.</span>'
+                    :overlay-no-rows-template="`<span class='ag-overlay-no-rows-center'>No cat events recorded for these filters.</span>`"
                     @grid-ready="onCatGridReady"
                   />
                 </div>
@@ -363,8 +363,7 @@ const activeTab = ref('notices')
 // AG-Grid overlay plumbing: the templates render when the grid calls
 // showLoadingOverlay / showNoRowsOverlay. The per-grid watchers below flip
 // between overlays based on the matching loading ref.
-const loadingOverlay =
-  '<span class="ag-overlay-loading-center">Loading…</span>'
+const loadingOverlay = '<span class="ag-overlay-loading-center">Loading…</span>'
 const noticesGridApi = ref(null)
 const catGridApi = ref(null)
 const onNoticesGridReady = (p) => {
