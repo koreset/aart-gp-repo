@@ -601,8 +601,10 @@ import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { useStatusBarStore } from '@/renderer/store/statusBar'
 import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
 import { useFlashStore } from '@/renderer/store/flash'
+import { useBordereauxStore } from '@/renderer/store/bordereaux'
 
 const flash = useFlashStore()
+const bordereauxStore = useBordereauxStore()
 const generatingComplianceReport = ref(false)
 
 const { hasPermission } = usePermissionCheck()
@@ -729,9 +731,11 @@ const fetchDashboardStats = async () => {
   error.value.stats = null
 
   try {
-    const response = await GroupPricingService.getBordereauxDashboardStats()
-    console.log('Dashboard Stats Response:', response.data)
-    if (response.data) {
+    // Stats are volatile — always force a refresh on mount/refresh. The store
+    // still dedupes concurrent callers via its in-flight promise.
+    const data = await bordereauxStore.loadDashboardStats({ force: true })
+    if (data) {
+      const response = { data } as any
       stats.value = {
         thisMonth: {
           generated: response.data.generated_this_month || 0

@@ -2,6 +2,7 @@ package services
 
 import (
 	"api/models"
+	"context"
 	"fmt"
 	"math"
 	"strings"
@@ -12,23 +13,40 @@ import (
 // Level 1 — Structural (completeness, duplicate run detection, treaty metadata)
 // Level 2 — Data integrity (arithmetic, date logic, exchange rate range)
 // Level 3 — Business rules (treaty limits, sanctions, large-loss recovery)
-func ValidateRIBordereaux(runID string) (models.ValidationSummary, error) {
+func ValidateRIBordereaux(ctx context.Context, runID string) (models.ValidationSummary, error) {
 	run, err := GetRIBordereauxRunByID(runID)
 	if err != nil {
+		sendRIValidationProgress(ctx, RIValidationProgressEvent{
+			RunID: runID, Level: 0, Phase: "failed", Progress: 100,
+			Message: "run not found",
+		})
 		return models.ValidationSummary{}, fmt.Errorf("run not found: %w", err)
 	}
-	if run.Status == "submitted" || run.Status == "acknowledged" || run.Status == "settled" {
-		return models.ValidationSummary{}, fmt.Errorf("cannot validate a run with status '%s'", run.Status)
+	if err := ValidateRIBordereauxRunTransition(run.Status, StatusRIRunValidating); err != nil {
+		sendRIValidationProgress(ctx, RIValidationProgressEvent{
+			RunID: runID, Level: 0, Phase: "failed", Progress: 100,
+			Message: err.Error(),
+		})
+		return models.ValidationSummary{}, err
 	}
 
+	sendRIValidationProgress(ctx, RIValidationProgressEvent{
+		RunID: runID, Level: 1, Phase: "start", Progress: 5,
+		Message: "Starting validation pipeline",
+	})
+
 	// Mark as validating
-	DB.Model(&run).Update("status", "validating")
+	DB.Model(&run).Update("status", StatusRIRunValidating)
 
 	// Clear any prior results for a re-run
 	DB.Where("run_id = ?", runID).Delete(&models.RIValidationResult{})
 
 	treaty, err := GetTreatyByID(run.TreatyID)
 	if err != nil {
+		sendRIValidationProgress(ctx, RIValidationProgressEvent{
+			RunID: runID, Level: 0, Phase: "failed", Progress: 100,
+			Message: "treaty not found",
+		})
 		return models.ValidationSummary{}, fmt.Errorf("treaty not found: %w", err)
 	}
 
@@ -40,13 +58,43 @@ func ValidateRIBordereaux(runID string) (models.ValidationSummary, error) {
 	if run.Type == "member_census" {
 		memberRows, _ := GetRIBordereauxMemberRows(runID)
 		results = append(results, validateL1Members(runID, memberRows)...)
+		sendRIValidationProgress(ctx, RIValidationProgressEvent{
+			RunID: runID, Level: 1, Phase: "level_complete", Progress: 35,
+			Findings: len(results),
+			Message:  "Level 1 (structural) complete",
+		})
 		results = append(results, validateL2Members(runID, memberRows)...)
+		sendRIValidationProgress(ctx, RIValidationProgressEvent{
+			RunID: runID, Level: 2, Phase: "level_complete", Progress: 60,
+			Findings: len(results),
+			Message:  "Level 2 (integrity) complete",
+		})
 		results = append(results, validateL3Members(runID, memberRows, treaty)...)
+		sendRIValidationProgress(ctx, RIValidationProgressEvent{
+			RunID: runID, Level: 3, Phase: "level_complete", Progress: 85,
+			Findings: len(results),
+			Message:  "Level 3 (business rules) complete",
+		})
 	} else {
 		claimsRows, _ := GetRIBordereauxClaimsRows(runID)
 		results = append(results, validateL1Claims(runID, claimsRows)...)
+		sendRIValidationProgress(ctx, RIValidationProgressEvent{
+			RunID: runID, Level: 1, Phase: "level_complete", Progress: 35,
+			Findings: len(results),
+			Message:  "Level 1 (structural) complete",
+		})
 		results = append(results, validateL2Claims(runID, claimsRows)...)
+		sendRIValidationProgress(ctx, RIValidationProgressEvent{
+			RunID: runID, Level: 2, Phase: "level_complete", Progress: 60,
+			Findings: len(results),
+			Message:  "Level 2 (integrity) complete",
+		})
 		results = append(results, validateL3Claims(runID, claimsRows, treaty)...)
+		sendRIValidationProgress(ctx, RIValidationProgressEvent{
+			RunID: runID, Level: 3, Phase: "level_complete", Progress: 85,
+			Findings: len(results),
+			Message:  "Level 3 (business rules) complete",
+		})
 	}
 
 	// Persist all findings
@@ -76,6 +124,11 @@ func ValidateRIBordereaux(runID string) (models.ValidationSummary, error) {
 	}
 	DB.Model(&run).Update("status", summary.Status)
 
+	sendRIValidationProgress(ctx, RIValidationProgressEvent{
+		RunID: runID, Level: 3, Phase: "completed", Progress: 100,
+		Findings: summary.Total,
+		Message:  fmt.Sprintf("Validation %s (%d findings)", summary.Status, summary.Total),
+	})
 	return summary, nil
 }
 

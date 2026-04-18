@@ -753,15 +753,20 @@
       </v-card>
     </v-dialog>
   </v-container>
+  <confirm-dialog ref="confirmationDialog" />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import BaseCard from '@/renderer/components/BaseCard.vue'
+import ConfirmDialog from '@/renderer/components/ConfirmDialog.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { useFlashStore } from '@/renderer/store/flash'
+import { useBordereauxStore } from '@/renderer/store/bordereaux'
 
 const flash = useFlashStore()
+const bordereauxStore = useBordereauxStore()
+const confirmationDialog: any = ref(null)
 const showDeleteDialog = ref(false)
 const deleting = ref(false)
 const templateToDelete: any = ref(null)
@@ -968,11 +973,13 @@ const formatDate = (dateString: string): string => {
   })
 }
 
-const refreshTemplates = async () => {
+const refreshTemplates = async (opts: { force?: boolean } = {}) => {
   loading.value = true
   try {
-    const templatesResponse = await GroupPricingService.getBordereauxTemplates()
-    templates.value = templatesResponse.data
+    // Use the store cache on first mount; force-reload after mutations or when
+    // the caller explicitly asks for fresh data.
+    const cached = await bordereauxStore.loadTemplates({ force: opts.force })
+    templates.value = cached as any[]
 
     // Generate template statistics based on fetched data
     const stats = {
@@ -1029,10 +1036,10 @@ const fetchBordereauFields = async (bordereauType: string) => {
 
   try {
     loadingFields.value = true
-    const response =
-      await GroupPricingService.getBordereauxFields(bordereauType)
-    console.log('Fetched bordereaux fields:', response.data)
-    bordereauFields.value = response.data || []
+    // Field catalogue per bordereaux type is effectively static — the store
+    // caches by type so repeated edits of the same template type skip the round trip.
+    const fields = await bordereauxStore.loadFieldsByType(bordereauType)
+    bordereauFields.value = fields
   } catch (error: any) {
     flash.show(
       error.response?.data?.error ||
@@ -1210,6 +1217,7 @@ const saveTemplate = async () => {
     showEditorDialog.value = false
     editingTemplate.value = null
     bordereauFields.value = []
+    bordereauxStore.invalidateTemplates()
 
     flash.show(`Template '${response.data.name}' saved`, 'success')
   } catch (error: any) {
@@ -1273,8 +1281,15 @@ const versionHistory = (_template: any) => {
 
 const activateTemplate = async (template: any) => {
   try {
+    await confirmationDialog.value?.open(
+      'Activate template?',
+      `Activate '${template.name}'? It will immediately become available for bordereaux generation.`
+    )
+  } catch {
+    return // user cancelled
+  }
+  try {
     updatingStatus.value = true
-    console.log('Activating template:', template.name)
 
     // Prepare template data for API update
     const templateData = {
@@ -1309,6 +1324,7 @@ const activateTemplate = async (template: any) => {
           ?.name
       }
     }
+    bordereauxStore.invalidateTemplates()
 
     flash.show(`Template '${template.name}' activated`, 'success')
   } catch (error: any) {
@@ -1326,8 +1342,15 @@ const activateTemplate = async (template: any) => {
 
 const deactivateTemplate = async (template: any) => {
   try {
+    await confirmationDialog.value?.open(
+      'Deactivate template?',
+      `Deactivate '${template.name}'? Schemes already using this template keep working, but it won't be selectable for new bordereaux until reactivated.`
+    )
+  } catch {
+    return // user cancelled
+  }
+  try {
     updatingStatus.value = true
-    console.log('Deactivating template:', template.name)
 
     // Prepare template data for API update
     const templateData = {
@@ -1362,6 +1385,7 @@ const deactivateTemplate = async (template: any) => {
           ?.name
       }
     }
+    bordereauxStore.invalidateTemplates()
 
     flash.show(`Template '${template.name}' deactivated`, 'success')
   } catch (error: any) {
@@ -1395,6 +1419,7 @@ const confirmDeleteTemplate = async () => {
     if (index !== -1) {
       templates.value.splice(index, 1)
     }
+    bordereauxStore.invalidateTemplates()
     flash.show(`Template '${template.name}' deleted`, 'success')
     showDeleteDialog.value = false
     templateToDelete.value = null

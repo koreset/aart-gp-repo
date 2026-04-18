@@ -67,6 +67,8 @@
           :rowSelection="props.rowSelection || 'multiple'"
           :pagination="props.pagination"
           :paginationPageSize="props.paginationPageSize"
+          :overlayLoadingTemplate="loadingOverlayTemplate"
+          :overlayNoRowsTemplate="noRowsOverlayTemplate"
           @row-selected="onRowSelected"
           @row-double-clicked="onRowDoubleClicked"
           @grid-ready="onGridReady"
@@ -108,6 +110,11 @@ const props = defineProps<{
   productCode?: string
   runName?: string
   density?: 'default' | 'compact' | 'comfortable'
+  // Loading + empty overlays. `loading` drives AG-Grid's loading overlay;
+  // `noRowsMessage` is shown when the loading has completed but the dataset
+  // is empty. Both are optional — existing callers are unaffected.
+  loading?: boolean
+  noRowsMessage?: string
 }>()
 
 // const emit = defineEmits(['delete-row'])
@@ -205,13 +212,40 @@ const autoSizeAll = (skipHeader: boolean) => {
   gridApi.value!.autoSizeColumns(allColumnIds, skipHeader)
 }
 
+const loadingOverlayTemplate =
+  '<span class="ag-overlay-loading-center">Loading…</span>'
+const noRowsOverlayTemplate = computed(
+  () =>
+    `<span class="ag-overlay-no-rows-center">${
+      props.noRowsMessage ?? 'No data to display'
+    }</span>`
+)
+
+const applyOverlay = () => {
+  if (!gridApi.value) return
+  if (props.loading) {
+    gridApi.value.showLoadingOverlay()
+  } else if (!localRowData.value || localRowData.value.length === 0) {
+    gridApi.value.showNoRowsOverlay()
+  } else {
+    gridApi.value.hideOverlay()
+  }
+}
+
 const onGridReady = (params) => {
   gridApi.value = params.api
   columnApi.value = params.columnApi
   gridApi.value.autoSizeAllColumns()
 
   autoSizeAll(false)
+  applyOverlay()
 }
+
+watch(() => props.loading, applyOverlay)
+watch(
+  () => localRowData.value,
+  () => applyOverlay()
+)
 
 // watch(
 //   () => props.rowData,

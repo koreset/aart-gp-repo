@@ -53,8 +53,11 @@ func ResolveDiscrepancy(id int, req ResolveDiscrepancyRequest, user models.AppUs
 
 	before := result
 
+	if err := ValidateReconciliationResultTransition(result.Status, StatusReconResolved); err != nil {
+		return result, err
+	}
 	result.IsResolved = true
-	result.Status = "resolved"
+	result.Status = StatusReconResolved
 	if req.Notes != "" {
 		if result.Comments != "" {
 			result.Comments += "\n"
@@ -100,11 +103,14 @@ func EscalateDiscrepancy(id int, req EscalateDiscrepancyRequest, user models.App
 
 	before := result
 
+	if err := ValidateReconciliationResultTransition(result.Status, StatusReconEscalated); err != nil {
+		return result, err
+	}
 	now := time.Now()
 	due := now.Add(escalationSLA(req.Priority))
 	assigneeEmail := ResolveEscalationTarget(req.EscalateTo)
 
-	result.Status = "escalated"
+	result.Status = StatusReconEscalated
 	result.AssignedTo = req.EscalateTo
 	result.Priority = strings.ToLower(strings.TrimSpace(req.Priority))
 	result.EscalatedBy = user.UserName

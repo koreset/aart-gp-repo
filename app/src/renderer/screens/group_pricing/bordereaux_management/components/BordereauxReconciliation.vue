@@ -1266,8 +1266,10 @@ import BaseCard from '@/renderer/components/BaseCard.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import * as pako from 'pako'
 import { useFlashStore } from '@/renderer/store/flash'
+import { useBordereauxStore } from '@/renderer/store/bordereaux'
 
 const flash = useFlashStore()
+const bordereauxStore = useBordereauxStore()
 
 // Reactive data
 const loading = ref(false)
@@ -1329,7 +1331,7 @@ const discrepancyHeaders = [
   { title: 'Actions', key: 'actions', sortable: false, width: '120px' }
 ]
 
-const schemes = ref([])
+const schemes = ref<any[]>([])
 const schemesLoading = ref(false)
 
 const fileTypes = [
@@ -2154,8 +2156,10 @@ const generateReconciliationReport = async () => {
 const fetchSchemes = async () => {
   schemesLoading.value = true
   try {
-    const response = await GroupPricingService.getSchemesInforce()
-    schemes.value = response.data
+    // Served from the shared bordereaux store — no redundant fetch when the
+    // user has already visited another screen in the module this session.
+    const list = await bordereauxStore.loadSchemes()
+    schemes.value = list as any[]
   } catch (error) {
     console.error('Error fetching schemes:', error)
     schemes.value = []

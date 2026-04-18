@@ -11,6 +11,7 @@ import (
 
 // CreateBordereauxTemplate handles POST to create a new template
 func CreateBordereauxTemplate(c *gin.Context) {
+    user := c.MustGet("user").(models.AppUser)
     var payload models.BordereauxTemplate
     if err := c.ShouldBindJSON(&payload); err != nil {
         c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -20,7 +21,7 @@ func CreateBordereauxTemplate(c *gin.Context) {
         c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
         return
     }
-    if err := services.CreateBordereauxTemplate(&payload); err != nil {
+    if err := services.CreateBordereauxTemplate(&payload, user); err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
         return
     }
@@ -54,6 +55,7 @@ func GetBordereauxTemplate(c *gin.Context) {
 
 // UpdateBordereauxTemplate handles PUT by id
 func UpdateBordereauxTemplate(c *gin.Context) {
+    user := c.MustGet("user").(models.AppUser)
     id, err := strconv.Atoi(c.Param("id"))
     if err != nil {
         c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
@@ -64,7 +66,7 @@ func UpdateBordereauxTemplate(c *gin.Context) {
         c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
         return
     }
-    updated, err := services.UpdateBordereauxTemplate(id, payload)
+    updated, err := services.UpdateBordereauxTemplate(id, payload, user)
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
         return
@@ -74,12 +76,13 @@ func UpdateBordereauxTemplate(c *gin.Context) {
 
 // DeleteBordereauxTemplate handles DELETE by id
 func DeleteBordereauxTemplate(c *gin.Context) {
+    user := c.MustGet("user").(models.AppUser)
     id, err := strconv.Atoi(c.Param("id"))
     if err != nil {
         c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
         return
     }
-    if err := services.DeleteBordereauxTemplate(id); err != nil {
+    if err := services.DeleteBordereauxTemplate(id, user); err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
         return
     }

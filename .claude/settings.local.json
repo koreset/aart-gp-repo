@@ -8,7 +8,10 @@
       "Bash(yarn vitest:*)",
       "Bash(go vet:*)",
       "Bash(yarn typecheck:*)",
-      "Bash(echo \"EXIT: $?\")"
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(find *)",
+      "Bash(git checkout *)",
+      "Bash(go mod *)"
     ]
   }
 }

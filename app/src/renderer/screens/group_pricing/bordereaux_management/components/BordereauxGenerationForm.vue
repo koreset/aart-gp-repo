@@ -225,7 +225,7 @@
                                 variant="outlined"
                                 density="compact"
                                 type="date"
-                                :rules="[rules.required]"
+                                :rules="[rules.required, rules.endAfterStart]"
                                 required
                               />
                             </v-col>
@@ -263,13 +263,13 @@
                         <v-col cols="12" md="6">
                           <v-select
                             v-model="formData.template_id"
-                            :items="availableTemplates"
+                            :items="templatesForSelectedType"
                             item-title="name"
                             item-value="id"
                             label="Template *"
                             variant="outlined"
                             density="compact"
-                            :rules="[rules.required]"
+                            :rules="[rules.required, rules.templateMatchesType]"
                             required
                           >
                             <template #item="{ props, item }">
@@ -503,6 +503,24 @@
                         </div>
                       </v-alert>
 
+                      <v-alert
+                        v-if="showZeroRecordsWarning"
+                        color="warning"
+                        variant="tonal"
+                        density="compact"
+                        class="mb-4"
+                      >
+                        <template #prepend>
+                          <v-icon>mdi-alert</v-icon>
+                        </template>
+                        <div>
+                          Estimated 0 records — the selected period and filters
+                          will produce an empty bordereaux. Double-check the
+                          period, schemes, and exclusion toggles before
+                          generating.
+                        </div>
+                      </v-alert>
+
                       <v-btn
                         color="primary"
                         size="large"
@@ -616,9 +634,21 @@
             height="8"
             striped
           />
-          <p class="text-center mt-3 text-body-2">
-            {{ progressMessage }}
-          </p>
+          <div class="d-flex justify-space-between align-center mt-2">
+            <p class="text-body-2 mb-0">{{ progressMessage }}</p>
+            <span class="text-caption text-medium-emphasis">
+              {{ progress }}%
+            </span>
+          </div>
+          <v-chip
+            v-if="currentPhase"
+            size="x-small"
+            class="mt-2"
+            :color="currentPhase === 'failed' ? 'error' : 'primary'"
+            variant="tonal"
+          >
+            {{ currentPhase }}
+          </v-chip>
         </v-card-text>
       </v-card>
     </v-dialog>
@@ -759,8 +789,12 @@ import BaseCard from '@/renderer/components/BaseCard.vue'
 import ConfirmDialog from '@/renderer/components/ConfirmDialog.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { useFlashStore } from '@/renderer/store/flash'
+import { useBordereauxStore } from '@/renderer/store/bordereaux'
+import { useWebSocket } from '@/renderer/composables/useWebSocket'
 
 const flash = useFlashStore()
+const bordereauxStore = useBordereauxStore()
+const { on: wsOn, off: wsOff } = useWebSocket()
 
 interface BordereauxFormData {
   type: string
@@ -821,11 +855,26 @@ const configDescription = ref('')
 const isUpdateMode = ref(false)
 
 // Job tracking properties
-// const currentJobId = ref<string | null>(null)
-// const jobStatus = ref<string>('')
-// const jobProgress = ref(0)
+// Real-time progress is delivered via WebSocket events of type
+// 'bordereaux_progress' (see services/bordereaux_progress.go). The handler
+// below writes directly into `progress` / `progressMessage` which the
+// progress dialog binds to.
+const currentPhase = ref<string>('')
 const jobResult: any = ref(null)
 const pollInterval: any = ref(null)
+
+const handleBordereauxProgress = (payload: any) => {
+  if (!progressDialog.value) return
+  if (typeof payload?.progress === 'number') {
+    progress.value = payload.progress
+  }
+  if (payload?.message) {
+    progressMessage.value = payload.message
+  }
+  if (payload?.phase) {
+    currentPhase.value = payload.phase
+  }
+}
 
 // Form data
 const formData = ref<BordereauxFormData>({
@@ -862,7 +911,25 @@ const generationResult = ref({
 
 // Validation rules
 const rules = {
-  required: (value: any) => !!value || 'This field is required'
+  required: (value: any) => !!value || 'This field is required',
+  endAfterStart: (value: any) => {
+    const end = String(value || '')
+    const start = String(formData.value.start_date || '')
+    if (!end || !start) return true // `required` handles blanks
+    return end >= start || 'End date must be on or after the start date'
+  },
+  templateMatchesType: (value: any) => {
+    if (!value || !formData.value.type) return true
+    const tmpl = availableTemplates.value.find((t: any) => t.id === value)
+    if (!tmpl) return true
+    const tmplType = String(tmpl.type ?? '').toLowerCase()
+    const formType = formData.value.type.toLowerCase()
+    if (!tmplType) return true
+    return (
+      tmplType === formType ||
+      `Template type '${tmpl.type}' does not match bordereaux type '${formData.value.type}'`
+    )
+  }
 }
 
 // Static data
@@ -970,14 +1037,60 @@ const availableTemplates = ref([
 ])
 
 // Computed properties
+
+// Templates whose type matches the current bordereaux type — avoids showing
+// user-visible options that the validator will reject anyway.
+const templatesForSelectedType = computed(() => {
+  if (!formData.value.type) return availableTemplates.value
+  const target = formData.value.type.toLowerCase()
+  return availableTemplates.value.filter((t: any) => {
+    const tt = String(t?.type ?? '').toLowerCase()
+    return !tt || tt === target
+  })
+})
+
+// True when the selected period has a valid, non-inverted date range.
+const hasValidDateRange = computed(() => {
+  if (formData.value.period_type !== 'custom') return true
+  const s = formData.value.start_date
+  const e = formData.value.end_date
+  if (!s || !e) return false
+  return String(e) >= String(s)
+})
+
+// True when the chosen template's type matches the current bordereaux type
+// (or no template/type is selected yet — `required` handles that).
+const templateTypeMatches = computed(() => {
+  if (!formData.value.template_id || !formData.value.type) return true
+  const tmpl = availableTemplates.value.find(
+    (t: any) => t.id === formData.value.template_id
+  )
+  if (!tmpl) return true
+  const tt = String(tmpl.type ?? '').toLowerCase()
+  if (!tt) return true
+  return tt === formData.value.type.toLowerCase()
+})
+
 const canGenerate = computed(() => {
   return (
     formData.value.type &&
     formData.value.scheme_ids.length > 0 &&
     formData.value.template_id &&
     formData.value.output_format &&
-    (formData.value.period_type !== 'custom' ||
-      (formData.value.start_date && formData.value.end_date))
+    hasValidDateRange.value &&
+    templateTypeMatches.value
+  )
+})
+
+// Warning surfaces once the required fields are all filled AND the estimate
+// comes back as zero — that combination almost always means the filters are
+// wrong (bad period, wrong scheme, everyone filtered out by toggles).
+const showZeroRecordsWarning = computed(() => {
+  return Boolean(
+    formData.value.type &&
+      formData.value.scheme_ids.length > 0 &&
+      hasValidDateRange.value &&
+      estimatedRecords.value === 0
   )
 })
 
@@ -1094,6 +1207,7 @@ const generateBordereaux = async () => {
   progressDialog.value = true
   progress.value = 0
   progressMessage.value = 'Submitting job to server...'
+  currentPhase.value = ''
 
   try {
     // Submit job to backend API
@@ -1226,10 +1340,10 @@ const closeSuccessDialog = () => {
 }
 
 // Configuration Management Methods
-const fetchSavedConfigurations = async () => {
+const fetchSavedConfigurations = async (opts: { force?: boolean } = {}) => {
   try {
-    const response = await GroupPricingService.getBordereauxConfigurations()
-    savedConfigurations.value = response.data
+    const list = await bordereauxStore.loadConfigurations({ force: opts.force })
+    savedConfigurations.value = list as any[]
   } catch (error) {
     console.error('Failed to fetch saved configurations:', error)
   }
@@ -1286,22 +1400,39 @@ const closeSaveConfigDialog = () => {
 }
 
 const saveConfiguration = async () => {
-  if (!configName.value.trim()) return
+  const trimmedName = configName.value.trim()
+  if (!trimmedName) return
+
+  // A new configuration with a name that already exists is almost always an
+  // operator mistake (or an intent to overwrite the existing one). Prompt
+  // before creating a duplicate.
+  const nameCollision = savedConfigurations.value.some(
+    (c) => c.name.trim().toLowerCase() === trimmedName.toLowerCase()
+  )
+  if (nameCollision) {
+    try {
+      await confirmationDialog.value?.open(
+        'Duplicate name',
+        `A configuration named '${trimmedName}' already exists. Save this one alongside it anyway?`
+      )
+    } catch {
+      return // user cancelled
+    }
+  }
 
   try {
     const configurationData = {
-      name: configName.value.trim(),
+      name: trimmedName,
       description: configDescription.value.trim(),
       config_data: { ...formData.value }
     }
-
-    console.log('Saving configuration:', configurationData)
 
     const response =
       await GroupPricingService.saveBordereauxConfiguration(configurationData)
 
     if (response.status === 201) {
-      await fetchSavedConfigurations()
+      bordereauxStore.invalidateConfigurations()
+      await fetchSavedConfigurations({ force: true })
       closeSaveConfigDialog()
       flash.show(`Configuration '${configurationData.name}' saved`, 'success')
     }
@@ -1318,6 +1449,18 @@ const saveConfiguration = async () => {
 const updateConfiguration = async () => {
   if (!configName.value.trim() || !selectedConfigurationId.value) return
 
+  const existing = savedConfigurations.value.find(
+    (c) => c.id === selectedConfigurationId.value
+  )
+  try {
+    await confirmationDialog.value?.open(
+      'Overwrite configuration?',
+      `Overwrite '${existing?.name ?? 'this configuration'}' with the current form values? The previous configuration cannot be restored.`
+    )
+  } catch {
+    return // user cancelled
+  }
+
   try {
     const configurationData = {
       name: configName.value.trim(),
@@ -1325,15 +1468,14 @@ const updateConfiguration = async () => {
       config_data: { ...formData.value }
     }
 
-    console.log('Updating configuration:', configurationData)
-
     const response = await GroupPricingService.updateBordereauxConfiguration(
       selectedConfigurationId.value,
       configurationData
     )
 
     if (response.status === 200) {
-      await fetchSavedConfigurations()
+      bordereauxStore.invalidateConfigurations()
+      await fetchSavedConfigurations({ force: true })
       closeSaveConfigDialog()
       flash.show(`Configuration '${configurationData.name}' updated`, 'success')
     }
@@ -1368,6 +1510,7 @@ const deleteConfiguration = async () => {
         (c) => c.id !== selectedConfigurationId.value
       )
       selectedConfigurationId.value = null
+      bordereauxStore.invalidateConfigurations()
       flash.show(`Configuration '${configName}' deleted`, 'success')
     }
   } catch (error: any) {
@@ -1412,18 +1555,35 @@ watch(
     updateEstimatedRecords()
   }
 )
-watch(() => formData.value.type, updateEstimatedRecords)
+watch(() => formData.value.type, (newType) => {
+  updateEstimatedRecords()
+  // If the previously selected template doesn't match the new type, clear it
+  // so the user isn't silently holding a mismatched selection.
+  const current = availableTemplates.value.find(
+    (t: any) => t.id === formData.value.template_id
+  )
+  if (
+    newType &&
+    current &&
+    current.type &&
+    String(current.type).toLowerCase() !== String(newType).toLowerCase()
+  ) {
+    formData.value.template_id = null
+  }
+})
 
 onMounted(async () => {
   updateEstimatedRecords()
-  // Fetch schemes from API
+  wsOn('bordereaux_progress', handleBordereauxProgress)
+  // Schemes and templates are cached at the store level — second and later
+  // mounts of this screen serve from cache and skip the round trips entirely.
   try {
-    const response = await GroupPricingService.getSchemesInforcev2()
-    schemes.value = response.data
-    const templatesResponse = await GroupPricingService.getBordereauxTemplates()
-    availableTemplates.value = templatesResponse.data
-
-    // Load saved configurations
+    const [schemeList, templateList] = await Promise.all([
+      bordereauxStore.loadSchemes(),
+      bordereauxStore.loadTemplates()
+    ])
+    schemes.value = schemeList as any[]
+    availableTemplates.value = templateList as any[]
     await fetchSavedConfigurations()
   } catch (error) {
     console.error('Failed to fetch schemes:', error)
@@ -1433,6 +1593,7 @@ onMounted(async () => {
 // Cleanup on unmount
 onUnmounted(() => {
   stopJobPolling()
+  wsOff('bordereaux_progress', handleBordereauxProgress)
 })
 </script>
 

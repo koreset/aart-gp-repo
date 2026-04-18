@@ -8,4 +8,6 @@ SET @s = (SELECT IF(
     'SELECT 1;',
     'ALTER TABLE group_schemes ADD COLUMN reconciliation_tolerance DOUBLE NOT NULL DEFAULT 0;'
 ));
-PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+PREPARE stmt FROM @s;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
