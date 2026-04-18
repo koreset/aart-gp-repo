@@ -179,7 +179,7 @@ const { snackbar, snackbarMessage, snackbarColor, hideNotification } =
   overflow: hidden;
 }
 
-/* Animation for section transitions 
+/* Animation for section transitions
 .sections-container > * {
   animation: fadeInUp 0.6s ease-out;
 }

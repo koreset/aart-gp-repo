@@ -297,7 +297,7 @@
         </v-card-title>
         <v-card-text>
           <!-- Summary chips -->
-          <v-row class="mb-3" v-if="validationSummary">
+          <v-row v-if="validationSummary" class="mb-3">
             <v-col cols="auto">
               <v-chip
                 color="error"

@@ -103,10 +103,10 @@
               v-model="manualCredibilityFormValid"
             >
               <v-text-field
+                v-model="manualCredibilityValue"
                 class="mb-7"
                 variant="outlined"
                 density="compact"
-                v-model="manualCredibilityValue"
                 label="Credibility Value"
                 type="number"
                 step="0.01"
@@ -119,9 +119,9 @@
               ></v-text-field>
 
               <v-select
+                v-model="selectedBasis"
                 variant="outlined"
                 density="compact"
-                v-model="selectedBasis"
                 :items="parameterBases"
                 item-title="name"
                 item-value="value"

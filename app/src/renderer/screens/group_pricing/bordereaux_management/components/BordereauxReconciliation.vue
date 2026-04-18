@@ -1814,7 +1814,7 @@ const escalateDiscrepancy = async (item: any) => {
       item.id || selectedDiscrepancyItem.value?.id,
       {
         escalate_to: 'manager',
-        reason: reason,
+        reason,
         priority: 'high'
       }
     )

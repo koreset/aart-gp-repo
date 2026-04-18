@@ -31,8 +31,8 @@
         </v-col>
         <v-col cols="12" md="2">
           <v-switch
-            class="mt-0"
             v-model="categoryData.active"
+            class="mt-0"
             label="Active"
             color="primary"
           />
