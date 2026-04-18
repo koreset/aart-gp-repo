@@ -334,8 +334,8 @@
                     >{{ plan.status }}</v-chip
                   >
                   <span class="text-caption"
-                    >Plan #{{ plan.id }} · {{ plan.instalments?.length ?? 0 }}
-                    instalment{{
+                    >Plan #{{ plan.id }} ·
+                    {{ plan.instalments?.length ?? 0 }} instalment{{
                       (plan.instalments?.length ?? 0) === 1 ? '' : 's'
                     }}
                     · Total {{ fmtCurrency(planSum(plan)) }}</span
@@ -366,10 +366,7 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr
-                      v-for="inst in plan.instalments"
-                      :key="inst.id"
-                    >
+                    <tr v-for="inst in plan.instalments" :key="inst.id">
                       <td>{{ inst.date }}</td>
                       <td class="text-right">{{ fmtCurrency(inst.amount) }}</td>
                       <td>

@@ -922,14 +922,41 @@ func BackfillReconciliationItems() {
 		touchedInvoiceIDs[*p.InvoiceID] = struct{}{}
 	}
 
+	// Also pick up every reconciliation item that has any PaymentAllocation
+	// entries — payments recorded via the v2 flow (no legacy invoice_id on
+	// the Payment row) won't be caught by the loop above, but their
+	// reconciliation items still need to stay in sync with the ledger and
+	// with the current AutoCloseTolerance.
+	var allocatedPaymentIDs []int
+	DB.Model(&models.PaymentAllocation{}).
+		Distinct("payment_id").
+		Pluck("payment_id", &allocatedPaymentIDs)
+	for _, pid := range allocatedPaymentIDs {
+		touchedPaymentIDs[pid] = struct{}{}
+	}
+
+	var allocatedInvoiceIDs []int
+	DB.Model(&models.PaymentAllocation{}).
+		Distinct("invoice_id").
+		Pluck("invoice_id", &allocatedInvoiceIDs)
+	for _, iid := range allocatedInvoiceIDs {
+		touchedInvoiceIDs[iid] = struct{}{}
+	}
+
 	// Recalculate each affected reconciliation item from the allocation
-	// ledger so allocated/unallocated/status are in sync with reality.
+	// ledger so allocated/unallocated/status are in sync with reality, then
+	// mirror the result onto the legacy Payment.Status / Invoice.Balance
+	// fields so list views stay consistent with the reconciliation workspace.
 	recalcCount := 0
 	for pid := range touchedPaymentIDs {
 		if err := recalcReconciliationItem(DB, "payment", pid); err != nil {
 			appLog.WithField("error", err.Error()).WithField("payment_id", pid).
 				Warn("Backfill: recalc payment item failed")
 			continue
+		}
+		if err := updatePaymentStatus(DB, pid, nil); err != nil {
+			appLog.WithField("error", err.Error()).WithField("payment_id", pid).
+				Warn("Backfill: sync payment status failed")
 		}
 		recalcCount++
 	}
@@ -938,6 +965,10 @@ func BackfillReconciliationItems() {
 			appLog.WithField("error", err.Error()).WithField("invoice_id", iid).
 				Warn("Backfill: recalc invoice item failed")
 			continue
+		}
+		if err := syncInvoiceFromReconItem(DB, iid); err != nil {
+			appLog.WithField("error", err.Error()).WithField("invoice_id", iid).
+				Warn("Backfill: sync invoice fields failed")
 		}
 		recalcCount++
 	}
@@ -1376,6 +1407,37 @@ func applyAllocationToInvoice(tx *gorm.DB, invoiceID int, amount float64) error 
 		invoice.Status = "sent"
 	}
 
+	return tx.Save(&invoice).Error
+}
+
+// syncInvoiceFromReconItem mirrors the v2 ReconciliationItem's allocated /
+// unallocated / status onto the legacy Invoice record (paid_amount, balance,
+// status). Needed so that list views reading the Invoice table reflect the
+// current allocation ledger — otherwise the Payments/Invoices grids get out
+// of sync with the reconciliation workspace.
+func syncInvoiceFromReconItem(tx *gorm.DB, invoiceID int) error {
+	var item models.ReconciliationItem
+	if err := tx.Where("invoice_id = ?", invoiceID).First(&item).Error; err != nil {
+		return err
+	}
+	var invoice models.Invoice
+	if err := tx.First(&invoice, invoiceID).Error; err != nil {
+		return err
+	}
+
+	invoice.PaidAmount = item.AllocatedAmount
+	invoice.Balance = item.UnallocatedAmount
+	switch item.Status {
+	case "matched":
+		invoice.Status = "paid"
+		invoice.Balance = 0
+	case "partial":
+		invoice.Status = "partial"
+	case "open":
+		if invoice.Status == "paid" || invoice.Status == "partial" {
+			invoice.Status = "sent"
+		}
+	}
 	return tx.Save(&invoice).Error
 }
 
