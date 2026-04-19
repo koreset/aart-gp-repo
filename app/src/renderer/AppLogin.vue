@@ -491,10 +491,7 @@ const assertLicenseEmail = (token: string | undefined): string | null => {
   const attrs = license?.data?.attributes || license?.attributes
   const meta = attrs?.metadata
   const licenseEmail: string | undefined =
-    meta?.userEmail ||
-    meta?.user_email ||
-    meta?.email ||
-    meta?.user?.email
+    meta?.userEmail || meta?.user_email || meta?.email || meta?.user?.email
   const claims = decodeJwtPayload(token)
   const tokenEmail: string | undefined =
     claims?.user?.Email ||
@@ -503,7 +500,10 @@ const assertLicenseEmail = (token: string | undefined): string | null => {
     claims?.Email ||
     claims?.email
 
-  console.log('[LicenseBinding] license metadata:', license?.data?.attributes?.metadata)
+  console.log(
+    '[LicenseBinding] license metadata:',
+    license?.data?.attributes?.metadata
+  )
   console.log('[LicenseBinding] token user claim:', claims?.user)
   console.log(
     '[LicenseBinding] resolved licenseEmail=%s tokenEmail=%s',

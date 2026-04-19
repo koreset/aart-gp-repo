@@ -153,8 +153,8 @@
                           </span>
                           <span v-else>
                             Not required. This table will not be read from the
-                            database; any downstream variables that depend on
-                            it will resolve to zero. The "Empty" warning is
+                            database; any downstream variables that depend on it
+                            will resolve to zero. The "Empty" warning is
                             suppressed.
                           </span>
                         </v-tooltip>

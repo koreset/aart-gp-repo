@@ -135,12 +135,7 @@
               </tbody>
             </v-table>
           </template>
-          <v-alert
-            v-else
-            type="warning"
-            density="compact"
-            variant="tonal"
-          >
+          <v-alert v-else type="warning" density="compact" variant="tonal">
             Extended family benefit is enabled for
             <strong>{{ (rs as any).category }}</strong>
             but per-band rates could not be computed. Check that (i) age bands
@@ -213,16 +208,12 @@
                 <em>{{ (rs as any).additional_gla_cover_age_band_type }}</em>
               </span>
               <span
-                v-if="
-                  (rs as any).additional_gla_cover_male_prop_used !=
-                    null
-                "
+                v-if="(rs as any).additional_gla_cover_male_prop_used != null"
               >
                 &middot; Male proportion used:
                 {{
                   (
-                    ((rs as any).additional_gla_cover_male_prop_used ?? 0) *
-                    100
+                    ((rs as any).additional_gla_cover_male_prop_used ?? 0) * 100
                   ).toFixed(1)
                 }}%
               </span>
@@ -251,16 +242,11 @@
               </tbody>
             </v-table>
           </template>
-          <v-alert
-            v-else
-            type="warning"
-            density="compact"
-            variant="tonal"
-          >
+          <v-alert v-else type="warning" density="compact" variant="tonal">
             {{ additionalGlaCoverBenefitTitle }} is enabled for
-            <strong>{{ (rs as any).category }}</strong> but per-band rates
-            could not be computed. Check that (i) age bands exist for the
-            configured band type<span
+            <strong>{{ (rs as any).category }}</strong> but per-band rates could
+            not be computed. Check that (i) age bands exist for the configured
+            band type<span
               v-if="(rs as any).additional_gla_cover_age_band_type"
             >
               (<em>{{ (rs as any).additional_gla_cover_age_band_type }}</em
@@ -611,7 +597,10 @@ const exportAdditionalGlaCoverToExcel = () => {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
-  XLSX.writeFile(wb, `${fileSlug || 'additional_gla_cover'}_summary_${schemeName}.xlsx`)
+  XLSX.writeFile(
+    wb,
+    `${fileSlug || 'additional_gla_cover'}_summary_${schemeName}.xlsx`
+  )
 }
 
 const exportExtendedFamilyToExcel = () => {

@@ -20,7 +20,11 @@ export async function loadUserPermissions(licenseId?: string | null) {
     const role = response?.data?.data ?? response?.data
     console.log('[RBAC] Role response:', role)
 
-    if (role && Array.isArray(role.permissions) && role.permissions.length > 0) {
+    if (
+      role &&
+      Array.isArray(role.permissions) &&
+      role.permissions.length > 0
+    ) {
       const permMap: Record<string, boolean> = {}
       for (const perm of role.permissions) {
         if (perm?.slug) permMap[perm.slug] = true

@@ -351,9 +351,7 @@ async function refreshMemberGenderSplit() {
     memberGenderSplit.value = null
     return
   }
-  if (
-    !(props.quote.member_data_count && props.quote.member_data_count > 0)
-  ) {
+  if (!(props.quote.member_data_count && props.quote.member_data_count > 0)) {
     memberGenderSplit.value = null
     return
   }

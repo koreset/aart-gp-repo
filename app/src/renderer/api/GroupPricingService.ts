@@ -51,17 +51,13 @@ export default {
     })
   },
   getTableConfigurationAudit(tableType: string) {
-    return Api.get(
-      `/group-pricing/table-configurations/${tableType}/audit`
-    )
+    return Api.get(`/group-pricing/table-configurations/${tableType}/audit`)
   },
   getAgeBands() {
     return Api.get('/group-pricing/age-bands')
   },
   getQuoteMemberGenderSplit(quoteId: number) {
-    return Api.get(
-      `/group-pricing/quotes/${quoteId}/member-gender-split`
-    )
+    return Api.get(`/group-pricing/quotes/${quoteId}/member-gender-split`)
   },
   getQuoteDocx(id: number) {
     return Api.get(`/group-pricing/get-quote/${id}/document.docx`, {

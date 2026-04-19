@@ -269,18 +269,13 @@
                       label="Standard Age Bands"
                       value="standard"
                     ></v-radio>
-                    <v-radio
-                      label="Custom Age Bands"
-                      value="custom"
-                    ></v-radio>
+                    <v-radio label="Custom Age Bands" value="custom"></v-radio>
                   </v-radio-group>
                 </v-col>
               </v-row>
 
               <!-- Standard bands: dropdown for the GLA-specific band type -->
-              <template
-                v-if="additionalGlaCoverAgeBandSource === 'standard'"
-              >
+              <template v-if="additionalGlaCoverAgeBandSource === 'standard'">
                 <v-row dense>
                   <v-col cols="4">
                     <v-select
@@ -289,9 +284,7 @@
                       label="Age Band Type"
                       variant="outlined"
                       density="compact"
-                      :no-data-text="
-                        'Upload age bands with a type in rate tables first'
-                      "
+                      :no-data-text="'Upload age bands with a type in rate tables first'"
                     ></v-select>
                   </v-col>
                 </v-row>
@@ -329,8 +322,8 @@
                         color="warning"
                         variant="outlined"
                       >
-                        No bands match this type — upload rows for it or
-                        switch to Custom.
+                        No bands match this type — upload rows for it or switch
+                        to Custom.
                       </v-chip>
                     </v-chip-group>
                   </v-col>
@@ -395,8 +388,8 @@
                 class="mt-2"
               >
                 Rates are computed per 1,000 sum assured during the quote
-                calculation using the main GLA benefit type and the gender
-                split from the uploaded member data. Results appear under
+                calculation using the main GLA benefit type and the gender split
+                from the uploaded member data. Results appear under
                 <strong>Premiums Summary</strong>.
               </v-alert>
             </template>
@@ -1155,9 +1148,7 @@
                   </v-row>
 
                   <!-- Standard age bands: pick a type, then show the bands -->
-                  <template
-                    v-if="extendedFamilyAgeBandSource === 'standard'"
-                  >
+                  <template v-if="extendedFamilyAgeBandSource === 'standard'">
                     <v-row dense>
                       <v-col cols="4">
                         <v-select
@@ -1166,9 +1157,7 @@
                           label="Age Band Type"
                           variant="outlined"
                           density="compact"
-                          :no-data-text="
-                            'Upload age bands with a type in rate tables first'
-                          "
+                          :no-data-text="'Upload age bands with a type in rate tables first'"
                         ></v-select>
                       </v-col>
                     </v-row>
@@ -1289,9 +1278,7 @@
                       </v-col>
                       <v-col cols="4">
                         <v-text-field
-                          :model-value="
-                            formatAmount(getBandSumAssured(band))
-                          "
+                          :model-value="formatAmount(getBandSumAssured(band))"
                           type="text"
                           variant="outlined"
                           density="compact"
@@ -1316,7 +1303,9 @@
                         <tr>
                           <th>Age Band</th>
                           <th>Average Rate</th>
-                          <th v-if="extendedFamilyPricingMethod === 'sum_assured'">
+                          <th
+                            v-if="extendedFamilyPricingMethod === 'sum_assured'"
+                          >
                             Sum Assured
                           </th>
                           <th>Monthly Premium (per member)</th>
@@ -1329,7 +1318,9 @@
                         >
                           <td>{{ formatBandLabel(r) }}</td>
                           <td>{{ r.average_rate.toFixed(6) }}</td>
-                          <td v-if="extendedFamilyPricingMethod === 'sum_assured'">
+                          <td
+                            v-if="extendedFamilyPricingMethod === 'sum_assured'"
+                          >
                             {{ formatAmount(r.sum_assured || 0) }}
                           </td>
                           <td>{{ formatAmount(r.monthly_premium) }}</td>
@@ -1513,8 +1504,7 @@ function onSchemeTypeChange(schemeType) {
       data.additional_accidental_gla_benefit || false
     additionalAccidentalGlaBenefitType.value =
       data.additional_accidental_gla_benefit_type || null
-    additionalGlaCoverBenefit.value =
-      data.additional_gla_cover_benefit || false
+    additionalGlaCoverBenefit.value = data.additional_gla_cover_benefit || false
     additionalGlaCoverAgeBandSource.value =
       data.additional_gla_cover_age_band_source === 'custom'
         ? 'custom'

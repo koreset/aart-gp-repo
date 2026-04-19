@@ -166,8 +166,11 @@ window.mainApi?.on('logout', async () => {
         class="mx-4 mt-2 mb-0"
         @click:close="expiryDismissed = true"
       >
-        Your license expires on <strong>{{ expiryFormatted }}</strong>
-        (<strong>{{ daysUntilExpiry }} day{{ daysUntilExpiry === 1 ? '' : 's' }}</strong>
+        Your license expires on <strong>{{ expiryFormatted }}</strong> (<strong
+          >{{ daysUntilExpiry }} day{{
+            daysUntilExpiry === 1 ? '' : 's'
+          }}</strong
+        >
         remaining). Please contact your administrator to renew.
       </v-alert>
       <server-unavailable />
