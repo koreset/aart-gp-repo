@@ -20,13 +20,7 @@ const expiryDismissed = ref(false)
 
 const licenseData = computed(() => appStore.getLicenseData)
 
-const licenseName = computed(() => {
-  if (!licenseData.value) return ''
-  const meta =
-    licenseData.value.data?.attributes?.metadata ||
-    licenseData.value.attributes?.metadata
-  return meta?.organization || meta?.userName || ''
-})
+const licenseName = computed<string>(() => appStore.getOrganisationName)
 
 const licenseExpiry = computed(() => {
   if (!licenseData.value) return null

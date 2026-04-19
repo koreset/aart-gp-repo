@@ -4,16 +4,12 @@ export const useAppStore = defineStore('app', {
   state: () => ({
     user: null,
     licenseData: null,
-    organization: null,
     entitlements: [],
     allProducts: []
   }),
   actions: {
     setUser(user: any) {
       this.user = user
-    },
-    getOrganization() {
-      return this.organization
     },
     setLicense(licenseData: any) {
       this.licenseData = licenseData
@@ -36,7 +32,6 @@ export const useAppStore = defineStore('app', {
     clearAll() {
       this.user = null
       this.licenseData = null
-      this.organization = null
       this.entitlements = []
       this.allProducts = []
     },
@@ -47,6 +42,16 @@ export const useAppStore = defineStore('app', {
   getters: {
     getUser: (state): any => state.user,
     getLicenseData: (state): any => state.licenseData,
-    getAllProducts: (state): any => state.allProducts
+    getAllProducts: (state): any => state.allProducts,
+    // Resolved organisation name from license metadata, set during
+    // activation. Supports both the nested Keygen response shape and
+    // the legacy flat shape; falls back to userName for single-user
+    // licenses without an explicit organization field.
+    getOrganisationName: (state): string => {
+      const license: any = state.licenseData
+      const meta =
+        license?.data?.attributes?.metadata || license?.attributes?.metadata
+      return meta?.organization || meta?.userName || ''
+    }
   }
 })

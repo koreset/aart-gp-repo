@@ -11,9 +11,9 @@ describe('useAppStore', () => {
     const store = useAppStore()
     expect(store.user).toBeNull()
     expect(store.licenseData).toBeNull()
-    expect(store.organization).toBeNull()
     expect(store.entitlements).toEqual([])
     expect(store.allProducts).toEqual([])
+    expect(store.getOrganisationName).toBe('')
   })
 
   it('setUser / getUser', () => {
@@ -74,8 +74,21 @@ describe('useAppStore', () => {
     store.clearAll()
     expect(store.user).toBeNull()
     expect(store.licenseData).toBeNull()
-    expect(store.organization).toBeNull()
     expect(store.entitlements).toEqual([])
     expect(store.allProducts).toEqual([])
+  })
+
+  it('getOrganisationName resolves from nested license metadata', () => {
+    const store = useAppStore()
+    store.setLicense({
+      data: { attributes: { metadata: { organization: 'Acme' } } }
+    })
+    expect(store.getOrganisationName).toBe('Acme')
+  })
+
+  it('getOrganisationName falls back to flat shape and userName', () => {
+    const store = useAppStore()
+    store.setLicense({ attributes: { metadata: { userName: 'solo-user' } } })
+    expect(store.getOrganisationName).toBe('solo-user')
   })
 })

@@ -66,9 +66,7 @@ import { computed, onMounted, ref } from 'vue'
 const appStore = useAppStore()
 const groupStore = useGroupPricingStore()
 const orgUsers: any = ref([])
-const organization = computed(
-  () => appStore.getLicenseData.data.attributes.metadata.organization
-)
+const organization = computed<string>(() => appStore.getOrganisationName)
 const parameterBases = ref([])
 
 const validateForm = () => {
@@ -76,6 +74,7 @@ const validateForm = () => {
 }
 
 onMounted(() => {
+  if (!organization.value) return
   try {
     GroupPricingService.getOrgUsers({ name: organization.value }).then(
       (res) => {

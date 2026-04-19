@@ -534,48 +534,32 @@ onMounted(() => {
       quotes.value = [] // Ensure quotes is an array on error
     })
 
-  // Watch for appStore.getLicenseData to be populated
+  // Re-fetch reviewers whenever the resolved organisation name becomes
+  // available or changes (e.g. after license activation completes).
   watchEffect(() => {
-    const licenseData = appStore.getLicenseData // Access it once
-    if (
-      licenseData &&
-      licenseData.data &&
-      licenseData.data.attributes &&
-      licenseData.data.attributes.metadata &&
-      licenseData.data.attributes.metadata.organization
-    ) {
-      const orgName = licenseData.data.attributes.metadata.organization
-      if (organization.value !== orgName) {
-        // Only update and fetch if it changed or was null
-        organization.value = orgName
+    const orgName = appStore.getOrganisationName
+    if (!orgName || organization.value === orgName) return
+    organization.value = orgName
 
-        // Now that organization.value is reliably set, fetch dependent data
-        GroupPricingService.getOrgUsers({ name: organization.value })
-          .then((res) => {
-            // Ensure res.data is an array before processing
-            if (res && Array.isArray(res.data)) {
-              const uniqueData = Array.from(
-                new Map(res.data.map((entry) => [entry.name, entry])).values()
-              )
-              reviewers.value = uniqueData
-            } else {
-              console.warn(
-                'Org Users response is not as expected or data is missing:',
-                res
-              )
-              reviewers.value = []
-            }
-          })
-          .catch((error) => {
-            console.error('Error fetching org users:', error)
-            reviewers.value = [] // Ensure reviewers is an array on error
-          })
-      }
-    } else {
-      // This will log until the data is available
-      // Avoid resetting organization.value to null if it was already set and watchEffect
-      // is re-running for another reason, unless that's desired behavior.
-    }
+    GroupPricingService.getOrgUsers({ name: orgName })
+      .then((res) => {
+        if (res && Array.isArray(res.data)) {
+          const uniqueData = Array.from(
+            new Map(res.data.map((entry) => [entry.name, entry])).values()
+          )
+          reviewers.value = uniqueData
+        } else {
+          console.warn(
+            'Org Users response is not as expected or data is missing:',
+            res
+          )
+          reviewers.value = []
+        }
+      })
+      .catch((error) => {
+        console.error('Error fetching org users:', error)
+        reviewers.value = []
+      })
   })
 })
 

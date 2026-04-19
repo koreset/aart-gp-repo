@@ -108,7 +108,8 @@ async function sendMessage() {
 
 async function fetchOrgUsers() {
   try {
-    const org = appStore.getOrganization() || 'AART'
+    const org = appStore.getOrganisationName
+    if (!org) return
     const res = await GroupPricingService.getOrgUsers({ name: org })
     const users = res.data?.data || res.data || []
     orgUsers.value = users.map((u: any) => ({

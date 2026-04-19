@@ -109,12 +109,15 @@
 </template>
 <script setup lang="ts">
 import BaseCard from '@/renderer/components/BaseCard.vue'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import formatValues from '@/renderer/utils/helpers.js'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
+import { useAppStore } from '@/renderer/store/app'
 
 const { hasPermission } = usePermissionCheck()
+const appStore = useAppStore()
+const organisationName = computed<string>(() => appStore.getOrganisationName)
 const snackbar = ref(false)
 const snackbarMessage = ref('')
 const columnDefs: any = ref([])
@@ -132,9 +135,17 @@ const refreshing = ref(false)
 const dialog = ref(false)
 
 const refreshUsers = async () => {
+  if (!organisationName.value) {
+    snackbarMessage.value =
+      'Cannot refresh: organisation is not set on this license'
+    snackbar.value = true
+    return
+  }
   refreshing.value = true
   try {
-    const result = await GroupPricingService.refreshOrgUsers({ name: 'AART' })
+    const result = await GroupPricingService.refreshOrgUsers({
+      name: organisationName.value
+    })
     orgUsers.value = result.data
     rowData.value = orgUsers.value
     if (orgUsers.value.length > 0) {
@@ -209,8 +220,14 @@ onMounted(async () => {
 
   availableRoles.value = res.data
 
+  if (!organisationName.value) {
+    return
+  }
+
   try {
-    const result = await GroupPricingService.getOrgUsers({ name: 'AART' })
+    const result = await GroupPricingService.getOrgUsers({
+      name: organisationName.value
+    })
     orgUsers.value = result.data
 
     rowData.value = orgUsers.value
