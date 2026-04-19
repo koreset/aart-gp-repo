@@ -1,0 +1,27 @@
+-- Migration for struct: ReinsuranceGlaAidsRate
+-- Table: reinsurance_gla_aids_rates
+
+IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'reinsurance_gla_aids_rates')
+BEGIN
+    CREATE TABLE reinsurance_gla_aids_rates (
+        id INT IDENTITY(1,1) PRIMARY KEY
+    );
+END;
+
+IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'reinsurance_gla_aids_rates' AND COLUMN_NAME = 'risk_rate_code')
+    ALTER TABLE reinsurance_gla_aids_rates ADD risk_rate_code NVARCHAR(255);
+
+IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'reinsurance_gla_aids_rates' AND COLUMN_NAME = 'age_next_birthday')
+    ALTER TABLE reinsurance_gla_aids_rates ADD age_next_birthday INT;
+
+IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'reinsurance_gla_aids_rates' AND COLUMN_NAME = 'gender')
+    ALTER TABLE reinsurance_gla_aids_rates ADD gender NVARCHAR(255);
+
+IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'reinsurance_gla_aids_rates' AND COLUMN_NAME = 'gla_aids_qx')
+    ALTER TABLE reinsurance_gla_aids_rates ADD gla_aids_qx DECIMAL(15,5);
+
+IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'reinsurance_gla_aids_rates' AND COLUMN_NAME = 'creation_date')
+    ALTER TABLE reinsurance_gla_aids_rates ADD creation_date DATETIME;
+
+IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'reinsurance_gla_aids_rates' AND COLUMN_NAME = 'created_by')
+    ALTER TABLE reinsurance_gla_aids_rates ADD created_by NVARCHAR(255);
