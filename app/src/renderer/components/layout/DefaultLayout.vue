@@ -52,6 +52,12 @@ const showExpiryWarning = computed(() => {
   )
 })
 
+const expiryAlertType = computed(() =>
+  daysUntilExpiry.value !== null && daysUntilExpiry.value <= 7
+    ? 'error'
+    : 'warning'
+)
+
 const expiryFormatted = computed(() => {
   if (!licenseExpiry.value) return ''
   return licenseExpiry.value.toLocaleDateString(undefined, {
@@ -158,15 +164,17 @@ window.mainApi?.on('logout', async () => {
     <v-main>
       <v-alert
         v-if="showExpiryWarning"
-        type="warning"
-        variant="tonal"
+        :type="expiryAlertType"
+        variant="flat"
         density="compact"
         closable
+        prominent
         class="mx-4 mt-2 mb-0"
         @click:close="expiryDismissed = true"
       >
-        Your license expires on {{ expiryFormatted }} ({{ daysUntilExpiry }}
-        days remaining). Please contact your administrator to renew.
+        Your license expires on <strong>{{ expiryFormatted }}</strong>
+        (<strong>{{ daysUntilExpiry }} day{{ daysUntilExpiry === 1 ? '' : 's' }}</strong>
+        remaining). Please contact your administrator to renew.
       </v-alert>
       <server-unavailable />
 

@@ -4,7 +4,19 @@
       <v-col>
         <base-card :show-actions="false">
           <template #header>
-            <span class="headline">User Management</span>
+            <div class="d-flex align-center justify-space-between w-100">
+              <span class="headline">User Management</span>
+              <v-btn
+                v-if="hasPermission('system:manage_users')"
+                size="small"
+                variant="text"
+                prepend-icon="mdi-refresh"
+                :loading="refreshing"
+                @click="refreshUsers"
+              >
+                Refresh from license server
+              </v-btn>
+            </div>
           </template>
           <template #default>
             <v-row>
@@ -115,8 +127,29 @@ const availableRoles: any = ref([
   { role_name: 'Viewer', slug: 'viewer' }
 ])
 const orgUsers: any = ref([])
+const refreshing = ref(false)
 
 const dialog = ref(false)
+
+const refreshUsers = async () => {
+  refreshing.value = true
+  try {
+    const result = await GroupPricingService.refreshOrgUsers({ name: 'AART' })
+    orgUsers.value = result.data
+    rowData.value = orgUsers.value
+    if (orgUsers.value.length > 0) {
+      createColumnDefs(rowData.value)
+    }
+    snackbarMessage.value = `Refreshed: ${orgUsers.value.length} user(s) loaded from license server`
+    snackbar.value = true
+  } catch (error) {
+    console.error('Error refreshing org users:', error)
+    snackbarMessage.value = 'Failed to refresh users from license server'
+    snackbar.value = true
+  } finally {
+    refreshing.value = false
+  }
+}
 
 const applyRoleChange = async () => {
   console.log('Selected Role:', selectedRole.value)

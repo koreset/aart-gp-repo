@@ -29,6 +29,7 @@ func ConfigureRouter(router *gin.Engine) {
 	{
 
 		apiv1.POST("org-users", controllers.GetOrgUsers)
+		apiv1.POST("org-users/refresh", RequirePermission("system:manage_users"), controllers.RefreshOrgUsers)
 
 		valuationJobs := apiv1.Group("/valuations/jobs")
 		{

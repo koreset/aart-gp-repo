@@ -50,3 +50,44 @@ func GetOrgUsers(c *gin.Context) {
 	logger.WithField("user_count", len(response)).Info("Successfully retrieved organisation users")
 	c.JSON(http.StatusOK, response)
 }
+
+// RefreshOrgUsers force-refreshes the local org_users cache for an
+// organisation by re-fetching from the license server. Intended for
+// admin use when new licenses have been provisioned upstream and need to
+// appear locally without waiting for a cache miss.
+func RefreshOrgUsers(c *gin.Context) {
+	requestID, exists := c.Get("requestID")
+	var ctx context.Context
+	if exists {
+		ctx = context.WithValue(context.Background(), log.RequestIDKey, requestID.(string))
+	} else {
+		ctx = context.Background()
+	}
+
+	userEmail, emailExists := c.Get("userEmail")
+	userName, nameExists := c.Get("userName")
+	if emailExists && nameExists {
+		ctx = log.ContextWithUserInfo(ctx, userEmail.(string), userName.(string))
+	}
+
+	logger := log.WithContext(ctx)
+	logger.Info("Processing RefreshOrgUsers request")
+
+	var organisation models.Organisation
+	if err := c.BindJSON(&organisation); err != nil {
+		logger.WithField("error", err.Error()).Error("Failed to bind JSON for organisation")
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	logger.WithField("organisation", organisation.Name).Info("Refreshing users for organisation")
+	users, err := services.RefreshOrgUsers(organisation)
+	if err != nil {
+		logger.WithField("error", err.Error()).Error("Failed to refresh organisation users")
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+
+	logger.WithField("user_count", len(users)).Info("Successfully refreshed organisation users")
+	c.JSON(http.StatusOK, users)
+}

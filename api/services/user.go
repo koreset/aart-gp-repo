@@ -6,9 +6,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 	"time"
 )
+
+const licenseServerBaseUrl = "https://licenses.aart-enterprise.com"
 
 // StoreUserToken stores a user token in the database
 func StoreUserToken(tokenString string, subject string) error {
@@ -136,10 +140,129 @@ func FindOrgUsers(company models.Organisation) (users []models.OrgUser) {
 	// need to make a call the keygen api to get the org users
 	logger.Info("No users found in database, fetching from license server")
 
-	var licenseServerUrl string
-	licenseServerUrl = "https://licenses.aart-enterprise.com"
+	users, err = fetchOrgUsersFromLicenseServer(company)
+	if err != nil {
+		return nil
+	}
 
-	// instantiate an http client to call the license server
+	if len(users) > 0 {
+		// we got here, now we need to save the users to the database
+		logger.Info("Saving users to database")
+		err = DB.CreateInBatches(&users, 100).Error
+		if err != nil {
+			logger.WithField("error", err.Error()).Error("Failed to save users to database")
+		} else {
+			logger.Info("Successfully saved users to database")
+		}
+	} else {
+		logger.Warn("No valid users found to save to database")
+	}
+
+	return users
+}
+
+// RefreshOrgUsers force-fetches users from the license server and merges
+// them into the local org_users table. Used when an admin knows new
+// licenses have been added on the license server and wants to pull them in
+// without waiting for a cache miss.
+//
+// Merges by email, preserving locally-managed fields (role, gp_role,
+// gp_role_id) on existing rows. Implemented in application code rather
+// than relying on a DB OnConflict clause so it stays correct even on
+// databases that haven't yet applied the unique-email migration.
+func RefreshOrgUsers(company models.Organisation) ([]models.OrgUser, error) {
+	logger := appLog.WithFields(map[string]interface{}{
+		"organisation": company.Name,
+		"action":       "RefreshOrgUsers",
+	})
+
+	logger.Info("Refreshing organization users from license server")
+
+	users, err := fetchOrgUsersFromLicenseServer(company)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(users) == 0 {
+		logger.Warn("License server returned no users — nothing to merge")
+		return users, nil
+	}
+
+	var existing []models.OrgUser
+	if err := DB.Where("organisation = ?", company.Name).Find(&existing).Error; err != nil {
+		logger.WithField("error", err.Error()).Error("Failed to load existing org users for merge")
+		return nil, err
+	}
+
+	existingByEmail := make(map[string]models.OrgUser, len(existing))
+	for _, u := range existing {
+		key := strings.ToLower(strings.TrimSpace(u.Email))
+		if key == "" {
+			continue
+		}
+		// First-seen wins so we don't accidentally overwrite the row
+		// with a meaningful gp_role using a duplicate that has none.
+		if _, ok := existingByEmail[key]; !ok {
+			existingByEmail[key] = u
+		}
+	}
+
+	var inserted, updated int
+	for _, u := range users {
+		key := strings.ToLower(strings.TrimSpace(u.Email))
+		if key == "" {
+			continue
+		}
+		if exist, ok := existingByEmail[key]; ok {
+			updates := map[string]interface{}{
+				"name":         u.Name,
+				"license_id":   u.LicenseId,
+				"organisation": u.Organisation,
+			}
+			if err := DB.Model(&models.OrgUser{}).Where("id = ?", exist.ID).Updates(updates).Error; err != nil {
+				logger.WithFields(map[string]interface{}{
+					"error": err.Error(),
+					"email": u.Email,
+				}).Error("Failed to update existing org user")
+				return nil, err
+			}
+			updated++
+		} else {
+			row := u
+			if err := DB.Create(&row).Error; err != nil {
+				logger.WithFields(map[string]interface{}{
+					"error": err.Error(),
+					"email": u.Email,
+				}).Error("Failed to insert new org user")
+				return nil, err
+			}
+			inserted++
+		}
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"inserted": inserted,
+		"updated":  updated,
+	}).Info("Merged org users from license server")
+
+	var refreshed []models.OrgUser
+	if err := DB.Where("organisation = ?", company.Name).Find(&refreshed).Error; err != nil {
+		logger.WithField("error", err.Error()).Error("Failed to reload users after merge")
+		return users, nil
+	}
+
+	logger.WithField("user_count", len(refreshed)).Info("Successfully refreshed organization users")
+	return refreshed, nil
+}
+
+// fetchOrgUsersFromLicenseServer calls the external license server and
+// returns the parsed OrgUser list. No DB writes.
+func fetchOrgUsersFromLicenseServer(company models.Organisation) ([]models.OrgUser, error) {
+	logger := appLog.WithFields(map[string]interface{}{
+		"organisation": company.Name,
+		"action":       "fetchOrgUsersFromLicenseServer",
+	})
+
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
@@ -147,14 +270,14 @@ func FindOrgUsers(company models.Organisation) (users []models.OrgUser) {
 	jsonBody, err := json.Marshal(&company)
 	if err != nil {
 		logger.WithField("error", err.Error()).Error("Failed to marshal organization to JSON")
-		return nil
+		return nil, err
 	}
 
 	logger.Debug("Making request to license server")
-	req, err := http.NewRequest("POST", licenseServerUrl+"/get-org-users", bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequest("POST", licenseServerBaseUrl+"/get-org-users", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		logger.WithField("error", err.Error()).Error("Failed to create HTTP request")
-		return nil
+		return nil, err
 	}
 
 	req.Header.Set("Accept", "application/json")
@@ -168,7 +291,7 @@ func FindOrgUsers(company models.Organisation) (users []models.OrgUser) {
 			"error":       err.Error(),
 			"duration_ms": requestDuration.Milliseconds(),
 		}).Error("Failed to execute HTTP request")
-		return nil
+		return nil, err
 	}
 
 	defer resp.Body.Close()
@@ -180,20 +303,19 @@ func FindOrgUsers(company models.Organisation) (users []models.OrgUser) {
 
 	if resp.StatusCode != http.StatusOK {
 		logger.WithField("status", resp.Status).Error("License server returned non-OK status")
-		return nil
+		return nil, errors.New("license server returned non-OK status: " + resp.Status)
 	}
 
 	var result []map[string]interface{}
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	if err != nil {
 		logger.WithField("error", err.Error()).Error("Failed to decode response from license server")
-		return nil
+		return nil, err
 	}
 
 	logger.WithField("user_count", len(result)).Info("Successfully retrieved users from license server")
 
-	users = make([]models.OrgUser, 0)
-	// iterate over the result and create a list of OrgUser
+	users := make([]models.OrgUser, 0)
 	for _, user := range result {
 		var orgUser models.OrgUser
 
@@ -223,18 +345,5 @@ func FindOrgUsers(company models.Organisation) (users []models.OrgUser) {
 		users = append(users, orgUser)
 	}
 
-	if len(users) > 0 {
-		// we got here, now we need to save the users to the database
-		logger.Info("Saving users to database")
-		err = DB.CreateInBatches(&users, 100).Error
-		if err != nil {
-			logger.WithField("error", err.Error()).Error("Failed to save users to database")
-		} else {
-			logger.Info("Successfully saved users to database")
-		}
-	} else {
-		logger.Warn("No valid users found to save to database")
-	}
-
-	return users
+	return users, nil
 }

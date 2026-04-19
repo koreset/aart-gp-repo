@@ -10,7 +10,7 @@ type AppUser struct {
 type OrgUser struct {
 	ID           int    `json:"id" gorm:"primary_key"`
 	Name         string `json:"name"`
-	Email        string `json:"email"`
+	Email        string `json:"email" gorm:"type:varchar(255);unique_index"`
 	LicenseId    string `json:"license_id"`
 	Role         string `json:"role"`
 	GPRole       string `json:"gp_role"`

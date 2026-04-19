@@ -1771,5 +1771,14 @@ export default {
         'Content-Type': 'application/json'
       }
     })
+  },
+  refreshOrgUsers(organization) {
+    const json = JSON.stringify(organization)
+    return Api.post('org-users/refresh', json, {
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      }
+    })
   }
 }
