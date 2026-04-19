@@ -1250,6 +1250,235 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		return nil
 	}
 
+	// Extended family funeral benefit: compute per-age-band straight-averaged
+	// loaded rates and attach to the scheme category so the UI can render them.
+	// Uses a representative income level (first member) as the loading driver.
+	if category != nil && category.ExtendedFamilyBenefit {
+		var bands []models.ExtendedFamilyAgeBand
+		if category.ExtendedFamilyAgeBandSource == "custom" {
+			bands = category.ExtendedFamilyCustomAgeBands
+		} else {
+			bands = make([]models.ExtendedFamilyAgeBand, 0, len(ageBands))
+			for _, b := range ageBands {
+				// Filter by the selected age-band type. Empty type matches
+				// untyped rows for backward compatibility.
+				if category.ExtendedFamilyAgeBandType != "" &&
+					b.Type != category.ExtendedFamilyAgeBandType {
+					continue
+				}
+				bands = append(bands, models.ExtendedFamilyAgeBand{MinAge: b.MinAge, MaxAge: b.MaxAge})
+			}
+		}
+		if len(bands) > 0 {
+			repIncomeLevel := 0
+			if len(memberMps) > 0 {
+				repIncomeLevel = GetIncomeLevel(memberMps[0], incomeLevels)
+			}
+			var sums []models.ExtendedFamilyBandSumAssured
+			if category.ExtendedFamilyPricingMethod == "sum_assured" {
+				sums = category.ExtendedFamilySumsAssured
+			}
+			// Combined premium loading from the premium_loading table, mirroring
+			// the formula used for every other benefit's office premium (see the
+			// per-member rating at memberDataPointResult.TotalLoading below).
+			// Direct-channel schemes zero out commission exactly as they do
+			// there.
+			effectiveCommission := premiumLoading.CommissionLoading
+			if groupQuote.DistributionChannel == models.ChannelDirect {
+				effectiveCommission = 0
+			}
+			efTotalLoading := math.Max(
+				premiumLoading.ExpenseLoading+
+					premiumLoading.AdminLoading+
+					effectiveCommission+
+					premiumLoading.ProfitLoading+
+					premiumLoading.OtherLoading-
+					(groupQuote.Loadings.Discount/100.0),
+				premiumLoading.MinimumPremiumLoading,
+			)
+			bandRates, efErr := CalculateExtendedFamilyAgeBandRates(
+				groupParameter.RiskRateCode,
+				repIncomeLevel,
+				groupParameter.ExtendedFamilyMaleProp,
+				efTotalLoading,
+				bands,
+				sums,
+			)
+			if efErr != nil {
+				logger.WithField("error", efErr.Error()).Warn("Failed to compute extended family band rates")
+			} else {
+				// For rate_per_1000 method the CalculateExtendedFamilyAgeBandRates
+				// helper does not populate MonthlyPremium (no sum assured), so
+				// derive it here: rate * 1000 / 12 per extended-family member
+				// on both the risk rate (AverageRate) and the office rate.
+				if category.ExtendedFamilyPricingMethod != "sum_assured" {
+					for i := range bandRates {
+						bandRates[i].MonthlyPremium = bandRates[i].AverageRate * 1000.0 / 12.0
+						bandRates[i].OfficeMonthlyPremium = bandRates[i].OfficeRate * 1000.0 / 12.0
+					}
+				} else {
+					// Divide-by-12 already applied; ensure zero premium rows
+					// (bands with no sum assured provided) remain zero.
+					for i := range bandRates {
+						if bandRates[i].SumAssured == 0 {
+							bandRates[i].MonthlyPremium = 0
+							bandRates[i].OfficeMonthlyPremium = 0
+						}
+					}
+				}
+				category.ExtendedFamilyBandRates = bandRates
+				if err := DB.Model(&models.SchemeCategory{}).
+					Where("id = ?", category.ID).
+					Update("extended_family_band_rates", bandRates).Error; err != nil {
+					logger.WithField("error", err.Error()).Warn("Failed to persist extended_family_band_rates")
+				}
+				// Mirror into the preloaded slice so downstream code sees it.
+				if categoryIndex >= 0 {
+					groupQuote.SchemeCategories[categoryIndex].ExtendedFamilyBandRates = bandRates
+				}
+				// Mirror the config + computed rates onto the member rating
+				// result summary so the Premiums Summary screen can render the
+				// per-category extended-family section from a single payload.
+				mdrs.ExtendedFamilyBenefit = true
+				mdrs.ExtendedFamilyAgeBandSource = category.ExtendedFamilyAgeBandSource
+				mdrs.ExtendedFamilyAgeBandType = category.ExtendedFamilyAgeBandType
+				mdrs.ExtendedFamilyPricingMethod = category.ExtendedFamilyPricingMethod
+				mdrs.ExtendedFamilyBandRates = bandRates
+				var totalMonthly float64
+				for _, b := range bandRates {
+					totalMonthly += b.MonthlyPremium
+				}
+				mdrs.TotalExtendedFamilyMonthlyPremium = totalMonthly
+			}
+		}
+	}
+
+	// Additional GLA Cover: compute per-age-band rate per 1,000 using the
+	// main GLA benefit type + waiting period, the gender split from the
+	// uploaded member data for this category, and the same region /
+	// industry / contingency / premium loading stack as base GLA. This is
+	// a rate-only product — no per-member premium aggregation.
+	if category != nil && category.AdditionalGlaCoverBenefit && category.GlaBenefitType != "" {
+		var aglaBands []models.AdditionalGlaCoverAgeBand
+		if category.AdditionalGlaCoverAgeBandSource == "custom" {
+			aglaBands = category.AdditionalGlaCoverCustomAgeBands
+		} else {
+			for _, b := range ageBands {
+				if category.AdditionalGlaCoverAgeBandType != "" &&
+					b.Type != category.AdditionalGlaCoverAgeBandType {
+					continue
+				}
+				aglaBands = append(aglaBands, models.AdditionalGlaCoverAgeBand{MinAge: b.MinAge, MaxAge: b.MaxAge})
+			}
+		}
+		if len(aglaBands) > 0 {
+			repIncomeLevelAgla := 0
+			if len(memberMps) > 0 {
+				repIncomeLevelAgla = GetIncomeLevel(memberMps[0], incomeLevels)
+			}
+			// Blend the gender-weighted loadings using the uploaded-member
+			// male proportion. Falls back to
+			// group_pricing_parameters.main_member_male_prop when the member
+			// list has no gender rows.
+			var maleCount, totalGender int
+			for _, m := range memberMps {
+				g := strings.ToUpper(strings.TrimSpace(m.Gender))
+				if g == "" {
+					continue
+				}
+				totalGender++
+				if g == "M" || g == "MALE" {
+					maleCount++
+				}
+			}
+			maleProp := groupParameter.MainMemberMaleProp
+			if totalGender > 0 {
+				maleProp = float64(maleCount) / float64(totalGender)
+			}
+
+			effectiveCommissionAgla := premiumLoading.CommissionLoading
+			if groupQuote.DistributionChannel == models.ChannelDirect {
+				effectiveCommissionAgla = 0
+			}
+			aglaTotalLoading := math.Max(
+				premiumLoading.ExpenseLoading+
+					premiumLoading.AdminLoading+
+					effectiveCommissionAgla+
+					premiumLoading.ProfitLoading+
+					premiumLoading.OtherLoading-
+					(groupQuote.Loadings.Discount/100.0),
+				premiumLoading.MinimumPremiumLoading,
+			)
+			aglaBandRates, aglaErr := CalculateAdditionalGlaCoverBandRates(
+				groupParameter.RiskRateCode,
+				category.GlaBenefitType,
+				category.Region,
+				category.GlaWaitingPeriod,
+				repIncomeLevelAgla,
+				groupQuote.OccupationClass,
+				maleProp,
+				aglaBands,
+				aglaTotalLoading,
+			)
+			if aglaErr != nil {
+				logger.WithFields(map[string]interface{}{
+					"error":         aglaErr.Error(),
+					"category":      selectedSchemeCategory,
+					"benefit_type":  category.GlaBenefitType,
+					"band_count":    len(aglaBands),
+					"male_prop":     maleProp,
+				}).Warn("Failed to compute additional GLA cover band rates")
+			} else {
+				category.AdditionalGlaCoverBandRates = aglaBandRates
+				mpUsed := maleProp
+				category.AdditionalGlaCoverMalePropUsed = &mpUsed
+				if err := DB.Model(&models.SchemeCategory{}).
+					Where("id = ?", category.ID).
+					Updates(map[string]interface{}{
+						"additional_gla_cover_band_rates":     aglaBandRates,
+						"additional_gla_cover_male_prop_used": mpUsed,
+					}).Error; err != nil {
+					logger.WithField("error", err.Error()).Warn("Failed to persist additional_gla_cover_band_rates")
+				}
+				if categoryIndex >= 0 {
+					groupQuote.SchemeCategories[categoryIndex].AdditionalGlaCoverBandRates = aglaBandRates
+					groupQuote.SchemeCategories[categoryIndex].AdditionalGlaCoverMalePropUsed = &mpUsed
+				}
+				// Mirror onto the MRRS row being built so the Premium
+				// Summary can read everything from a single payload
+				// (matches the Extended Family Funeral mirror above).
+				mdrs.AdditionalGlaCoverBenefit = true
+				mdrs.AdditionalGlaCoverAgeBandSource = category.AdditionalGlaCoverAgeBandSource
+				mdrs.AdditionalGlaCoverAgeBandType = category.AdditionalGlaCoverAgeBandType
+				mdrs.AdditionalGlaCoverBandRates = aglaBandRates
+				mdrs.AdditionalGlaCoverMalePropUsed = &mpUsed
+				logger.WithFields(map[string]interface{}{
+					"category":     selectedSchemeCategory,
+					"band_count":   len(aglaBandRates),
+					"male_prop":    maleProp,
+					"benefit_type": category.GlaBenefitType,
+				}).Info("Additional GLA Cover band rates computed and mirrored to MRRS")
+			}
+		} else {
+			// Benefit is enabled but we couldn't build a band list — most
+			// often because source=standard with no age_band_type selected,
+			// or a custom list that's empty. Log it so the Premium Summary
+			// silence makes sense.
+			logger.WithFields(map[string]interface{}{
+				"category":        selectedSchemeCategory,
+				"source":          category.AdditionalGlaCoverAgeBandSource,
+				"band_type":       category.AdditionalGlaCoverAgeBandType,
+				"custom_count":    len(category.AdditionalGlaCoverCustomAgeBands),
+				"available_bands": len(ageBands),
+			}).Warn("Additional GLA Cover enabled but band list resolved to empty")
+		}
+	} else if category != nil && category.AdditionalGlaCoverBenefit {
+		// Enabled but no GlaBenefitType — usually means base GLA wasn't
+		// fully configured.
+		logger.WithField("category", selectedSchemeCategory).
+			Warn("Additional GLA Cover enabled but scheme category has no gla_benefit_type; skipping calc")
+	}
+
 	var weightedLifeYears float64
 
 	if groupQuote.ExperienceRating == "Yes" {
@@ -3341,6 +3570,7 @@ var gpTableSpecs = []gpTableSpec{
 	{"premiumLoading", "Premium Loadings", "premiumloadings", "group_pricing", models.PremiumLoading{}},
 	{"schemeSizeLevel", "Scheme Size Levels", "schemesizelevels", "group_pricing", models.SchemeSizeLevel{}},
 	{"taxTable", "Tax Table", "taxtable", "group_pricing", models.TaxTable{}},
+	{"ageBands", "Age Bands", "agebands", "group_pricing", models.GroupPricingAgeBands{}},
 	{"reinsuranceGlaRate", "Reinsurance GLA Rate", "reinsuranceglarate", "reinsurance", models.ReinsuranceGlaRate{}},
 	{"reinsuranceCiRate", "Reinsurance CI Rate", "reinsurancecirate", "reinsurance", models.ReinsuranceCiRate{}},
 	{"reinsurancePtdRate", "Reinsurance PTD Rate", "reinsuranceptdrate", "reinsurance", models.ReinsurancePtdRate{}},
@@ -4729,6 +4959,50 @@ func SaveGPTables(v *multipart.FileHeader, tableType string, riskRateCode string
 			return fmt.Errorf("failed to save Tax Table data: %v", err)
 		}
 
+	case "Age Bands":
+		// Age bands are keyed by `type` (e.g. GLA vs funeral sets). A fresh
+		// upload only replaces rows whose `type` appears in the incoming CSV
+		// — other types are left untouched so uploading one band set does
+		// not clobber another.
+		if err := utils.ValidateCSVHeaders(headers, models.GroupPricingAgeBands{}); err != nil {
+			return fmt.Errorf("%s validation failed: %v", tableType, err)
+		}
+		var pps []models.GroupPricingAgeBands
+		for i := 1; ; i++ {
+			var pp models.GroupPricingAgeBands
+			if err := dec.Decode(&pp); err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("error decoding Age Bands at row %d: %v", i, err)
+			}
+			// Stamp the uploading user on each row. CreationDate is filled by
+			// GORM via the autoCreateTime tag.
+			pp.CreatedBy = user.UserName
+			pps = append(pps, pp)
+		}
+		// Gather the distinct types present in the upload. An empty string is
+		// its own bucket so legacy untyped rows still replace legacy untyped
+		// rows on re-upload.
+		typeSet := make(map[string]struct{}, len(pps))
+		for _, p := range pps {
+			typeSet[p.Type] = struct{}{}
+		}
+		types := make([]string, 0, len(typeSet))
+		for t := range typeSet {
+			types = append(types, t)
+		}
+		if len(types) > 0 {
+			if err := DB.Where("type IN ?", types).Delete(&models.GroupPricingAgeBands{}).Error; err != nil {
+				appLog.Error("Delete Age Bands by type error: ", err.Error())
+				return fmt.Errorf("failed to clear existing Age Bands for types %v: %v", types, err)
+			}
+		}
+		err = DB.CreateInBatches(&pps, 100).Error
+		if err != nil {
+			appLog.Error("Save Age Bands error: ", err.Error())
+			return fmt.Errorf("failed to save Age Bands data: %v", err)
+		}
+
 	case "Commission Structure":
 		if err := utils.ValidateCSVHeaders(headers, models.CommissionStructure{}); err != nil {
 			return fmt.Errorf("%s validation failed: %v", tableType, err)
@@ -4853,6 +5127,12 @@ func DeleteGPTableData(tableType, riskCode string) error {
 		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.SchemeSizeLevel{})
 	case "taxtable":
 		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.TaxTable{})
+	case "agebands":
+		// Age bands are keyed by type. The delete picker re-uses the
+		// risk-code slot to carry the selected type.
+		if riskCode != "" {
+			DB.Where("type = ?", riskCode).Delete(&models.GroupPricingAgeBands{})
+		}
 	}
 	// Update the stats table so GetGPTableMetaData reflects the deletion.
 	go refreshGPTableStatByDeleteKey(tableType)
@@ -4926,6 +5206,11 @@ func GetGPTableRiskCodes(tableType string) []string {
 		DB.Model(&models.SchemeSizeLevel{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
 	case "taxtable":
 		DB.Model(&models.TaxTable{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
+	case "agebands":
+		// Age bands are keyed by type, not risk_rate_code. The frontend
+		// re-uses this endpoint to populate the delete picker, so we return
+		// distinct types under the same key.
+		DB.Model(&models.GroupPricingAgeBands{}).Select("DISTINCT type").Order("type asc").Find(&riskCodes)
 	}
 	return riskCodes
 }
@@ -5269,6 +5554,14 @@ func GetGPTableData(tableType string) []map[string]interface{} {
 		}
 	case "taxtable":
 		var data []models.TaxTable
+		DB.Find(&data)
+		b, _ := json.Marshal(&data)
+		err := json.Unmarshal(b, &results)
+		if err != nil {
+			fmt.Println(err)
+		}
+	case "agebands":
+		var data []models.GroupPricingAgeBands
 		DB.Find(&data)
 		b, _ := json.Marshal(&data)
 		err := json.Unmarshal(b, &results)
@@ -6300,6 +6593,522 @@ func GetFuneralParameters(memberResultData *models.MemberRatingResult, groupPric
 
 	}
 	return 0
+}
+
+// CalculateExtendedFamilyAgeBandRates produces a loaded funeral rate for each
+// requested age band. For every age present in the funeral_rates table it
+// blends male and female FunQx using the extended-family male proportion from
+// GroupPricingParameters:
+//
+//	qx[age] = maleProp * maleQx[age] + (1 - maleProp) * femaleQx[age]
+//
+// It then applies the extended-family loading from funeral_parameters (keyed
+// by risk_rate_code + member_income_level + age_next_birthday) as
+// `qx * (1 + loading)`, and averages the loaded rates across the integer ages
+// in each band (AverageRate — the per-band risk rate). If only one gender has
+// a rate for a given age (e.g. unisex data), that rate is used as-is.
+//
+// totalLoading is the combined premium loading from the premium_loading table
+// (expense + admin + commission + profit + other − discount, floored at
+// MinimumPremiumLoading). It is grossed up onto AverageRate to produce the
+// office rate:
+//
+//	OfficeRate = AverageRate / (1 - totalLoading)
+//
+// sumsAssured, when non-empty, is merged into the result so callers can emit
+// per-band risk and office monthly premiums without looking them up again.
+// Rate-per-1000 callers pass an empty slice and derive the premiums as
+// rate * 1000 / 12.
+func CalculateExtendedFamilyAgeBandRates(
+	riskRateCode string,
+	memberIncomeLevel int,
+	maleProp float64,
+	totalLoading float64,
+	bands []models.ExtendedFamilyAgeBand,
+	sumsAssured []models.ExtendedFamilyBandSumAssured,
+) ([]models.ExtendedFamilyBandRate, error) {
+	if len(bands) == 0 {
+		return nil, nil
+	}
+
+	// Clamp male proportion to [0, 1] so bad data in
+	// group_pricing_parameters.extended_family_male_prop can't produce
+	// negative or >100% weighted rates.
+	if maleProp < 0 {
+		maleProp = 0
+	} else if maleProp > 1 {
+		maleProp = 1
+	}
+	femaleProp := 1 - maleProp
+
+	// 1) Pull all funeral_rates rows for this risk code, then blend
+	//    male/female FunQx per age using maleProp.
+	var rateRows []models.FuneralRate
+	if err := DB.Table("funeral_rates").
+		Where("risk_rate_code = ?", riskRateCode).
+		Find(&rateRows).Error; err != nil {
+		return nil, err
+	}
+	if len(rateRows) == 0 {
+		return nil, fmt.Errorf("no funeral rates found for risk_rate_code=%s", riskRateCode)
+	}
+
+	type genderAgg struct {
+		maleSum     float64
+		maleCount   int
+		femaleSum   float64
+		femaleCount int
+	}
+	ageToQx := make(map[int]float64)
+	{
+		agg := make(map[int]*genderAgg)
+		for _, r := range rateRows {
+			a := agg[r.AgeNextBirthday]
+			if a == nil {
+				a = &genderAgg{}
+				agg[r.AgeNextBirthday] = a
+			}
+			// Gender values are typically "M"/"F" but normalise defensively.
+			switch strings.ToUpper(strings.TrimSpace(r.Gender)) {
+			case "M", "MALE":
+				a.maleSum += r.FunQx
+				a.maleCount++
+			case "F", "FEMALE":
+				a.femaleSum += r.FunQx
+				a.femaleCount++
+			default:
+				// Unisex/unknown gender — count in both buckets so it still
+				// contributes when the opposite gender is absent.
+				a.maleSum += r.FunQx
+				a.maleCount++
+				a.femaleSum += r.FunQx
+				a.femaleCount++
+			}
+		}
+		for age, a := range agg {
+			hasMale := a.maleCount > 0
+			hasFemale := a.femaleCount > 0
+			switch {
+			case hasMale && hasFemale:
+				maleQx := a.maleSum / float64(a.maleCount)
+				femaleQx := a.femaleSum / float64(a.femaleCount)
+				ageToQx[age] = maleProp*maleQx + femaleProp*femaleQx
+			case hasMale:
+				ageToQx[age] = a.maleSum / float64(a.maleCount)
+			case hasFemale:
+				ageToQx[age] = a.femaleSum / float64(a.femaleCount)
+			}
+		}
+	}
+
+	// 2) Pull loadings for (risk_rate_code, member_income_level) and index by age.
+	var paramRows []models.FuneralParameters
+	if err := DB.Table("funeral_parameters").
+		Where("risk_rate_code = ? AND member_income_level = ?", riskRateCode, memberIncomeLevel).
+		Find(&paramRows).Error; err != nil {
+		return nil, err
+	}
+	ageToLoading := make(map[int]float64, len(paramRows))
+	for _, p := range paramRows {
+		ageToLoading[p.AgeNextBirthday] = p.ExtendedFamilyLoading
+	}
+
+	// 3) Build loadedQx[age] = qx * (1 + loading) for every age we have a rate.
+	loadedQx := make(map[int]float64, len(ageToQx))
+	maxAge := 0
+	for age, qx := range ageToQx {
+		loadedQx[age] = qx * (1 + ageToLoading[age])
+		if age > maxAge {
+			maxAge = age
+		}
+	}
+
+	// 4) Map sums-assured by (min,max) so we can merge into results.
+	sumByKey := make(map[[2]int]float64, len(sumsAssured))
+	for _, s := range sumsAssured {
+		sumByKey[[2]int{s.MinAge, s.MaxAge}] = s.SumAssured
+	}
+
+	// Office-rate gross-up divisor. A totalLoading outside [0, 1) would either
+	// yield zero/negative premiums or a negative divisor, so fall back to the
+	// risk rate (divisor = 1) in those degenerate cases.
+	loadingDivisor := 1.0 - totalLoading
+	if loadingDivisor <= 0 {
+		loadingDivisor = 1.0
+	}
+
+	// 5) Straight-average loadedQx over the integer ages in each band.
+	results := make([]models.ExtendedFamilyBandRate, 0, len(bands))
+	for _, b := range bands {
+		lo := b.MinAge
+		hi := b.MaxAge
+		if hi < lo {
+			continue
+		}
+		// Clip upper bound to the maximum age available in the rate table.
+		if hi > maxAge {
+			hi = maxAge
+		}
+		var sum float64
+		var count int
+		for age := lo; age <= hi; age++ {
+			if q, ok := loadedQx[age]; ok {
+				sum += q
+				count++
+			}
+		}
+		var avg float64
+		if count > 0 {
+			avg = sum / float64(count)
+		}
+		officeRate := avg / loadingDivisor
+		res := models.ExtendedFamilyBandRate{
+			MinAge:      b.MinAge,
+			MaxAge:      b.MaxAge,
+			AverageRate: avg,
+			OfficeRate:  officeRate,
+		}
+		if sa, ok := sumByKey[[2]int{b.MinAge, b.MaxAge}]; ok {
+			res.SumAssured = sa
+			res.MonthlyPremium = avg * sa / 12.0
+			res.OfficeMonthlyPremium = officeRate * sa / 12.0
+		}
+		results = append(results, res)
+	}
+	return results, nil
+}
+
+// CalculateAdditionalGlaCoverBandRates produces per-age-band office-rate-per-1000
+// figures for the optional rate-only Additional GLA Cover. It mirrors
+// CalculateExtendedFamilyAgeBandRates but draws from gla_rates + gla_aids_rates
+// and layers the same region / industry / contingency loadings that base GLA
+// uses, then grosses the risk rate up by (1 - totalPremiumLoading).
+//
+// All rates are quoted per 1,000 sum assured. No per-member premium is
+// computed here — this is a rate-only product.
+//
+// Ages used come from gla_rates itself (whatever the table actually supplies
+// for the given risk code / benefit type / waiting period / income level).
+// Bands outside that range are clipped and empty bands are skipped.
+func CalculateAdditionalGlaCoverBandRates(
+	riskRateCode, benefitType, region string,
+	waitingPeriod, incomeLevel, occupationClass int,
+	maleProp float64,
+	bands []models.AdditionalGlaCoverAgeBand,
+	totalPremiumLoading float64,
+) ([]models.AdditionalGlaCoverBandRate, error) {
+	if len(bands) == 0 {
+		return nil, nil
+	}
+
+	// Clamp male proportion to [0, 1] so a bad UI or DB value can't
+	// produce negative or > 100% weighted rates.
+	if maleProp < 0 {
+		maleProp = 0
+	} else if maleProp > 1 {
+		maleProp = 1
+	}
+	femaleProp := 1 - maleProp
+
+	// 1) Pull gla_rates rows across whatever ages the table has for this
+	// risk code / benefit type / waiting period / income level. The
+	// base-GLA path (GetGlaRate) binds the int income_level directly and
+	// relies on the DB's implicit conversion; do the same here.
+	var glaRows []models.GlaRate
+	if err := DB.Table("gla_rates").
+		Where("risk_rate_code = ? AND benefit_type = ? AND waiting_period = ? AND income_level = ?",
+			riskRateCode, benefitType, waitingPeriod, incomeLevel).
+		Find(&glaRows).Error; err != nil {
+		return nil, err
+	}
+	if len(glaRows) == 0 {
+		return nil, fmt.Errorf("no gla_rates found for risk_rate_code=%s, benefit_type=%s, waiting_period=%d, income_level=%d",
+			riskRateCode, benefitType, waitingPeriod, incomeLevel)
+	}
+
+	type genderAgg struct {
+		maleSum     float64
+		maleCount   int
+		femaleSum   float64
+		femaleCount int
+	}
+	ageToQx := make(map[int]float64)
+	{
+		agg := make(map[int]*genderAgg)
+		for _, r := range glaRows {
+			a := agg[r.AgeNextBirthday]
+			if a == nil {
+				a = &genderAgg{}
+				agg[r.AgeNextBirthday] = a
+			}
+			switch strings.ToUpper(strings.TrimSpace(r.Gender)) {
+			case "M", "MALE":
+				a.maleSum += r.Qx
+				a.maleCount++
+			case "F", "FEMALE":
+				a.femaleSum += r.Qx
+				a.femaleCount++
+			default:
+				// Unisex/unknown gender — count in both buckets so it still
+				// contributes when the opposite gender is absent.
+				a.maleSum += r.Qx
+				a.maleCount++
+				a.femaleSum += r.Qx
+				a.femaleCount++
+			}
+		}
+		for age, a := range agg {
+			hasMale := a.maleCount > 0
+			hasFemale := a.femaleCount > 0
+			switch {
+			case hasMale && hasFemale:
+				maleQx := a.maleSum / float64(a.maleCount)
+				femaleQx := a.femaleSum / float64(a.femaleCount)
+				ageToQx[age] = maleProp*maleQx + femaleProp*femaleQx
+			case hasMale:
+				ageToQx[age] = a.maleSum / float64(a.maleCount)
+			case hasFemale:
+				ageToQx[age] = a.femaleSum / float64(a.femaleCount)
+			}
+		}
+	}
+
+	// Record the min/max age actually present in gla_rates so bands can
+	// be clipped without a hardcoded assumption.
+	minTableAge, maxTableAge := 0, 0
+	firstAge := true
+	for age := range ageToQx {
+		if firstAge {
+			minTableAge = age
+			maxTableAge = age
+			firstAge = false
+			continue
+		}
+		if age < minTableAge {
+			minTableAge = age
+		}
+		if age > maxTableAge {
+			maxTableAge = age
+		}
+	}
+
+	// 2) Pull gla_aids_rates across all ages for this risk code and blend
+	// male/female. Missing ages are implicitly 0 (matches the per-member
+	// path which simply looks up 0 when nothing is stored).
+	var aidsRows []models.GlaAidsRate
+	if err := DB.Table("gla_aids_rates").
+		Where("risk_rate_code = ?", riskRateCode).
+		Find(&aidsRows).Error; err != nil {
+		return nil, err
+	}
+	ageToAidsQx := make(map[int]float64)
+	{
+		agg := make(map[int]*genderAgg)
+		for _, r := range aidsRows {
+			a := agg[r.AgeNextBirthday]
+			if a == nil {
+				a = &genderAgg{}
+				agg[r.AgeNextBirthday] = a
+			}
+			switch strings.ToUpper(strings.TrimSpace(r.Gender)) {
+			case "M", "MALE":
+				a.maleSum += r.GlaAidsQx
+				a.maleCount++
+			case "F", "FEMALE":
+				a.femaleSum += r.GlaAidsQx
+				a.femaleCount++
+			default:
+				a.maleSum += r.GlaAidsQx
+				a.maleCount++
+				a.femaleSum += r.GlaAidsQx
+				a.femaleCount++
+			}
+		}
+		for age, a := range agg {
+			hasMale := a.maleCount > 0
+			hasFemale := a.femaleCount > 0
+			switch {
+			case hasMale && hasFemale:
+				m := a.maleSum / float64(a.maleCount)
+				f := a.femaleSum / float64(a.femaleCount)
+				ageToAidsQx[age] = maleProp*m + femaleProp*f
+			case hasMale:
+				ageToAidsQx[age] = a.maleSum / float64(a.maleCount)
+			case hasFemale:
+				ageToAidsQx[age] = a.femaleSum / float64(a.femaleCount)
+			}
+		}
+	}
+
+	// 3) Resolve region loadings (keyed by gender) and blend by male prop.
+	// The loading is applied uniformly across ages — it doesn't vary by age.
+	var regionRows []models.RegionLoading
+	if region != "" {
+		if err := DB.Table("region_loadings").
+			Where("risk_rate_code = ? AND region = ?", riskRateCode, strings.TrimSpace(region)).
+			Find(&regionRows).Error; err != nil {
+			return nil, err
+		}
+	}
+	var regionLoading, aidsRegionLoading float64
+	{
+		var rm, rf, rmAids, rfAids float64
+		var hasM, hasF bool
+		for _, r := range regionRows {
+			g := strings.ToUpper(strings.TrimSpace(r.Gender))
+			if g == "M" || g == "MALE" {
+				rm = r.GlaRegionLoadingRate
+				rmAids = r.GlaAidsRegionLoadingRate
+				hasM = true
+			} else if g == "F" || g == "FEMALE" {
+				rf = r.GlaRegionLoadingRate
+				rfAids = r.GlaAidsRegionLoadingRate
+				hasF = true
+			}
+		}
+		switch {
+		case hasM && hasF:
+			regionLoading = maleProp*rm + femaleProp*rf
+			aidsRegionLoading = maleProp*rmAids + femaleProp*rfAids
+		case hasM:
+			regionLoading = rm
+			aidsRegionLoading = rmAids
+		case hasF:
+			regionLoading = rf
+			aidsRegionLoading = rfAids
+		}
+	}
+
+	// 4) Industry loadings — keyed by (risk_rate_code, occupation_class, gender).
+	// Blend by male prop, uniform across ages.
+	var industryRows []models.IndustryLoading
+	if err := DB.Table("industry_loadings").
+		Where("risk_rate_code = ? AND occupation_class = ?", riskRateCode, occupationClass).
+		Find(&industryRows).Error; err != nil {
+		return nil, err
+	}
+	var industryLoading float64
+	{
+		var im, iFem float64
+		var hasM, hasF bool
+		for _, il := range industryRows {
+			g := strings.ToUpper(strings.TrimSpace(il.Gender))
+			if g == "M" || g == "MALE" {
+				im = il.GlaIndustryLoadingRate
+				hasM = true
+			} else if g == "F" || g == "FEMALE" {
+				iFem = il.GlaIndustryLoadingRate
+				hasF = true
+			}
+		}
+		switch {
+		case hasM && hasF:
+			industryLoading = maleProp*im + femaleProp*iFem
+		case hasM:
+			industryLoading = im
+		case hasF:
+			industryLoading = iFem
+		}
+	}
+
+	// 5) Per-age contingency loading from general_loadings (varies by age
+	// and gender) — blend the male/female rates with male prop so the
+	// result matches the gender mix assumed for the qx blend above.
+	ageToContingency := make(map[int]float64, len(ageToQx))
+	for age := range ageToQx {
+		m := GetGeneralLoading(riskRateCode, age, "M").GlaContigencyLoadingRate
+		f := GetGeneralLoading(riskRateCode, age, "F").GlaContigencyLoadingRate
+		ageToContingency[age] = maleProp*m + femaleProp*f
+	}
+
+	// 6) Build per-age loaded rate.
+	//    baseRate = qx * (1 + industry + region) + aidsQx * (1 + aidsRegion)
+	//    loadedRate = baseRate * (1 + contingency)
+	loadedRate := make(map[int]float64, len(ageToQx))
+	for age, qx := range ageToQx {
+		base := qx*(1+industryLoading+regionLoading) + ageToAidsQx[age]*(1+aidsRegionLoading)
+		loadedRate[age] = base * (1 + ageToContingency[age])
+	}
+
+	// 7) Office-rate gross-up divisor. Out-of-range totalPremiumLoading
+	// falls back to the risk rate (divisor = 1) so we never produce a
+	// zero or negative denominator.
+	loadingDivisor := 1.0 - totalPremiumLoading
+	if loadingDivisor <= 0 {
+		loadingDivisor = 1.0
+	}
+
+	// 8) Straight-average loadedRate across the integer ages in each band,
+	// clipped to the range the gla_rates table actually covers.
+	results := make([]models.AdditionalGlaCoverBandRate, 0, len(bands))
+	for _, b := range bands {
+		lo := b.MinAge
+		hi := b.MaxAge
+		if hi < lo {
+			continue
+		}
+		if lo < minTableAge {
+			lo = minTableAge
+		}
+		if hi > maxTableAge {
+			hi = maxTableAge
+		}
+		if hi < lo {
+			// Band fell entirely outside the rate table — emit a zero
+			// row so the caller can see the clip took the band to empty.
+			results = append(results, models.AdditionalGlaCoverBandRate{
+				MinAge:       b.MinAge,
+				MaxAge:       b.MaxAge,
+				MalePropUsed: maleProp,
+			})
+			continue
+		}
+		var sum float64
+		var count int
+		for age := lo; age <= hi; age++ {
+			if r, ok := loadedRate[age]; ok {
+				sum += r
+				count++
+			}
+		}
+		var avg float64
+		if count > 0 {
+			avg = sum / float64(count)
+		}
+		officeRate := avg / loadingDivisor
+		results = append(results, models.AdditionalGlaCoverBandRate{
+			MinAge:            b.MinAge,
+			MaxAge:            b.MaxAge,
+			RiskRatePer1000:   avg * 1000.0,
+			OfficeRatePer1000: officeRate * 1000.0,
+			MalePropUsed:      maleProp,
+		})
+	}
+	return results, nil
+}
+
+// ResolveAdditionalGlaCoverMaleProp returns the male proportion that should
+// be used for this scheme category's Additional GLA Cover calc. The value is
+// always derived from the uploaded member data — the benefit is only offered
+// for populations whose member data has already been loaded. Falls back to
+// group_pricing_parameters.main_member_male_prop (default 0.5) when the
+// member list is empty or has no gender rows.
+func ResolveAdditionalGlaCoverMaleProp(parameters models.GroupPricingParameters, members []models.GPricingMemberDataInForce) float64 {
+	var male, total int
+	for _, m := range members {
+		if strings.TrimSpace(m.Gender) == "" {
+			continue
+		}
+		total++
+		g := strings.ToUpper(strings.TrimSpace(m.Gender))
+		if g == "M" || g == "MALE" {
+			male++
+		}
+	}
+	if total == 0 {
+		return parameters.MainMemberMaleProp
+	}
+	return float64(male) / float64(total)
 }
 
 func GetChildFuneralRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, childAge float64) float64 {
@@ -10697,6 +11506,12 @@ func GetBenefitMapsByScheme(schemeId string) ([]models.GroupBenefitMapper, error
 				benefitAliases["GLA"] = cat.GlaAlias
 			}
 		}
+		if cat.AdditionalAccidentalGlaBenefit {
+			enabledBenefits["AAGLA"] = true
+		}
+		if cat.AdditionalGlaCoverBenefit {
+			enabledBenefits["AGLA"] = true
+		}
 		if cat.SglaBenefit {
 			enabledBenefits["SGLA"] = true
 			if cat.SglaAlias != "" {
@@ -10773,6 +11588,12 @@ func GetBenefitMapsBySchemeCategory(schemeId string, categoryId string) ([]model
 		if category.GlaAlias != "" {
 			benefitAliases["GLA"] = category.GlaAlias
 		}
+	}
+	if category.AdditionalAccidentalGlaBenefit {
+		enabledBenefits["AAGLA"] = true
+	}
+	if category.AdditionalGlaCoverBenefit {
+		enabledBenefits["AGLA"] = true
 	}
 	if category.SglaBenefit {
 		enabledBenefits["SGLA"] = true
@@ -11052,6 +11873,8 @@ func getBaseBenefitMaps() []models.GroupBenefitMapper {
 	// Define the base list of benefits
 	baseBenefits := []models.GroupBenefitMapper{
 		{BenefitName: "Group Life Assurance", BenefitCode: "GLA", BenefitAlias: ""},
+		{BenefitName: "Additional Accidental Group Life Assurance", BenefitCode: "AAGLA", BenefitAlias: ""},
+		{BenefitName: "Additional Group Life Assurance", BenefitCode: "AGLA", BenefitAlias: ""},
 		{BenefitName: "Spouse Group Life Assurance", BenefitCode: "SGLA", BenefitAlias: ""},
 		{BenefitName: "Permanent Total Disability", BenefitCode: "PTD", BenefitAlias: ""},
 		{BenefitName: "Temporary Total Disability", BenefitCode: "TTD", BenefitAlias: ""},
@@ -11061,6 +11884,78 @@ func getBaseBenefitMaps() []models.GroupBenefitMapper {
 		{BenefitName: "Educator Risk Rates", BenefitCode: "EDU", BenefitAlias: ""},
 	}
 	return baseBenefits
+}
+
+// EnsureBaseBenefitMapsSeeded inserts any base benefit maps that don't yet
+// exist in group_benefit_mappers, and refreshes the benefit_name of existing
+// rows when it differs from the base list (benefit_name is not user-editable,
+// so renames in the base list should propagate automatically on startup
+// without clobbering the user's benefit_alias / benefit_alias_code).
+// Called from main.go after migrations so additions and renames in the base
+// list (e.g. AAGLA, AGLA) surface on existing installs without manual work.
+func EnsureBaseBenefitMapsSeeded() error {
+	// Legacy code migrations: if a previous seed used a different
+	// benefit_code for what is now a base entry, rename the code on the
+	// existing row so the user's custom alias (and any data referencing
+	// it) survives. Only renames when the new code is NOT already
+	// present.
+	codeRenames := map[string]string{
+		"AGLC": "AGLA", // "Additional Group Life Cover" -> "... Assurance"
+	}
+	for oldCode, newCode := range codeRenames {
+		var oldCount, newCount int64
+		if err := DB.Model(&models.GroupBenefitMapper{}).
+			Where("benefit_code = ?", oldCode).
+			Count(&oldCount).Error; err != nil {
+			return err
+		}
+		if oldCount == 0 {
+			continue
+		}
+		if err := DB.Model(&models.GroupBenefitMapper{}).
+			Where("benefit_code = ?", newCode).
+			Count(&newCount).Error; err != nil {
+			return err
+		}
+		if newCount > 0 {
+			// New code already seeded (e.g. from a clean install). Drop the
+			// legacy row to avoid a duplicate entry for the same benefit.
+			if err := DB.Where("benefit_code = ?", oldCode).
+				Delete(&models.GroupBenefitMapper{}).Error; err != nil {
+				return err
+			}
+			continue
+		}
+		if err := DB.Model(&models.GroupBenefitMapper{}).
+			Where("benefit_code = ?", oldCode).
+			Update("benefit_code", newCode).Error; err != nil {
+			return err
+		}
+	}
+
+	base := getBaseBenefitMaps()
+	for _, b := range base {
+		var existing models.GroupBenefitMapper
+		err := DB.Where("benefit_code = ?", b.BenefitCode).First(&existing).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				row := b
+				if err := DB.Create(&row).Error; err != nil {
+					return err
+				}
+				continue
+			}
+			return err
+		}
+		if existing.BenefitName != b.BenefitName {
+			if err := DB.Model(&models.GroupBenefitMapper{}).
+				Where("id = ?", existing.ID).
+				Update("benefit_name", b.BenefitName).Error; err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func GetGroupPricingIndustriesForQuotes() ([]string, error) {
@@ -11170,6 +12065,82 @@ func GetGroupPricingAgeBands(ctx context.Context) ([]models.GroupPricingAgeBands
 		return variables, err
 	}
 	return variables, nil
+}
+
+// QuoteMemberGenderSplit is the gender breakdown of the uploaded member
+// data for a single quote. Counts exclude rows with an empty gender.
+type QuoteMemberGenderSplit struct {
+	QuoteID     int     `json:"quote_id"`
+	MaleCount   int     `json:"male_count"`
+	FemaleCount int     `json:"female_count"`
+	OtherCount  int     `json:"other_count"`
+	TotalCount  int     `json:"total_count"`
+	MaleProp    float64 `json:"male_prop"`
+	FemaleProp  float64 `json:"female_prop"`
+}
+
+// GetQuoteMemberGenderSplit counts the male/female members uploaded for a
+// quote. New Business quotes live in g_pricing_member_data (keyed by
+// quote_id); renewals/in-force quotes live in g_pricing_member_data_in_forces
+// (keyed by scheme_id). We check the new-business table first; if nothing is
+// found and the quote has a scheme_id, we fall back to the in-force table.
+func GetQuoteMemberGenderSplit(quoteID int) (QuoteMemberGenderSplit, error) {
+	split := QuoteMemberGenderSplit{QuoteID: quoteID}
+
+	type genderRow struct {
+		Gender string
+		N      int
+	}
+
+	countByGender := func(rows []genderRow) {
+		for _, r := range rows {
+			g := strings.ToUpper(strings.TrimSpace(r.Gender))
+			switch g {
+			case "M", "MALE":
+				split.MaleCount += r.N
+			case "F", "FEMALE":
+				split.FemaleCount += r.N
+			default:
+				split.OtherCount += r.N
+			}
+		}
+	}
+
+	// New-business member data.
+	var nbRows []genderRow
+	if err := DB.Table("g_pricing_member_data").
+		Select("gender, COUNT(*) AS n").
+		Where("quote_id = ?", quoteID).
+		Group("gender").
+		Scan(&nbRows).Error; err != nil {
+		return split, err
+	}
+	countByGender(nbRows)
+
+	// If nothing for this quote_id, try the in-force members (scheme-scoped).
+	if split.MaleCount+split.FemaleCount+split.OtherCount == 0 {
+		var quote models.GroupPricingQuote
+		if err := DB.Select("scheme_id").
+			Where("id = ?", quoteID).
+			First(&quote).Error; err == nil && quote.SchemeID != 0 {
+			var ifRows []genderRow
+			if err := DB.Table("g_pricing_member_data_in_forces").
+				Select("gender, COUNT(*) AS n").
+				Where("scheme_id = ?", quote.SchemeID).
+				Group("gender").
+				Scan(&ifRows).Error; err != nil {
+				return split, err
+			}
+			countByGender(ifRows)
+		}
+	}
+
+	split.TotalCount = split.MaleCount + split.FemaleCount + split.OtherCount
+	if split.TotalCount > 0 {
+		split.MaleProp = float64(split.MaleCount) / float64(split.TotalCount)
+		split.FemaleProp = float64(split.FemaleCount) / float64(split.TotalCount)
+	}
+	return split, nil
 }
 
 func GetGroupPricingBenefits(ctx context.Context) ([]models.GroupBusinessBenefits, error) {

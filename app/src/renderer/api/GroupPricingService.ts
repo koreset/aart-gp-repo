@@ -37,6 +37,14 @@ export default {
   getTableMetaData() {
     return Api.get('/group-pricing/rate-tables')
   },
+  getAgeBands() {
+    return Api.get('/group-pricing/age-bands')
+  },
+  getQuoteMemberGenderSplit(quoteId: number) {
+    return Api.get(
+      `/group-pricing/quotes/${quoteId}/member-gender-split`
+    )
+  },
   getQuoteDocx(id: number) {
     return Api.get(`/group-pricing/get-quote/${id}/document.docx`, {
       responseType: 'blob'

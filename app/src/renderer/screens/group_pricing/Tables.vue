@@ -108,7 +108,8 @@
                           :gp-risk-rate-codes="genericRiskRateCodes"
                           :show-risk-rate-code-select="
                             (rawItem3 as any).table_type !==
-                            'Group Pricing Parameters'
+                              'Group Pricing Parameters' &&
+                            (rawItem3 as any).table_type !== 'Age Bands'
                           "
                           @uploadFile="handleUpload"
                         ></file-updater>
@@ -116,7 +117,7 @@
                           variant="text"
                           size="small"
                           color="error"
-                          @click.stop="chooseRiskRateCode(rawItem3)"
+                          @click.stop="deleteClicked(rawItem3)"
                         >
                           <v-icon start size="small">mdi-delete-outline</v-icon>
                           Delete
@@ -173,7 +174,7 @@
     <v-dialog v-model="riskCodeDialog" persistent max-width="550px">
       <base-card>
         <template #header>
-          <span class="headline">Choose the relevant Risk Code</span>
+          <span class="headline">{{ pickerLabel }}</span>
         </template>
         <template #default>
           <v-row>
@@ -182,7 +183,7 @@
                 v-model="selectedRiskRateCode"
                 variant="outlined"
                 density="compact"
-                label="Select a risk rate code"
+                :label="pickerFieldLabel"
                 :items="availableRiskRateCodes"
                 item-title="year"
                 item-value="year"
@@ -327,6 +328,24 @@ const chooseRiskRateCode = async (item: any) => {
   riskCodeDialog.value = true
 }
 
+// Delete button — routes through the standard picker. For Age Bands the
+// picker shows distinct types (the backend returns them under the same
+// risk-code slot) so the user can delete one type at a time.
+const deleteClicked = (item: any) => {
+  chooseRiskRateCode(item)
+}
+
+const pickerLabel = computed(() =>
+  selectedTableText.value === 'Age Bands'
+    ? 'Choose the Age Band Type to delete'
+    : 'Choose the relevant Risk Code'
+)
+const pickerFieldLabel = computed(() =>
+  selectedTableText.value === 'Age Bands'
+    ? 'Select an age band type'
+    : 'Select a risk rate code'
+)
+
 const handleUpload = async (payload: DataPayload) => {
   uploadComplete.value = false
 
@@ -430,7 +449,7 @@ const viewTable = (item: any) => {
     } else {
       tableData.value = res.data
       if (tableData.value.length > 0) {
-        createColumnDefs(tableData.value)
+        createColumnDefs(tableData.value, item.table_type)
       }
       selectedTable.value = item.table_type
     }
@@ -438,9 +457,28 @@ const viewTable = (item: any) => {
   })
 }
 
-const createColumnDefs = (data: any) => {
+// Per-table explicit column ordering. Keys not listed fall back to the order
+// returned by the backend (which for tables serialised via map[string]interface{}
+// is alphabetical). Unknown fields in a preferred list are skipped; remaining
+// fields are appended after the preferred ones in their original order.
+const preferredColumnOrder: Record<string, string[]> = {
+  'Age Bands': ['name', 'type', 'min_age', 'max_age']
+}
+
+// System fields that should never render as columns.
+const hiddenColumns = new Set(['id'])
+
+const createColumnDefs = (data: any, tableType?: string) => {
   columnDefs.value = []
-  Object.keys(data[0]).forEach((element) => {
+  const keys = Object.keys(data[0]).filter((k) => !hiddenColumns.has(k))
+  const preferred = tableType ? preferredColumnOrder[tableType] : undefined
+  const ordered = preferred
+    ? [
+        ...preferred.filter((k) => keys.includes(k)),
+        ...keys.filter((k) => !preferred.includes(k))
+      ]
+    : keys
+  ordered.forEach((element) => {
     const header: any = {}
     header.headerName = element
     header.field = element

@@ -194,13 +194,15 @@
               </v-col>
             </v-row>
             <v-divider class="my-4"></v-divider>
-            <div class="text-subtitle-2 mb-2">Additional Accidental GLA</div>
+            <div class="text-subtitle-2 mb-2">
+              {{ additionalAccidentalGlaLabel }}
+            </div>
             <v-row>
               <v-col cols="4">
                 <v-switch
                   v-model="additionalAccidentalGlaBenefit"
                   color="primary"
-                  label="Enable Additional Accidental GLA"
+                  :label="`Enable ${additionalAccidentalGlaLabel}`"
                   density="compact"
                   :disabled="
                     !glaBenefit ||
@@ -231,6 +233,173 @@
                 ></v-select>
               </v-col>
             </v-row>
+
+            <v-divider class="my-4"></v-divider>
+            <div class="text-subtitle-2 mb-2">
+              {{ additionalGlaCoverLabel }} (rate per 1,000 by age band)
+            </div>
+            <v-row>
+              <v-col cols="4">
+                <v-switch
+                  v-model="additionalGlaCoverBenefit"
+                  color="primary"
+                  :label="`Enable ${additionalGlaCoverLabel}`"
+                  density="compact"
+                  :disabled="!glaBenefit || !selectedSchemeType"
+                  :hint="
+                    !glaBenefit
+                      ? 'Enable base GLA first — additional cover uses the same benefit type.'
+                      : ''
+                  "
+                  persistent-hint
+                ></v-switch>
+              </v-col>
+            </v-row>
+
+            <template v-if="additionalGlaCoverBenefit">
+              <v-row>
+                <v-col cols="6">
+                  <v-radio-group
+                    v-model="additionalGlaCoverAgeBandSource"
+                    label="Age Band Source"
+                    density="compact"
+                    inline
+                  >
+                    <v-radio
+                      label="Standard Age Bands"
+                      value="standard"
+                    ></v-radio>
+                    <v-radio
+                      label="Custom Age Bands"
+                      value="custom"
+                    ></v-radio>
+                  </v-radio-group>
+                </v-col>
+              </v-row>
+
+              <!-- Standard bands: dropdown for the GLA-specific band type -->
+              <template
+                v-if="additionalGlaCoverAgeBandSource === 'standard'"
+              >
+                <v-row dense>
+                  <v-col cols="4">
+                    <v-select
+                      v-model="additionalGlaCoverAgeBandType"
+                      :items="standardAgeBandTypes"
+                      label="Age Band Type"
+                      variant="outlined"
+                      density="compact"
+                      :no-data-text="
+                        'Upload age bands with a type in rate tables first'
+                      "
+                    ></v-select>
+                  </v-col>
+                </v-row>
+                <v-row no-gutters>
+                  <v-col>
+                    <div class="text-caption mb-1">
+                      Standard Age Bands
+                      <span v-if="additionalGlaCoverAgeBandType"
+                        >({{ additionalGlaCoverAgeBandType }})</span
+                      >
+                    </div>
+                    <v-chip-group column>
+                      <v-chip
+                        v-for="(band, i) in standardGlaBands"
+                        :key="'agla-std-' + i"
+                        size="small"
+                        variant="outlined"
+                      >
+                        {{ formatBandLabel(band) }}
+                      </v-chip>
+                      <v-chip
+                        v-if="
+                          standardGlaBands.length === 0 &&
+                          !additionalGlaCoverAgeBandType
+                        "
+                        size="small"
+                        color="info"
+                        variant="outlined"
+                      >
+                        Select an age band type to view bands.
+                      </v-chip>
+                      <v-chip
+                        v-else-if="standardGlaBands.length === 0"
+                        size="small"
+                        color="warning"
+                        variant="outlined"
+                      >
+                        No bands match this type — upload rows for it or
+                        switch to Custom.
+                      </v-chip>
+                    </v-chip-group>
+                  </v-col>
+                </v-row>
+              </template>
+
+              <!-- Custom bands editor -->
+              <template v-else>
+                <v-row
+                  v-for="(band, i) in additionalGlaCoverCustomAgeBands"
+                  :key="'agla-custom-' + i"
+                  dense
+                >
+                  <v-col cols="3">
+                    <v-text-field
+                      v-model.number="band.min_age"
+                      type="number"
+                      variant="outlined"
+                      density="compact"
+                      label="Min Age"
+                      min="0"
+                    ></v-text-field>
+                  </v-col>
+                  <v-col cols="3">
+                    <v-text-field
+                      v-model.number="band.max_age"
+                      type="number"
+                      variant="outlined"
+                      density="compact"
+                      label="Max Age"
+                      min="0"
+                    ></v-text-field>
+                  </v-col>
+                  <v-col cols="2" class="d-flex align-center">
+                    <v-btn
+                      icon="mdi-delete"
+                      variant="text"
+                      size="small"
+                      color="error"
+                      @click="removeAdditionalGlaCoverBand(i)"
+                    ></v-btn>
+                  </v-col>
+                </v-row>
+                <v-row no-gutters class="mb-2">
+                  <v-col cols="12">
+                    <v-btn
+                      size="small"
+                      variant="tonal"
+                      color="primary"
+                      prepend-icon="mdi-plus"
+                      @click="addAdditionalGlaCoverBand"
+                      >Add Age Band</v-btn
+                    >
+                  </v-col>
+                </v-row>
+              </template>
+
+              <v-alert
+                type="info"
+                density="compact"
+                variant="tonal"
+                class="mt-2"
+              >
+                Rates are computed per 1,000 sum assured during the quote
+                calculation using the main GLA benefit type and the gender
+                split from the uploaded member data. Results appear under
+                <strong>Premiums Summary</strong>.
+              </v-alert>
+            </template>
           </template>
         </base-card>
       </v-window-item>
@@ -935,6 +1104,240 @@
                     ></v-text-field>
                   </v-col>
                 </v-row>
+
+                <v-divider class="my-4"></v-divider>
+                <div class="text-subtitle-1 font-weight-medium mb-2">
+                  Extended Family Funeral Cover
+                </div>
+                <v-switch
+                  v-model="extendedFamilyBenefit"
+                  color="primary"
+                  label="Enable Extended Family Funeral Cover"
+                  :disabled="!familyFuneralBenefit || !selectedSchemeType"
+                ></v-switch>
+
+                <template v-if="extendedFamilyBenefit">
+                  <v-row>
+                    <v-col cols="6">
+                      <v-radio-group
+                        v-model="extendedFamilyAgeBandSource"
+                        label="Age Band Source"
+                        density="compact"
+                        inline
+                      >
+                        <v-radio
+                          label="Standard Age Bands"
+                          value="standard"
+                        ></v-radio>
+                        <v-radio
+                          label="Custom Age Bands"
+                          value="custom"
+                        ></v-radio>
+                      </v-radio-group>
+                    </v-col>
+                    <v-col cols="6">
+                      <v-radio-group
+                        v-model="extendedFamilyPricingMethod"
+                        label="Pricing Method"
+                        density="compact"
+                        inline
+                      >
+                        <v-radio
+                          label="Rate per 1,000"
+                          value="rate_per_1000"
+                        ></v-radio>
+                        <v-radio
+                          label="Sum Assured per Band"
+                          value="sum_assured"
+                        ></v-radio>
+                      </v-radio-group>
+                    </v-col>
+                  </v-row>
+
+                  <!-- Standard age bands: pick a type, then show the bands -->
+                  <template
+                    v-if="extendedFamilyAgeBandSource === 'standard'"
+                  >
+                    <v-row dense>
+                      <v-col cols="4">
+                        <v-select
+                          v-model="extendedFamilyAgeBandType"
+                          :items="standardAgeBandTypes"
+                          label="Age Band Type"
+                          variant="outlined"
+                          density="compact"
+                          :no-data-text="
+                            'Upload age bands with a type in rate tables first'
+                          "
+                        ></v-select>
+                      </v-col>
+                    </v-row>
+                    <v-row no-gutters>
+                      <v-col>
+                        <div class="text-caption mb-1">
+                          Standard Age Bands
+                          <span v-if="extendedFamilyAgeBandType"
+                            >({{ extendedFamilyAgeBandType }})</span
+                          >
+                        </div>
+                        <v-chip-group column>
+                          <v-chip
+                            v-for="(band, i) in effectiveAgeBands"
+                            :key="'std-' + i"
+                            size="small"
+                            variant="outlined"
+                          >
+                            {{ formatBandLabel(band) }}
+                          </v-chip>
+                          <v-chip
+                            v-if="
+                              effectiveAgeBands.length === 0 &&
+                              !extendedFamilyAgeBandType
+                            "
+                            size="small"
+                            color="info"
+                            variant="outlined"
+                          >
+                            Select an age band type to view bands.
+                          </v-chip>
+                          <v-chip
+                            v-else-if="effectiveAgeBands.length === 0"
+                            size="small"
+                            color="warning"
+                            variant="outlined"
+                          >
+                            No bands match this type — upload rows for it or
+                            switch to Custom.
+                          </v-chip>
+                        </v-chip-group>
+                      </v-col>
+                    </v-row>
+                  </template>
+
+                  <!-- Custom age bands editor -->
+                  <template v-else>
+                    <v-row
+                      v-for="(band, i) in extendedFamilyCustomAgeBands"
+                      :key="'custom-band-' + i"
+                      dense
+                    >
+                      <v-col cols="3">
+                        <v-text-field
+                          v-model.number="band.min_age"
+                          type="number"
+                          variant="outlined"
+                          density="compact"
+                          label="Min Age"
+                          min="0"
+                        ></v-text-field>
+                      </v-col>
+                      <v-col cols="3">
+                        <v-text-field
+                          v-model.number="band.max_age"
+                          type="number"
+                          variant="outlined"
+                          density="compact"
+                          label="Max Age"
+                          min="0"
+                        ></v-text-field>
+                      </v-col>
+                      <v-col cols="2" class="d-flex align-center">
+                        <v-btn
+                          icon="mdi-delete"
+                          variant="text"
+                          size="small"
+                          color="error"
+                          @click="removeCustomBand(i)"
+                        ></v-btn>
+                      </v-col>
+                    </v-row>
+                    <v-row no-gutters class="mb-2">
+                      <v-col cols="12">
+                        <v-btn
+                          size="small"
+                          variant="tonal"
+                          color="primary"
+                          prepend-icon="mdi-plus"
+                          @click="addCustomBand"
+                          >Add Age Band</v-btn
+                        >
+                      </v-col>
+                    </v-row>
+                  </template>
+
+                  <!-- Per-band sum assured entry -->
+                  <template
+                    v-if="extendedFamilyPricingMethod === 'sum_assured'"
+                  >
+                    <v-divider class="my-3"></v-divider>
+                    <div class="text-caption mb-2">
+                      Sums Assured per Age Band
+                    </div>
+                    <v-row
+                      v-for="(band, i) in effectiveAgeBands"
+                      :key="'sa-' + i"
+                      dense
+                    >
+                      <v-col cols="3">
+                        <v-text-field
+                          :model-value="formatBandLabel(band)"
+                          variant="outlined"
+                          density="compact"
+                          label="Age Band"
+                          readonly
+                        ></v-text-field>
+                      </v-col>
+                      <v-col cols="4">
+                        <v-text-field
+                          :model-value="
+                            formatAmount(getBandSumAssured(band))
+                          "
+                          type="text"
+                          variant="outlined"
+                          density="compact"
+                          label="Sum Assured"
+                          placeholder="Enter a value"
+                          @update:model-value="
+                            (v) => setBandSumAssured(band, v)
+                          "
+                        ></v-text-field>
+                      </v-col>
+                    </v-row>
+                  </template>
+
+                  <!-- Computed premiums (populated after quote recalc) -->
+                  <template v-if="extendedFamilyBandRates.length > 0">
+                    <v-divider class="my-3"></v-divider>
+                    <div class="text-caption mb-2">
+                      Computed Rates (from last recalculation)
+                    </div>
+                    <v-table density="compact">
+                      <thead>
+                        <tr>
+                          <th>Age Band</th>
+                          <th>Average Rate</th>
+                          <th v-if="extendedFamilyPricingMethod === 'sum_assured'">
+                            Sum Assured
+                          </th>
+                          <th>Monthly Premium (per member)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="(r, i) in extendedFamilyBandRates"
+                          :key="'result-' + i"
+                        >
+                          <td>{{ formatBandLabel(r) }}</td>
+                          <td>{{ r.average_rate.toFixed(6) }}</td>
+                          <td v-if="extendedFamilyPricingMethod === 'sum_assured'">
+                            {{ formatAmount(r.sum_assured || 0) }}
+                          </td>
+                          <td>{{ formatAmount(r.monthly_premium) }}</td>
+                        </tr>
+                      </tbody>
+                    </v-table>
+                  </template>
+                </template>
               </template>
             </base-card>
           </v-col>
@@ -1110,6 +1513,33 @@ function onSchemeTypeChange(schemeType) {
       data.additional_accidental_gla_benefit || false
     additionalAccidentalGlaBenefitType.value =
       data.additional_accidental_gla_benefit_type || null
+    additionalGlaCoverBenefit.value =
+      data.additional_gla_cover_benefit || false
+    additionalGlaCoverAgeBandSource.value =
+      data.additional_gla_cover_age_band_source === 'custom'
+        ? 'custom'
+        : 'standard'
+    additionalGlaCoverAgeBandType.value =
+      data.additional_gla_cover_age_band_type || ''
+    additionalGlaCoverCustomAgeBands.value = Array.isArray(
+      data.additional_gla_cover_custom_age_bands
+    )
+      ? data.additional_gla_cover_custom_age_bands.map((b: any) => ({
+          min_age: Number(b.min_age),
+          max_age: Number(b.max_age)
+        }))
+      : []
+    additionalGlaCoverBandRates.value = Array.isArray(
+      data.additional_gla_cover_band_rates
+    )
+      ? data.additional_gla_cover_band_rates.map((b: any) => ({
+          min_age: Number(b.min_age),
+          max_age: Number(b.max_age),
+          risk_rate_per1000: Number(b.risk_rate_per1000),
+          office_rate_per1000: Number(b.office_rate_per1000),
+          male_prop_used: Number(b.male_prop_used)
+        }))
+      : []
 
     // Populate PTD fields
     ptdRiskType.value = data.ptd_risk_type || ''
@@ -1177,6 +1607,43 @@ function onSchemeTypeChange(schemeType) {
       data.family_funeral_max_number_children || 0
     familyFuneralMaxNumberAdultDependants.value =
       data.family_funeral_max_number_adult_dependants || 0
+    // Extended family
+    extendedFamilyBenefit.value = !!data.extended_family_benefit
+    extendedFamilyAgeBandSource.value =
+      data.extended_family_age_band_source === 'custom' ? 'custom' : 'standard'
+    extendedFamilyAgeBandType.value = data.extended_family_age_band_type || ''
+    extendedFamilyCustomAgeBands.value = Array.isArray(
+      data.extended_family_custom_age_bands
+    )
+      ? data.extended_family_custom_age_bands.map((b: any) => ({
+          min_age: b.min_age ?? 0,
+          max_age: b.max_age ?? 0
+        }))
+      : []
+    extendedFamilyPricingMethod.value =
+      data.extended_family_pricing_method === 'sum_assured'
+        ? 'sum_assured'
+        : 'rate_per_1000'
+    extendedFamilySumsAssured.value = Array.isArray(
+      data.extended_family_sums_assured
+    )
+      ? data.extended_family_sums_assured.map((s: any) => ({
+          min_age: s.min_age ?? 0,
+          max_age: s.max_age ?? 0,
+          sum_assured: s.sum_assured ?? 0
+        }))
+      : []
+    extendedFamilyBandRates.value = Array.isArray(
+      data.extended_family_band_rates
+    )
+      ? data.extended_family_band_rates.map((r: any) => ({
+          min_age: r.min_age ?? 0,
+          max_age: r.max_age ?? 0,
+          average_rate: r.average_rate ?? 0,
+          sum_assured: r.sum_assured,
+          monthly_premium: r.monthly_premium ?? 0
+        }))
+      : []
     selectedRegion.value = data.region || ''
   } else {
     // Reset form fields
@@ -1190,6 +1657,11 @@ function onSchemeTypeChange(schemeType) {
     glaConversionOnRetirement.value = false
     additionalAccidentalGlaBenefit.value = false
     additionalAccidentalGlaBenefitType.value = null
+    additionalGlaCoverBenefit.value = false
+    additionalGlaCoverAgeBandSource.value = 'standard'
+    additionalGlaCoverAgeBandType.value = ''
+    additionalGlaCoverCustomAgeBands.value = []
+    additionalGlaCoverBandRates.value = []
     glaBenefit.value = false
     ptdBenefit.value = false
     ciBenefit.value = false
@@ -1243,6 +1715,14 @@ function onSchemeTypeChange(schemeType) {
     familyFuneralParentFuneralSumAssured.value = 0
     familyFuneralMaxNumberChildren.value = 0
     familyFuneralMaxNumberAdultDependants.value = 0
+    // reset Extended Family
+    extendedFamilyBenefit.value = false
+    extendedFamilyAgeBandSource.value = 'standard'
+    extendedFamilyAgeBandType.value = ''
+    extendedFamilyCustomAgeBands.value = []
+    extendedFamilyPricingMethod.value = 'rate_per_1000'
+    extendedFamilySumsAssured.value = []
+    extendedFamilyBandRates.value = []
   }
 }
 
@@ -1283,6 +1763,23 @@ function saveCurrentSchemeCategory() {
           ...(additionalAccidentalGlaBenefit.value && {
             additional_accidental_gla_benefit_type:
               additionalAccidentalGlaBenefitType.value
+          }),
+          additional_gla_cover_benefit: !!additionalGlaCoverBenefit.value,
+          ...(additionalGlaCoverBenefit.value && {
+            additional_gla_cover_age_band_source:
+              additionalGlaCoverAgeBandSource.value,
+            additional_gla_cover_age_band_type:
+              additionalGlaCoverAgeBandSource.value === 'standard'
+                ? additionalGlaCoverAgeBandType.value || ''
+                : '',
+            additional_gla_cover_custom_age_bands:
+              additionalGlaCoverAgeBandSource.value === 'custom'
+                ? additionalGlaCoverCustomAgeBands.value.map((b) => ({
+                    min_age: Number(b.min_age),
+                    max_age: Number(b.max_age)
+                  }))
+                : [],
+            additional_gla_cover_band_rates: additionalGlaCoverBandRates.value
           })
         }),
         ...(ptdBenefit.value && {
@@ -1359,7 +1856,31 @@ function saveCurrentSchemeCategory() {
           ),
           family_funeral_max_number_adult_dependants: Number(
             familyFuneralMaxNumberAdultDependants.value
-          )
+          ),
+          extended_family_benefit: !!extendedFamilyBenefit.value,
+          ...(extendedFamilyBenefit.value && {
+            extended_family_age_band_source: extendedFamilyAgeBandSource.value,
+            extended_family_age_band_type:
+              extendedFamilyAgeBandSource.value === 'standard'
+                ? extendedFamilyAgeBandType.value || ''
+                : '',
+            extended_family_pricing_method: extendedFamilyPricingMethod.value,
+            extended_family_custom_age_bands:
+              extendedFamilyAgeBandSource.value === 'custom'
+                ? extendedFamilyCustomAgeBands.value.map((b) => ({
+                    min_age: Number(b.min_age),
+                    max_age: Number(b.max_age)
+                  }))
+                : [],
+            extended_family_sums_assured:
+              extendedFamilyPricingMethod.value === 'sum_assured'
+                ? effectiveAgeBands.value.map((b) => ({
+                    min_age: Number(b.min_age),
+                    max_age: Number(b.max_age),
+                    sum_assured: Number(getBandSumAssured(b))
+                  }))
+                : []
+          })
         })
       }
       if (typeof selectedSchemeType.value === 'string') {
@@ -1392,6 +1913,8 @@ const phiLabel = ref('PHI')
 const ttdLabel = ref('TTD')
 const glaLabel = ref('GLA')
 const familyFuneralLabel = ref('Family Funeral')
+const additionalAccidentalGlaLabel = ref('Additional Accidental GLA')
+const additionalGlaCoverLabel = ref('Additional GLA Cover')
 const benefitDefinitions: any = ref(['Lump Sum', 'Monthly'])
 const incomeEscalations: any = ref([])
 const ptdDisabilityDefinitions: any = ref([])
@@ -2035,6 +2558,151 @@ const [
   familyFuneralMaxNumberAdultDependantsAttrs
 ] = defineField('family_funeral_max_number_adult_dependants')
 
+// ----- Extended family funeral state (kept outside vee-validate) -----
+interface EfAgeBand {
+  min_age: number
+  max_age: number
+  name?: string
+  type?: string
+}
+interface EfBandSumAssured {
+  min_age: number
+  max_age: number
+  sum_assured: number
+}
+interface EfBandRate {
+  min_age: number
+  max_age: number
+  average_rate: number
+  sum_assured?: number
+  monthly_premium: number
+}
+const extendedFamilyBenefit = ref(false)
+const extendedFamilyAgeBandSource = ref<'standard' | 'custom'>('standard')
+const extendedFamilyAgeBandType = ref<string>('')
+const extendedFamilyCustomAgeBands = ref<EfAgeBand[]>([])
+const extendedFamilyPricingMethod = ref<'rate_per_1000' | 'sum_assured'>(
+  'rate_per_1000'
+)
+const extendedFamilySumsAssured = ref<EfBandSumAssured[]>([])
+const extendedFamilyBandRates = ref<EfBandRate[]>([])
+const standardAgeBands = ref<EfAgeBand[]>([])
+
+const standardAgeBandTypes = computed<string[]>(() => {
+  const set = new Set<string>()
+  standardAgeBands.value.forEach((b) => {
+    if (b.type) set.add(b.type)
+  })
+  return Array.from(set).sort()
+})
+
+const effectiveAgeBands = computed<EfAgeBand[]>(() => {
+  if (extendedFamilyAgeBandSource.value === 'custom') {
+    return extendedFamilyCustomAgeBands.value
+  }
+  if (!extendedFamilyAgeBandType.value) return []
+  return standardAgeBands.value.filter(
+    (b) => (b.type || '') === extendedFamilyAgeBandType.value
+  )
+})
+
+function formatBandLabel(band: { min_age: number; max_age: number }) {
+  if (band.max_age >= 150) return `${band.min_age}+`
+  return `${band.min_age}–${band.max_age}`
+}
+
+function formatAmount(n: number | string) {
+  const v = typeof n === 'string' ? parseFloat(n.replace(/,/g, '')) : n
+  if (isNaN(v)) return ''
+  return v.toLocaleString()
+}
+
+function addCustomBand() {
+  const last = extendedFamilyCustomAgeBands.value.at(-1)
+  const min = last ? last.max_age + 1 : 0
+  extendedFamilyCustomAgeBands.value.push({ min_age: min, max_age: min + 9 })
+}
+
+function removeCustomBand(i: number) {
+  extendedFamilyCustomAgeBands.value.splice(i, 1)
+}
+
+// ============================================================================
+// Additional GLA Cover (rate-only, by age band) — mirrors the extended-family
+// pattern but draws from gla_rates + gla_aids_rates + premium loadings.
+// ============================================================================
+
+interface AglaBand {
+  min_age: number
+  max_age: number
+}
+
+interface AglaBandRate {
+  min_age: number
+  max_age: number
+  risk_rate_per1000: number
+  office_rate_per1000: number
+  male_prop_used: number
+}
+
+const additionalGlaCoverBenefit = ref(false)
+const additionalGlaCoverAgeBandSource = ref<'standard' | 'custom'>('standard')
+const additionalGlaCoverAgeBandType = ref<string>('')
+const additionalGlaCoverCustomAgeBands = ref<AglaBand[]>([])
+// Last computed band rates returned from the backend recalc. Kept so a
+// reload restores whatever the Premiums Summary is currently showing.
+const additionalGlaCoverBandRates = ref<AglaBandRate[]>([])
+
+// Resolve the "standard" option to its own GLA-specific band type — read from
+// group_pricing_age_bands, filtered by the user-chosen type.
+const standardGlaBands = computed<AglaBand[]>(() => {
+  if (!additionalGlaCoverAgeBandType.value) return []
+  return standardAgeBands.value.filter(
+    (b) => (b.type || '') === additionalGlaCoverAgeBandType.value
+  )
+})
+
+function addAdditionalGlaCoverBand() {
+  const last = additionalGlaCoverCustomAgeBands.value.at(-1)
+  const min = last ? last.max_age + 1 : 18
+  additionalGlaCoverCustomAgeBands.value.push({
+    min_age: min,
+    max_age: min + 9
+  })
+}
+
+function removeAdditionalGlaCoverBand(i: number) {
+  additionalGlaCoverCustomAgeBands.value.splice(i, 1)
+}
+
+function getBandSumAssured(band: { min_age: number; max_age: number }) {
+  const row = extendedFamilySumsAssured.value.find(
+    (s) => s.min_age === band.min_age && s.max_age === band.max_age
+  )
+  return row?.sum_assured ?? 0
+}
+
+function setBandSumAssured(
+  band: { min_age: number; max_age: number },
+  raw: string | number
+) {
+  const parsed =
+    typeof raw === 'string' ? parseFloat(raw.replace(/,/g, '')) : raw
+  const sum = isNaN(parsed as number) ? 0 : (parsed as number)
+  const existing = extendedFamilySumsAssured.value.find(
+    (s) => s.min_age === band.min_age && s.max_age === band.max_age
+  )
+  if (existing) {
+    existing.sum_assured = sum
+  } else {
+    extendedFamilySumsAssured.value.push({
+      min_age: band.min_age,
+      max_age: band.max_age,
+      sum_assured: sum
+    })
+  }
+}
+
 onBeforeMount(async () => {
   // get benefit definitions from the API
   const benefitResponse = await GroupPricingService.getBenefitDefinitions()
@@ -2048,12 +2716,27 @@ onBeforeMount(async () => {
   phiLabel.value = getBenefitAlias('PHI')
   ttdLabel.value = getBenefitAlias('TTD')
   familyFuneralLabel.value = getBenefitAlias('GFF')
+  additionalAccidentalGlaLabel.value = getBenefitAlias('AAGLA')
+  additionalGlaCoverLabel.value = getBenefitAlias('AGLA')
+  try {
+    const bandsRes = await GroupPricingService.getAgeBands()
+    const raw = bandsRes?.data?.data ?? bandsRes?.data ?? []
+    standardAgeBands.value = (Array.isArray(raw) ? raw : []).map((b: any) => ({
+      min_age: b.min_age ?? b.MinAge ?? 0,
+      max_age: b.max_age ?? b.MaxAge ?? 0,
+      name: b.name ?? b.Name ?? '',
+      type: b.type ?? b.Type ?? ''
+    }))
+  } catch (e) {
+    console.warn('Failed to load age bands', e)
+  }
 })
 
 const getBenefitAlias = (benefit: any) => {
   const benefitMap = benefitMaps.value.find(
     (map: any) => map.benefit_code === benefit
   )
+  if (!benefitMap) return benefit
   return benefitMap.benefit_alias !== ''
     ? benefitMap.benefit_alias
     : benefitMap.benefit_name

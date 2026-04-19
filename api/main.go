@@ -280,6 +280,13 @@ func startApplication(initTables bool, s service.Service) {
 	// (Table creation is handled by SetupTables above; this seeds the row counts.)
 	services.EnsureGPTableStats()
 
+	// Top up group_benefit_mappers with any newly-added base rows (e.g.
+	// AAGLA, AGLC) so Benefits Customization shows them on existing
+	// installs without requiring a manual seed.
+	if err := services.EnsureBaseBenefitMapsSeeded(); err != nil {
+		log.WithField("error", err.Error()).Warn("Failed to seed base benefit maps")
+	}
+
 	services.StartGroupSchemeStatusUpdater()
 	services.StartNotificationOverdueSweeper()
 	services.StartDeadlineOverdueSweeper()

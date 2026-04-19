@@ -73,6 +73,8 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.GET("get-quote-by-scheme-name/:schemeName", controllers.GetGroupPricingQuoteBySchemeName)
 			groupPricing.GET("get-quote/:id", controllers.GetGroupPricingQuote)
 
+			groupPricing.GET("age-bands", controllers.GetGroupPricingAgeBands)
+			groupPricing.GET("quotes/:id/member-gender-split", controllers.GetQuoteMemberGenderSplit)
 			groupPricing.GET("rate-tables", controllers.GetGPTableMetadata)
 			groupPricing.POST("rate-tables/rebuild-stats", controllers.RebuildGPTableStats)
 			groupPricing.POST("rate-tables", controllers.UploadGPRateTables)

@@ -45,6 +45,20 @@ export const useGroupPricingStore = defineStore('groupPricing', {
       gla_conversion_on_retirement: false,
       additional_accidental_gla_benefit: false,
       additional_accidental_gla_benefit_type: null,
+      additional_gla_cover_benefit: false,
+      additional_gla_cover_age_band_source: 'standard',
+      additional_gla_cover_age_band_type: '',
+      additional_gla_cover_custom_age_bands: [] as Array<{
+        min_age: number
+        max_age: number
+      }>,
+      additional_gla_cover_band_rates: [] as Array<{
+        min_age: number
+        max_age: number
+        risk_rate_per1000: number
+        office_rate_per1000: number
+        male_prop_used: number
+      }>,
       ptd_risk_type: null,
       ptd_benefit_type: null,
       ptd_salary_multiple: 0,
@@ -84,6 +98,26 @@ export const useGroupPricingStore = defineStore('groupPricing', {
       family_funeral_parent_funeral_sum_assured: 0,
       family_funeral_max_number_children: 0,
       family_funeral_max_number_adult_dependants: 0,
+      extended_family_benefit: false,
+      extended_family_age_band_source: 'standard',
+      extended_family_age_band_type: '',
+      extended_family_custom_age_bands: [] as Array<{
+        min_age: number
+        max_age: number
+      }>,
+      extended_family_pricing_method: 'rate_per_1000',
+      extended_family_sums_assured: [] as Array<{
+        min_age: number
+        max_age: number
+        sum_assured: number
+      }>,
+      extended_family_band_rates: [] as Array<{
+        min_age: number
+        max_age: number
+        average_rate: number
+        sum_assured?: number
+        monthly_premium: number
+      }>,
       region: ''
     },
     scheme_category: {},

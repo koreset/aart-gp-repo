@@ -245,6 +245,8 @@ const ciBenefitTitle = ref('')
 const phiBenefitTitle = ref('')
 const ttdBenefitTitle = ref('')
 const familyFuneralBenefitTitle = ref('')
+const additionalAccidentalGlaBenefitTitle = ref('Additional Accidental GLA')
+const additionalGlaCoverBenefitTitle = ref('Additional GLA Cover')
 const quote: any = ref(null)
 const resultSummaries: any = ref([])
 const insurer: any = ref(null)
@@ -278,7 +280,10 @@ const generateWord = async () => {
         ciBenefitTitle: ciBenefitTitle.value,
         phiBenefitTitle: phiBenefitTitle.value,
         ttdBenefitTitle: ttdBenefitTitle.value,
-        familyFuneralBenefitTitle: familyFuneralBenefitTitle.value
+        familyFuneralBenefitTitle: familyFuneralBenefitTitle.value,
+        additionalAccidentalGlaBenefitTitle:
+          additionalAccidentalGlaBenefitTitle.value,
+        additionalGlaCoverBenefitTitle: additionalGlaCoverBenefitTitle.value
       }
     )
   } catch (error) {
@@ -452,7 +457,7 @@ const convertExcelDataToGridData = () => {
     if (resultSummary.total_additional_accidental_gla_capped_sum_assured > 0) {
       gridData.push({
         category,
-        benefit: 'Additional Accidental GLA',
+        benefit: additionalAccidentalGlaBenefitTitle.value,
         totalSumAssured:
           resultSummary.total_additional_accidental_gla_capped_sum_assured,
         annualPremium:
@@ -635,6 +640,22 @@ onMounted(async () => {
       familyFuneralBenefitTitle.value = familyFuneralBenefit.benefit_alias
     } else {
       familyFuneralBenefitTitle.value = familyFuneralBenefit.benefit_name
+    }
+    const additionalAccidentalGlaBenefit = benefitMaps.value.find(
+      (item) => item.benefit_code === 'AAGLA'
+    )
+    if (additionalAccidentalGlaBenefit) {
+      additionalAccidentalGlaBenefitTitle.value =
+        additionalAccidentalGlaBenefit.benefit_alias ||
+        additionalAccidentalGlaBenefit.benefit_name
+    }
+    const additionalGlaCoverBenefit = benefitMaps.value.find(
+      (item) => item.benefit_code === 'AGLA'
+    )
+    if (additionalGlaCoverBenefit) {
+      additionalGlaCoverBenefitTitle.value =
+        additionalGlaCoverBenefit.benefit_alias ||
+        additionalGlaCoverBenefit.benefit_name
     }
   })
 

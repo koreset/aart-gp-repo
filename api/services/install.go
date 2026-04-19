@@ -246,17 +246,10 @@ func BaseData(initTables bool) {
 		DB.CreateInBatches(pfs, 100)
 	}
 
-	//Group Pricing Age Bands
-	file, err = installer.Files.Open("group_business_agebands.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	body, err = io.ReadAll(file)
-	groupPricingAgeBands := make([]models.GroupPricingAgeBands, 0)
-
-	_ = json.Unmarshal(body, &groupPricingAgeBands)
-	DB.Where("id > 0").Delete(&models.GroupPricingAgeBands{})
-	DB.CreateInBatches(groupPricingAgeBands, 100)
+	// Group Pricing Age Bands are user-managed via the rate-tables upload flow
+	// (services.UploadTable, case "Age Bands"). Do not seed from
+	// installer/group_business_agebands.json — the bundled JSON has no `type`
+	// column and re-seeding on every startup was overwriting user uploads.
 
 	//Group Pricing Benefits
 	file, err = installer.Files.Open("group_business_benefits.json")

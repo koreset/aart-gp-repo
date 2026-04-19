@@ -52,6 +52,8 @@ export interface BenefitTitles {
   phiBenefitTitle: string
   ttdBenefitTitle: string
   familyFuneralBenefitTitle: string
+  additionalAccidentalGlaBenefitTitle?: string
+  additionalGlaCoverBenefitTitle?: string
 }
 
 /** Aggregated totals across all categories */

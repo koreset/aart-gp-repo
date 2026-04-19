@@ -137,6 +137,24 @@
               item.populated ? `${item.count} records loaded` : 'Data required'
             }}
           </span>
+          <span
+            v-if="
+              item.table_type === 'Member Data' &&
+              item.populated &&
+              !item.isIndicative &&
+              memberGenderSplit &&
+              memberGenderSplit.total_count > 0
+            "
+            class="ml-2 text-medium-emphasis"
+          >
+            · Male {{ memberGenderSplit.male_count }} ({{
+              (memberGenderSplit.male_prop * 100).toFixed(1)
+            }}%) · Female {{ memberGenderSplit.female_count }} ({{
+              (memberGenderSplit.female_prop * 100).toFixed(1)
+            }}%)<span v-if="memberGenderSplit.other_count > 0">
+              · Other {{ memberGenderSplit.other_count }}</span
+            >
+          </span>
         </v-list-item-subtitle>
 
         <template #append>
@@ -319,6 +337,37 @@ const memberAverageAge = ref<number | null>(null)
 const memberAverageIncome = ref<number | null>(null)
 const memberDataCount = ref<number | null>(null)
 const memberMaleFemaleDistribution = ref<number | null>(null)
+const memberGenderSplit = ref<{
+  male_count: number
+  female_count: number
+  other_count: number
+  total_count: number
+  male_prop: number
+  female_prop: number
+} | null>(null)
+
+async function refreshMemberGenderSplit() {
+  if (!props.quote || !props.quote.quote_id) {
+    memberGenderSplit.value = null
+    return
+  }
+  if (
+    !(props.quote.member_data_count && props.quote.member_data_count > 0)
+  ) {
+    memberGenderSplit.value = null
+    return
+  }
+  try {
+    const res = await GroupPricingService.getQuoteMemberGenderSplit(
+      props.quote.quote_id
+    )
+    if (res?.data?.success) {
+      memberGenderSplit.value = res.data.data
+    }
+  } catch {
+    memberGenderSplit.value = null
+  }
+}
 const selectedCategory = ref<string | null>(null)
 const useInfiniteModel = ref(false)
 const currentTableType = ref('')
@@ -652,6 +701,11 @@ const handleUpload = async (payload: any) => {
         count,
         updateType: 'upload'
       })
+      if (selectedTable.value?.table_type === 'Member Data') {
+        // Refresh the gender split readout shown under the Member Data row
+        // as soon as the upload completes.
+        refreshMemberGenderSplit()
+      }
       isDialogOpen.value = false
       uploadingData.value = false
     })
@@ -804,6 +858,7 @@ const viewTable = async (item: any) => {
 // }
 
 onMounted(() => {
+  refreshMemberGenderSplit()
   GroupPricingService.getBenefitMaps().then((res) => {
     benefitMaps.value = res.data
     const glaBenefit = benefitMaps.value.find(

@@ -667,6 +667,35 @@ func GetGPTableMetadata(c *gin.Context) {
 	c.JSON(http.StatusOK, metadata)
 }
 
+// GetQuoteMemberGenderSplit returns the male / female counts of the uploaded
+// member data for a quote. The Data Management screen renders this under the
+// Member Data row once the upload completes.
+func GetQuoteMemberGenderSplit(c *gin.Context) {
+	quoteID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid quote id"})
+		return
+	}
+	split, err := services.GetQuoteMemberGenderSplit(quoteID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": split})
+}
+
+// GetGroupPricingAgeBands returns the configured standard age bands used by the
+// extended-family funeral benefit UI to partition the funeral rate table.
+func GetGroupPricingAgeBands(c *gin.Context) {
+	bands, err := services.GetGroupPricingAgeBands(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": bands})
+}
+
+
 func GetGPTableData(c *gin.Context) {
 	tableType := c.Param("table_type")
 	results := services.GetGPTableData(tableType)

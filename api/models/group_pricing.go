@@ -163,6 +163,188 @@ func (s *StringArray) Scan(value interface{}) error {
 	return json.Unmarshal(bytes, s)
 }
 
+// ExtendedFamilyAgeBandArray is a JSON-serialised slice of age bands, stored as
+// TEXT / NVARCHAR(MAX) on scheme_categories.extended_family_custom_age_bands.
+type ExtendedFamilyAgeBandArray []ExtendedFamilyAgeBand
+
+func (a ExtendedFamilyAgeBandArray) Value() (driver.Value, error) {
+	if a == nil {
+		return "[]", nil
+	}
+	b, err := json.Marshal(a)
+	if err != nil {
+		return nil, err
+	}
+	return string(b), nil
+}
+
+func (a *ExtendedFamilyAgeBandArray) Scan(value interface{}) error {
+	if value == nil {
+		*a = nil
+		return nil
+	}
+	var bytes []byte
+	switch v := value.(type) {
+	case string:
+		bytes = []byte(v)
+	case []byte:
+		bytes = v
+	default:
+		return fmt.Errorf("cannot convert %T to ExtendedFamilyAgeBandArray", value)
+	}
+	if len(bytes) == 0 {
+		*a = nil
+		return nil
+	}
+	return json.Unmarshal(bytes, a)
+}
+
+// ExtendedFamilyBandSumAssuredArray is a JSON-serialised slice of per-band sums
+// assured, stored as TEXT / NVARCHAR(MAX) on
+// scheme_categories.extended_family_sums_assured.
+type ExtendedFamilyBandSumAssuredArray []ExtendedFamilyBandSumAssured
+
+func (a ExtendedFamilyBandSumAssuredArray) Value() (driver.Value, error) {
+	if a == nil {
+		return "[]", nil
+	}
+	b, err := json.Marshal(a)
+	if err != nil {
+		return nil, err
+	}
+	return string(b), nil
+}
+
+func (a *ExtendedFamilyBandSumAssuredArray) Scan(value interface{}) error {
+	if value == nil {
+		*a = nil
+		return nil
+	}
+	var bytes []byte
+	switch v := value.(type) {
+	case string:
+		bytes = []byte(v)
+	case []byte:
+		bytes = v
+	default:
+		return fmt.Errorf("cannot convert %T to ExtendedFamilyBandSumAssuredArray", value)
+	}
+	if len(bytes) == 0 {
+		*a = nil
+		return nil
+	}
+	return json.Unmarshal(bytes, a)
+}
+
+// ExtendedFamilyBandRateArray persists computed per-band extended-family rates
+// (straight average of loaded funeral Qx across ages in the band, plus the
+// per-member monthly premium) on the scheme category after a quote recalc.
+type ExtendedFamilyBandRateArray []ExtendedFamilyBandRate
+
+func (a ExtendedFamilyBandRateArray) Value() (driver.Value, error) {
+	if a == nil {
+		return "[]", nil
+	}
+	b, err := json.Marshal(a)
+	if err != nil {
+		return nil, err
+	}
+	return string(b), nil
+}
+
+func (a *ExtendedFamilyBandRateArray) Scan(value interface{}) error {
+	if value == nil {
+		*a = nil
+		return nil
+	}
+	var bytes []byte
+	switch v := value.(type) {
+	case string:
+		bytes = []byte(v)
+	case []byte:
+		bytes = v
+	default:
+		return fmt.Errorf("cannot convert %T to ExtendedFamilyBandRateArray", value)
+	}
+	if len(bytes) == 0 {
+		*a = nil
+		return nil
+	}
+	return json.Unmarshal(bytes, a)
+}
+
+// AdditionalGlaCoverAgeBandArray is a JSON-serialised slice of min/max age
+// rows persisted on scheme_categories.additional_gla_cover_custom_age_bands.
+type AdditionalGlaCoverAgeBandArray []AdditionalGlaCoverAgeBand
+
+func (a AdditionalGlaCoverAgeBandArray) Value() (driver.Value, error) {
+	if a == nil {
+		return "[]", nil
+	}
+	b, err := json.Marshal(a)
+	if err != nil {
+		return nil, err
+	}
+	return string(b), nil
+}
+
+func (a *AdditionalGlaCoverAgeBandArray) Scan(value interface{}) error {
+	if value == nil {
+		*a = nil
+		return nil
+	}
+	var bytes []byte
+	switch v := value.(type) {
+	case string:
+		bytes = []byte(v)
+	case []byte:
+		bytes = v
+	default:
+		return fmt.Errorf("cannot convert %T to AdditionalGlaCoverAgeBandArray", value)
+	}
+	if len(bytes) == 0 {
+		*a = nil
+		return nil
+	}
+	return json.Unmarshal(bytes, a)
+}
+
+// AdditionalGlaCoverBandRateArray persists the computed per-band rate-per-1000
+// snapshot on scheme_categories.additional_gla_cover_band_rates.
+type AdditionalGlaCoverBandRateArray []AdditionalGlaCoverBandRate
+
+func (a AdditionalGlaCoverBandRateArray) Value() (driver.Value, error) {
+	if a == nil {
+		return "[]", nil
+	}
+	b, err := json.Marshal(a)
+	if err != nil {
+		return nil, err
+	}
+	return string(b), nil
+}
+
+func (a *AdditionalGlaCoverBandRateArray) Scan(value interface{}) error {
+	if value == nil {
+		*a = nil
+		return nil
+	}
+	var bytes []byte
+	switch v := value.(type) {
+	case string:
+		bytes = []byte(v)
+	case []byte:
+		bytes = v
+	default:
+		return fmt.Errorf("cannot convert %T to AdditionalGlaCoverBandRateArray", value)
+	}
+	if len(bytes) == 0 {
+		*a = nil
+		return nil
+	}
+	return json.Unmarshal(bytes, a)
+}
+
 type SchemeCategory struct {
 	ID                                       int     `json:"id" gorm:"primary_key"`
 	QuoteId                                  int     `json:"quote_id"`
@@ -186,6 +368,12 @@ type SchemeCategory struct {
 	GlaConversionOnRetirement                bool    `json:"gla_conversion_on_retirement"`
 	AdditionalAccidentalGlaBenefit           bool    `json:"additional_accidental_gla_benefit"`
 	AdditionalAccidentalGlaBenefitType       string  `json:"additional_accidental_gla_benefit_type"`
+	AdditionalGlaCoverBenefit                bool                            `json:"additional_gla_cover_benefit"`
+	AdditionalGlaCoverAgeBandSource          string                          `json:"additional_gla_cover_age_band_source"`
+	AdditionalGlaCoverAgeBandType            string                          `json:"additional_gla_cover_age_band_type"`
+	AdditionalGlaCoverCustomAgeBands         AdditionalGlaCoverAgeBandArray  `json:"additional_gla_cover_custom_age_bands" gorm:"type:text"`
+	AdditionalGlaCoverBandRates              AdditionalGlaCoverBandRateArray `json:"additional_gla_cover_band_rates" gorm:"type:text"`
+	AdditionalGlaCoverMalePropUsed           *float64                        `json:"additional_gla_cover_male_prop_used"`
 	PtdRiskType                              string  `json:"ptd_risk_type"`
 	PtdBenefitType                           string  `json:"ptd_benefit_type"`
 	PtdSalaryMultiple                        float64 `json:"ptd_salary_multiple"`
@@ -232,6 +420,15 @@ type SchemeCategory struct {
 	FamilyFuneralParentFuneralSumAssured     float64 `json:"family_funeral_parent_funeral_sum_assured"`
 	FamilyFuneralMaxNumberChildren           int     `json:"family_funeral_max_number_children"`
 	FamilyFuneralMaxNumberAdultDependants    int     `json:"family_funeral_max_number_adult_dependants"`
+
+	ExtendedFamilyBenefit        bool                              `json:"extended_family_benefit"`
+	ExtendedFamilyAgeBandSource  string                            `json:"extended_family_age_band_source"`
+	ExtendedFamilyAgeBandType    string                            `json:"extended_family_age_band_type"`
+	ExtendedFamilyCustomAgeBands ExtendedFamilyAgeBandArray        `json:"extended_family_custom_age_bands" gorm:"type:text"`
+	ExtendedFamilyPricingMethod  string                            `json:"extended_family_pricing_method"`
+	ExtendedFamilySumsAssured    ExtendedFamilyBandSumAssuredArray `json:"extended_family_sums_assured" gorm:"type:text"`
+	ExtendedFamilyBandRates      ExtendedFamilyBandRateArray       `json:"extended_family_band_rates" gorm:"type:text"`
+
 	PtdAlias                                 string  `json:"ptd_alias"`
 	CiAlias                                  string  `json:"ci_alias"`
 	SglaAlias                                string  `json:"sgla_alias"`
@@ -317,6 +514,64 @@ type FamilyFuneral struct {
 	ParentFuneralSumAssured     float64 `json:"parent_funeral_sum_assured"`
 	MaxNumberChildren           int     `json:"max_number_children"`
 	MaxNumberAdultDependants    int     `json:"max_number_adult_dependants"`
+
+	// Extended family funeral cover — priced per age band from the funeral rate table.
+	ExtendedFamilyBenefit        bool                           `json:"extended_family_benefit"`
+	ExtendedFamilyAgeBandSource  string                         `json:"extended_family_age_band_source"` // "standard" | "custom"
+	ExtendedFamilyAgeBandType    string                         `json:"extended_family_age_band_type"`
+	ExtendedFamilyCustomAgeBands []ExtendedFamilyAgeBand        `json:"extended_family_custom_age_bands" gorm:"-"`
+	ExtendedFamilyPricingMethod  string                         `json:"extended_family_pricing_method"` // "rate_per_1000" | "sum_assured"
+	ExtendedFamilySumsAssured    []ExtendedFamilyBandSumAssured `json:"extended_family_sums_assured" gorm:"-"`
+}
+
+type ExtendedFamilyAgeBand struct {
+	MinAge int `json:"min_age"`
+	MaxAge int `json:"max_age"`
+}
+
+type ExtendedFamilyBandSumAssured struct {
+	MinAge     int     `json:"min_age"`
+	MaxAge     int     `json:"max_age"`
+	SumAssured float64 `json:"sum_assured"`
+}
+
+// ExtendedFamilyBandRate is the per-band result of averaging the loaded
+// funeral mortality rates across the integer ages in the band.
+//
+//   - AverageRate   — per-1 risk rate (loaded Qx) before premium loadings.
+//   - OfficeRate    — gross-up of AverageRate for premium loadings:
+//     OfficeRate = AverageRate / (1 - totalLoading), where totalLoading is
+//     derived from the premium_loading table (expense + admin + commission +
+//     profit + other − discount, floored at MinimumPremiumLoading).
+//   - MonthlyPremium / OfficeMonthlyPremium — per-ext-family-member monthly
+//     premium on each rate. Populated for the sum_assured pricing method here;
+//     rate_per_1000 callers derive them as rate * 1000 / 12.
+type ExtendedFamilyBandRate struct {
+	MinAge              int     `json:"min_age"`
+	MaxAge              int     `json:"max_age"`
+	AverageRate         float64 `json:"average_rate"`
+	OfficeRate          float64 `json:"office_rate"`
+	SumAssured          float64 `json:"sum_assured,omitempty"`
+	MonthlyPremium      float64 `json:"monthly_premium"`
+	OfficeMonthlyPremium float64 `json:"office_monthly_premium"`
+}
+
+// AdditionalGlaCoverAgeBand is one min/max age row used to bucket GLA rates
+// for the optional rate-only additional GLA cover.
+type AdditionalGlaCoverAgeBand struct {
+	MinAge int `json:"min_age"`
+	MaxAge int `json:"max_age"`
+}
+
+// AdditionalGlaCoverBandRate carries the computed per-band rate-per-1000
+// snapshot (risk and office gross-up) along with the male proportion that
+// was used to blend the underlying gla_qx / gla_aids_qx.
+type AdditionalGlaCoverBandRate struct {
+	MinAge            int     `json:"min_age"`
+	MaxAge            int     `json:"max_age"`
+	RiskRatePer1000   float64 `json:"risk_rate_per1000"`
+	OfficeRatePer1000 float64 `json:"office_rate_per1000"`
+	MalePropUsed      float64 `json:"male_prop_used"`
 }
 type Loadings struct {
 	CommissionLoading  float64 `json:"commission_loading"`
@@ -841,7 +1096,10 @@ type MemberRatingResultSummary struct {
 	ExpTotalAdditionalAccidentalGlaRiskRate                     float64 `json:"exp_total_additional_accidental_gla_risk_rate" csv:"exp_total_additional_accidental_gla_risk_rate"`
 	ExpTotalAdditionalAccidentalGlaAnnualRiskPremium            float64 `json:"exp_total_additional_accidental_gla_annual_risk_premium" csv:"exp_total_additional_accidental_gla_annual_risk_premium"`
 	ExpAdditionalAccidentalGlaRiskRatePer1000SA                 float64 `json:"exp_additional_accidental_gla_risk_rate_per_1000_sa" csv:"exp_additional_accidental_gla_risk_rate_per_1000_sa"`
-	ExpProportionAdditionalAccidentalGlaAnnualRiskPremiumSalary float64 `json:"exp_proportion_additional_accidental_gla_annual_risk_premium_salary" csv:"exp_proportion_additional_accidental_gla_annual_risk_premium_salary"`
+	// DB column is abbreviated (`exp_prop_additional_accidental_gla_annual_risk_premium_salary`, 61 chars)
+	// because MySQL caps identifiers at 64 chars and the full snake_case name is 67.
+	// JSON / CSV tags keep the full name so downstream consumers are unaffected.
+	ExpProportionAdditionalAccidentalGlaAnnualRiskPremiumSalary float64 `json:"exp_proportion_additional_accidental_gla_annual_risk_premium_salary" csv:"exp_proportion_additional_accidental_gla_annual_risk_premium_salary" gorm:"column:exp_prop_additional_accidental_gla_annual_risk_premium_salary"`
 	ExpTotalAdditionalAccidentalGlaAnnualOfficePremium          float64 `json:"exp_total_additional_accidental_gla_annual_office_premium" csv:"exp_total_additional_accidental_gla_annual_office_premium"`
 	ExpAdditionalAccidentalGlaOfficeRatePer1000SA               float64 `json:"exp_additional_accidental_gla_office_rate_per_1000_sa" csv:"exp_additional_accidental_gla_office_rate_per_1000_sa"`
 	ExpProportionAdditionalAccidentalGlaOfficePremiumSalary     float64 `json:"exp_proportion_additional_accidental_gla_office_premium_salary" csv:"exp_proportion_additional_accidental_gla_office_premium_salary"`
@@ -972,6 +1230,25 @@ type MemberRatingResultSummary struct {
 	TotalFunMonthlyPremiumPerMember     float64 `json:"total_fun_monthly_premium_per_member" csv:"total_fun_monthly_premium_per_member"`
 	ExpTotalFunAnnualPremiumPerMember   float64 `json:"exp_total_fun_annual_premium_per_member" csv:"exp_total_fun_annual_premium_per_member"`
 	ExpTotalFunMonthlyPremiumPerMember  float64 `json:"exp_total_fun_monthly_premium_per_member" csv:"exp_total_fun_monthly_premium_per_member"`
+
+	// Extended family funeral: mirrored from the scheme category at calc time
+	// so the summary UI can render per-band premiums without re-joining
+	// scheme_categories.
+	ExtendedFamilyBenefit             bool                        `json:"extended_family_benefit" csv:"extended_family_benefit"`
+	ExtendedFamilyAgeBandSource       string                      `json:"extended_family_age_band_source" csv:"extended_family_age_band_source"`
+	ExtendedFamilyAgeBandType         string                      `json:"extended_family_age_band_type" csv:"extended_family_age_band_type"`
+	ExtendedFamilyPricingMethod       string                      `json:"extended_family_pricing_method" csv:"extended_family_pricing_method"`
+	ExtendedFamilyBandRates           ExtendedFamilyBandRateArray `json:"extended_family_band_rates" gorm:"type:text"`
+	TotalExtendedFamilyMonthlyPremium float64                     `json:"total_extended_family_monthly_premium" csv:"total_extended_family_monthly_premium"`
+
+	// Additional GLA Cover mirror — rate-only product, so only the config
+	// + computed per-band rate-per-1000 snapshot is captured here. No
+	// aggregate premium / sum assured columns.
+	AdditionalGlaCoverBenefit       bool                            `json:"additional_gla_cover_benefit" csv:"additional_gla_cover_benefit"`
+	AdditionalGlaCoverAgeBandSource string                          `json:"additional_gla_cover_age_band_source" csv:"additional_gla_cover_age_band_source"`
+	AdditionalGlaCoverAgeBandType   string                          `json:"additional_gla_cover_age_band_type" csv:"additional_gla_cover_age_band_type"`
+	AdditionalGlaCoverBandRates     AdditionalGlaCoverBandRateArray `json:"additional_gla_cover_band_rates" gorm:"type:text"`
+	AdditionalGlaCoverMalePropUsed  *float64                        `json:"additional_gla_cover_male_prop_used" csv:"additional_gla_cover_male_prop_used"`
 
 	TotalRiskWeightedEducatorSumAssured         float64 `json:"total_risk_weighted_educator_sum_assured" csv:"total_risk_weighted_educator_sum_assured"`
 	TotalEducatorRiskPremium                    float64 `json:"total_educator_risk_premium" csv:"total_educator_risk_premium"`
@@ -1260,15 +1537,17 @@ type IndustryLoading struct {
 type FuneralParameters struct {
 	ID int `json:"id" gorm:"primary_key"`
 	//Year                int       `json:"year" csv:"year"`
-	RiskRateCode        string    `json:"risk_rate_code" csv:"risk_rate_code"`
-	AgeNextBirthday     int       `json:"age_next_birthday" csv:"age_next_birthday"`
-	ProportionMarried   float64   `json:"proportion_married" csv:"proportion_married"`
-	AverageChildAge     float64   `json:"average_child_age" csv:"average_child_age"`
-	AverageDependantAge float64   `json:"average_dependant_age" csv:"average_dependant_age"`
-	NumberChildren      float64   `json:"number_children" csv:"number_children"`
-	NumberDependants    float64   `json:"number_dependants" csv:"number_dependants"`
-	CreationDate        time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
-	CreatedBy           string    `json:"created_by" csv:"created_by"`
+	RiskRateCode          string    `json:"risk_rate_code" csv:"risk_rate_code"`
+	AgeNextBirthday       int       `json:"age_next_birthday" csv:"age_next_birthday"`
+	MemberIncomeLevel     int       `json:"member_income_level" csv:"member_income_level"`
+	ExtendedFamilyLoading float64   `json:"extended_family_loading" csv:"extended_family_loading"`
+	ProportionMarried     float64   `json:"proportion_married" csv:"proportion_married"`
+	AverageChildAge       float64   `json:"average_child_age" csv:"average_child_age"`
+	AverageDependantAge   float64   `json:"average_dependant_age" csv:"average_dependant_age"`
+	NumberChildren        float64   `json:"number_children" csv:"number_children"`
+	NumberDependants      float64   `json:"number_dependants" csv:"number_dependants"`
+	CreationDate          time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy             string    `json:"created_by" csv:"created_by"`
 }
 
 type GroupPricingReinsuranceStructure struct {
@@ -1329,8 +1608,17 @@ type GroupPricingParameters struct {
 	MedicalAidWaiverProportion         float64   `json:"medical_aid_waiver_proportion" csv:"medical_aid_waiver_proportion"`
 	MedicalAidWaiverAmount             float64   `json:"medical_aid_waiver_amount" csv:"medical_aid_waiver_amount"`
 	TtdNumberMonthlyPayments           float64   `json:"ttd_number_monthly_payments" csv:"ttd_number_monthly_payments"`
-	CreationDate                       time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
-	CreatedBy                          string    `json:"created_by" csv:"created_by"`
+	// Proportion of males assumed in the extended-family population. Used to
+	// weight male vs female funeral qx when computing extended-family band
+	// rates: qx = maleProp * maleQx + (1 - maleProp) * femaleQx.
+	ExtendedFamilyMaleProp float64   `json:"extended_family_male_prop" csv:"extended_family_male_prop"`
+	// MainMemberMaleProp is the proportion of main-member males assumed when
+	// computing additional-GLA-cover band rates: qx = maleProp*maleQx + (1-maleProp)*femaleQx.
+	// Default 0.5 preserves a straight average. May be overridden per scheme
+	// category (manual entry or derived from the uploaded member list).
+	MainMemberMaleProp float64   `json:"main_member_male_prop" csv:"main_member_male_prop"`
+	CreationDate       time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy              string    `json:"created_by" csv:"created_by"`
 }
 
 type GroupScheme struct {
@@ -1957,10 +2245,13 @@ type GroupSchemeExposure struct {
 }
 
 type GroupPricingAgeBands struct {
-	ID     int    `json:"id" gorm:"primary_key"`
-	Name   string `json:"name"`
-	MinAge int    `json:"min_age"`
-	MaxAge int    `json:"max_age"`
+	ID           int       `json:"id" gorm:"primary_key"`
+	Type         string    `json:"type" csv:"type"`
+	Name         string    `json:"name" csv:"name"`
+	MinAge       int       `json:"min_age" csv:"min_age"`
+	MaxAge       int       `json:"max_age" csv:"max_age"`
+	CreationDate time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy    string    `json:"created_by" csv:"created_by"`
 }
 
 type GroupBusinessBenefits struct {
