@@ -5,7 +5,7 @@
         <v-card variant="outlined">
           <v-card-text>
             <div class="text-overline text-grey-darken-1">{{ item.label }}</div>
-            <div class="text-h7 font-weight-medium">{{ item.value }}</div>
+            <div class="quote-summary-value">{{ item.value }}</div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -14,7 +14,7 @@
         <v-card variant="outlined">
           <v-card-text>
             <div class="text-overline text-grey-darken-1">Win Probability</div>
-            <div class="d-flex align-center mt-1">
+            <div class="quote-summary-value">
               <ProbabilityBadge
                 :score="winProb"
                 :loading="winProbLoading"
@@ -336,3 +336,18 @@ const categoryItems = computed(() => {
 
 // const dashIfEmpty = (value: any) => value || '–'
 </script>
+
+<style scoped>
+/* Shared value row for the top "Quote Summary" cards. The min-height matches
+   the v-chip used by ProbabilityBadge (small chip ≈ 24px) so the chip and
+   plain text values sit at the same vertical centre. Without this the chip
+   extends below the text baseline and looks misaligned next to its
+   neighbours. */
+.quote-summary-value {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+</style>

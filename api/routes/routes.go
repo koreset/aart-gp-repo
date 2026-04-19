@@ -50,7 +50,16 @@ func ConfigureRouter(router *gin.Engine) {
 
 
 
-		groupPricing := apiv1.Group("group-pricing")
+		// NoCache() forces every group-pricing response to carry
+		// Cache-Control: no-store so dynamic per-quote data (result
+		// summaries, output summary, premium summary, reinsurance premium
+		// summary, table metadata, calculation status, etc.) is never
+		// served from the renderer's HTTP cache. Without this a watcher
+		// triggered re-fetch after a recalculation can hit a cached pre-
+		// recalc payload and show stale numbers until the user manually
+		// refreshes. Mutating verbs ignore the headers so the cost on
+		// POST/PUT/DELETE is nil.
+		groupPricing := apiv1.Group("group-pricing", NoCache())
 		{
 			groupPricing.POST("generate-quote", controllers.GenerateGroupPricingQuote)
 			groupPricing.POST("calculate-quote/:id/basis/:basis", controllers.CalculateGroupPricingQuote)

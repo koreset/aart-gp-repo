@@ -4588,6 +4588,11 @@ func SaveQuoteTables(v *multipart.FileHeader, tableType string, quoteId int, use
 		}
 		DB.Model(&models.GroupPricingClaimsExperience{}).Where("quote_id = ?", quoteId).Count(&count)
 	}
+	// Drop any cached per-quote lookups so the next calculation reads the
+	// freshly-uploaded data rather than the pre-upload snapshot.
+	if GroupPricingCache != nil {
+		GroupPricingCache.Clear()
+	}
 	return nil, int(count)
 }
 
@@ -4606,6 +4611,11 @@ func DeleteQuoteTableData(tableType string, quoteId int) error {
 		DB.Where("quote_id = ?", quoteId).Delete(&models.Bordereaux{})
 	case "Group Scheme Exposures":
 		DB.Where("quote_id = ?", quoteId).Delete(&models.GroupSchemeExposure{})
+	}
+	// Drop any cached per-quote lookups so the next calculation cannot
+	// reuse rows that have just been deleted.
+	if GroupPricingCache != nil {
+		GroupPricingCache.Clear()
 	}
 	return nil
 }
@@ -5639,6 +5649,12 @@ func SaveGPTables(v *multipart.FileHeader, tableType string, riskRateCode string
 	}
 	// Update the stats table so GetGPTableMetaData reflects the new upload.
 	go refreshGPTableStatByDisplayName(tableType)
+	// Drop any per-row lookups (region/industry/general/premium loadings,
+	// etc.) cached by previous calculation runs — without this an in-flight
+	// or immediately-following calc could reuse the pre-upload values.
+	if GroupPricingCache != nil {
+		GroupPricingCache.Clear()
+	}
 	return nil
 }
 
@@ -5729,6 +5745,11 @@ func DeleteGPTableData(tableType, riskCode string) error {
 	}
 	// Update the stats table so GetGPTableMetaData reflects the deletion.
 	go refreshGPTableStatByDeleteKey(tableType)
+	// Drop any per-row lookups cached by previous calculation runs so the
+	// next calc cannot reuse rows that have just been deleted.
+	if GroupPricingCache != nil {
+		GroupPricingCache.Clear()
+	}
 	return nil
 }
 

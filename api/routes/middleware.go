@@ -340,3 +340,29 @@ func ActivityLogger() gin.HandlerFunc {
 		log.WithContext(ctx).Info("User activity logged")
 	}
 }
+
+// NoCache disables HTTP caching on the response so dynamic per-quote data
+// (result summaries, premium summaries, reinsurance summaries, output
+// summaries, table metadata, calculation status, etc.) is never served
+// stale from the renderer's HTTP cache.
+//
+// Without these headers Chromium (used by the Electron renderer) can apply
+// heuristic freshness to plain GET responses that have no Cache-Control,
+// no ETag and no Last-Modified — which is exactly the shape of every JSON
+// endpoint here. The result is that a watcher-triggered refetch after a
+// recalculation gets the cached pre-recalc payload, and the user only sees
+// the new numbers after a hard refresh (which bypasses the renderer cache).
+//
+// Apply via group.Use(NoCache()) on any route group whose responses must
+// always reflect the current database state. Setting Cache-Control to
+// no-store (rather than no-cache) instructs the browser to neither cache
+// nor revalidate — the safest setting for inherently dynamic data.
+func NoCache() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		h := c.Writer.Header()
+		h.Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+		h.Set("Pragma", "no-cache")
+		h.Set("Expires", "0")
+		c.Next()
+	}
+}

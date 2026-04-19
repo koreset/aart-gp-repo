@@ -331,6 +331,7 @@
           >
             <OutputSummary
               v-if="resultSummaries !== null && resultSummaries.length > 0"
+              :key="`output-${resultsRefreshKey}`"
               :quote="quote"
               :resultSummaries="resultSummaries"
             />
@@ -342,6 +343,7 @@
           >
             <QuoteBenefitSummary
               v-if="resultSummaries !== null"
+              :key="`premium-${resultsRefreshKey}`"
               :resultSummaries="resultSummaries"
               :quote="quote"
             />
@@ -353,6 +355,7 @@
           >
             <QuoteReinsurancePremiumSummary
               v-if="resultSummaries !== null"
+              :key="`reins-${resultsRefreshKey}`"
               :resultSummaries="resultSummaries"
               :quote="quote"
             />
@@ -605,6 +608,12 @@ const confirmAction = ref()
 const broker = ref(null)
 const parameterBases = ref([]) // Array to hold basis options
 const resultSummaries: any = ref(null)
+// Bumped on every successful refetch of the result summary so the bound
+// child components (Output Summary, Premiums Summary, Reinsurance Premium
+// Summary) are forcibly remounted. Belt-and-braces against any deep-watch
+// or prop-diffing edge case that might leave a child rendering against
+// stale data after a recalculation.
+const resultsRefreshKey = ref(0)
 const acceptQuoteParams: any = ref({
   commencementDate: '',
   term: 0
@@ -684,7 +693,13 @@ const loadQuote = async () => {
 
     const resp = await GroupPricingService.getResultSummary(props.id)
     if (resp.status === 200) {
+      // Force a clean remount of the summary children even if the new
+      // payload happens to deep-equal the old one (or if Vue reactivity
+      // misses the swap for any reason). The :key on each summary panel
+      // is bound to resultsRefreshKey, so bumping it guarantees a fresh
+      // render against the new data.
       resultSummaries.value = resp.data
+      resultsRefreshKey.value++
     } else {
       resultSummaries.value = null
     }
