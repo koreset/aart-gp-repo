@@ -36,6 +36,45 @@
                 </v-row>
               </template>
 
+              <v-row v-if="isRatingTablesTab && pendingChangeCount > 0">
+                <v-col>
+                  <v-alert
+                    type="info"
+                    variant="tonal"
+                    density="compact"
+                    class="mb-2"
+                  >
+                    <div class="d-flex align-center">
+                      <span class="flex-grow-1">
+                        {{ pendingChangeCount }} unsaved
+                        {{ pendingChangeCount === 1 ? 'change' : 'changes' }}
+                        to the Required configuration. Nothing is persisted or
+                        recorded in the audit log until you click Save.
+                      </span>
+                      <v-btn
+                        size="small"
+                        variant="text"
+                        color="primary"
+                        :disabled="savingChanges"
+                        class="mr-2"
+                        @click="discardRequiredChanges"
+                      >
+                        Discard
+                      </v-btn>
+                      <v-btn
+                        size="small"
+                        variant="flat"
+                        color="primary"
+                        :loading="savingChanges"
+                        @click="saveRequiredChanges"
+                      >
+                        Save changes
+                      </v-btn>
+                    </div>
+                  </v-alert>
+                </v-col>
+              </v-row>
+
               <v-row v-if="isRatingTablesTab">
                 <v-col>
                   <v-data-table
@@ -68,9 +107,72 @@
                         </span>
                       </div>
                     </template>
+                    <template #[`item.is_required`]="{ item: rawItemR }">
+                      <div class="d-flex align-center justify-center">
+                        <v-checkbox
+                          :model-value="effectiveRequired(rawItemR)"
+                          density="compact"
+                          hide-details
+                          color="primary"
+                          :disabled="savingChanges"
+                          @update:model-value="
+                            (val) => onRequiredChange(rawItemR, val)
+                          "
+                        />
+                        <v-tooltip
+                          v-if="hasPendingChange(rawItemR)"
+                          location="top"
+                        >
+                          <template #activator="{ props }">
+                            <v-icon
+                              v-bind="props"
+                              size="small"
+                              color="warning"
+                              class="ml-1"
+                            >
+                              mdi-circle-medium
+                            </v-icon>
+                          </template>
+                          <span>Unsaved change — click Save to apply.</span>
+                        </v-tooltip>
+                        <v-tooltip location="top" max-width="320">
+                          <template #activator="{ props }">
+                            <v-icon
+                              v-bind="props"
+                              size="small"
+                              color="grey"
+                              class="ml-1"
+                            >
+                              mdi-information-outline
+                            </v-icon>
+                          </template>
+                          <span v-if="effectiveRequired(rawItemR)">
+                            Required. This table will be loaded and used by
+                            downstream calculations. If no data has been
+                            uploaded, the status will show "Empty".
+                          </span>
+                          <span v-else>
+                            Not required. This table will not be read from the
+                            database; any downstream variables that depend on
+                            it will resolve to zero. The "Empty" warning is
+                            suppressed.
+                          </span>
+                        </v-tooltip>
+                      </div>
+                    </template>
                     <template #[`item.populated`]="{ item: rawItem2 }">
                       <div class="text-center">
                         <v-chip
+                          v-if="(rawItem2 as any).is_required === false"
+                          color="default"
+                          size="small"
+                          variant="tonal"
+                          label
+                        >
+                          Not required
+                        </v-chip>
+                        <v-chip
+                          v-else
                           :color="
                             (rawItem2 as any).populated ? 'success' : 'warning'
                           "
@@ -96,6 +198,16 @@
                             >mdi-information-outline</v-icon
                           >
                           Info
+                        </v-btn>
+                        <v-btn
+                          variant="text"
+                          size="small"
+                          color="primary"
+                          :title="`View configuration history for ${(rawItem3 as any).table_type}`"
+                          @click.stop="viewAuditHistory(rawItem3)"
+                        >
+                          <v-icon start size="small">mdi-history</v-icon>
+                          History
                         </v-btn>
                         <file-updater
                           :show-risk-rate-code="
@@ -171,6 +283,8 @@
       >
     </v-snackbar>
     <confirmation-dialog ref="confirmDeleteDialog" />
+    <confirmation-dialog ref="confirmSaveDialog" />
+    <table-config-audit-dialog ref="auditDialog" />
     <v-dialog v-model="riskCodeDialog" persistent max-width="550px">
       <base-card>
         <template #header>
@@ -205,6 +319,7 @@ import ConfirmationDialog from '@/renderer/components/ConfirmDialog.vue'
 import DataGrid from '@/renderer/components/tables/DataGrid.vue'
 import FileUpdater from '@/renderer/components/FileUpdater.vue'
 import BaseCard from '@/renderer/components/BaseCard.vue'
+import TableConfigAuditDialog from '@/renderer/components/TableConfigAuditDialog.vue'
 import BinderFeeManagement from '@/renderer/screens/group_pricing/administration/BinderFeeManagement.vue'
 import CommissionStructureManagement from '@/renderer/screens/group_pricing/administration/CommissionStructureManagement.vue'
 
@@ -237,14 +352,28 @@ const availableRiskRateCodes: any = ref([])
 const genericRiskRateCodes: any = ref([])
 const selectedRiskRateCode: any = ref('')
 const hasEmpty: any = ref(false)
+const auditDialog: any = ref(null)
+const confirmSaveDialog: any = ref(null)
+// Tentative checkbox edits keyed by canonical table_key (falls back to
+// table_type display name). Empty = no unsaved changes; nothing is sent to
+// the API or recorded in the audit log until the user clicks Save.
+const pendingRequired = ref<Record<string, boolean>>({})
+const savingChanges = ref(false)
 
 const tableHeaders = [
-  { title: 'Table Name', key: 'table_type', width: '50%' },
-  { title: 'Status', key: 'populated', width: '10%', align: 'center' as const },
+  { title: 'Table Name', key: 'table_type', width: '40%' },
+  {
+    title: 'Required',
+    key: 'is_required',
+    width: '14%',
+    align: 'center' as const,
+    sortable: false
+  },
+  { title: 'Status', key: 'populated', width: '14%', align: 'center' as const },
   {
     title: 'Actions',
     key: 'actions',
-    width: '40%',
+    width: '32%',
     align: 'center' as const,
     sortable: false
   }
@@ -284,10 +413,132 @@ onMounted(async () => {
 })
 
 const checkPopulated = () => {
+  // Only count required-but-unpopulated tables — opting a table out of the
+  // configuration intentionally suppresses the "Empty" warning for it.
   hasEmpty.value = tables.value.some(
     (t: any) =>
-      !t.populated && (t.category || 'group_pricing') === activeTab.value
+      !t.populated &&
+      t.is_required !== false &&
+      (t.category || 'group_pricing') === activeTab.value
   )
+}
+
+// Stable lookup key for an item. Falls back to display name when table_key
+// is missing (older API payloads).
+const itemKey = (item: any): string =>
+  String(item?.table_key || item?.table_type || '')
+
+// True if the item currently has an unsaved override.
+const hasPendingChange = (item: any): boolean => {
+  const k = itemKey(item)
+  return Object.prototype.hasOwnProperty.call(pendingRequired.value, k)
+}
+
+// Effective (visible) required state — the unsaved override if present,
+// otherwise the saved server-side value.
+const effectiveRequired = (item: any): boolean => {
+  const k = itemKey(item)
+  if (Object.prototype.hasOwnProperty.call(pendingRequired.value, k)) {
+    return pendingRequired.value[k]
+  }
+  return item?.is_required !== false
+}
+
+// Total unsaved changes across all tabs. Drives the Save banner visibility.
+const pendingChangeCount = computed(
+  () => Object.keys(pendingRequired.value).length
+)
+
+// Toggle handler: stores the new value as a pending edit. If the user toggles
+// back to the original value, the entry is dropped so the banner clears.
+const onRequiredChange = (item: any, newValue: boolean | null) => {
+  const k = itemKey(item)
+  if (!k) return
+  const desired = newValue === true
+  const original = item.is_required !== false
+  const next = { ...pendingRequired.value }
+  if (desired === original) {
+    delete next[k]
+  } else {
+    next[k] = desired
+  }
+  pendingRequired.value = next
+}
+
+// Discard all unsaved overrides — checkboxes snap back to the saved values
+// because the bindings re-read item.is_required.
+const discardRequiredChanges = () => {
+  pendingRequired.value = {}
+}
+
+// Persist all unsaved overrides. One PATCH per change (server writes one
+// audit row per call). Surface a single confirmation dialog summarising the
+// changes before any network call fires.
+const saveRequiredChanges = async () => {
+  const entries = Object.entries(pendingRequired.value)
+  if (entries.length === 0) return
+
+  const summary = entries
+    .map(([key, val]) => {
+      const display =
+        tables.value.find((t: any) => itemKey(t) === key)?.table_type || key
+      return `• ${display} → ${val ? 'Required' : 'Not required'}`
+    })
+    .join('\n')
+
+  let confirmed = false
+  try {
+    confirmed = (await confirmSaveDialog.value.open(
+      `Save ${entries.length} configuration ${
+        entries.length === 1 ? 'change' : 'changes'
+      }?`,
+      `The following changes will be persisted and recorded in the audit log:\n\n${summary}`
+    )) as boolean
+  } catch {
+    confirmed = false
+  }
+  if (!confirmed) return
+
+  savingChanges.value = true
+  let failed = 0
+  try {
+    for (const [key, val] of entries) {
+      try {
+        await GroupPricingService.updateTableConfiguration(key, val)
+      } catch (e) {
+        failed += 1
+        console.error('Failed to save table configuration', key, e)
+      }
+    }
+
+    // Refresh metadata to pick up the authoritative server state (including
+    // the new updated_by / updated_at and audit history) and clear pending.
+    const res = await GroupPricingService.getTableMetaData()
+    tables.value = res.data.associated_tables
+    pendingRequired.value = {}
+    checkPopulated()
+
+    if (failed === 0) {
+      snackbarText.value = `Saved ${entries.length} ${
+        entries.length === 1 ? 'change' : 'changes'
+      } successfully.`
+      timeout.value = 2500
+    } else {
+      snackbarText.value = `Saved ${
+        entries.length - failed
+      } of ${entries.length} changes — ${failed} failed.`
+      timeout.value = 4000
+    }
+    snackbar.value = true
+  } finally {
+    savingChanges.value = false
+  }
+}
+
+const viewAuditHistory = (item: any) => {
+  const tableKey = item.table_key || item.table_type
+  if (!tableKey || !auditDialog.value) return
+  auditDialog.value.open(tableKey, item.table_type)
 }
 
 // Recompute the "some tables not populated" banner whenever the user

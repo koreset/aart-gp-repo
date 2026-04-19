@@ -1360,15 +1360,48 @@ type MemberRatingResultSummary struct {
 	TotalExpenses                              float64 `json:"total_expenses" csv:"total_expenses"`
 	TotalExpectedClaims                        float64 `json:"total_expected_claims" csv:"total_expected_claims"`
 
-	AnnualGlaExperienceWeightedRate    float64   `json:"annual_gla_experience_weighted_rate" csv:"annual_gla_experience_weighted_rate"`
-	AnnualPtdExperienceWeightedRate    float64   `json:"annual_ptd_experience_weighted_rate" csv:"annual_ptd_experience_weighted_rate"`
-	AnnualCiExperienceWeightedRate     float64   `json:"annual_ci_experience_weighted_rate" csv:"annual_ci_experience_weighted_rate"`
-	CredibilityRate                    float64   `json:"credibility_rate" csv:"credibility_rate"`
-	ManuallyAddedCredibility           float64   `json:"manually_added_credibility" csv:"manually_added_credibility"`
-	PremiumRatesGuaranteedPeriodMonths int       `json:"premium_rates_guaranteed_period_months" csv:"premium_rates_guaranteed_period_months"`
-	QuoteValidityPeriodMonths          int       `json:"quote_validity_period_months" csv:"quote_validity_period_months"`
-	CreationDate                       time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
-	CreatedBy                          string    `json:"created_by" csv:"created_by"`
+	AnnualGlaExperienceWeightedRate    float64 `json:"annual_gla_experience_weighted_rate" csv:"annual_gla_experience_weighted_rate"`
+	AnnualPtdExperienceWeightedRate    float64 `json:"annual_ptd_experience_weighted_rate" csv:"annual_ptd_experience_weighted_rate"`
+	AnnualCiExperienceWeightedRate     float64 `json:"annual_ci_experience_weighted_rate" csv:"annual_ci_experience_weighted_rate"`
+	CredibilityRate                    float64 `json:"credibility_rate" csv:"credibility_rate"`
+	ManuallyAddedCredibility           float64 `json:"manually_added_credibility" csv:"manually_added_credibility"`
+	PremiumRatesGuaranteedPeriodMonths int     `json:"premium_rates_guaranteed_period_months" csv:"premium_rates_guaranteed_period_months"`
+	QuoteValidityPeriodMonths          int     `json:"quote_validity_period_months" csv:"quote_validity_period_months"`
+
+	// Reinsurance premium aggregates per benefit (sum over members) and the
+	// corresponding proportion = sum(<benefit>_reinsurance_premium) /
+	// sum(exp_adj_<benefit>_office_premium). Funeral aggregates roll up the
+	// five relationship-level reinsurance premiums (main member, spouse,
+	// child, parent, dependant) and divide by exp_adj_total_funeral_office_cost.
+	TotalGlaReinsurancePremium       float64 `json:"total_gla_reinsurance_premium" csv:"total_gla_reinsurance_premium"`
+	TotalPtdReinsurancePremium       float64 `json:"total_ptd_reinsurance_premium" csv:"total_ptd_reinsurance_premium"`
+	TotalCiReinsurancePremium        float64 `json:"total_ci_reinsurance_premium" csv:"total_ci_reinsurance_premium"`
+	TotalSglaReinsurancePremium      float64 `json:"total_sgla_reinsurance_premium" csv:"total_sgla_reinsurance_premium"`
+	TotalPhiReinsurancePremium       float64 `json:"total_phi_reinsurance_premium" csv:"total_phi_reinsurance_premium"`
+	TotalTtdReinsurancePremium       float64 `json:"total_ttd_reinsurance_premium" csv:"total_ttd_reinsurance_premium"`
+	TotalFunReinsurancePremium       float64 `json:"total_fun_reinsurance_premium" csv:"total_fun_reinsurance_premium"`
+	GlaReinsurancePremiumProportion  float64 `json:"gla_reinsurance_premium_proportion" csv:"gla_reinsurance_premium_proportion"`
+	PtdReinsurancePremiumProportion  float64 `json:"ptd_reinsurance_premium_proportion" csv:"ptd_reinsurance_premium_proportion"`
+	CiReinsurancePremiumProportion   float64 `json:"ci_reinsurance_premium_proportion" csv:"ci_reinsurance_premium_proportion"`
+	SglaReinsurancePremiumProportion float64 `json:"sgla_reinsurance_premium_proportion" csv:"sgla_reinsurance_premium_proportion"`
+	PhiReinsurancePremiumProportion  float64 `json:"phi_reinsurance_premium_proportion" csv:"phi_reinsurance_premium_proportion"`
+	TtdReinsurancePremiumProportion  float64 `json:"ttd_reinsurance_premium_proportion" csv:"ttd_reinsurance_premium_proportion"`
+	FunReinsurancePremiumProportion  float64 `json:"fun_reinsurance_premium_proportion" csv:"fun_reinsurance_premium_proportion"`
+
+	// Ceded sum assured / ceded monthly benefit aggregates per benefit
+	// (sum over the bordereaux rows produced for the category). Funeral
+	// rolls up the five relationship-level ceded sums. TTD / PHI carry a
+	// monthly-benefit aggregate because those benefits are income-based.
+	TotalGlaCededSumAssured     float64 `json:"total_gla_ceded_sum_assured" csv:"total_gla_ceded_sum_assured"`
+	TotalPtdCededSumAssured     float64 `json:"total_ptd_ceded_sum_assured" csv:"total_ptd_ceded_sum_assured"`
+	TotalCiCededSumAssured      float64 `json:"total_ci_ceded_sum_assured" csv:"total_ci_ceded_sum_assured"`
+	TotalSglaCededSumAssured    float64 `json:"total_sgla_ceded_sum_assured" csv:"total_sgla_ceded_sum_assured"`
+	TotalTtdCededMonthlyBenefit float64 `json:"total_ttd_ceded_monthly_benefit" csv:"total_ttd_ceded_monthly_benefit"`
+	TotalPhiCededMonthlyBenefit float64 `json:"total_phi_ceded_monthly_benefit" csv:"total_phi_ceded_monthly_benefit"`
+	TotalFunCededSumAssured     float64 `json:"total_fun_ceded_sum_assured" csv:"total_fun_ceded_sum_assured"`
+
+	CreationDate time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy    string    `json:"created_by" csv:"created_by"`
 }
 
 type MovementMemberRatingResult struct {

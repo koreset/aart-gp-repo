@@ -280,6 +280,11 @@ func startApplication(initTables bool, s service.Service) {
 	// (Table creation is handled by SetupTables above; this seeds the row counts.)
 	services.EnsureGPTableStats()
 
+	// Seed table_configurations with one row per gpTableSpecs entry,
+	// defaulting IsRequired = true. Existing rows are left untouched so
+	// administrator overrides survive restarts.
+	services.EnsureTableConfigurations()
+
 	// Top up group_benefit_mappers with any newly-added base rows (e.g.
 	// AAGLA, AGLC) so Benefits Customization shows them on existing
 	// installs without requiring a manual seed.

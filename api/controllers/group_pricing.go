@@ -739,6 +739,62 @@ func RebuildGPTableStats(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
+// ListTableConfigurations returns every per-table-type "is required" row.
+// Powers the Required-column rendering in the Tables UI when callers want
+// the raw configuration without the populated-status payload.
+func ListTableConfigurations(c *gin.Context) {
+	rows, err := services.GetTableConfigurations()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": rows})
+}
+
+// UpdateTableConfiguration toggles IsRequired for one table_type and writes
+// an audit row capturing the active user, old value, new value, and an
+// optional free-text note from the request body.
+func UpdateTableConfiguration(c *gin.Context) {
+	tableType := c.Param("table_type")
+	if tableType == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "table_type is required"})
+		return
+	}
+
+	var body struct {
+		IsRequired bool   `json:"is_required"`
+		Note       string `json:"note"`
+	}
+	if err := c.BindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
+	user := c.MustGet("user").(models.AppUser)
+	cfg, err := services.SetTableRequired(tableType, body.IsRequired, user, body.Note)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": cfg})
+}
+
+// GetTableConfigurationAuditLog returns the audit history for one table_type
+// in reverse-chronological order. Powers the Info dialog history view.
+func GetTableConfigurationAuditLog(c *gin.Context) {
+	tableType := c.Param("table_type")
+	if tableType == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "table_type is required"})
+		return
+	}
+	rows, err := services.GetTableConfigurationAudit(tableType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": rows})
+}
+
 func CreateBroker(c *gin.Context) {
 	var broker models.Broker
 	var appUser models.AppUser

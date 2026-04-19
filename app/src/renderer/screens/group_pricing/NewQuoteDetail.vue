@@ -294,6 +294,11 @@
             value="benefitssummary"
             >Premiums Summary</v-tab
           >
+          <v-tab
+            v-if="hasPermission('quote:view_premium_summary')"
+            value="reinsurancepremiumsummary"
+            >Reinsurance Premium Summary</v-tab
+          >
         </v-tabs>
         <v-window v-model="tab">
           <v-window-item value="summary" eager>
@@ -336,6 +341,17 @@
             eager
           >
             <QuoteBenefitSummary
+              v-if="resultSummaries !== null"
+              :resultSummaries="resultSummaries"
+              :quote="quote"
+            />
+          </v-window-item>
+          <v-window-item
+            v-if="hasPermission('quote:view_premium_summary')"
+            value="reinsurancepremiumsummary"
+            eager
+          >
+            <QuoteReinsurancePremiumSummary
               v-if="resultSummaries !== null"
               :resultSummaries="resultSummaries"
               :quote="quote"
@@ -528,6 +544,7 @@ import QuoteBenefitsConfiguration from './QuoteBenefitsConfiguration.vue'
 import QuoteDataTableManager from './QuoteDataTableManager.vue'
 import QuoteResults from './QuoteResults.vue'
 import QuoteBenefitSummary from './QuoteBenefitSummary.vue'
+import QuoteReinsurancePremiumSummary from './QuoteReinsurancePremiumSummary.vue'
 import formatDateString from '@/renderer/utils/helpers'
 
 // Import Other Components

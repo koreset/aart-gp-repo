@@ -37,6 +37,24 @@ export default {
   getTableMetaData() {
     return Api.get('/group-pricing/rate-tables')
   },
+  getTableConfigurations() {
+    return Api.get('/group-pricing/table-configurations')
+  },
+  updateTableConfiguration(
+    tableType: string,
+    isRequired: boolean,
+    note: string = ''
+  ) {
+    return Api.patch(`/group-pricing/table-configurations/${tableType}`, {
+      is_required: isRequired,
+      note
+    })
+  },
+  getTableConfigurationAudit(tableType: string) {
+    return Api.get(
+      `/group-pricing/table-configurations/${tableType}/audit`
+    )
+  },
   getAgeBands() {
     return Api.get('/group-pricing/age-bands')
   },

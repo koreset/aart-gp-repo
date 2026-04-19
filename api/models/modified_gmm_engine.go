@@ -813,11 +813,15 @@ type ModifiedGMMShock struct {
 }
 
 type TableMetaData struct {
-	TableType string                   `json:"table_type"`
-	TableName string                   `json:"table_name"`
-	Category  string                   `json:"category"`
-	Data      []map[string]interface{} `json:"data"`
-	Populated bool                     `json:"populated"`
+	TableType   string                   `json:"table_type"`
+	TableName   string                   `json:"table_name"`
+	Category    string                   `json:"category"`
+	Data        []map[string]interface{} `json:"data"`
+	Populated   bool                     `json:"populated"`
+	TableKey    string                   `json:"table_key,omitempty"`    // canonical statName, e.g. "regionLoading"
+	IsRequired  bool                     `json:"is_required"`            // false = skip DB read, downstream reads zero
+	UpdatedBy   string                   `json:"updated_by,omitempty"`   // last user to toggle IsRequired
+	UpdatedAt   *time.Time               `json:"updated_at,omitempty"`
 }
 
 type PaaPortfolio struct {
