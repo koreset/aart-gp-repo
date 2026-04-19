@@ -1048,6 +1048,16 @@ type MemberRatingResult struct {
 	ReinsTtdIndustryLoading float64 `json:"reins_ttd_industry_loading" csv:"reins_ttd_industry_loading"`
 	ReinsPhiIndustryLoading float64 `json:"reins_phi_industry_loading" csv:"reins_phi_industry_loading"`
 
+	// Reinsurance region loadings (resolved per member from ReinsuranceRegionLoading table)
+	ReinsGlaRegionLoading     float64 `json:"reins_gla_region_loading" csv:"reins_gla_region_loading"`
+	ReinsGlaAidsRegionLoading float64 `json:"reins_gla_aids_region_loading" csv:"reins_gla_aids_region_loading"`
+	ReinsPtdRegionLoading     float64 `json:"reins_ptd_region_loading" csv:"reins_ptd_region_loading"`
+	ReinsCiRegionLoading      float64 `json:"reins_ci_region_loading" csv:"reins_ci_region_loading"`
+	ReinsTtdRegionLoading     float64 `json:"reins_ttd_region_loading" csv:"reins_ttd_region_loading"`
+	ReinsPhiRegionLoading     float64 `json:"reins_phi_region_loading" csv:"reins_phi_region_loading"`
+	ReinsFunRegionLoading     float64 `json:"reins_fun_region_loading" csv:"reins_fun_region_loading"`
+	ReinsFunAidsRegionLoading float64 `json:"reins_fun_aids_region_loading" csv:"reins_fun_aids_region_loading"`
+
 	// Reinsurance contingency loadings (resolved per member from ReinsuranceGeneralLoading table)
 	ReinsGlaContingencyLoading float64 `json:"reins_gla_contingency_loading" csv:"reins_gla_contingency_loading"`
 	ReinsPtdContingencyLoading float64 `json:"reins_ptd_contingency_loading" csv:"reins_ptd_contingency_loading"`
@@ -2198,6 +2208,23 @@ type ReinsuranceIndustryLoading struct {
 	PhiIndustryLoadingRate float64   `json:"phi_industry_loading_rate" csv:"phi_industry_loading_rate"`
 	CreationDate           time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy              string    `json:"created_by" csv:"created_by"`
+}
+
+type ReinsuranceRegionLoading struct {
+	ID                       int       `json:"id" gorm:"primary_key"`
+	RiskRateCode             string    `json:"risk_rate_code" csv:"risk_rate_code"`
+	Region                   string    `json:"region" csv:"region"`
+	Gender                   string    `json:"gender" csv:"gender"`
+	GlaRegionLoadingRate     float64   `json:"gla_region_loading_rate" csv:"gla_region_loading_rate"`
+	GlaAidsRegionLoadingRate float64   `json:"gla_aids_region_loading_rate" csv:"gla_aids_region_loading_rate"`
+	PtdRegionLoadingRate     float64   `json:"ptd_region_loading_rate" csv:"ptd_region_loading_rate"`
+	CiRegionLoadingRate      float64   `json:"ci_region_loading_rate" csv:"ci_region_loading_rate"`
+	TtdRegionLoadingRate     float64   `json:"ttd_region_loading_rate" csv:"ttd_region_loading_rate"`
+	PhiRegionLoadingRate     float64   `json:"phi_region_loading_rate" csv:"phi_region_loading_rate"`
+	FunRegionLoadingRate     float64   `json:"fun_region_loading_rate" csv:"fun_region_loading_rate"`
+	FunAidsRegionLoadingRate float64   `json:"fun_aids_region_loading_rate" csv:"fun_aids_region_loading_rate"`
+	CreationDate             time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy                string    `json:"created_by" csv:"created_by"`
 }
 
 type PremiumLoading struct {

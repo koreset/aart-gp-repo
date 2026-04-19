@@ -1153,6 +1153,21 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		}
 	}
 
+	// Pre-load reinsurance region loadings for this category (single DB hit, keyed by gender)
+	reinsRegionLoadingByGender := make(map[string]models.ReinsuranceRegionLoading)
+	if category != nil && category.Region != "" {
+		var categoryReinsRegionLoadings []models.ReinsuranceRegionLoading
+		DB.Where("risk_rate_code = ? AND region = ?",
+			groupParameter.RiskRateCode,
+			strings.TrimSpace(category.Region),
+		).Find(&categoryReinsRegionLoadings)
+		for _, r := range categoryReinsRegionLoadings {
+			if len(r.Gender) > 0 {
+				reinsRegionLoadingByGender[strings.ToUpper(r.Gender[:1])] = r
+			}
+		}
+	}
+
 	// Pre-load industry loadings for this category (single DB hit, keyed by gender)
 	industryLoadingByGender := make(map[string]models.IndustryLoading)
 	var categoryIndustryLoadings []models.IndustryLoading
@@ -1671,7 +1686,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	for idx, mp := range memberMps {
 		idx, mp := idx, mp
 		rateWorkerPool.Submit(func() {
-			rateResults[idx] = PopulateRatesPerMember(categoryIndex, indicativeRatesCount, indicativeMemberMps, selectedSchemeCategory, mp, groupQuote, groupParameter, groupPricingReinsuranceStructure, incomeLevels, ageBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit, educatorBenefitStructure, credibility, glaTheoreticalRate, insurerYearEndMonth, user, restriction, taxTable, tieredIncomeTiers, customTieredIncomeTiers, premiumLoading, regionLoadingByGender, industryLoadingByGender)
+			rateResults[idx] = PopulateRatesPerMember(categoryIndex, indicativeRatesCount, indicativeMemberMps, selectedSchemeCategory, mp, groupQuote, groupParameter, groupPricingReinsuranceStructure, incomeLevels, ageBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit, educatorBenefitStructure, credibility, glaTheoreticalRate, insurerYearEndMonth, user, restriction, taxTable, tieredIncomeTiers, customTieredIncomeTiers, premiumLoading, regionLoadingByGender, industryLoadingByGender, reinsRegionLoadingByGender)
 		})
 	}
 	rateWorkerPool.StopWait()
@@ -2092,7 +2107,7 @@ func calculateAgeNextBirthday(commencementDate, dob time.Time) int {
 func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingResult, bordereauxDatapoint models.Bordereaux, memberPremiumScheduleDatapoint *models.MemberPremiumSchedule, addedMemberInForce models.GPricingMemberDataInForce, groupQuote models.GroupPricingQuote,
 	groupParameter models.GroupPricingParameters,
 	groupPricingReinsuranceStructure models.GroupPricingReinsuranceStructure,
-	incomeLevels []models.IncomeLevel, ageBands []models.GroupPricingAgeBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, manuallyAddedCredibility float64, finacialYear int, restriction models.Restriction, premiumLoading models.PremiumLoading, industryLoadingByGender map[string]models.IndustryLoading, regionLoadingByGender map[string]models.RegionLoading) {
+	incomeLevels []models.IncomeLevel, ageBands []models.GroupPricingAgeBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, manuallyAddedCredibility float64, finacialYear int, restriction models.Restriction, premiumLoading models.PremiumLoading, industryLoadingByGender map[string]models.IndustryLoading, regionLoadingByGender map[string]models.RegionLoading, reinsRegionLoadingByGender map[string]models.ReinsuranceRegionLoading) {
 
 	//var memberPremiumScheduleDatapoint models.MemberPremiumSchedule
 	var mpIncomeLevel int
@@ -2373,16 +2388,27 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	// ── Reinsurance rates & loadings ───────────────────────────────────────
 	// Compute reinsurance base & loaded rates per benefit using the new
 	// reinsurance rate/loading tables (reinsurance_*_rates,
-	// reinsurance_general_loadings, reinsurance_industry_loadings). Region
-	// loadings are shared with direct pricing. If the reinsurance tables
-	// are empty for this risk code the getters return zero values, leaving
-	// reinsurance rates at 0 so non-reinsured schemes are unaffected.
+	// reinsurance_general_loadings, reinsurance_industry_loadings,
+	// reinsurance_region_loadings). If any reinsurance table is empty for
+	// this risk code the getters return zero values, leaving reinsurance
+	// rates at 0 so non-reinsured schemes are unaffected.
 	reinsIndustryLoadingMain := GetReinsuranceIndustryLoading(groupParameter.RiskRateCode, groupQuote.OccupationClass, memberDataPointResult.Gender[:1])
 	memberDataPointResult.ReinsGlaIndustryLoading = reinsIndustryLoadingMain.GlaIndustryLoadingRate
 	memberDataPointResult.ReinsPtdIndustryLoading = reinsIndustryLoadingMain.PtdIndustryLoadingRate
 	memberDataPointResult.ReinsCiIndustryLoading = reinsIndustryLoadingMain.CiIndustryLoadingRate
 	memberDataPointResult.ReinsTtdIndustryLoading = reinsIndustryLoadingMain.TtdIndustryLoadingRate
 	memberDataPointResult.ReinsPhiIndustryLoading = reinsIndustryLoadingMain.PhiIndustryLoadingRate
+
+	// Reinsurance region loadings (pre-loaded per-gender map built once per category).
+	reinsRegionLoadingMain := reinsRegionLoadingByGender[strings.ToUpper(memberDataPointResult.Gender[:1])]
+	memberDataPointResult.ReinsGlaRegionLoading = reinsRegionLoadingMain.GlaRegionLoadingRate
+	memberDataPointResult.ReinsGlaAidsRegionLoading = reinsRegionLoadingMain.GlaAidsRegionLoadingRate
+	memberDataPointResult.ReinsPtdRegionLoading = reinsRegionLoadingMain.PtdRegionLoadingRate
+	memberDataPointResult.ReinsCiRegionLoading = reinsRegionLoadingMain.CiRegionLoadingRate
+	memberDataPointResult.ReinsTtdRegionLoading = reinsRegionLoadingMain.TtdRegionLoadingRate
+	memberDataPointResult.ReinsPhiRegionLoading = reinsRegionLoadingMain.PhiRegionLoadingRate
+	memberDataPointResult.ReinsFunRegionLoading = reinsRegionLoadingMain.FunRegionLoadingRate
+	memberDataPointResult.ReinsFunAidsRegionLoading = reinsRegionLoadingMain.FunAidsRegionLoadingRate
 
 	reinsGL := GetReinsuranceGeneralLoading(groupParameter.RiskRateCode, memberDataPointResult.AgeNextBirthday, memberDataPointResult.Gender)
 	memberDataPointResult.ReinsGlaContingencyLoading = reinsGL.GlaContigencyLoadingRate
@@ -2398,13 +2424,13 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		memberDataPointResult.ReinsContinuationLoading = reinsGL.ContinuationLoadingRate
 	}
 
-	// GLA: BaseReinsGlaRate = ReinsGlaQx × (1 + ReinsGlaIndustryLoading + GlaRegionLoading)
-	//                        + ReinsGlaAidsQx × (1 + GlaAidsRegionLoading)
+	// GLA: BaseReinsGlaRate = ReinsGlaQx × (1 + ReinsGlaIndustryLoading + ReinsGlaRegionLoading)
+	//                        + ReinsGlaAidsQx × (1 + ReinsGlaAidsRegionLoading)
 	if schemeCategory.GlaBenefit {
 		memberDataPointResult.ReinsGlaQx = GetReinsuranceGlaRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, schemeCategory)
 		memberDataPointResult.ReinsGlaAidsQx = GetReinsuranceGlaAidsRate(memberDataPointResult, groupParameter)
-		memberDataPointResult.BaseReinsGlaRate = memberDataPointResult.ReinsGlaQx*(1+memberDataPointResult.ReinsGlaIndustryLoading+memberDataPointResult.GlaRegionLoading) +
-			memberDataPointResult.ReinsGlaAidsQx*(1+memberDataPointResult.GlaAidsRegionLoading)
+		memberDataPointResult.BaseReinsGlaRate = memberDataPointResult.ReinsGlaQx*(1+memberDataPointResult.ReinsGlaIndustryLoading+memberDataPointResult.ReinsGlaRegionLoading) +
+			memberDataPointResult.ReinsGlaAidsQx*(1+memberDataPointResult.ReinsGlaAidsRegionLoading)
 		memberDataPointResult.LoadedReinsGlaRate = memberDataPointResult.BaseReinsGlaRate *
 			(1 + memberDataPointResult.ReinsGlaContingencyLoading + memberDataPointResult.ReinsGlaTerminalIllnessLoading + memberDataPointResult.ReinsContinuationLoading)
 	}
@@ -2413,9 +2439,9 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	if schemeCategory.PtdBenefit {
 		memberDataPointResult.ReinsPtdRate = GetReinsurancePtdRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, schemeCategory)
 		if schemeCategory.PtdBenefitType == "Accelerated" {
-			memberDataPointResult.BaseReinsPtdRate = memberDataPointResult.ReinsPtdRate * (1 + memberDataPointResult.ReinsPtdIndustryLoading + memberDataPointResult.PtdRegionLoading - reinsGL.PtdAcceleratedBenefitDiscount)
+			memberDataPointResult.BaseReinsPtdRate = memberDataPointResult.ReinsPtdRate * (1 + memberDataPointResult.ReinsPtdIndustryLoading + memberDataPointResult.ReinsPtdRegionLoading - reinsGL.PtdAcceleratedBenefitDiscount)
 		} else {
-			memberDataPointResult.BaseReinsPtdRate = memberDataPointResult.ReinsPtdRate * (1 + memberDataPointResult.ReinsPtdIndustryLoading + memberDataPointResult.PtdRegionLoading)
+			memberDataPointResult.BaseReinsPtdRate = memberDataPointResult.ReinsPtdRate * (1 + memberDataPointResult.ReinsPtdIndustryLoading + memberDataPointResult.ReinsPtdRegionLoading)
 		}
 		memberDataPointResult.LoadedReinsPtdRate = memberDataPointResult.BaseReinsPtdRate * (1 + memberDataPointResult.ReinsPtdContingencyLoading)
 	}
@@ -2424,24 +2450,24 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	if schemeCategory.CiBenefit {
 		memberDataPointResult.ReinsCiRate = GetReinsuranceCiRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, schemeCategory)
 		if schemeCategory.CiBenefitStructure == "Accelerated" {
-			memberDataPointResult.BaseReinsCiRate = memberDataPointResult.ReinsCiRate * (1 + memberDataPointResult.ReinsCiIndustryLoading + memberDataPointResult.CiRegionLoading - reinsGL.CiAcceleratedBenefitDiscount)
+			memberDataPointResult.BaseReinsCiRate = memberDataPointResult.ReinsCiRate * (1 + memberDataPointResult.ReinsCiIndustryLoading + memberDataPointResult.ReinsCiRegionLoading - reinsGL.CiAcceleratedBenefitDiscount)
 		} else {
-			memberDataPointResult.BaseReinsCiRate = memberDataPointResult.ReinsCiRate * (1 + memberDataPointResult.ReinsCiIndustryLoading + memberDataPointResult.CiRegionLoading)
+			memberDataPointResult.BaseReinsCiRate = memberDataPointResult.ReinsCiRate * (1 + memberDataPointResult.ReinsCiIndustryLoading + memberDataPointResult.ReinsCiRegionLoading)
 		}
 		memberDataPointResult.LoadedReinsCiRate = memberDataPointResult.BaseReinsCiRate * (1 + memberDataPointResult.ReinsCiContingencyLoading)
 	}
 
-	// TTD — reinsurance TTD rate table is not yet present; base uses direct TTD Qx scaled by reinsurance industry loading.
+	// TTD — reinsurance TTD rate table is not yet present; base uses direct TTD Qx scaled by reinsurance industry/region loadings.
 	if schemeCategory.TtdBenefit {
 		ttdReinsQx := memberDataPointResult.BaseTtdRate / math.Max(1+memberDataPointResult.TtdIndustryLoading+memberDataPointResult.TtdRegionLoading, 1e-9)
-		memberDataPointResult.BaseReinsTtdRate = ttdReinsQx * (1 + memberDataPointResult.ReinsTtdIndustryLoading + memberDataPointResult.TtdRegionLoading)
+		memberDataPointResult.BaseReinsTtdRate = ttdReinsQx * (1 + memberDataPointResult.ReinsTtdIndustryLoading + memberDataPointResult.ReinsTtdRegionLoading)
 		memberDataPointResult.LoadedReinsTtdRate = memberDataPointResult.BaseReinsTtdRate * (1 + memberDataPointResult.ReinsTtdContingencyLoading)
 	}
 
 	// PHI
 	if schemeCategory.PhiBenefit {
 		memberDataPointResult.ReinsPhiRate = GetReinsurancePhiRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, schemeCategory)
-		memberDataPointResult.BaseReinsPhiRate = memberDataPointResult.ReinsPhiRate * (1 + memberDataPointResult.ReinsPhiIndustryLoading + memberDataPointResult.PhiRegionLoading)
+		memberDataPointResult.BaseReinsPhiRate = memberDataPointResult.ReinsPhiRate * (1 + memberDataPointResult.ReinsPhiIndustryLoading + memberDataPointResult.ReinsPhiRegionLoading)
 		memberDataPointResult.LoadedReinsPhiRate = memberDataPointResult.BaseReinsPhiRate * (1 + memberDataPointResult.ReinsPhiContingencyLoading)
 	}
 
@@ -2451,9 +2477,9 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		memberDataPointResult.ReinsSpouseGlaQx = GetReinsuranceSpouseGlaRate(memberDataPointResult, groupParameter, mpIncomeLevel, schemeCategory)
 		memberDataPointResult.ReinsSpouseGlaAidsQx = GetReinsuranceSpouseGlaAidsRate(memberDataPointResult, groupParameter)
 		memberDataPointResult.ReinsSpouseGlaLoading = spouseReinsIndustry.GlaIndustryLoadingRate
-		spouseRegionLoading := regionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
-		memberDataPointResult.BaseReinsSpouseGlaRate = memberDataPointResult.ReinsSpouseGlaQx*(1+memberDataPointResult.ReinsSpouseGlaLoading+spouseRegionLoading.GlaRegionLoadingRate) +
-			memberDataPointResult.ReinsSpouseGlaAidsQx*(1+spouseRegionLoading.GlaAidsRegionLoadingRate)
+		spouseReinsRegion := reinsRegionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+		memberDataPointResult.BaseReinsSpouseGlaRate = memberDataPointResult.ReinsSpouseGlaQx*(1+memberDataPointResult.ReinsSpouseGlaLoading+spouseReinsRegion.GlaRegionLoadingRate) +
+			memberDataPointResult.ReinsSpouseGlaAidsQx*(1+spouseReinsRegion.GlaAidsRegionLoadingRate)
 		memberDataPointResult.LoadedReinsSpouseGlaRate = memberDataPointResult.BaseReinsSpouseGlaRate
 	}
 
@@ -2467,13 +2493,13 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	} else if schemeCategory.FamilyFuneralBenefit {
 		reinsFunQx := GetReinsuranceFuneralRate(memberDataPointResult, groupParameter)
 		reinsFunAidsQx := GetReinsuranceFuneralAidsRate(memberDataPointResult, groupParameter)
-		memberDataPointResult.MainMemberReinsuranceBaseRate = reinsFunQx*(1+memberDataPointResult.FunRegionLoading) + reinsFunAidsQx*(1+memberDataPointResult.FunAidsRegionLoading)
+		memberDataPointResult.MainMemberReinsuranceBaseRate = reinsFunQx*(1+memberDataPointResult.ReinsFunRegionLoading) + reinsFunAidsQx*(1+memberDataPointResult.ReinsFunAidsRegionLoading)
 		memberDataPointResult.MainMemberReinsuranceRate = memberDataPointResult.MainMemberReinsuranceBaseRate * (1 + memberDataPointResult.ReinsFunContingencyLoading)
 		if len(memberDataPointResult.SpouseGender) > 0 {
-			spouseRegionLoading := regionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+			spouseReinsRegion := reinsRegionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
 			spouseReinsFunQx := GetReinsuranceSpouseFuneralRate(memberDataPointResult, groupParameter)
 			spouseReinsFunAidsQx := GetReinsuranceSpouseFuneralAidsRate(memberDataPointResult, groupParameter)
-			memberDataPointResult.SpouseReinsuranceBaseRate = spouseReinsFunQx*(1+spouseRegionLoading.FunRegionLoadingRate) + spouseReinsFunAidsQx*(1+spouseRegionLoading.FunAidsRegionLoadingRate)
+			memberDataPointResult.SpouseReinsuranceBaseRate = spouseReinsFunQx*(1+spouseReinsRegion.FunRegionLoadingRate) + spouseReinsFunAidsQx*(1+spouseReinsRegion.FunAidsRegionLoadingRate)
 			memberDataPointResult.SpouseReinsuranceRate = memberDataPointResult.SpouseReinsuranceBaseRate * (1 + memberDataPointResult.ReinsFunContingencyLoading)
 		}
 	}
@@ -2913,7 +2939,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	}
 }
 
-func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMemberMps []models.MemberIndicativeDataSet, selectedSchemeCategory string, mp models.GPricingMemberData, groupQuote models.GroupPricingQuote, groupParameter models.GroupPricingParameters, groupPricingReinsuranceStructure models.GroupPricingReinsuranceStructure, incomeLevels []models.IncomeLevel, ageBands []models.GroupPricingAgeBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit float64, educatorBenefitStructure models.EducatorBenefitStructure, credibility, glatheoreticalRate float64, insurerYearEndMonth int, user models.AppUser, restriction models.Restriction, taxTable []models.TaxTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, premiumLoading models.PremiumLoading, regionLoadingByGender map[string]models.RegionLoading, industryLoadingByGender map[string]models.IndustryLoading) MemberRateResult {
+func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMemberMps []models.MemberIndicativeDataSet, selectedSchemeCategory string, mp models.GPricingMemberData, groupQuote models.GroupPricingQuote, groupParameter models.GroupPricingParameters, groupPricingReinsuranceStructure models.GroupPricingReinsuranceStructure, incomeLevels []models.IncomeLevel, ageBands []models.GroupPricingAgeBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit float64, educatorBenefitStructure models.EducatorBenefitStructure, credibility, glatheoreticalRate float64, insurerYearEndMonth int, user models.AppUser, restriction models.Restriction, taxTable []models.TaxTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, premiumLoading models.PremiumLoading, regionLoadingByGender map[string]models.RegionLoading, industryLoadingByGender map[string]models.IndustryLoading, reinsRegionLoadingByGender map[string]models.ReinsuranceRegionLoading) MemberRateResult {
 
 	var memberDataPointResult models.MemberRatingResult
 	var memberPremiumScheduleDatapoint models.MemberPremiumSchedule
@@ -3721,6 +3747,7 @@ var gpTableSpecs = []gpTableSpec{
 	{"reinsuranceGlaAidsRate", "Reinsurance GLA Aids Rate", "reinsuranceglaaidsrates", "reinsurance", models.ReinsuranceGlaAidsRate{}},
 	{"reinsuranceGeneralLoading", "Reinsurance General Loading", "reinsurancegeneralloadings", "reinsurance", models.ReinsuranceGeneralLoading{}},
 	{"reinsuranceIndustryLoading", "Reinsurance Industry Loading", "reinsuranceindustryloadings", "reinsurance", models.ReinsuranceIndustryLoading{}},
+	{"reinsuranceRegionLoading", "Reinsurance Region Loading", "reinsuranceregionloadings", "reinsurance", models.ReinsuranceRegionLoading{}},
 }
 
 // setGPTableStat upserts the row count for a single table into gp_table_stats.
@@ -3760,7 +3787,10 @@ func refreshGPTableStatByDeleteKey(deleteKey string) {
 
 // EnsureGPTableStats is called on startup. It creates the gp_table_stats table
 // if it does not exist (handles existing databases that predate this feature)
-// and rebuilds the stats if the table is empty.
+// and seeds any missing stat rows. A full rebuild happens only when the
+// table is completely empty; otherwise we self-heal per-spec so newly-added
+// entries in gpTableSpecs (e.g. new reinsurance tables) get a correct
+// populated flag on first load without a manual rebuild.
 func EnsureGPTableStats() {
 	if err := DB.AutoMigrate(&models.GPTableStat{}); err != nil {
 		appLog.WithField("error", err.Error()).Error("Failed to auto-migrate gp_table_stats")
@@ -3773,6 +3803,26 @@ func EnsureGPTableStats() {
 		if err := RebuildGPTableStats(); err != nil {
 			appLog.WithField("error", err.Error()).Error("Failed to rebuild gp_table_stats on startup")
 		}
+		return
+	}
+
+	// Fill in any spec rows that are missing (idempotent per-spec seed).
+	var existing []models.GPTableStat
+	DB.Find(&existing)
+	have := make(map[string]struct{}, len(existing))
+	for _, s := range existing {
+		have[s.TableName] = struct{}{}
+	}
+	for _, spec := range gpTableSpecs {
+		if _, ok := have[spec.statName]; ok {
+			continue
+		}
+		var rowCount int64
+		if err := DB.Model(&spec.model).Count(&rowCount).Error; err != nil {
+			appLog.WithField("spec", spec.statName).WithField("error", err.Error()).Warn("Failed to seed missing gp_table_stats row")
+			continue
+		}
+		setGPTableStat(spec.statName, rowCount)
 	}
 }
 
@@ -4075,6 +4125,12 @@ func GetGPTableMetaDataLEGACY() (map[string]interface{}, error) {
 			tableType = "Reinsurance Industry Loading"
 			category = "reinsurance"
 			var m models.ReinsuranceIndustryLoading
+			populated, _ := IsTableEmpty(m)
+			legacyMetadata = append(legacyMetadata, models.TableMetaData{TableType: tableType, Category: category, Data: nil, Populated: populated})
+		case "reinsuranceRegionLoading":
+			tableType = "Reinsurance Region Loading"
+			category = "reinsurance"
+			var m models.ReinsuranceRegionLoading
 			populated, _ := IsTableEmpty(m)
 			legacyMetadata = append(legacyMetadata, models.TableMetaData{TableType: tableType, Category: category, Data: nil, Populated: populated})
 		}
@@ -5181,6 +5237,29 @@ func SaveGPTables(v *multipart.FileHeader, tableType string, riskRateCode string
 			return fmt.Errorf("failed to save Reinsurance Industry Loading data: %v", err)
 		}
 
+	case "Reinsurance Region Loading":
+		if err := utils.ValidateCSVHeaders(headers, models.ReinsuranceRegionLoading{}); err != nil {
+			return fmt.Errorf("%s validation failed: %v", tableType, err)
+		}
+		DB.Where("risk_rate_code = ?", riskRateCode).Delete(&models.ReinsuranceRegionLoading{})
+		var pps []models.ReinsuranceRegionLoading
+		for i := 1; ; i++ {
+			var pp models.ReinsuranceRegionLoading
+			if err := dec.Decode(&pp); err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("error decoding Reinsurance Region Loading at row %d: %v", i, err)
+			}
+			pp.RiskRateCode = riskRateCode
+			pp.CreatedBy = user.UserName
+			pps = append(pps, pp)
+		}
+		err = DB.CreateInBatches(&pps, 100).Error
+		if err != nil {
+			appLog.Error("Save Reinsurance Region Loading error: ", err.Error())
+			return fmt.Errorf("failed to save Reinsurance Region Loading data: %v", err)
+		}
+
 	case "Premium Loadings":
 		if err := utils.ValidateCSVHeaders(headers, models.PremiumLoading{}); err != nil {
 			return fmt.Errorf("%s validation failed: %v", tableType, err)
@@ -5422,6 +5501,8 @@ func DeleteGPTableData(tableType, riskCode string) error {
 		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.ReinsuranceGeneralLoading{})
 	case "reinsuranceindustryloadings":
 		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.ReinsuranceIndustryLoading{})
+	case "reinsuranceregionloadings":
+		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.ReinsuranceRegionLoading{})
 	case "premiumloadings":
 		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.PremiumLoading{})
 	case "schemesizelevels":
@@ -5511,6 +5592,8 @@ func GetGPTableRiskCodes(tableType string) []string {
 		DB.Model(&models.ReinsuranceGeneralLoading{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
 	case "reinsuranceindustryloadings":
 		DB.Model(&models.ReinsuranceIndustryLoading{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
+	case "reinsuranceregionloadings":
+		DB.Model(&models.ReinsuranceRegionLoading{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
 	case "premiumloadings":
 		DB.Model(&models.PremiumLoading{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
 	case "schemesizelevels":
@@ -5597,6 +5680,8 @@ func GetGPTableYears(tableType string) []int {
 		DB.Model(&models.ReinsuranceGeneralLoading{}).Select("DISTINCT year").Order("year desc").Find(&years)
 	case "reinsuranceindustryloadings":
 		DB.Model(&models.ReinsuranceIndustryLoading{}).Select("DISTINCT year").Order("year desc").Find(&years)
+	case "reinsuranceregionloadings":
+		DB.Model(&models.ReinsuranceRegionLoading{}).Select("DISTINCT year").Order("year desc").Find(&years)
 	case "premiumloadings":
 		DB.Model(&models.PremiumLoading{}).Select("DISTINCT year").Order("year desc").Find(&years)
 	case "schemesizelevels":
@@ -5891,6 +5976,14 @@ func GetGPTableData(tableType string) []map[string]interface{} {
 		}
 	case "reinsuranceindustryloadings":
 		var data []models.ReinsuranceIndustryLoading
+		DB.Find(&data)
+		b, _ := json.Marshal(&data)
+		err := json.Unmarshal(b, &results)
+		if err != nil {
+			fmt.Println(err)
+		}
+	case "reinsuranceregionloadings":
+		var data []models.ReinsuranceRegionLoading
 		DB.Find(&data)
 		b, _ := json.Marshal(&data)
 		err := json.Unmarshal(b, &results)
@@ -6590,6 +6683,25 @@ func GetReinsuranceIndustryLoading(riskRateCode string, occupationClass int, gen
 	var loading models.ReinsuranceIndustryLoading
 	DB.Table(tableName).
 		Where("risk_rate_code = ? AND occupation_class = ? AND gender = ?", riskRateCode, occupationClass, strings.ToUpper(gender)).
+		First(&loading)
+	GroupPricingCache.Set(cacheKey, loading, 1)
+	return loading
+}
+
+// GetReinsuranceRegionLoading returns one row from reinsurance_region_loadings
+// keyed by (risk_rate_code, gender, region). Returns a zero-value struct when
+// no row matches, so reinsurance pricing degrades gracefully when the table
+// is empty. Mirrors GetRegionLoading for the reinsurance side.
+func GetReinsuranceRegionLoading(riskRateCode string, gender string, region string) models.ReinsuranceRegionLoading {
+	tableName := "reinsurance_region_loadings"
+	cacheKey := tableName + "_" + riskRateCode + "_" + strings.ToUpper(gender) + "_" + strings.TrimSpace(region)
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(models.ReinsuranceRegionLoading)
+	}
+	var loading models.ReinsuranceRegionLoading
+	DB.Table(tableName).
+		Where("risk_rate_code = ? AND gender = ? AND region = ?",
+			riskRateCode, strings.ToUpper(gender), strings.TrimSpace(region)).
 		First(&loading)
 	GroupPricingCache.Set(cacheKey, loading, 1)
 	return loading

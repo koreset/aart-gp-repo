@@ -210,7 +210,7 @@ import CommissionStructureManagement from '@/renderer/screens/group_pricing/admi
 
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import formatValues from '@/renderer/utils/format_values'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { DataPayload } from '@/renderer/components/types'
 import * as pako from 'pako'
 
@@ -289,6 +289,13 @@ const checkPopulated = () => {
       !t.populated && (t.category || 'group_pricing') === activeTab.value
   )
 }
+
+// Recompute the "some tables not populated" banner whenever the user
+// switches tabs. Without this, hasEmpty reflects whichever tab was active
+// at mount time.
+watch(activeTab, () => {
+  checkPopulated()
+})
 
 const closeDialog = () => {
   riskCodeDialog.value = false
@@ -379,7 +386,6 @@ const handleUpload = async (payload: DataPayload) => {
       snackbar.value = true
       timeout.value = 3000
       uploadComplete.value = true
-      checkPopulated()
     }
   } catch (error: any) {
     let errorMessage = 'An error occurred while uploading the file'
@@ -399,10 +405,11 @@ const handleUpload = async (payload: DataPayload) => {
     getGenericRiskRateCodes()
   }
 
-  GroupPricingService.getTableMetaData().then((res) => {
-    tables.value = res.data.associated_tables
-    console.log(tables.value)
-  })
+  // Refresh metadata first, then recompute the empty-banner state so it
+  // reflects the row just uploaded (not the stale pre-upload snapshot).
+  const res = await GroupPricingService.getTableMetaData()
+  tables.value = res.data.associated_tables
+  checkPopulated()
 }
 
 const deleteTableData = async () => {
@@ -422,15 +429,16 @@ const deleteTableData = async () => {
         timeout.value = 3000
         tableData.value = []
         selectedTable.value = ''
-        checkPopulated()
       }
     }
   } catch (error) {
     console.log(error)
   }
-  GroupPricingService.getTableMetaData().then((res) => {
-    tables.value = res.data.associated_tables
-  })
+  // Refresh metadata first so checkPopulated() sees the latest populated
+  // flags; otherwise the banner would reflect the pre-delete snapshot.
+  const res = await GroupPricingService.getTableMetaData()
+  tables.value = res.data.associated_tables
+  checkPopulated()
 }
 
 const viewTable = (item: any) => {
