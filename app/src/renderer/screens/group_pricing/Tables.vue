@@ -579,7 +579,10 @@ const chooseRiskRateCode = async (item: any) => {
   selectedYear.value = null
   selectedRiskRateCode.value = null
   selectedTableText.value = item.table_type
-  selectedTable.value = item.table_type.replace(/\s+/g, '').toLowerCase()
+  // Prefer the authoritative delete_key from the backend; fall back to
+  // deriving it from the display name for older API payloads.
+  selectedTable.value =
+    item.delete_key || item.table_type.replace(/\s+/g, '').toLowerCase()
 
   availableRiskRateCodes.value = []
   getRiskRateCodes()
@@ -696,7 +699,11 @@ const viewTable = (item: any) => {
   loadingData.value = true
   tableData.value = []
 
-  const tableType = item.table_type.replace(/ /g, '').toLowerCase()
+  // Prefer the authoritative delete_key from the backend (matches the
+  // switch-case slug on the server); fall back to deriving it from the
+  // display name for older API payloads.
+  const tableType =
+    item.delete_key || item.table_type.replace(/ /g, '').toLowerCase()
   GroupPricingService.getDataForTable(tableType).then((res) => {
     if (res.data === null) {
       res.data = []

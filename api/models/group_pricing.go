@@ -896,6 +896,14 @@ type MemberRatingResult struct {
 	PhiContingencyLoading float64 `json:"phi_contingency_loading" csv:"phi_contingency_loading"`
 	FunContingencyLoading float64 `json:"fun_contingency_loading" csv:"fun_contingency_loading"`
 
+	// Voluntary loadings (resolved per member from GeneralLoading table)
+	GlaVoluntaryLoading float64 `json:"gla_voluntary_loading" csv:"gla_voluntary_loading"`
+	PtdVoluntaryLoading float64 `json:"ptd_voluntary_loading" csv:"ptd_voluntary_loading"`
+	CiVoluntaryLoading  float64 `json:"ci_voluntary_loading" csv:"ci_voluntary_loading"`
+	TtdVoluntaryLoading float64 `json:"ttd_voluntary_loading" csv:"ttd_voluntary_loading"`
+	PhiVoluntaryLoading float64 `json:"phi_voluntary_loading" csv:"phi_voluntary_loading"`
+	FunVoluntaryLoading float64 `json:"fun_voluntary_loading" csv:"fun_voluntary_loading"`
+
 	// Continuation loading (resolved per member from GeneralLoading table)
 	ContinuationLoading float64 `json:"continuation_loading" csv:"continuation_loading"`
 
@@ -1065,6 +1073,14 @@ type MemberRatingResult struct {
 	ReinsTtdContingencyLoading float64 `json:"reins_ttd_contingency_loading" csv:"reins_ttd_contingency_loading"`
 	ReinsPhiContingencyLoading float64 `json:"reins_phi_contingency_loading" csv:"reins_phi_contingency_loading"`
 	ReinsFunContingencyLoading float64 `json:"reins_fun_contingency_loading" csv:"reins_fun_contingency_loading"`
+
+	// Reinsurance voluntary loadings (resolved per member from ReinsuranceGeneralLoading table)
+	ReinsGlaVoluntaryLoading float64 `json:"reins_gla_voluntary_loading" csv:"reins_gla_voluntary_loading"`
+	ReinsPtdVoluntaryLoading float64 `json:"reins_ptd_voluntary_loading" csv:"reins_ptd_voluntary_loading"`
+	ReinsCiVoluntaryLoading  float64 `json:"reins_ci_voluntary_loading" csv:"reins_ci_voluntary_loading"`
+	ReinsTtdVoluntaryLoading float64 `json:"reins_ttd_voluntary_loading" csv:"reins_ttd_voluntary_loading"`
+	ReinsPhiVoluntaryLoading float64 `json:"reins_phi_voluntary_loading" csv:"reins_phi_voluntary_loading"`
+	ReinsFunVoluntaryLoading float64 `json:"reins_fun_voluntary_loading" csv:"reins_fun_voluntary_loading"`
 
 	// Reinsurance continuation & terminal illness loadings (from ReinsuranceGeneralLoading)
 	ReinsContinuationLoading       float64 `json:"reins_continuation_loading" csv:"reins_continuation_loading"`
@@ -2033,6 +2049,12 @@ type GeneralLoading struct {
 	TtdContigencyLoadingRate      float64   `json:"ttd_contigency_loading_rate" csv:"ttd_contigency_loading_rate"`
 	PhiContigencyLoadingRate      float64   `json:"phi_contigency_loading_rate" csv:"phi_contigency_loading_rate"`
 	FunContigencyLoadingRate      float64   `json:"fun_contigency_loading_rate" csv:"fun_contigency_loading_rate"`
+	GlaVoluntaryLoadingRate       float64   `json:"gla_voluntary_loading_rate" csv:"gla_voluntary_loading_rate"`
+	PtdVoluntaryLoadingRate       float64   `json:"ptd_voluntary_loading_rate" csv:"ptd_voluntary_loading_rate"`
+	CiVoluntaryLoadingRate        float64   `json:"ci_voluntary_loading_rate" csv:"ci_voluntary_loading_rate"`
+	TtdVoluntaryLoadingRate       float64   `json:"ttd_voluntary_loading_rate" csv:"ttd_voluntary_loading_rate"`
+	PhiVoluntaryLoadingRate       float64   `json:"phi_voluntary_loading_rate" csv:"phi_voluntary_loading_rate"`
+	FunVoluntaryLoadingRate       float64   `json:"fun_voluntary_loading_rate" csv:"fun_voluntary_loading_rate"`
 	ContinuationLoadingRate       float64   `json:"continuation_loading_rate" csv:"continuation_loading_rate"`
 	TerminalIllnessLoadingRate    float64   `json:"terminal_illness_loading_rate" csv:"terminal_illness_loading_rate"`
 	PtdAcceleratedBenefitDiscount float64   `json:"ptd_accelerated_benefit_discount" csv:"ptd_accelerated_benefit_discount"`
@@ -2221,6 +2243,12 @@ type ReinsuranceGeneralLoading struct {
 	TtdContigencyLoadingRate      float64   `json:"ttd_contigency_loading_rate" csv:"ttd_contigency_loading_rate"`
 	PhiContigencyLoadingRate      float64   `json:"phi_contigency_loading_rate" csv:"phi_contigency_loading_rate"`
 	FunContigencyLoadingRate      float64   `json:"fun_contigency_loading_rate" csv:"fun_contigency_loading_rate"`
+	GlaVoluntaryLoadingRate       float64   `json:"gla_voluntary_loading_rate" csv:"gla_voluntary_loading_rate"`
+	PtdVoluntaryLoadingRate       float64   `json:"ptd_voluntary_loading_rate" csv:"ptd_voluntary_loading_rate"`
+	CiVoluntaryLoadingRate        float64   `json:"ci_voluntary_loading_rate" csv:"ci_voluntary_loading_rate"`
+	TtdVoluntaryLoadingRate       float64   `json:"ttd_voluntary_loading_rate" csv:"ttd_voluntary_loading_rate"`
+	PhiVoluntaryLoadingRate       float64   `json:"phi_voluntary_loading_rate" csv:"phi_voluntary_loading_rate"`
+	FunVoluntaryLoadingRate       float64   `json:"fun_voluntary_loading_rate" csv:"fun_voluntary_loading_rate"`
 	ContinuationLoadingRate       float64   `json:"continuation_loading_rate" csv:"continuation_loading_rate"`
 	TerminalIllnessLoadingRate    float64   `json:"terminal_illness_loading_rate" csv:"terminal_illness_loading_rate"`
 	PtdAcceleratedBenefitDiscount float64   `json:"ptd_accelerated_benefit_discount" csv:"ptd_accelerated_benefit_discount"`

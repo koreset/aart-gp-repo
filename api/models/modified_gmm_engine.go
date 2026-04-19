@@ -819,6 +819,7 @@ type TableMetaData struct {
 	Data        []map[string]interface{} `json:"data"`
 	Populated   bool                     `json:"populated"`
 	TableKey    string                   `json:"table_key,omitempty"`    // canonical statName, e.g. "regionLoading"
+	DeleteKey   string                   `json:"delete_key,omitempty"`   // slug expected by rate-tables/:table_type endpoints, e.g. "reinsurancegeneralloadings"
 	IsRequired  bool                     `json:"is_required"`            // false = skip DB read, downstream reads zero
 	UpdatedBy   string                   `json:"updated_by,omitempty"`   // last user to toggle IsRequired
 	UpdatedAt   *time.Time               `json:"updated_at,omitempty"`
