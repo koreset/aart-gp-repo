@@ -1037,11 +1037,83 @@ type MemberRatingResult struct {
 	ExpAdjEducatorRiskPremium   float64 `json:"exp_adj_educator_risk_premium" csv:"exp_adj_educator_risk_premium"`
 	ExpAdjEducatorOfficePremium float64 `json:"exp_adj_educator_office_premium" csv:"exp_adj_educator_office_premium"`
 
-	ExceedsNormalRetirementAgeIndicator    int       `json:"exceeds_normal_retirement_age_indicator" csv:"exceeds_normal_retirement_age_indicator"`
-	ExceedsFreeCoverLimitIndicator         int       `json:"exceeds_free_cover_limit_indicator" csv:"exceeds_free_cover_limit_indicator"`
-	FuneralExperienceAdjustedAnnualPremium float64   `json:"funeral_experience_adjusted_annual_premium" csv:"funeral_experience_adjusted_annual_premium"`
-	CreationDate                           time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
-	CreatedBy                              string    `json:"created_by" csv:"created_by"`
+	ExceedsNormalRetirementAgeIndicator    int     `json:"exceeds_normal_retirement_age_indicator" csv:"exceeds_normal_retirement_age_indicator"`
+	ExceedsFreeCoverLimitIndicator         int     `json:"exceeds_free_cover_limit_indicator" csv:"exceeds_free_cover_limit_indicator"`
+	FuneralExperienceAdjustedAnnualPremium float64 `json:"funeral_experience_adjusted_annual_premium" csv:"funeral_experience_adjusted_annual_premium"`
+
+	// Reinsurance industry loadings (resolved per member from ReinsuranceIndustryLoading table)
+	ReinsGlaIndustryLoading float64 `json:"reins_gla_industry_loading" csv:"reins_gla_industry_loading"`
+	ReinsPtdIndustryLoading float64 `json:"reins_ptd_industry_loading" csv:"reins_ptd_industry_loading"`
+	ReinsCiIndustryLoading  float64 `json:"reins_ci_industry_loading" csv:"reins_ci_industry_loading"`
+	ReinsTtdIndustryLoading float64 `json:"reins_ttd_industry_loading" csv:"reins_ttd_industry_loading"`
+	ReinsPhiIndustryLoading float64 `json:"reins_phi_industry_loading" csv:"reins_phi_industry_loading"`
+
+	// Reinsurance contingency loadings (resolved per member from ReinsuranceGeneralLoading table)
+	ReinsGlaContingencyLoading float64 `json:"reins_gla_contingency_loading" csv:"reins_gla_contingency_loading"`
+	ReinsPtdContingencyLoading float64 `json:"reins_ptd_contingency_loading" csv:"reins_ptd_contingency_loading"`
+	ReinsCiContingencyLoading  float64 `json:"reins_ci_contingency_loading" csv:"reins_ci_contingency_loading"`
+	ReinsTtdContingencyLoading float64 `json:"reins_ttd_contingency_loading" csv:"reins_ttd_contingency_loading"`
+	ReinsPhiContingencyLoading float64 `json:"reins_phi_contingency_loading" csv:"reins_phi_contingency_loading"`
+	ReinsFunContingencyLoading float64 `json:"reins_fun_contingency_loading" csv:"reins_fun_contingency_loading"`
+
+	// Reinsurance continuation & terminal illness loadings (from ReinsuranceGeneralLoading)
+	ReinsContinuationLoading       float64 `json:"reins_continuation_loading" csv:"reins_continuation_loading"`
+	ReinsGlaTerminalIllnessLoading float64 `json:"reins_gla_terminal_illness_loading" csv:"reins_gla_terminal_illness_loading"`
+
+	// Reinsurance Qx / base / loaded rates per benefit
+	ReinsGlaQx         float64 `json:"reins_gla_qx" csv:"reins_gla_qx"`
+	ReinsGlaAidsQx     float64 `json:"reins_gla_aids_qx" csv:"reins_gla_aids_qx"`
+	BaseReinsGlaRate   float64 `json:"base_reins_gla_rate" csv:"base_reins_gla_rate"`
+	LoadedReinsGlaRate float64 `json:"loaded_reins_gla_rate" csv:"loaded_reins_gla_rate"`
+
+	ReinsPtdRate       float64 `json:"reins_ptd_rate" csv:"reins_ptd_rate"`
+	BaseReinsPtdRate   float64 `json:"base_reins_ptd_rate" csv:"base_reins_ptd_rate"`
+	LoadedReinsPtdRate float64 `json:"loaded_reins_ptd_rate" csv:"loaded_reins_ptd_rate"`
+
+	ReinsCiRate       float64 `json:"reins_ci_rate" csv:"reins_ci_rate"`
+	BaseReinsCiRate   float64 `json:"base_reins_ci_rate" csv:"base_reins_ci_rate"`
+	LoadedReinsCiRate float64 `json:"loaded_reins_ci_rate" csv:"loaded_reins_ci_rate"`
+
+	BaseReinsTtdRate   float64 `json:"base_reins_ttd_rate" csv:"base_reins_ttd_rate"`
+	LoadedReinsTtdRate float64 `json:"loaded_reins_ttd_rate" csv:"loaded_reins_ttd_rate"`
+
+	ReinsPhiRate       float64 `json:"reins_phi_rate" csv:"reins_phi_rate"`
+	BaseReinsPhiRate   float64 `json:"base_reins_phi_rate" csv:"base_reins_phi_rate"`
+	LoadedReinsPhiRate float64 `json:"loaded_reins_phi_rate" csv:"loaded_reins_phi_rate"`
+
+	ReinsSpouseGlaQx         float64 `json:"reins_spouse_gla_qx" csv:"reins_spouse_gla_qx"`
+	ReinsSpouseGlaAidsQx     float64 `json:"reins_spouse_gla_aids_qx" csv:"reins_spouse_gla_aids_qx"`
+	ReinsSpouseGlaLoading    float64 `json:"reins_spouse_gla_loading" csv:"reins_spouse_gla_loading"`
+	BaseReinsSpouseGlaRate   float64 `json:"base_reins_spouse_gla_rate" csv:"base_reins_spouse_gla_rate"`
+	LoadedReinsSpouseGlaRate float64 `json:"loaded_reins_spouse_gla_rate" csv:"loaded_reins_spouse_gla_rate"`
+
+	// Reinsurance funeral per-relationship base/loaded rates
+	MainMemberReinsuranceBaseRate float64 `json:"main_member_reinsurance_base_rate" csv:"main_member_reinsurance_base_rate"`
+	MainMemberReinsuranceRate     float64 `json:"main_member_reinsurance_rate" csv:"main_member_reinsurance_rate"`
+	SpouseReinsuranceBaseRate     float64 `json:"spouse_reinsurance_base_rate" csv:"spouse_reinsurance_base_rate"`
+	SpouseReinsuranceRate         float64 `json:"spouse_reinsurance_rate" csv:"spouse_reinsurance_rate"`
+	ChildReinsuranceBaseRate      float64 `json:"child_reinsurance_base_rate" csv:"child_reinsurance_base_rate"`
+	ChildReinsuranceRate          float64 `json:"child_reinsurance_rate" csv:"child_reinsurance_rate"`
+	ParentReinsuranceBaseRate     float64 `json:"parent_reinsurance_base_rate" csv:"parent_reinsurance_base_rate"`
+	ParentReinsuranceRate         float64 `json:"parent_reinsurance_rate" csv:"parent_reinsurance_rate"`
+	DependantReinsuranceBaseRate  float64 `json:"dependant_reinsurance_base_rate" csv:"dependant_reinsurance_base_rate"`
+	DependantReinsuranceRate      float64 `json:"dependant_reinsurance_rate" csv:"dependant_reinsurance_rate"`
+
+	// Reinsurance premium per benefit (loaded reinsurance rate × ceded sum assured)
+	GlaReinsurancePremium       float64 `json:"gla_reinsurance_premium" csv:"gla_reinsurance_premium"`
+	PtdReinsurancePremium       float64 `json:"ptd_reinsurance_premium" csv:"ptd_reinsurance_premium"`
+	CiReinsurancePremium        float64 `json:"ci_reinsurance_premium" csv:"ci_reinsurance_premium"`
+	SpouseGlaReinsurancePremium float64 `json:"spouse_gla_reinsurance_premium" csv:"spouse_gla_reinsurance_premium"`
+	TtdReinsurancePremium       float64 `json:"ttd_reinsurance_premium" csv:"ttd_reinsurance_premium"`
+	PhiReinsurancePremium       float64 `json:"phi_reinsurance_premium" csv:"phi_reinsurance_premium"`
+	MainMemberReinsurancePremium float64 `json:"main_member_reinsurance_premium" csv:"main_member_reinsurance_premium"`
+	SpouseReinsurancePremium    float64 `json:"spouse_reinsurance_premium" csv:"spouse_reinsurance_premium"`
+	ChildReinsurancePremium     float64 `json:"child_reinsurance_premium" csv:"child_reinsurance_premium"`
+	ParentReinsurancePremium    float64 `json:"parent_reinsurance_premium" csv:"parent_reinsurance_premium"`
+	DependantReinsurancePremium float64 `json:"dependant_reinsurance_premium" csv:"dependant_reinsurance_premium"`
+
+	CreationDate time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy    string    `json:"created_by" csv:"created_by"`
 }
 
 type MemberRatingResultSummary struct {
@@ -2063,6 +2135,69 @@ type ReinsurancePhiRate struct {
 	PhiRate                 float64   `json:"phi_rate" csv:"phi_rate"`
 	CreationDate            time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy               string    `json:"created_by" csv:"created_by"`
+}
+
+type ReinsuranceFuneralAidsRate struct {
+	ID              int       `json:"id" gorm:"primary_key"`
+	RiskRateCode    string    `json:"risk_rate_code" csv:"risk_rate_code"`
+	AgeNextBirthday int       `json:"age_next_birthday" csv:"age_next_birthday"`
+	Gender          string    `json:"gender" csv:"gender"`
+	FunAidsQx       float64   `json:"fun_aids_qx" csv:"fun_aids_qx"`
+	CreationDate    time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy       string    `json:"created_by" csv:"created_by"`
+}
+
+type ReinsuranceFuneralRate struct {
+	ID              int       `json:"id" gorm:"primary_key"`
+	RiskRateCode    string    `json:"risk_rate_code" csv:"risk_rate_code"`
+	AgeNextBirthday int       `json:"age_next_birthday" csv:"age_next_birthday"`
+	Gender          string    `json:"gender" csv:"gender"`
+	FunQx           float64   `json:"fun_qx" csv:"fun_qx"`
+	CreationDate    time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy       string    `json:"created_by" csv:"created_by"`
+}
+
+type ReinsuranceGlaAidsRate struct {
+	ID              int       `json:"id" gorm:"primary_key"`
+	RiskRateCode    string    `json:"risk_rate_code" csv:"risk_rate_code"`
+	AgeNextBirthday int       `json:"age_next_birthday" csv:"age_next_birthday"`
+	Gender          string    `json:"gender" csv:"gender"`
+	GlaAidsQx       float64   `json:"gla_aids_qx" csv:"gla_aids_qx"`
+	CreationDate    time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy       string    `json:"created_by" csv:"created_by"`
+}
+
+type ReinsuranceGeneralLoading struct {
+	ID                            int       `json:"id" gorm:"primary_key"`
+	RiskRateCode                  string    `json:"risk_rate_code" csv:"risk_rate_code"`
+	Age                           int       `json:"age" csv:"age"`
+	Gender                        string    `json:"gender" csv:"gender"`
+	GlaContigencyLoadingRate      float64   `json:"gla_contigency_loading_rate" csv:"gla_contigency_loading_rate"`
+	PtdContigencyLoadingRate      float64   `json:"ptd_contigency_loading_rate" csv:"ptd_contigency_loading_rate"`
+	CiContigencyLoadingRate       float64   `json:"ci_contigency_loading_rate" csv:"ci_contigency_loading_rate"`
+	TtdContigencyLoadingRate      float64   `json:"ttd_contigency_loading_rate" csv:"ttd_contigency_loading_rate"`
+	PhiContigencyLoadingRate      float64   `json:"phi_contigency_loading_rate" csv:"phi_contigency_loading_rate"`
+	FunContigencyLoadingRate      float64   `json:"fun_contigency_loading_rate" csv:"fun_contigency_loading_rate"`
+	ContinuationLoadingRate       float64   `json:"continuation_loading_rate" csv:"continuation_loading_rate"`
+	TerminalIllnessLoadingRate    float64   `json:"terminal_illness_loading_rate" csv:"terminal_illness_loading_rate"`
+	PtdAcceleratedBenefitDiscount float64   `json:"ptd_accelerated_benefit_discount" csv:"ptd_accelerated_benefit_discount"`
+	CiAcceleratedBenefitDiscount  float64   `json:"ci_accelerated_benefit_discount" csv:"ci_accelerated_benefit_discount"`
+	CreationDate                  time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy                     string    `json:"created_by" csv:"created_by"`
+}
+
+type ReinsuranceIndustryLoading struct {
+	ID                     int       `json:"id" gorm:"primary_key"`
+	RiskRateCode           string    `json:"risk_rate_code" csv:"risk_rate_code"`
+	OccupationClass        int       `json:"occupation_class" csv:"occupation_class"`
+	Gender                 string    `json:"gender" csv:"gender"`
+	GlaIndustryLoadingRate float64   `json:"gla_industry_loading_rate" csv:"gla_industry_loading_rate"`
+	PtdIndustryLoadingRate float64   `json:"ptd_industry_loading_rate" csv:"ptd_industry_loading_rate"`
+	CiIndustryLoadingRate  float64   `json:"ci_industry_loading_rate" csv:"ci_industry_loading_rate"`
+	TtdIndustryLoadingRate float64   `json:"ttd_industry_loading_rate" csv:"ttd_industry_loading_rate"`
+	PhiIndustryLoadingRate float64   `json:"phi_industry_loading_rate" csv:"phi_industry_loading_rate"`
+	CreationDate           time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy              string    `json:"created_by" csv:"created_by"`
 }
 
 type PremiumLoading struct {

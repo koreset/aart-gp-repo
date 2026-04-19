@@ -2370,6 +2370,123 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	memberDataPointResult.SpouseGlaRiskPremium = memberDataPointResult.LoadedSpouseGlaRate * memberDataPointResult.SpouseGlaCappedSumAssured
 	memberDataPointResult.ExpAdjSpouseGlaRiskPremium = memberDataPointResult.ExpAdjLoadedSpouseGlaRate * memberDataPointResult.SpouseGlaCappedSumAssured
 
+	// ── Reinsurance rates & loadings ───────────────────────────────────────
+	// Compute reinsurance base & loaded rates per benefit using the new
+	// reinsurance rate/loading tables (reinsurance_*_rates,
+	// reinsurance_general_loadings, reinsurance_industry_loadings). Region
+	// loadings are shared with direct pricing. If the reinsurance tables
+	// are empty for this risk code the getters return zero values, leaving
+	// reinsurance rates at 0 so non-reinsured schemes are unaffected.
+	reinsIndustryLoadingMain := GetReinsuranceIndustryLoading(groupParameter.RiskRateCode, groupQuote.OccupationClass, memberDataPointResult.Gender[:1])
+	memberDataPointResult.ReinsGlaIndustryLoading = reinsIndustryLoadingMain.GlaIndustryLoadingRate
+	memberDataPointResult.ReinsPtdIndustryLoading = reinsIndustryLoadingMain.PtdIndustryLoadingRate
+	memberDataPointResult.ReinsCiIndustryLoading = reinsIndustryLoadingMain.CiIndustryLoadingRate
+	memberDataPointResult.ReinsTtdIndustryLoading = reinsIndustryLoadingMain.TtdIndustryLoadingRate
+	memberDataPointResult.ReinsPhiIndustryLoading = reinsIndustryLoadingMain.PhiIndustryLoadingRate
+
+	reinsGL := GetReinsuranceGeneralLoading(groupParameter.RiskRateCode, memberDataPointResult.AgeNextBirthday, memberDataPointResult.Gender)
+	memberDataPointResult.ReinsGlaContingencyLoading = reinsGL.GlaContigencyLoadingRate
+	memberDataPointResult.ReinsPtdContingencyLoading = reinsGL.PtdContigencyLoadingRate
+	memberDataPointResult.ReinsCiContingencyLoading = reinsGL.CiContigencyLoadingRate
+	memberDataPointResult.ReinsTtdContingencyLoading = reinsGL.TtdContigencyLoadingRate
+	memberDataPointResult.ReinsPhiContingencyLoading = reinsGL.PhiContigencyLoadingRate
+	memberDataPointResult.ReinsFunContingencyLoading = reinsGL.FunContigencyLoadingRate
+	if schemeCategory.GlaTerminalIllnessBenefit == "Yes" {
+		memberDataPointResult.ReinsGlaTerminalIllnessLoading = reinsGL.TerminalIllnessLoadingRate
+	}
+	if groupQuote.ContinuationOption {
+		memberDataPointResult.ReinsContinuationLoading = reinsGL.ContinuationLoadingRate
+	}
+
+	// GLA: BaseReinsGlaRate = ReinsGlaQx × (1 + ReinsGlaIndustryLoading + GlaRegionLoading)
+	//                        + ReinsGlaAidsQx × (1 + GlaAidsRegionLoading)
+	if schemeCategory.GlaBenefit {
+		memberDataPointResult.ReinsGlaQx = GetReinsuranceGlaRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, schemeCategory)
+		memberDataPointResult.ReinsGlaAidsQx = GetReinsuranceGlaAidsRate(memberDataPointResult, groupParameter)
+		memberDataPointResult.BaseReinsGlaRate = memberDataPointResult.ReinsGlaQx*(1+memberDataPointResult.ReinsGlaIndustryLoading+memberDataPointResult.GlaRegionLoading) +
+			memberDataPointResult.ReinsGlaAidsQx*(1+memberDataPointResult.GlaAidsRegionLoading)
+		memberDataPointResult.LoadedReinsGlaRate = memberDataPointResult.BaseReinsGlaRate *
+			(1 + memberDataPointResult.ReinsGlaContingencyLoading + memberDataPointResult.ReinsGlaTerminalIllnessLoading + memberDataPointResult.ReinsContinuationLoading)
+	}
+
+	// PTD
+	if schemeCategory.PtdBenefit {
+		memberDataPointResult.ReinsPtdRate = GetReinsurancePtdRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, schemeCategory)
+		if schemeCategory.PtdBenefitType == "Accelerated" {
+			memberDataPointResult.BaseReinsPtdRate = memberDataPointResult.ReinsPtdRate * (1 + memberDataPointResult.ReinsPtdIndustryLoading + memberDataPointResult.PtdRegionLoading - reinsGL.PtdAcceleratedBenefitDiscount)
+		} else {
+			memberDataPointResult.BaseReinsPtdRate = memberDataPointResult.ReinsPtdRate * (1 + memberDataPointResult.ReinsPtdIndustryLoading + memberDataPointResult.PtdRegionLoading)
+		}
+		memberDataPointResult.LoadedReinsPtdRate = memberDataPointResult.BaseReinsPtdRate * (1 + memberDataPointResult.ReinsPtdContingencyLoading)
+	}
+
+	// CI
+	if schemeCategory.CiBenefit {
+		memberDataPointResult.ReinsCiRate = GetReinsuranceCiRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, schemeCategory)
+		if schemeCategory.CiBenefitStructure == "Accelerated" {
+			memberDataPointResult.BaseReinsCiRate = memberDataPointResult.ReinsCiRate * (1 + memberDataPointResult.ReinsCiIndustryLoading + memberDataPointResult.CiRegionLoading - reinsGL.CiAcceleratedBenefitDiscount)
+		} else {
+			memberDataPointResult.BaseReinsCiRate = memberDataPointResult.ReinsCiRate * (1 + memberDataPointResult.ReinsCiIndustryLoading + memberDataPointResult.CiRegionLoading)
+		}
+		memberDataPointResult.LoadedReinsCiRate = memberDataPointResult.BaseReinsCiRate * (1 + memberDataPointResult.ReinsCiContingencyLoading)
+	}
+
+	// TTD — reinsurance TTD rate table is not yet present; base uses direct TTD Qx scaled by reinsurance industry loading.
+	if schemeCategory.TtdBenefit {
+		ttdReinsQx := memberDataPointResult.BaseTtdRate / math.Max(1+memberDataPointResult.TtdIndustryLoading+memberDataPointResult.TtdRegionLoading, 1e-9)
+		memberDataPointResult.BaseReinsTtdRate = ttdReinsQx * (1 + memberDataPointResult.ReinsTtdIndustryLoading + memberDataPointResult.TtdRegionLoading)
+		memberDataPointResult.LoadedReinsTtdRate = memberDataPointResult.BaseReinsTtdRate * (1 + memberDataPointResult.ReinsTtdContingencyLoading)
+	}
+
+	// PHI
+	if schemeCategory.PhiBenefit {
+		memberDataPointResult.ReinsPhiRate = GetReinsurancePhiRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, schemeCategory)
+		memberDataPointResult.BaseReinsPhiRate = memberDataPointResult.ReinsPhiRate * (1 + memberDataPointResult.ReinsPhiIndustryLoading + memberDataPointResult.PhiRegionLoading)
+		memberDataPointResult.LoadedReinsPhiRate = memberDataPointResult.BaseReinsPhiRate * (1 + memberDataPointResult.ReinsPhiContingencyLoading)
+	}
+
+	// Spouse GLA
+	if schemeCategory.SglaBenefit && len(memberDataPointResult.SpouseGender) > 0 {
+		spouseReinsIndustry := GetReinsuranceIndustryLoading(groupParameter.RiskRateCode, groupQuote.OccupationClass, memberDataPointResult.SpouseGender[:1])
+		memberDataPointResult.ReinsSpouseGlaQx = GetReinsuranceSpouseGlaRate(memberDataPointResult, groupParameter, mpIncomeLevel, schemeCategory)
+		memberDataPointResult.ReinsSpouseGlaAidsQx = GetReinsuranceSpouseGlaAidsRate(memberDataPointResult, groupParameter)
+		memberDataPointResult.ReinsSpouseGlaLoading = spouseReinsIndustry.GlaIndustryLoadingRate
+		spouseRegionLoading := regionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+		memberDataPointResult.BaseReinsSpouseGlaRate = memberDataPointResult.ReinsSpouseGlaQx*(1+memberDataPointResult.ReinsSpouseGlaLoading+spouseRegionLoading.GlaRegionLoadingRate) +
+			memberDataPointResult.ReinsSpouseGlaAidsQx*(1+spouseRegionLoading.GlaAidsRegionLoadingRate)
+		memberDataPointResult.LoadedReinsSpouseGlaRate = memberDataPointResult.BaseReinsSpouseGlaRate
+	}
+
+	// Family funeral per-relationship reinsurance rates. When the scheme
+	// uses the GLA benefit as the main-member funeral rate we reuse
+	// LoadedReinsGlaRate; otherwise compute a dedicated reinsurance funeral
+	// rate from reinsurance_funeral_rates + reinsurance_funeral_aids_rates.
+	if schemeCategory.GlaBenefit {
+		memberDataPointResult.MainMemberReinsuranceRate = memberDataPointResult.LoadedReinsGlaRate
+		memberDataPointResult.SpouseReinsuranceRate = memberDataPointResult.LoadedReinsSpouseGlaRate
+	} else if schemeCategory.FamilyFuneralBenefit {
+		reinsFunQx := GetReinsuranceFuneralRate(memberDataPointResult, groupParameter)
+		reinsFunAidsQx := GetReinsuranceFuneralAidsRate(memberDataPointResult, groupParameter)
+		memberDataPointResult.MainMemberReinsuranceBaseRate = reinsFunQx*(1+memberDataPointResult.FunRegionLoading) + reinsFunAidsQx*(1+memberDataPointResult.FunAidsRegionLoading)
+		memberDataPointResult.MainMemberReinsuranceRate = memberDataPointResult.MainMemberReinsuranceBaseRate * (1 + memberDataPointResult.ReinsFunContingencyLoading)
+		if len(memberDataPointResult.SpouseGender) > 0 {
+			spouseRegionLoading := regionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+			spouseReinsFunQx := GetReinsuranceSpouseFuneralRate(memberDataPointResult, groupParameter)
+			spouseReinsFunAidsQx := GetReinsuranceSpouseFuneralAidsRate(memberDataPointResult, groupParameter)
+			memberDataPointResult.SpouseReinsuranceBaseRate = spouseReinsFunQx*(1+spouseRegionLoading.FunRegionLoadingRate) + spouseReinsFunAidsQx*(1+spouseRegionLoading.FunAidsRegionLoadingRate)
+			memberDataPointResult.SpouseReinsuranceRate = memberDataPointResult.SpouseReinsuranceBaseRate * (1 + memberDataPointResult.ReinsFunContingencyLoading)
+		}
+	}
+	// Child/parent/dependant — fall back to the direct-pricing rate scaled
+	// by the funeral reinsurance contingency loading, since those don't have
+	// per-life reinsurance rate tables.
+	memberDataPointResult.ChildReinsuranceBaseRate = memberDataPointResult.ChildFuneralBaseRate
+	memberDataPointResult.ChildReinsuranceRate = memberDataPointResult.ChildReinsuranceBaseRate * (1 + memberDataPointResult.ReinsFunContingencyLoading)
+	memberDataPointResult.ParentReinsuranceBaseRate = memberDataPointResult.DependantFuneralBaseRate
+	memberDataPointResult.ParentReinsuranceRate = memberDataPointResult.ParentReinsuranceBaseRate * (1 + memberDataPointResult.ReinsFunContingencyLoading)
+	memberDataPointResult.DependantReinsuranceBaseRate = memberDataPointResult.DependantFuneralBaseRate
+	memberDataPointResult.DependantReinsuranceRate = memberDataPointResult.DependantReinsuranceBaseRate * (1 + memberDataPointResult.ReinsFunContingencyLoading)
+
 	memberDataPointResult.GlaOfficePremium = memberDataPointResult.GlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjGlaOfficePremium = memberDataPointResult.ExpAdjGlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 
@@ -2472,62 +2589,74 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	bordereauxDatapoint.GlaCoveredSumAssured = memberDataPointResult.GlaCappedSumAssured
 	bordereauxDatapoint.LoadedGlaRiskRate = memberDataPointResult.LoadedGlaRate
 	bordereauxDatapoint.GlaRetainedRiskPremium = bordereauxDatapoint.GlaRetainedSumAssured * memberDataPointResult.LoadedGlaRate
-	bordereauxDatapoint.GlaCededRiskPremium = bordereauxDatapoint.GlaCededSumAssured * memberDataPointResult.LoadedGlaRate
+	// Ceded premium uses the LOADED REINSURANCE rate × ceded sum assured.
+	bordereauxDatapoint.GlaCededRiskPremium = bordereauxDatapoint.GlaCededSumAssured * memberDataPointResult.LoadedReinsGlaRate
+	memberDataPointResult.GlaReinsurancePremium = bordereauxDatapoint.GlaCededRiskPremium
 
 	bordereauxDatapoint.PtdMultiple = schemeCategory.PtdSalaryMultiple
 	bordereauxDatapoint.PtdCoveredSumAssured = memberDataPointResult.PtdCappedSumAssured
 	bordereauxDatapoint.LoadedPtdRiskRate = memberDataPointResult.LoadedPtdRate
 	bordereauxDatapoint.PtdRetainedRiskPremium = bordereauxDatapoint.PtdRetainedSumAssured * memberDataPointResult.LoadedPtdRate
-	bordereauxDatapoint.PtdCededRiskPremium = bordereauxDatapoint.PtdCededSumAssured * memberDataPointResult.LoadedPtdRate
+	bordereauxDatapoint.PtdCededRiskPremium = bordereauxDatapoint.PtdCededSumAssured * memberDataPointResult.LoadedReinsPtdRate
+	memberDataPointResult.PtdReinsurancePremium = bordereauxDatapoint.PtdCededRiskPremium
 
 	bordereauxDatapoint.CiMultiple = schemeCategory.CiCriticalIllnessSalaryMultiple
 	bordereauxDatapoint.CiCoveredSumAssured = memberDataPointResult.CiCappedSumAssured
 	bordereauxDatapoint.LoadedCiRiskRate = memberDataPointResult.LoadedCiRate
 	bordereauxDatapoint.CiRetainedRiskPremium = bordereauxDatapoint.CiRetainedSumAssured * memberDataPointResult.LoadedCiRate
-	bordereauxDatapoint.CiCededRiskPremium = bordereauxDatapoint.CiCededSumAssured * memberDataPointResult.LoadedCiRate
+	bordereauxDatapoint.CiCededRiskPremium = bordereauxDatapoint.CiCededSumAssured * memberDataPointResult.LoadedReinsCiRate
+	memberDataPointResult.CiReinsurancePremium = bordereauxDatapoint.CiCededRiskPremium
 
 	bordereauxDatapoint.SglaMultiple = schemeCategory.SglaSalaryMultiple
 	bordereauxDatapoint.SglaCoveredSumAssured = memberDataPointResult.SpouseGlaCappedSumAssured
 	bordereauxDatapoint.LoadedSglaRiskRate = memberDataPointResult.LoadedSpouseGlaRate
 	bordereauxDatapoint.SglaRetainedRiskPremium = bordereauxDatapoint.SglaRetainedSumAssured * memberDataPointResult.LoadedSpouseGlaRate
-	bordereauxDatapoint.SglaCededRiskPremium = bordereauxDatapoint.SglaCededSumAssured * memberDataPointResult.LoadedSpouseGlaRate
+	bordereauxDatapoint.SglaCededRiskPremium = bordereauxDatapoint.SglaCededSumAssured * memberDataPointResult.LoadedReinsSpouseGlaRate
+	memberDataPointResult.SpouseGlaReinsurancePremium = bordereauxDatapoint.SglaCededRiskPremium
 
 	bordereauxDatapoint.TtdReplacementMultiple = schemeCategory.TtdIncomeReplacementPercentage
 	bordereauxDatapoint.TtdMonthlyBenefit = memberDataPointResult.TtdCappedIncome
 	bordereauxDatapoint.LoadedTtdRiskRate = memberDataPointResult.LoadedTtdRate
 	bordereauxDatapoint.TtdRetainedRiskPremium = bordereauxDatapoint.TtdRetainedMonthlyBenefit * memberDataPointResult.LoadedTtdRate * groupParameter.TtdNumberMonthlyPayments
-	bordereauxDatapoint.TtdCededRiskPremium = bordereauxDatapoint.TtdCededMonthlyBenefit * memberDataPointResult.LoadedTtdRate * groupParameter.TtdNumberMonthlyPayments
+	bordereauxDatapoint.TtdCededRiskPremium = bordereauxDatapoint.TtdCededMonthlyBenefit * memberDataPointResult.LoadedReinsTtdRate * groupParameter.TtdNumberMonthlyPayments
+	memberDataPointResult.TtdReinsurancePremium = bordereauxDatapoint.TtdCededRiskPremium
 
 	bordereauxDatapoint.PhiReplacementMultiple = schemeCategory.PhiIncomeReplacementPercentage
 	bordereauxDatapoint.PhiMonthlyBenefit = memberDataPointResult.PhiCappedIncome
 	bordereauxDatapoint.LoadedPhiRiskRate = memberDataPointResult.LoadedPhiRate
 	bordereauxDatapoint.PhiRetainedRiskPremium = bordereauxDatapoint.PhiRetainedMonthlyBenefit * memberDataPointResult.LoadedPhiRate
-	bordereauxDatapoint.PhiCededRiskPremium = bordereauxDatapoint.PhiCededMonthlyBenefit * memberDataPointResult.LoadedPhiRate
+	bordereauxDatapoint.PhiCededRiskPremium = bordereauxDatapoint.PhiCededMonthlyBenefit * memberDataPointResult.LoadedReinsPhiRate
+	memberDataPointResult.PhiReinsurancePremium = bordereauxDatapoint.PhiCededRiskPremium
 
 	bordereauxDatapoint.MainMemberFuneralSumAssured = schemeCategory.FamilyFuneralMainMemberFuneralSumAssured
 	bordereauxDatapoint.MainMemberRiskRate = memberDataPointResult.LoadedGlaRate
 	bordereauxDatapoint.MainMemberRetainedRiskPremium = bordereauxDatapoint.MainMemberRetainedSumAssured * memberDataPointResult.LoadedGlaRate
-	bordereauxDatapoint.MainMemberCededRiskPremium = bordereauxDatapoint.MainMemberCededSumAssured * memberDataPointResult.LoadedGlaRate
+	bordereauxDatapoint.MainMemberCededRiskPremium = bordereauxDatapoint.MainMemberCededSumAssured * memberDataPointResult.MainMemberReinsuranceRate
+	memberDataPointResult.MainMemberReinsurancePremium = bordereauxDatapoint.MainMemberCededRiskPremium
 
 	bordereauxDatapoint.SpouseFuneralSumAssured = schemeCategory.FamilyFuneralSpouseFuneralSumAssured
 	bordereauxDatapoint.SpouseRiskRate = memberDataPointResult.LoadedSpouseGlaRate
 	bordereauxDatapoint.SpouseRetainedRiskPremium = bordereauxDatapoint.SpouseRetainedSumAssured * memberDataPointResult.LoadedSpouseGlaRate
-	bordereauxDatapoint.SpouseCededRiskPremium = bordereauxDatapoint.SpouseCededSumAssured * memberDataPointResult.LoadedSpouseGlaRate
+	bordereauxDatapoint.SpouseCededRiskPremium = bordereauxDatapoint.SpouseCededSumAssured * memberDataPointResult.SpouseReinsuranceRate
+	memberDataPointResult.SpouseReinsurancePremium = bordereauxDatapoint.SpouseCededRiskPremium
 
 	bordereauxDatapoint.ChildFuneralSumAssured = schemeCategory.FamilyFuneralChildrenFuneralSumAssured
 	bordereauxDatapoint.ChildRiskRate = memberDataPointResult.ChildFuneralBaseRate
 	bordereauxDatapoint.ChildRetainedRiskPremium = bordereauxDatapoint.ChildRetainedSumAssured * memberDataPointResult.ChildFuneralBaseRate
-	bordereauxDatapoint.ChildCededRiskPremium = bordereauxDatapoint.ChildCededSumAssured * memberDataPointResult.ChildFuneralBaseRate
+	bordereauxDatapoint.ChildCededRiskPremium = bordereauxDatapoint.ChildCededSumAssured * memberDataPointResult.ChildReinsuranceRate
+	memberDataPointResult.ChildReinsurancePremium = bordereauxDatapoint.ChildCededRiskPremium
 
 	bordereauxDatapoint.ParentFuneralSumAssured = schemeCategory.FamilyFuneralParentFuneralSumAssured
 	bordereauxDatapoint.ParentRiskRate = memberDataPointResult.DependantFuneralBaseRate
 	bordereauxDatapoint.ParentRetainedRiskPremium = bordereauxDatapoint.ParentRetainedSumAssured * memberDataPointResult.DependantFuneralBaseRate
-	bordereauxDatapoint.ParentCededRiskPremium = bordereauxDatapoint.ParentCededSumAssured * memberDataPointResult.DependantFuneralBaseRate
+	bordereauxDatapoint.ParentCededRiskPremium = bordereauxDatapoint.ParentCededSumAssured * memberDataPointResult.ParentReinsuranceRate
+	memberDataPointResult.ParentReinsurancePremium = bordereauxDatapoint.ParentCededRiskPremium
 
 	bordereauxDatapoint.DependantFuneralSumAssured = schemeCategory.FamilyFuneralAdultDependantSumAssured
 	bordereauxDatapoint.DependantRiskRate = memberDataPointResult.DependantFuneralBaseRate
 	bordereauxDatapoint.DependantRetainedRiskPremium = bordereauxDatapoint.DependantRetainedSumAssured * memberDataPointResult.DependantFuneralBaseRate
-	bordereauxDatapoint.DependantCededRiskPremium = bordereauxDatapoint.DependantCededSumAssured * memberDataPointResult.DependantFuneralBaseRate
+	bordereauxDatapoint.DependantCededRiskPremium = bordereauxDatapoint.DependantCededSumAssured * memberDataPointResult.DependantReinsuranceRate
+	memberDataPointResult.DependantReinsurancePremium = bordereauxDatapoint.DependantCededRiskPremium
 
 	//UpdateRatedMemberData(mpIndex, memberDataPointResult, memberDataResults)
 }
@@ -3247,62 +3376,74 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	bordereauxDatapoint.GlaCoveredSumAssured = memberDataPointResult.GlaCappedSumAssured
 	bordereauxDatapoint.LoadedGlaRiskRate = memberDataPointResult.LoadedGlaRate
 	bordereauxDatapoint.GlaRetainedRiskPremium = bordereauxDatapoint.GlaRetainedSumAssured * memberDataPointResult.LoadedGlaRate
-	bordereauxDatapoint.GlaCededRiskPremium = bordereauxDatapoint.GlaCededSumAssured * memberDataPointResult.LoadedGlaRate
+	// Ceded premium uses the LOADED REINSURANCE rate × ceded sum assured.
+	bordereauxDatapoint.GlaCededRiskPremium = bordereauxDatapoint.GlaCededSumAssured * memberDataPointResult.LoadedReinsGlaRate
+	memberDataPointResult.GlaReinsurancePremium = bordereauxDatapoint.GlaCededRiskPremium
 
 	bordereauxDatapoint.PtdMultiple = groupQuote.SchemeCategories[i].PtdSalaryMultiple
 	bordereauxDatapoint.PtdCoveredSumAssured = memberDataPointResult.PtdCappedSumAssured
 	bordereauxDatapoint.LoadedPtdRiskRate = memberDataPointResult.LoadedPtdRate
 	bordereauxDatapoint.PtdRetainedRiskPremium = bordereauxDatapoint.PtdRetainedSumAssured * memberDataPointResult.LoadedPtdRate
-	bordereauxDatapoint.PtdCededRiskPremium = bordereauxDatapoint.PtdCededSumAssured * memberDataPointResult.LoadedPtdRate
+	bordereauxDatapoint.PtdCededRiskPremium = bordereauxDatapoint.PtdCededSumAssured * memberDataPointResult.LoadedReinsPtdRate
+	memberDataPointResult.PtdReinsurancePremium = bordereauxDatapoint.PtdCededRiskPremium
 
 	bordereauxDatapoint.CiMultiple = groupQuote.SchemeCategories[i].CiCriticalIllnessSalaryMultiple
 	bordereauxDatapoint.CiCoveredSumAssured = memberDataPointResult.CiCappedSumAssured
 	bordereauxDatapoint.LoadedCiRiskRate = memberDataPointResult.LoadedCiRate
 	bordereauxDatapoint.CiRetainedRiskPremium = bordereauxDatapoint.CiRetainedSumAssured * memberDataPointResult.LoadedCiRate
-	bordereauxDatapoint.CiCededRiskPremium = bordereauxDatapoint.CiCededSumAssured * memberDataPointResult.LoadedCiRate
+	bordereauxDatapoint.CiCededRiskPremium = bordereauxDatapoint.CiCededSumAssured * memberDataPointResult.LoadedReinsCiRate
+	memberDataPointResult.CiReinsurancePremium = bordereauxDatapoint.CiCededRiskPremium
 
 	bordereauxDatapoint.SglaMultiple = groupQuote.SchemeCategories[i].SglaSalaryMultiple
 	bordereauxDatapoint.SglaCoveredSumAssured = memberDataPointResult.SpouseGlaCappedSumAssured
 	bordereauxDatapoint.LoadedSglaRiskRate = memberDataPointResult.LoadedSpouseGlaRate
 	bordereauxDatapoint.SglaRetainedRiskPremium = bordereauxDatapoint.SglaRetainedSumAssured * memberDataPointResult.LoadedSpouseGlaRate
-	bordereauxDatapoint.SglaCededRiskPremium = bordereauxDatapoint.SglaCededSumAssured * memberDataPointResult.LoadedSpouseGlaRate
+	bordereauxDatapoint.SglaCededRiskPremium = bordereauxDatapoint.SglaCededSumAssured * memberDataPointResult.LoadedReinsSpouseGlaRate
+	memberDataPointResult.SpouseGlaReinsurancePremium = bordereauxDatapoint.SglaCededRiskPremium
 
 	bordereauxDatapoint.TtdReplacementMultiple = groupQuote.SchemeCategories[i].TtdIncomeReplacementPercentage
 	bordereauxDatapoint.TtdMonthlyBenefit = memberDataPointResult.TtdCappedIncome
 	bordereauxDatapoint.LoadedTtdRiskRate = memberDataPointResult.LoadedTtdRate
 	bordereauxDatapoint.TtdRetainedRiskPremium = bordereauxDatapoint.TtdRetainedMonthlyBenefit * memberDataPointResult.LoadedTtdRate * groupParameter.TtdNumberMonthlyPayments
-	bordereauxDatapoint.TtdCededRiskPremium = bordereauxDatapoint.TtdCededMonthlyBenefit * memberDataPointResult.LoadedTtdRate * groupParameter.TtdNumberMonthlyPayments
+	bordereauxDatapoint.TtdCededRiskPremium = bordereauxDatapoint.TtdCededMonthlyBenefit * memberDataPointResult.LoadedReinsTtdRate * groupParameter.TtdNumberMonthlyPayments
+	memberDataPointResult.TtdReinsurancePremium = bordereauxDatapoint.TtdCededRiskPremium
 
 	bordereauxDatapoint.PhiReplacementMultiple = groupQuote.SchemeCategories[i].PhiIncomeReplacementPercentage
 	bordereauxDatapoint.PhiMonthlyBenefit = memberDataPointResult.PhiCappedIncome
 	bordereauxDatapoint.LoadedPhiRiskRate = memberDataPointResult.LoadedPhiRate
 	bordereauxDatapoint.PhiRetainedRiskPremium = bordereauxDatapoint.PhiRetainedMonthlyBenefit * memberDataPointResult.LoadedPhiRate
-	bordereauxDatapoint.PhiCededRiskPremium = bordereauxDatapoint.PhiCededMonthlyBenefit * memberDataPointResult.LoadedPhiRate
+	bordereauxDatapoint.PhiCededRiskPremium = bordereauxDatapoint.PhiCededMonthlyBenefit * memberDataPointResult.LoadedReinsPhiRate
+	memberDataPointResult.PhiReinsurancePremium = bordereauxDatapoint.PhiCededRiskPremium
 
 	bordereauxDatapoint.MainMemberFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralMainMemberFuneralSumAssured
 	bordereauxDatapoint.MainMemberRiskRate = memberDataPointResult.LoadedGlaRate
 	bordereauxDatapoint.MainMemberRetainedRiskPremium = bordereauxDatapoint.MainMemberRetainedSumAssured * memberDataPointResult.LoadedGlaRate
-	bordereauxDatapoint.MainMemberCededRiskPremium = bordereauxDatapoint.MainMemberCededSumAssured * memberDataPointResult.LoadedGlaRate
+	bordereauxDatapoint.MainMemberCededRiskPremium = bordereauxDatapoint.MainMemberCededSumAssured * memberDataPointResult.MainMemberReinsuranceRate
+	memberDataPointResult.MainMemberReinsurancePremium = bordereauxDatapoint.MainMemberCededRiskPremium
 
 	bordereauxDatapoint.SpouseFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured
 	bordereauxDatapoint.SpouseRiskRate = memberDataPointResult.LoadedSpouseGlaRate
 	bordereauxDatapoint.SpouseRetainedRiskPremium = bordereauxDatapoint.SpouseRetainedSumAssured * memberDataPointResult.LoadedSpouseGlaRate
-	bordereauxDatapoint.SpouseCededRiskPremium = bordereauxDatapoint.SpouseCededSumAssured * memberDataPointResult.LoadedSpouseGlaRate
+	bordereauxDatapoint.SpouseCededRiskPremium = bordereauxDatapoint.SpouseCededSumAssured * memberDataPointResult.SpouseReinsuranceRate
+	memberDataPointResult.SpouseReinsurancePremium = bordereauxDatapoint.SpouseCededRiskPremium
 
 	bordereauxDatapoint.ChildFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralChildrenFuneralSumAssured
 	bordereauxDatapoint.ChildRiskRate = memberDataPointResult.ChildFuneralBaseRate
 	bordereauxDatapoint.ChildRetainedRiskPremium = bordereauxDatapoint.ChildRetainedSumAssured * memberDataPointResult.ChildFuneralBaseRate
-	bordereauxDatapoint.ChildCededRiskPremium = bordereauxDatapoint.ChildCededSumAssured * memberDataPointResult.ChildFuneralBaseRate
+	bordereauxDatapoint.ChildCededRiskPremium = bordereauxDatapoint.ChildCededSumAssured * memberDataPointResult.ChildReinsuranceRate
+	memberDataPointResult.ChildReinsurancePremium = bordereauxDatapoint.ChildCededRiskPremium
 
 	bordereauxDatapoint.ParentFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralParentFuneralSumAssured
 	bordereauxDatapoint.ParentRiskRate = memberDataPointResult.DependantFuneralBaseRate
 	bordereauxDatapoint.ParentRetainedRiskPremium = bordereauxDatapoint.ParentRetainedSumAssured * memberDataPointResult.DependantFuneralBaseRate
-	bordereauxDatapoint.ParentCededRiskPremium = bordereauxDatapoint.ParentCededSumAssured * memberDataPointResult.DependantFuneralBaseRate
+	bordereauxDatapoint.ParentCededRiskPremium = bordereauxDatapoint.ParentCededSumAssured * memberDataPointResult.ParentReinsuranceRate
+	memberDataPointResult.ParentReinsurancePremium = bordereauxDatapoint.ParentCededRiskPremium
 
 	bordereauxDatapoint.DependantFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured
 	bordereauxDatapoint.DependantRiskRate = memberDataPointResult.DependantFuneralBaseRate
 	bordereauxDatapoint.DependantRetainedRiskPremium = bordereauxDatapoint.DependantRetainedSumAssured * memberDataPointResult.DependantFuneralBaseRate
-	bordereauxDatapoint.DependantCededRiskPremium = bordereauxDatapoint.DependantCededSumAssured * memberDataPointResult.DependantFuneralBaseRate
+	bordereauxDatapoint.DependantCededRiskPremium = bordereauxDatapoint.DependantCededSumAssured * memberDataPointResult.DependantReinsuranceRate
+	memberDataPointResult.DependantReinsurancePremium = bordereauxDatapoint.DependantCededRiskPremium
 
 	return MemberRateResult{
 		Rating:          memberDataPointResult,
@@ -3575,6 +3716,11 @@ var gpTableSpecs = []gpTableSpec{
 	{"reinsuranceCiRate", "Reinsurance CI Rate", "reinsurancecirate", "reinsurance", models.ReinsuranceCiRate{}},
 	{"reinsurancePtdRate", "Reinsurance PTD Rate", "reinsuranceptdrate", "reinsurance", models.ReinsurancePtdRate{}},
 	{"reinsurancePhiRate", "Reinsurance PHI Rate", "reinsurancephirate", "reinsurance", models.ReinsurancePhiRate{}},
+	{"reinsuranceFuneralAidsRate", "Reinsurance Funeral Aids Rate", "reinsurancefuneralaidsrates", "reinsurance", models.ReinsuranceFuneralAidsRate{}},
+	{"reinsuranceFuneralRate", "Reinsurance Funeral Rate", "reinsurancefuneralrates", "reinsurance", models.ReinsuranceFuneralRate{}},
+	{"reinsuranceGlaAidsRate", "Reinsurance GLA Aids Rate", "reinsuranceglaaidsrates", "reinsurance", models.ReinsuranceGlaAidsRate{}},
+	{"reinsuranceGeneralLoading", "Reinsurance General Loading", "reinsurancegeneralloadings", "reinsurance", models.ReinsuranceGeneralLoading{}},
+	{"reinsuranceIndustryLoading", "Reinsurance Industry Loading", "reinsuranceindustryloadings", "reinsurance", models.ReinsuranceIndustryLoading{}},
 }
 
 // setGPTableStat upserts the row count for a single table into gp_table_stats.
@@ -3899,6 +4045,36 @@ func GetGPTableMetaDataLEGACY() (map[string]interface{}, error) {
 			tableType = "Reinsurance PHI Rate"
 			category = "reinsurance"
 			var m models.ReinsurancePhiRate
+			populated, _ := IsTableEmpty(m)
+			legacyMetadata = append(legacyMetadata, models.TableMetaData{TableType: tableType, Category: category, Data: nil, Populated: populated})
+		case "reinsuranceFuneralAidsRate":
+			tableType = "Reinsurance Funeral Aids Rate"
+			category = "reinsurance"
+			var m models.ReinsuranceFuneralAidsRate
+			populated, _ := IsTableEmpty(m)
+			legacyMetadata = append(legacyMetadata, models.TableMetaData{TableType: tableType, Category: category, Data: nil, Populated: populated})
+		case "reinsuranceFuneralRate":
+			tableType = "Reinsurance Funeral Rate"
+			category = "reinsurance"
+			var m models.ReinsuranceFuneralRate
+			populated, _ := IsTableEmpty(m)
+			legacyMetadata = append(legacyMetadata, models.TableMetaData{TableType: tableType, Category: category, Data: nil, Populated: populated})
+		case "reinsuranceGlaAidsRate":
+			tableType = "Reinsurance GLA Aids Rate"
+			category = "reinsurance"
+			var m models.ReinsuranceGlaAidsRate
+			populated, _ := IsTableEmpty(m)
+			legacyMetadata = append(legacyMetadata, models.TableMetaData{TableType: tableType, Category: category, Data: nil, Populated: populated})
+		case "reinsuranceGeneralLoading":
+			tableType = "Reinsurance General Loading"
+			category = "reinsurance"
+			var m models.ReinsuranceGeneralLoading
+			populated, _ := IsTableEmpty(m)
+			legacyMetadata = append(legacyMetadata, models.TableMetaData{TableType: tableType, Category: category, Data: nil, Populated: populated})
+		case "reinsuranceIndustryLoading":
+			tableType = "Reinsurance Industry Loading"
+			category = "reinsurance"
+			var m models.ReinsuranceIndustryLoading
 			populated, _ := IsTableEmpty(m)
 			legacyMetadata = append(legacyMetadata, models.TableMetaData{TableType: tableType, Category: category, Data: nil, Populated: populated})
 		}
@@ -4890,6 +5066,121 @@ func SaveGPTables(v *multipart.FileHeader, tableType string, riskRateCode string
 			return fmt.Errorf("failed to save Reinsurance PHI Rate data: %v", err)
 		}
 
+	case "Reinsurance Funeral Aids Rate":
+		if err := utils.ValidateCSVHeaders(headers, models.ReinsuranceFuneralAidsRate{}); err != nil {
+			return fmt.Errorf("%s validation failed: %v", tableType, err)
+		}
+		DB.Where("risk_rate_code = ?", riskRateCode).Delete(&models.ReinsuranceFuneralAidsRate{})
+		var pps []models.ReinsuranceFuneralAidsRate
+		for i := 1; ; i++ {
+			var pp models.ReinsuranceFuneralAidsRate
+			if err := dec.Decode(&pp); err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("error decoding Reinsurance Funeral Aids Rate at row %d: %v", i, err)
+			}
+			pp.RiskRateCode = riskRateCode
+			pp.CreatedBy = user.UserName
+			pps = append(pps, pp)
+		}
+		err = DB.CreateInBatches(&pps, 100).Error
+		if err != nil {
+			appLog.Error("Save Reinsurance Funeral Aids Rate error: ", err.Error())
+			return fmt.Errorf("failed to save Reinsurance Funeral Aids Rate data: %v", err)
+		}
+
+	case "Reinsurance Funeral Rate":
+		if err := utils.ValidateCSVHeaders(headers, models.ReinsuranceFuneralRate{}); err != nil {
+			return fmt.Errorf("%s validation failed: %v", tableType, err)
+		}
+		DB.Where("risk_rate_code = ?", riskRateCode).Delete(&models.ReinsuranceFuneralRate{})
+		var pps []models.ReinsuranceFuneralRate
+		for i := 1; ; i++ {
+			var pp models.ReinsuranceFuneralRate
+			if err := dec.Decode(&pp); err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("error decoding Reinsurance Funeral Rate at row %d: %v", i, err)
+			}
+			pp.RiskRateCode = riskRateCode
+			pp.CreatedBy = user.UserName
+			pps = append(pps, pp)
+		}
+		err = DB.CreateInBatches(&pps, 100).Error
+		if err != nil {
+			appLog.Error("Save Reinsurance Funeral Rate error: ", err.Error())
+			return fmt.Errorf("failed to save Reinsurance Funeral Rate data: %v", err)
+		}
+
+	case "Reinsurance GLA Aids Rate":
+		if err := utils.ValidateCSVHeaders(headers, models.ReinsuranceGlaAidsRate{}); err != nil {
+			return fmt.Errorf("%s validation failed: %v", tableType, err)
+		}
+		DB.Where("risk_rate_code = ?", riskRateCode).Delete(&models.ReinsuranceGlaAidsRate{})
+		var pps []models.ReinsuranceGlaAidsRate
+		for i := 1; ; i++ {
+			var pp models.ReinsuranceGlaAidsRate
+			if err := dec.Decode(&pp); err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("error decoding Reinsurance GLA Aids Rate at row %d: %v", i, err)
+			}
+			pp.RiskRateCode = riskRateCode
+			pp.CreatedBy = user.UserName
+			pps = append(pps, pp)
+		}
+		err = DB.CreateInBatches(&pps, 100).Error
+		if err != nil {
+			appLog.Error("Save Reinsurance GLA Aids Rate error: ", err.Error())
+			return fmt.Errorf("failed to save Reinsurance GLA Aids Rate data: %v", err)
+		}
+
+	case "Reinsurance General Loading":
+		if err := utils.ValidateCSVHeaders(headers, models.ReinsuranceGeneralLoading{}); err != nil {
+			return fmt.Errorf("%s validation failed: %v", tableType, err)
+		}
+		DB.Where("risk_rate_code = ?", riskRateCode).Delete(&models.ReinsuranceGeneralLoading{})
+		var pps []models.ReinsuranceGeneralLoading
+		for i := 1; ; i++ {
+			var pp models.ReinsuranceGeneralLoading
+			if err := dec.Decode(&pp); err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("error decoding Reinsurance General Loading at row %d: %v", i, err)
+			}
+			pp.RiskRateCode = riskRateCode
+			pp.CreatedBy = user.UserName
+			pps = append(pps, pp)
+		}
+		err = DB.CreateInBatches(&pps, 100).Error
+		if err != nil {
+			appLog.Error("Save Reinsurance General Loading error: ", err.Error())
+			return fmt.Errorf("failed to save Reinsurance General Loading data: %v", err)
+		}
+
+	case "Reinsurance Industry Loading":
+		if err := utils.ValidateCSVHeaders(headers, models.ReinsuranceIndustryLoading{}); err != nil {
+			return fmt.Errorf("%s validation failed: %v", tableType, err)
+		}
+		DB.Where("risk_rate_code = ?", riskRateCode).Delete(&models.ReinsuranceIndustryLoading{})
+		var pps []models.ReinsuranceIndustryLoading
+		for i := 1; ; i++ {
+			var pp models.ReinsuranceIndustryLoading
+			if err := dec.Decode(&pp); err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("error decoding Reinsurance Industry Loading at row %d: %v", i, err)
+			}
+			pp.RiskRateCode = riskRateCode
+			pp.CreatedBy = user.UserName
+			pps = append(pps, pp)
+		}
+		err = DB.CreateInBatches(&pps, 100).Error
+		if err != nil {
+			appLog.Error("Save Reinsurance Industry Loading error: ", err.Error())
+			return fmt.Errorf("failed to save Reinsurance Industry Loading data: %v", err)
+		}
+
 	case "Premium Loadings":
 		if err := utils.ValidateCSVHeaders(headers, models.PremiumLoading{}); err != nil {
 			return fmt.Errorf("%s validation failed: %v", tableType, err)
@@ -5121,6 +5412,16 @@ func DeleteGPTableData(tableType, riskCode string) error {
 		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.ReinsurancePtdRate{})
 	case "reinsurancephirate":
 		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.ReinsurancePhiRate{})
+	case "reinsurancefuneralaidsrates":
+		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.ReinsuranceFuneralAidsRate{})
+	case "reinsurancefuneralrates":
+		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.ReinsuranceFuneralRate{})
+	case "reinsuranceglaaidsrates":
+		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.ReinsuranceGlaAidsRate{})
+	case "reinsurancegeneralloadings":
+		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.ReinsuranceGeneralLoading{})
+	case "reinsuranceindustryloadings":
+		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.ReinsuranceIndustryLoading{})
 	case "premiumloadings":
 		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.PremiumLoading{})
 	case "schemesizelevels":
@@ -5200,6 +5501,16 @@ func GetGPTableRiskCodes(tableType string) []string {
 		DB.Model(&models.ReinsurancePtdRate{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
 	case "reinsurancephirate":
 		DB.Model(&models.ReinsurancePhiRate{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
+	case "reinsurancefuneralaidsrates":
+		DB.Model(&models.ReinsuranceFuneralAidsRate{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
+	case "reinsurancefuneralrates":
+		DB.Model(&models.ReinsuranceFuneralRate{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
+	case "reinsuranceglaaidsrates":
+		DB.Model(&models.ReinsuranceGlaAidsRate{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
+	case "reinsurancegeneralloadings":
+		DB.Model(&models.ReinsuranceGeneralLoading{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
+	case "reinsuranceindustryloadings":
+		DB.Model(&models.ReinsuranceIndustryLoading{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
 	case "premiumloadings":
 		DB.Model(&models.PremiumLoading{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
 	case "schemesizelevels":
@@ -5276,6 +5587,16 @@ func GetGPTableYears(tableType string) []int {
 		DB.Model(&models.ReinsurancePtdRate{}).Select("DISTINCT year").Order("year desc").Find(&years)
 	case "reinsurancephirate":
 		DB.Model(&models.ReinsurancePhiRate{}).Select("DISTINCT year").Order("year desc").Find(&years)
+	case "reinsurancefuneralaidsrates":
+		DB.Model(&models.ReinsuranceFuneralAidsRate{}).Select("DISTINCT year").Order("year desc").Find(&years)
+	case "reinsurancefuneralrates":
+		DB.Model(&models.ReinsuranceFuneralRate{}).Select("DISTINCT year").Order("year desc").Find(&years)
+	case "reinsuranceglaaidsrates":
+		DB.Model(&models.ReinsuranceGlaAidsRate{}).Select("DISTINCT year").Order("year desc").Find(&years)
+	case "reinsurancegeneralloadings":
+		DB.Model(&models.ReinsuranceGeneralLoading{}).Select("DISTINCT year").Order("year desc").Find(&years)
+	case "reinsuranceindustryloadings":
+		DB.Model(&models.ReinsuranceIndustryLoading{}).Select("DISTINCT year").Order("year desc").Find(&years)
 	case "premiumloadings":
 		DB.Model(&models.PremiumLoading{}).Select("DISTINCT year").Order("year desc").Find(&years)
 	case "schemesizelevels":
@@ -5530,6 +5851,46 @@ func GetGPTableData(tableType string) []map[string]interface{} {
 		}
 	case "reinsurancephirate":
 		var data []models.ReinsurancePhiRate
+		DB.Find(&data)
+		b, _ := json.Marshal(&data)
+		err := json.Unmarshal(b, &results)
+		if err != nil {
+			fmt.Println(err)
+		}
+	case "reinsurancefuneralaidsrates":
+		var data []models.ReinsuranceFuneralAidsRate
+		DB.Find(&data)
+		b, _ := json.Marshal(&data)
+		err := json.Unmarshal(b, &results)
+		if err != nil {
+			fmt.Println(err)
+		}
+	case "reinsurancefuneralrates":
+		var data []models.ReinsuranceFuneralRate
+		DB.Find(&data)
+		b, _ := json.Marshal(&data)
+		err := json.Unmarshal(b, &results)
+		if err != nil {
+			fmt.Println(err)
+		}
+	case "reinsuranceglaaidsrates":
+		var data []models.ReinsuranceGlaAidsRate
+		DB.Find(&data)
+		b, _ := json.Marshal(&data)
+		err := json.Unmarshal(b, &results)
+		if err != nil {
+			fmt.Println(err)
+		}
+	case "reinsurancegeneralloadings":
+		var data []models.ReinsuranceGeneralLoading
+		DB.Find(&data)
+		b, _ := json.Marshal(&data)
+		err := json.Unmarshal(b, &results)
+		if err != nil {
+			fmt.Println(err)
+		}
+	case "reinsuranceindustryloadings":
+		var data []models.ReinsuranceIndustryLoading
 		DB.Find(&data)
 		b, _ := json.Marshal(&data)
 		err := json.Unmarshal(b, &results)
@@ -6099,6 +6460,221 @@ func GetSpouseFuneralAidsRate(memberResultData *models.MemberRatingResult, group
 
 	GroupPricingCache.Set(cacheKey, qx, 1)
 	return qx
+}
+
+// GetReinsuranceGlaAidsRate looks up the reinsurance-specific GLA aids Qx
+// for the main member. Returns 0 if no row is found (so missing tables do
+// not break pricing for schemes without reinsurance).
+func GetReinsuranceGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+	tableName := "reinsurance_gla_aids_rates"
+	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + memberResultData.Gender[:1]
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(float64)
+	}
+	var qx float64
+	DB.Table(tableName).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ?",
+			groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, memberResultData.Gender[:1]).
+		Pluck("gla_aids_qx", &qx)
+	GroupPricingCache.Set(cacheKey, qx, 1)
+	return qx
+}
+
+// GetReinsuranceSpouseGlaAidsRate — spouse variant of GetReinsuranceGlaAidsRate.
+func GetReinsuranceSpouseGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+	tableName := "reinsurance_gla_aids_rates"
+	cacheKey := tableName + "_spouse_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_" + memberResultData.SpouseGender[:1]
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(float64)
+	}
+	var qx float64
+	DB.Table(tableName).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ?",
+			groupPricingParameter.RiskRateCode, memberResultData.SpouseAgeNextBirthday, memberResultData.SpouseGender[:1]).
+		Pluck("gla_aids_qx", &qx)
+	GroupPricingCache.Set(cacheKey, qx, 1)
+	return qx
+}
+
+// GetReinsuranceFuneralRate looks up the reinsurance-specific funeral Qx for the main member.
+func GetReinsuranceFuneralRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+	tableName := "reinsurance_funeral_rates"
+	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + memberResultData.Gender[:1]
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(float64)
+	}
+	var qx float64
+	DB.Table(tableName).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ?",
+			groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, memberResultData.Gender[:1]).
+		Pluck("fun_qx", &qx)
+	GroupPricingCache.Set(cacheKey, qx, 1)
+	return qx
+}
+
+// GetReinsuranceSpouseFuneralRate — spouse variant.
+func GetReinsuranceSpouseFuneralRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+	tableName := "reinsurance_funeral_rates"
+	cacheKey := tableName + "_spouse_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_" + memberResultData.SpouseGender[:1]
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(float64)
+	}
+	var qx float64
+	DB.Table(tableName).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ?",
+			groupPricingParameter.RiskRateCode, memberResultData.SpouseAgeNextBirthday, memberResultData.SpouseGender[:1]).
+		Pluck("fun_qx", &qx)
+	GroupPricingCache.Set(cacheKey, qx, 1)
+	return qx
+}
+
+// GetReinsuranceFuneralAidsRate looks up the reinsurance-specific funeral aids Qx for the main member.
+func GetReinsuranceFuneralAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+	tableName := "reinsurance_funeral_aids_rates"
+	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + memberResultData.Gender[:1]
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(float64)
+	}
+	var qx float64
+	DB.Table(tableName).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ?",
+			groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, memberResultData.Gender[:1]).
+		Pluck("fun_aids_qx", &qx)
+	GroupPricingCache.Set(cacheKey, qx, 1)
+	return qx
+}
+
+// GetReinsuranceSpouseFuneralAidsRate — spouse variant.
+func GetReinsuranceSpouseFuneralAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+	tableName := "reinsurance_funeral_aids_rates"
+	cacheKey := tableName + "_spouse_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_" + memberResultData.SpouseGender[:1]
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(float64)
+	}
+	var qx float64
+	DB.Table(tableName).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ?",
+			groupPricingParameter.RiskRateCode, memberResultData.SpouseAgeNextBirthday, memberResultData.SpouseGender[:1]).
+		Pluck("fun_aids_qx", &qx)
+	GroupPricingCache.Set(cacheKey, qx, 1)
+	return qx
+}
+
+// GetReinsuranceGeneralLoading returns the per-age/gender reinsurance contingency &
+// continuation loadings row. Returns a zero-value struct (all loadings 0) if no
+// row matches, so reinsurance pricing gracefully degrades when the table is empty.
+func GetReinsuranceGeneralLoading(riskRateCode string, age int, gender string) models.ReinsuranceGeneralLoading {
+	tableName := "reinsurance_general_loadings"
+	cacheKey := tableName + "_" + riskRateCode + "_" + strconv.Itoa(age) + "_" + gender
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(models.ReinsuranceGeneralLoading)
+	}
+	var loading models.ReinsuranceGeneralLoading
+	DB.Table(tableName).
+		Where("risk_rate_code = ? AND age = ? AND gender = ?", riskRateCode, age, gender).
+		First(&loading)
+	GroupPricingCache.Set(cacheKey, loading, 1)
+	return loading
+}
+
+// GetReinsuranceIndustryLoading returns one row from reinsurance_industry_loadings
+// keyed by (risk_rate_code, occupation_class, gender). Returns a zero-value
+// struct if no row matches, so reinsurance pricing gracefully degrades when
+// the table is empty.
+func GetReinsuranceIndustryLoading(riskRateCode string, occupationClass int, gender string) models.ReinsuranceIndustryLoading {
+	tableName := "reinsurance_industry_loadings"
+	cacheKey := tableName + "_" + riskRateCode + "_" + strconv.Itoa(occupationClass) + "_" + strings.ToUpper(gender)
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(models.ReinsuranceIndustryLoading)
+	}
+	var loading models.ReinsuranceIndustryLoading
+	DB.Table(tableName).
+		Where("risk_rate_code = ? AND occupation_class = ? AND gender = ?", riskRateCode, occupationClass, strings.ToUpper(gender)).
+		First(&loading)
+	GroupPricingCache.Set(cacheKey, loading, 1)
+	return loading
+}
+
+// GetReinsuranceGlaRate looks up the reinsurance GLA Qx (re_qx) from
+// reinsurance_gla_rates. The table has richer keys (income_level,
+// waiting_period) so we honor them here; returns 0 when no match.
+func GetReinsuranceGlaRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, schemeCategory models.SchemeCategory) float64 {
+	tableName := "reinsurance_gla_rates"
+	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + strconv.Itoa(incomeLevel) + "_" + memberResultData.Gender[:1] + "_" + strconv.Itoa(schemeCategory.GlaWaitingPeriod)
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(float64)
+	}
+	var qx float64
+	DB.Table(tableName).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND income_level = ? AND gender = ? AND waiting_period = ?",
+			groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, incomeLevel, memberResultData.Gender[:1], schemeCategory.GlaWaitingPeriod).
+		Pluck("re_qx", &qx)
+	GroupPricingCache.Set(cacheKey, qx, 1)
+	return qx
+}
+
+// GetReinsuranceSpouseGlaRate — spouse variant.
+func GetReinsuranceSpouseGlaRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, schemeCategory models.SchemeCategory) float64 {
+	tableName := "reinsurance_gla_rates"
+	cacheKey := tableName + "_spouse_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_" + strconv.Itoa(incomeLevel) + "_" + memberResultData.SpouseGender[:1] + "_" + strconv.Itoa(schemeCategory.GlaWaitingPeriod)
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(float64)
+	}
+	var qx float64
+	DB.Table(tableName).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND income_level = ? AND gender = ? AND waiting_period = ?",
+			groupPricingParameter.RiskRateCode, memberResultData.SpouseAgeNextBirthday, incomeLevel, memberResultData.SpouseGender[:1], schemeCategory.GlaWaitingPeriod).
+		Pluck("re_qx", &qx)
+	GroupPricingCache.Set(cacheKey, qx, 1)
+	return qx
+}
+
+// GetReinsurancePtdRate looks up the reinsurance PTD rate.
+func GetReinsurancePtdRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, schemeCategory models.SchemeCategory) float64 {
+	tableName := "reinsurance_ptd_rates"
+	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + strconv.Itoa(incomeLevel) + "_" + memberResultData.Gender[:1] + "_" + strconv.Itoa(memberResultData.OccupationClass)
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(float64)
+	}
+	var rate float64
+	DB.Table(tableName).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND income_level = ? AND gender = ? AND occupation_class = ?",
+			groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, incomeLevel, memberResultData.Gender[:1], strconv.Itoa(memberResultData.OccupationClass)).
+		Pluck("ptd_rate", &rate)
+	GroupPricingCache.Set(cacheKey, rate, 1)
+	return rate
+}
+
+// GetReinsuranceCiRate looks up the reinsurance CI rate.
+func GetReinsuranceCiRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, schemeCategory models.SchemeCategory) float64 {
+	tableName := "reinsurance_ci_rates"
+	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + strconv.Itoa(incomeLevel) + "_" + memberResultData.Gender[:1] + "_" + strconv.Itoa(memberResultData.OccupationClass)
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(float64)
+	}
+	var rate float64
+	DB.Table(tableName).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND income_level = ? AND gender = ? AND occupation_class = ?",
+			groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, incomeLevel, memberResultData.Gender[:1], strconv.Itoa(memberResultData.OccupationClass)).
+		Pluck("ci_rate", &rate)
+	GroupPricingCache.Set(cacheKey, rate, 1)
+	return rate
+}
+
+// GetReinsurancePhiRate looks up the reinsurance PHI rate.
+func GetReinsurancePhiRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, schemeCategory models.SchemeCategory) float64 {
+	tableName := "reinsurance_phi_rates"
+	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + strconv.Itoa(incomeLevel) + "_" + memberResultData.Gender[:1] + "_" + strconv.Itoa(memberResultData.OccupationClass)
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(float64)
+	}
+	var rate float64
+	DB.Table(tableName).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND income_level = ? AND gender = ? AND occupation_class = ?",
+			groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, incomeLevel, memberResultData.Gender[:1], strconv.Itoa(memberResultData.OccupationClass)).
+		Pluck("phi_rate", &rate)
+	GroupPricingCache.Set(cacheKey, rate, 1)
+	return rate
 }
 
 // computeTakeHomePayFromBands calculates annual take-home pay from pre-fetched tax bands.

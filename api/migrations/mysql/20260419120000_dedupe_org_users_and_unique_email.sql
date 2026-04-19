@@ -45,7 +45,7 @@ SET @create_sql = (
               AND INDEX_NAME = 'idx_org_users_email'
         ),
         'SELECT 1',
-        'ALTER TABLE org_users ADD UNIQUE INDEX idx_org_users_email (email)'
+        'ALTER TABLE org_users ADD UNIQUE INDEX idx_org_users_email (email(255))'
     )
 );
 PREPARE stmt FROM @create_sql;
