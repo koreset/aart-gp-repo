@@ -12,31 +12,14 @@ func MigrateBaseTables() error {
 	appLog.Info("Migrating base tables")
 	err := DB.AutoMigrate(
 		&models.SystemLock{},
-		&models.BaseAssumptionVariable{},
-		&models.BaseFeature{},
-		&models.ModelPointVariable{},
-		&models.MarkovState{},
-		&models.BaseMortalityBand{},
-		&models.BaseAosVariable{},
-		&models.LicBaseVariable{},
 		&models.System{},
 		&models.AppUser{},
 		&models.UserToken{},
-		&models.ConsolidateResult{},
-		&models.CumulativeConsolidatedResult{},
-		&models.AnnualConsolidatedResult{},
-		&models.BelBuildupBaseVariable{},
-		&models.ProductFamily{},
-		&models.LiabilityMovementLine{},
 		&models.GroupPricingAgeBands{},
 		&models.GroupBusinessBenefits{},
 		&models.Activity{},
-		&models.RatingFactor{},
 		&models.GPPermission{},
 		&models.AuditLog{},
-		&models.TransitionState{},
-		&models.RetrenchmentRate{},
-		&models.DisabilityIncidenceFactors{},
 	)
 
 	if err != nil {
@@ -49,328 +32,328 @@ func MigrateBaseTables() error {
 }
 
 // MigrateProductModelTables migrates the product model tables
-func MigrateProductModelTables() error {
-	appLog.Info("Migrating product model tables")
-	err := DB.AutoMigrate(
-		&models.ProductModelPointCount{},
-		&models.AggregatedProjection{},
-		&models.ScopedAggregatedProjection{},
-		&models.Projection{},
-
-		&models.ProductModelpointVariable{},
-		&models.ProductTransitionState{},
-		&models.ProductTransition{},
-		&models.ProductTable{},
-		&models.ProductRatingFactor{},
-		&models.ProductFeatures{},
-		&models.ProductAccidentalBenefitMultiplier{},
-		&models.ProductPricingAccidentalBenefitMultiplier{},
-		&models.Fds{},
-		&models.GlobalTable{},
-		&models.ProductClawback{},
-		&models.ProductChildSumAssured{},
-		&models.ProductChildAdditionalSumAssured{},
-		&models.ProductAdditionalSumAssured{},
-		&models.ProductReinsurance{},
-		&models.ShockSetting{},
-		&models.ProductPricingShock{},
-		&models.Task{},
-		&models.ManualScopedAggregatedProjection{},
-		&models.LICAggregatedProjections{},
-		&models.ProductRider{},
-		&models.JobsTemplate{},
-		&models.JobTemplateContent{},
-		&models.ProductNonLifeRating{},
-		&models.ProductBenefitMultiplier{},
-		&models.ProductSpecialDecrementMargin{},
-		&models.ProductRenewableProfitAdjustment{},
-		&models.ProductUnitFundCharge{},
-		&models.ProductInvestmentReturn{},
-		&models.ProductFundAssetDistribution{},
-		&models.ProductMaturityPattern{},
-		&models.ProductSurrenderValueCoefficient{},
-		&models.IBNRAverageClaimAmount{},
-		&models.IBNRClaimHistorySummary{},
-		&models.LICClaimsAnalysisOfChange{},
-		&models.IBNRPaidVsOutstandingClaims{},
-		&models.IBNRProportionOutstandingClaims{},
-		&models.IBNRIncurredClaims{},
-		&models.AggregatedModifiedGMMProjection{},
-		&models.ModifiedGMMProjection{},
-		&models.ModifiedGMMScopedAggregation{},
-		&models.Escalations{},
-		&models.YieldCurve{},
-		&models.ProductParameters{},
-		&models.ProductCommissionStructure{},
-		&models.ProductMargins{},
-		&models.ProjectionJob{},
-		&models.JobProduct{},
-		&models.JobProductRunError{},
-		&models.CachedReserveResults{},
-		&models.RunParameters{},
-		&models.ModelPointPricing{},
-		&models.Profitability{},
-		&models.PricingRun{},
-		&models.PricingConfig{},
-		&models.RiskDriver{},
-		&models.RiskAdjustmentFactor{},
-		&models.RiskAdjustmentDriver{},
-		&models.RAConfiguration{},
-		&models.AOSConfiguration{},
-		&models.ProductLapseMargin{},
-		&models.AggregatedVariableGroup{},
-		&models.Product{},
-	)
-
-	if err != nil {
-		appLog.WithField("error", err.Error()).Error("Failed to migrate product model tables")
-		return err
-	}
-
-	appLog.Info("Successfully migrated product model tables")
-	return nil
-}
+//func MigrateProductModelTables() error {
+//	appLog.Info("Migrating product model tables")
+//	err := DB.AutoMigrate(
+//		&models.ProductModelPointCount{},
+//		&models.AggregatedProjection{},
+//		&models.ScopedAggregatedProjection{},
+//		&models.Projection{},
+//
+//		&models.ProductModelpointVariable{},
+//		&models.ProductTransitionState{},
+//		&models.ProductTransition{},
+//		&models.ProductTable{},
+//		&models.ProductRatingFactor{},
+//		&models.ProductFeatures{},
+//		&models.ProductAccidentalBenefitMultiplier{},
+//		&models.ProductPricingAccidentalBenefitMultiplier{},
+//		&models.Fds{},
+//		&models.GlobalTable{},
+//		&models.ProductClawback{},
+//		&models.ProductChildSumAssured{},
+//		&models.ProductChildAdditionalSumAssured{},
+//		&models.ProductAdditionalSumAssured{},
+//		&models.ProductReinsurance{},
+//		&models.ShockSetting{},
+//		&models.ProductPricingShock{},
+//		&models.Task{},
+//		&models.ManualScopedAggregatedProjection{},
+//		&models.LICAggregatedProjections{},
+//		&models.ProductRider{},
+//		&models.JobsTemplate{},
+//		&models.JobTemplateContent{},
+//		&models.ProductNonLifeRating{},
+//		&models.ProductBenefitMultiplier{},
+//		&models.ProductSpecialDecrementMargin{},
+//		&models.ProductRenewableProfitAdjustment{},
+//		&models.ProductUnitFundCharge{},
+//		&models.ProductInvestmentReturn{},
+//		&models.ProductFundAssetDistribution{},
+//		&models.ProductMaturityPattern{},
+//		&models.ProductSurrenderValueCoefficient{},
+//		&models.IBNRAverageClaimAmount{},
+//		&models.IBNRClaimHistorySummary{},
+//		&models.LICClaimsAnalysisOfChange{},
+//		&models.IBNRPaidVsOutstandingClaims{},
+//		&models.IBNRProportionOutstandingClaims{},
+//		&models.IBNRIncurredClaims{},
+//		&models.AggregatedModifiedGMMProjection{},
+//		&models.ModifiedGMMProjection{},
+//		&models.ModifiedGMMScopedAggregation{},
+//		&models.Escalations{},
+//		&models.YieldCurve{},
+//		&models.ProductParameters{},
+//		&models.ProductCommissionStructure{},
+//		&models.ProductMargins{},
+//		&models.ProjectionJob{},
+//		&models.JobProduct{},
+//		&models.JobProductRunError{},
+//		&models.CachedReserveResults{},
+//		&models.RunParameters{},
+//		&models.ModelPointPricing{},
+//		&models.Profitability{},
+//		&models.PricingRun{},
+//		&models.PricingConfig{},
+//		&models.RiskDriver{},
+//		&models.RiskAdjustmentFactor{},
+//		&models.RiskAdjustmentDriver{},
+//		&models.RAConfiguration{},
+//		&models.AOSConfiguration{},
+//		&models.ProductLapseMargin{},
+//		&models.AggregatedVariableGroup{},
+//		&models.Product{},
+//	)
+//
+//	if err != nil {
+//		appLog.WithField("error", err.Error()).Error("Failed to migrate product model tables")
+//		return err
+//	}
+//
+//	appLog.Info("Successfully migrated product model tables")
+//	return nil
+//}
 
 // MigratePricingTables migrates the pricing tables
-func MigratePricingTables() error {
-	appLog.Info("Migrating pricing tables")
-	err := DB.AutoMigrate(
-		// Currently empty as commented out in original code
-	)
-
-	if err != nil {
-		appLog.WithField("error", err.Error()).Error("Failed to migrate pricing tables")
-		return err
-	}
-
-	appLog.Info("Successfully migrated pricing tables")
-	return nil
-}
+//func MigratePricingTables() error {
+//	appLog.Info("Migrating pricing tables")
+//	err := DB.AutoMigrate(
+//		// Currently empty as commented out in original code
+//	)
+//
+//	if err != nil {
+//		appLog.WithField("error", err.Error()).Error("Failed to migrate pricing tables")
+//		return err
+//	}
+//
+//	appLog.Info("Successfully migrated pricing tables")
+//	return nil
+//}
 
 // MigrateEscalationTables migrates the escalation tables
-func MigrateEscalationTables() error {
-	appLog.Info("Migrating escalation tables")
-	err := DB.AutoMigrate(
-		&models.ProductParameters{},
-		&models.ProductPricingProductLevelEscalation{},
-		&models.PricingPoint{},
-		&models.PAAFinance{},
-		&models.ProductModelPointVariableStats{},
-		&models.PAAResult{},
-		&models.BalanceSheetRecord{},
-		&models.ProductShock{},
-	)
-
-	if err != nil {
-		appLog.WithField("error", err.Error()).Error("Failed to migrate escalation tables")
-		return err
-	}
-
-	appLog.Info("Successfully migrated escalation tables")
-	return nil
-}
+//func MigrateEscalationTables() error {
+//	appLog.Info("Migrating escalation tables")
+//	err := DB.AutoMigrate(
+//		&models.ProductParameters{},
+//		&models.ProductPricingProductLevelEscalation{},
+//		&models.PricingPoint{},
+//		&models.PAAFinance{},
+//		&models.ProductModelPointVariableStats{},
+//		&models.PAAResult{},
+//		&models.BalanceSheetRecord{},
+//		&models.ProductShock{},
+//	)
+//
+//	if err != nil {
+//		appLog.WithField("error", err.Error()).Error("Failed to migrate escalation tables")
+//		return err
+//	}
+//
+//	appLog.Info("Successfully migrated escalation tables")
+//	return nil
+//}
 
 // MigrateModelPointTables migrates the model point tables
-func MigrateModelPointTables() error {
-	appLog.Info("Migrating model point tables")
-	err := DB.Migrator().AutoMigrate(
-		&models.BalanceSheetRecord{},
-		&models.ProductPricingMargins{},
-		&models.FinanceVariables{},
-		&models.PaaModelPointVariableStats{},
-		&models.ProductPricingModelPoint{},
-		&models.CsmRun{},
-		&models.PricingParameter{},
-		&models.ProductPricingTable{},
-		&models.ProductPricingChildAdditionalSumAssured{},
-		&models.ProductPricingChildSumAssured{},
-		&models.ProductPricingClawback{},
-		&models.ProductPricingAdditionalSumAssured{},
-		&models.ProductPricingSpecialDecrementMargin{},
-		&models.ProductPricingRenewableProfitAdjustment{},
-		&models.ProductPricingLapseMargin{},
-		&models.ProductPricingRider{},
-		&models.ProductPricingParameters{},
-		&models.ProductPricingReinsurance{},
-		&models.PricingYieldCurve{},
-		&models.PricingRetrenchmentRate{},
-		&models.AosVariableSet{},
-		&models.AosVariable{},
-		&models.CsmAosVariable{},
-		&models.AOSStepResult{},
-		&models.ChartAccountItem{},
-		&models.JournalTransactions{},
-		&models.CsmProjection{},
-		&models.InitialRecognition{},
-		&models.InsuranceRevenue{},
-		&models.LiabilityMovement{},
-		&models.PremiumEarningPattern{},
-		&models.ReserveSummary{},
-		&models.PAABuildUp{},
-		&models.PAALapse{},
-		&models.PAAEligibilityTestResult{},
-		&models.LicExpectedSimulation{},
-		&models.LicStandardisedResiduals{},
-		&models.LicGeneratedRandomResiduals{},
-		&models.LicRandomResiduals{},
-		&models.LicBootStrappedCumulative{},
-		&models.LicBootstrappedDevelopmentFactor{},
-		&models.LicBootStrappedCumulativeProjection{},
-		&models.LicBootStrappedIncremental{},
-		&models.LicBootStrappedIncrementalProjection{},
-		&models.LicBootStrappedIncrementalInflatedProjection{},
-		&models.LicBootStrappedIncrementalInflatedDiscountedProjection{},
-		&models.LicBootstrappedResults{},
-		&models.LicBootstrappedResultSummary{},
-		&models.IbnrFrequency{},
-		&models.LicIndividualDevelopmentFactors{},
-		&models.LicBiasAdjustmentFactor{},
-		&models.LicMackModelCalculatedParameters{},
-		&models.LicBiasAdjustedResiduals{},
-		&models.LicMeanBiasAdjustedResiduals{},
-		&models.LicLogNormalSigmas{},
-		&models.LicLogNormalMeans{},
-		&models.LicLogNormalStandardDeviations{},
-		&models.LicPseudoRatios{},
-		&models.LicMackModelSimulatedDevelopmentFactor{},
-		&models.LicMackCumulativeProjection{},
-		&models.LicMackSimulationResults{},
-		&models.LicMackSimulationSummaryStats{},
-		&models.MackIbnrFrequency{},
-		&models.ProductPricingNewBusinessProfile{},
-		&models.ProductPricingProfitMargin{},
-		&models.AggregatedPricingPoint{},
-		&models.PricingPolicyDemographic{},
-		&models.Lic2Parameter{},
-		&models.IFRS17AuditLog{},
-	)
-
-	if err != nil {
-		appLog.WithField("error", err.Error()).Error("Failed to migrate model point tables")
-		return err
-	}
-
-	appLog.Info("Successfully migrated model point tables")
-	return nil
-}
+//func MigrateModelPointTables() error {
+//	appLog.Info("Migrating model point tables")
+//	err := DB.Migrator().AutoMigrate(
+//		&models.BalanceSheetRecord{},
+//		&models.ProductPricingMargins{},
+//		&models.FinanceVariables{},
+//		&models.PaaModelPointVariableStats{},
+//		&models.ProductPricingModelPoint{},
+//		&models.CsmRun{},
+//		&models.PricingParameter{},
+//		&models.ProductPricingTable{},
+//		&models.ProductPricingChildAdditionalSumAssured{},
+//		&models.ProductPricingChildSumAssured{},
+//		&models.ProductPricingClawback{},
+//		&models.ProductPricingAdditionalSumAssured{},
+//		&models.ProductPricingSpecialDecrementMargin{},
+//		&models.ProductPricingRenewableProfitAdjustment{},
+//		&models.ProductPricingLapseMargin{},
+//		&models.ProductPricingRider{},
+//		&models.ProductPricingParameters{},
+//		&models.ProductPricingReinsurance{},
+//		&models.PricingYieldCurve{},
+//		&models.PricingRetrenchmentRate{},
+//		&models.AosVariableSet{},
+//		&models.AosVariable{},
+//		&models.CsmAosVariable{},
+//		&models.AOSStepResult{},
+//		&models.ChartAccountItem{},
+//		&models.JournalTransactions{},
+//		&models.CsmProjection{},
+//		&models.InitialRecognition{},
+//		&models.InsuranceRevenue{},
+//		&models.LiabilityMovement{},
+//		&models.PremiumEarningPattern{},
+//		&models.ReserveSummary{},
+//		&models.PAABuildUp{},
+//		&models.PAALapse{},
+//		&models.PAAEligibilityTestResult{},
+//		&models.LicExpectedSimulation{},
+//		&models.LicStandardisedResiduals{},
+//		&models.LicGeneratedRandomResiduals{},
+//		&models.LicRandomResiduals{},
+//		&models.LicBootStrappedCumulative{},
+//		&models.LicBootstrappedDevelopmentFactor{},
+//		&models.LicBootStrappedCumulativeProjection{},
+//		&models.LicBootStrappedIncremental{},
+//		&models.LicBootStrappedIncrementalProjection{},
+//		&models.LicBootStrappedIncrementalInflatedProjection{},
+//		&models.LicBootStrappedIncrementalInflatedDiscountedProjection{},
+//		&models.LicBootstrappedResults{},
+//		&models.LicBootstrappedResultSummary{},
+//		&models.IbnrFrequency{},
+//		&models.LicIndividualDevelopmentFactors{},
+//		&models.LicBiasAdjustmentFactor{},
+//		&models.LicMackModelCalculatedParameters{},
+//		&models.LicBiasAdjustedResiduals{},
+//		&models.LicMeanBiasAdjustedResiduals{},
+//		&models.LicLogNormalSigmas{},
+//		&models.LicLogNormalMeans{},
+//		&models.LicLogNormalStandardDeviations{},
+//		&models.LicPseudoRatios{},
+//		&models.LicMackModelSimulatedDevelopmentFactor{},
+//		&models.LicMackCumulativeProjection{},
+//		&models.LicMackSimulationResults{},
+//		&models.LicMackSimulationSummaryStats{},
+//		&models.MackIbnrFrequency{},
+//		&models.ProductPricingNewBusinessProfile{},
+//		&models.ProductPricingProfitMargin{},
+//		&models.AggregatedPricingPoint{},
+//		&models.PricingPolicyDemographic{},
+//		&models.Lic2Parameter{},
+//		&models.IFRS17AuditLog{},
+//	)
+//
+//	if err != nil {
+//		appLog.WithField("error", err.Error()).Error("Failed to migrate model point tables")
+//		return err
+//	}
+//
+//	appLog.Info("Successfully migrated model point tables")
+//	return nil
+//}
 
 // MigrateGMMTables migrates the GMM tables
-func MigrateGMMTables() error {
-	appLog.Info("Migrating GMM tables")
-	err := DB.Migrator().AutoMigrate(
-		&models.PaaPortfolio{},
-		&models.ModifiedGMMModelPoint{},
-		&models.ModifiedGMMParameter{},
-		&models.ReinsuranceParameter{},
-		&models.ModifiedGMMShockSetting{},
-		&models.ModifiedGMMShock{},
-		&models.MgmmRun{},
-		&models.GMMRunSetting{},
-		&models.PaaYieldCurve{},
-		&models.PAAYearVersion{},
-		&models.TransitionAdjustment{},
-		&models.IFRS17Amendment{},
-		&models.SCRRABridgeEntry{},
-		&models.SARBCodeMapping{},
-		&models.DeferredTaxEntry{},
-	)
-
-	if err != nil {
-		appLog.WithField("error", err.Error()).Error("Failed to migrate GMM tables")
-		return err
-	}
-
-	appLog.Info("Successfully migrated GMM tables")
-	return nil
-}
+//func MigrateGMMTables() error {
+//	appLog.Info("Migrating GMM tables")
+//	err := DB.Migrator().AutoMigrate(
+//		&models.PaaPortfolio{},
+//		&models.ModifiedGMMModelPoint{},
+//		&models.ModifiedGMMParameter{},
+//		&models.ReinsuranceParameter{},
+//		&models.ModifiedGMMShockSetting{},
+//		&models.ModifiedGMMShock{},
+//		&models.MgmmRun{},
+//		&models.GMMRunSetting{},
+//		&models.PaaYieldCurve{},
+//		&models.PAAYearVersion{},
+//		&models.TransitionAdjustment{},
+//		&models.IFRS17Amendment{},
+//		&models.SCRRABridgeEntry{},
+//		&models.SARBCodeMapping{},
+//		&models.DeferredTaxEntry{},
+//	)
+//
+//	if err != nil {
+//		appLog.WithField("error", err.Error()).Error("Failed to migrate GMM tables")
+//		return err
+//	}
+//
+//	appLog.Info("Successfully migrated GMM tables")
+//	return nil
+//}
 
 // MigrateLICTables migrates the LIC tables
-func MigrateLICTables() error {
-	appLog.Info("Migrating LIC tables")
-	err := DB.Migrator().AutoMigrate(
-		&models.LicPortfolio{},
-		&models.LICClaimsInput{},
-		&models.LicVariableSet{},
-		&models.LicVariable{},
-		&models.LICParameter{},
-		&models.LicCPI{},
-		&models.IBNRRunSetting{},
-		&models.LicModelPoint{},
-		&models.LicTriangulation{},
-		&models.LicTriangulationClaimCount{},
-		&models.LicCumulativeTriangulation{},
-		&models.LicCumulativeTriangulationClaimCount{},
-		&models.LicCumulativeTriangulationAverageClaim{},
-		&models.LicDevelopmentFactor{},
-		&models.LicDevelopmentFactorClaimCount{},
-		&models.LicDevelopmentFactorAverageClaim{},
-		&models.LicCumulativeProjection{},
-		&models.LicCumulativeProjectionClaimCount{},
-		&models.LicCumulativeProjectionAverageClaim{},
-		&models.LicCumulativeProjectionAveragetoTotalClaim{},
-		&models.LicIncrementalProjectionAveragetoTotalClaim{},
-		&models.LicIncrementalProjection{},
-		&models.LicIncrementalInflated{},
-		&models.LicDiscountedIncrementalInflated{},
-		&models.LicIncrementalInflatedAveragetoTotalClaim{},
-		&models.LicDiscountedIncrementalInflatedAveragetoTotalClaim{},
-		&models.LicIbnrReserve{},
-		&models.IbnrReserveReport{},
-		&models.IbnrYieldCurve{},
-		&models.LicRunSetting{},
-		&models.IBNRShockSetting{},
-		&models.IBNRShock{},
-		&models.LicBuildupResult{},
-		&models.LICEarnedPremium{},
-		&models.ReinsuranceParameter{},
-		&models.BelBuildupVariableSet{},
-		&models.BelBuildupVariable{},
-		&models.LicJournalTransactions{},
-		&models.LicClaimsYearVersion{},
-		&models.LicEarnedPremiumYearVersion{},
-		&models.LicIbnrMethodAssignment{},
-	)
-
-	if err != nil {
-		appLog.WithField("error", err.Error()).Error("Failed to migrate LIC tables")
-		return err
-	}
-
-	appLog.Info("Successfully migrated LIC tables")
-	return nil
-}
+//func MigrateLICTables() error {
+//	appLog.Info("Migrating LIC tables")
+//	err := DB.Migrator().AutoMigrate(
+//		&models.LicPortfolio{},
+//		&models.LICClaimsInput{},
+//		&models.LicVariableSet{},
+//		&models.LicVariable{},
+//		&models.LICParameter{},
+//		&models.LicCPI{},
+//		&models.IBNRRunSetting{},
+//		&models.LicModelPoint{},
+//		&models.LicTriangulation{},
+//		&models.LicTriangulationClaimCount{},
+//		&models.LicCumulativeTriangulation{},
+//		&models.LicCumulativeTriangulationClaimCount{},
+//		&models.LicCumulativeTriangulationAverageClaim{},
+//		&models.LicDevelopmentFactor{},
+//		&models.LicDevelopmentFactorClaimCount{},
+//		&models.LicDevelopmentFactorAverageClaim{},
+//		&models.LicCumulativeProjection{},
+//		&models.LicCumulativeProjectionClaimCount{},
+//		&models.LicCumulativeProjectionAverageClaim{},
+//		&models.LicCumulativeProjectionAveragetoTotalClaim{},
+//		&models.LicIncrementalProjectionAveragetoTotalClaim{},
+//		&models.LicIncrementalProjection{},
+//		&models.LicIncrementalInflated{},
+//		&models.LicDiscountedIncrementalInflated{},
+//		&models.LicIncrementalInflatedAveragetoTotalClaim{},
+//		&models.LicDiscountedIncrementalInflatedAveragetoTotalClaim{},
+//		&models.LicIbnrReserve{},
+//		&models.IbnrReserveReport{},
+//		&models.IbnrYieldCurve{},
+//		&models.LicRunSetting{},
+//		&models.IBNRShockSetting{},
+//		&models.IBNRShock{},
+//		&models.LicBuildupResult{},
+//		&models.LICEarnedPremium{},
+//		&models.ReinsuranceParameter{},
+//		&models.BelBuildupVariableSet{},
+//		&models.BelBuildupVariable{},
+//		&models.LicJournalTransactions{},
+//		&models.LicClaimsYearVersion{},
+//		&models.LicEarnedPremiumYearVersion{},
+//		&models.LicIbnrMethodAssignment{},
+//	)
+//
+//	if err != nil {
+//		appLog.WithField("error", err.Error()).Error("Failed to migrate LIC tables")
+//		return err
+//	}
+//
+//	appLog.Info("Successfully migrated LIC tables")
+//	return nil
+//}
 
 // MigrateExposureAnalysisTables migrates the exposure analysis tables
-func MigrateExposureAnalysisTables() error {
-	appLog.Info("Migrating exposure analysis tables")
-	err := DB.Migrator().AutoMigrate(
-		&models.ExpConfiguration{},
-		&models.ExpExposureData{},
-		&models.ExpActualData{},
-		&models.ExpExpDataYearVersion{},
-		&models.ExpActualDataYearVersion{},
-		&models.ExpAnalysisRunSetting{},
-		&models.ExposureModelPoint{},
-		&models.ExpCrudeResult{},
-		&models.ExpLapseCrudeResult{},
-		&models.ExpAgeBand{},
-		&models.ExpCurrentMortality{},
-		&models.ExpCurrentLapse{},
-		&models.ExpCurrentLapseYearVersion{},
-		&models.ExpCurrentMortalityYearVersion{},
-		&models.ExpRunGroup{},
-		&models.TotalMortalityExpAnalysisResult{},
-		&models.TotalLapseExpAnalysisResult{},
-	)
-
-	if err != nil {
-		appLog.WithField("error", err.Error()).Error("Failed to migrate exposure analysis tables")
-		return err
-	}
-
-	appLog.Info("Successfully migrated exposure analysis tables")
-	return nil
-}
+//func MigrateExposureAnalysisTables() error {
+//	appLog.Info("Migrating exposure analysis tables")
+//	err := DB.Migrator().AutoMigrate(
+//		&models.ExpConfiguration{},
+//		&models.ExpExposureData{},
+//		&models.ExpActualData{},
+//		&models.ExpExpDataYearVersion{},
+//		&models.ExpActualDataYearVersion{},
+//		&models.ExpAnalysisRunSetting{},
+//		&models.ExposureModelPoint{},
+//		&models.ExpCrudeResult{},
+//		&models.ExpLapseCrudeResult{},
+//		&models.ExpAgeBand{},
+//		&models.ExpCurrentMortality{},
+//		&models.ExpCurrentLapse{},
+//		&models.ExpCurrentLapseYearVersion{},
+//		&models.ExpCurrentMortalityYearVersion{},
+//		&models.ExpRunGroup{},
+//		&models.TotalMortalityExpAnalysisResult{},
+//		&models.TotalLapseExpAnalysisResult{},
+//	)
+//
+//	if err != nil {
+//		appLog.WithField("error", err.Error()).Error("Failed to migrate exposure analysis tables")
+//		return err
+//	}
+//
+//	appLog.Info("Successfully migrated exposure analysis tables")
+//	return nil
+//}
 
 // MigrateGroupPricingTables migrates the group pricing tables
 func MigrateGroupPricingTables() error {

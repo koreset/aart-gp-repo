@@ -2,7 +2,6 @@ package services
 
 import (
 	appLog "api/log"
-	"bufio"
 	"fmt"
 	"gorm.io/gorm"
 	"os"
@@ -319,31 +318,59 @@ func splitSQLStatements(sqlScript string) []string {
 	var statements []string
 	var sb strings.Builder
 
-	scanner := bufio.NewScanner(strings.NewReader(sqlScript))
-	for scanner.Scan() {
-		line := scanner.Text()
+	flush := func() {
+		stmt := strings.TrimSpace(sb.String())
+		if stmt != "" {
+			statements = append(statements, stmt)
+		}
+		sb.Reset()
+	}
 
-		// Skip empty lines and comments (simple handling)
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "--") || strings.HasPrefix(trimmed, "#") {
+	inSingle := false
+	inDouble := false
+	i := 0
+	for i < len(sqlScript) {
+		c := sqlScript[i]
+
+		// Line comment: skip from -- or # to end of line (only when not inside a string)
+		if !inSingle && !inDouble {
+			if (c == '-' && i+1 < len(sqlScript) && sqlScript[i+1] == '-') || c == '#' {
+				for i < len(sqlScript) && sqlScript[i] != '\n' {
+					i++
+				}
+				continue
+			}
+		}
+
+		// String literal boundaries (MySQL: '' inside '' escapes a quote)
+		if c == '\'' && !inDouble {
+			sb.WriteByte(c)
+			if inSingle && i+1 < len(sqlScript) && sqlScript[i+1] == '\'' {
+				sb.WriteByte(sqlScript[i+1])
+				i += 2
+				continue
+			}
+			inSingle = !inSingle
+			i++
+			continue
+		}
+		if c == '"' && !inSingle {
+			sb.WriteByte(c)
+			inDouble = !inDouble
+			i++
 			continue
 		}
 
-		sb.WriteString(line)
-		// Preserve line breaks for multi-line statements
-		sb.WriteString("\n")
-
-		if strings.HasSuffix(trimmed, ";") {
-			statement := strings.TrimSpace(sb.String())
-			statements = append(statements, statement)
-			sb.Reset()
+		if c == ';' && !inSingle && !inDouble {
+			flush()
+			i++
+			continue
 		}
+
+		sb.WriteByte(c)
+		i++
 	}
 
-	// In case the last statement does not end in a semicolon
-	if sb.Len() > 0 {
-		statements = append(statements, strings.TrimSpace(sb.String()))
-	}
-
+	flush()
 	return statements
 }

@@ -90,8 +90,8 @@ mkdir -p migrations
 
 #Afrihost Copy migration files
 scp -r migrations/* aartadmin@aartserver.dedicated.co.za:/opt/aart/api1/migrations/
-scp -r migrations/* aartadmin@aartserver.dedicated.co.za:/opt/aart/api2/migrations/
-scp -r migrations/* aartadmin@aartserver.dedicated.co.za:/opt/aart/api3/migrations/
+#scp -r migrations/* aartadmin@aartserver.dedicated.co.za:/opt/aart/api2/migrations/
+#scp -r migrations/* aartadmin@aartserver.dedicated.co.za:/opt/aart/api3/migrations/
 
 #Afrihost
 ssh -l aartadmin aartserver.dedicated.co.za "sudo systemctl stop app1.service; sudo systemctl stop app2.service; sudo systemctl stop app3.service; sudo rm /opt/aart/api1/aart-api; rm /opt/aart/api2/aart-api; rm /opt/aart/api3/aart-api"
@@ -99,8 +99,8 @@ scp aart_api aartadmin@aartserver.dedicated.co.za:/opt/aart/api1/aart-api
 ssh -l aartadmin aartserver.dedicated.co.za "cp /opt/aart/api1/aart-api /opt/aart/api2/aart-api; cp /opt/aart/api1/aart-api /opt/aart/api3/aart-api; "
 ssh -l aartadmin aartserver.dedicated.co.za "sudo chmod +x /opt/aart/api1/aart-api; sudo chmod +x /opt/aart/api2/aart-api; sudo chmod +x /opt/aart/api3/aart-api"
 ssh -l aartadmin aartserver.dedicated.co.za "sudo systemctl start app1.service"
-ssh -l aartadmin aartserver.dedicated.co.za "sudo systemctl start app1.service; sudo systemctl start app2.service; sudo systemctl start app3.service"
-#ssh -l aartadmin aartserver.dedicated.co.za "sudo systemctl start app1.service"
+#ssh -l aartadmin aartserver.dedicated.co.za "sudo systemctl start app1.service; sudo systemctl start app2.service; sudo systemctl start app3.service"
+ssh -l aartadmin aartserver.dedicated.co.za "sudo systemctl start app1.service"
 
 
 #TMU Copy migration files
