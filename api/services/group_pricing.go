@@ -1730,6 +1730,9 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 
 		mr := r.Rating
 		mdrs.Category = selectedSchemeCategory
+		if category != nil {
+			mdrs.TaxSaverBenefit = category.TaxSaverBenefit
+		}
 		mdrs.FinancialYear = mr.FinancialYear
 		if groupQuote.MemberIndicativeData {
 			mdrs.MemberCount = float64(indicativeMemberMps[0].MemberDataCount)
@@ -1744,6 +1747,14 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.TotalGlaAnnualOfficePremium += mr.GlaOfficePremium
 		mdrs.ExpTotalGlaAnnualRiskPremium += mr.ExpAdjGlaRiskPremium
 		mdrs.ExpTotalGlaAnnualOfficePremium += mr.ExpAdjGlaOfficePremium
+
+		// TaxSaver is a slice of the GLA premium (already baked into
+		// TotalGlaAnnualOfficePremium via LoadedGlaRate) — these rollups
+		// exist only for reporting the slice, not for adding to any total.
+		mdrs.TotalTaxSaverAnnualRiskPremium += mr.TaxSaverRiskPremium
+		mdrs.TotalTaxSaverAnnualOfficePremium += mr.TaxSaverOfficePremium
+		mdrs.ExpTotalTaxSaverAnnualRiskPremium += mr.ExpAdjTaxSaverRiskPremium
+		mdrs.ExpTotalTaxSaverAnnualOfficePremium += mr.ExpAdjTaxSaverOfficePremium
 
 		mdrs.TotalAdditionalAccidentalGlaRiskRate += mr.LoadedAdditionalAccidentalGlaRate
 		mdrs.ExpTotalAdditionalAccidentalGlaRiskRate += mr.ExpAdjLoadedAdditionalAccidentalGlaRate
@@ -1832,15 +1843,86 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		if category != nil && (category.GlaEducatorBenefit == "Yes" || category.PtdEducatorBenefit == "Yes") {
 			educatorRates := GetEducatorRate(groupParameter, mr.AgeNextBirthday)
 			mdrs.TotalRiskWeightedEducatorSumAssured += mr.Grade0SumAssured*educatorRates.Grade0RiskRate + mr.Grade17SumAssured*educatorRates.Grade17RiskRate + mr.Grade812SumAssured*educatorRates.Grade812RiskRate + mr.TertiarySumAssured*educatorRates.TertiaryRiskRate
-			mdrs.TotalEducatorRiskPremium += mr.EducatorRiskPremium
-			mdrs.TotalEducatorOfficePremium += mr.EducatorOfficePremium
-			mdrs.ExpAdjTotalEducatorRiskPremium += mr.ExpAdjEducatorRiskPremium
-			mdrs.ExpAdjTotalEducatorOfficePremium += mr.ExpAdjEducatorOfficePremium
-			mdrs.TotalEducatorBinderAmount += mr.EducatorBinderAmount
-			mdrs.TotalEducatorOutsourcedAmount += mr.EducatorOutsourcedAmount
-			mdrs.ExpAdjTotalEducatorBinderAmount += mr.ExpAdjEducatorBinderAmount
-			mdrs.ExpAdjTotalEducatorOutsourcedAmount += mr.ExpAdjEducatorOutsourcedAmount
+			mdrs.TotalEducatorSumAssured += mr.Grade0SumAssured + mr.Grade17SumAssured + mr.Grade812SumAssured + mr.TertiarySumAssured
+			mdrs.TotalGlaEducatorRiskPremium += mr.GlaEducatorRiskPremium
+			mdrs.TotalGlaEducatorOfficePremium += mr.GlaEducatorOfficePremium
+			mdrs.ExpAdjTotalGlaEducatorRiskPremium += mr.ExpAdjGlaEducatorRiskPremium
+			mdrs.ExpAdjTotalGlaEducatorOfficePremium += mr.ExpAdjGlaEducatorOfficePremium
+			mdrs.TotalPtdEducatorRiskPremium += mr.PtdEducatorRiskPremium
+			mdrs.TotalPtdEducatorOfficePremium += mr.PtdEducatorOfficePremium
+			mdrs.ExpAdjTotalPtdEducatorRiskPremium += mr.ExpAdjPtdEducatorRiskPremium
+			mdrs.ExpAdjTotalPtdEducatorOfficePremium += mr.ExpAdjPtdEducatorOfficePremium
+			mdrs.TotalGlaEducatorBinderAmount += mr.GlaEducatorBinderAmount
+			mdrs.TotalGlaEducatorOutsourcedAmount += mr.GlaEducatorOutsourcedAmount
+			mdrs.ExpAdjTotalGlaEducatorBinderAmount += mr.ExpAdjGlaEducatorBinderAmount
+			mdrs.ExpAdjTotalGlaEducatorOutsourcedAmount += mr.ExpAdjGlaEducatorOutsourcedAmount
+			mdrs.TotalPtdEducatorBinderAmount += mr.PtdEducatorBinderAmount
+			mdrs.TotalPtdEducatorOutsourcedAmount += mr.PtdEducatorOutsourcedAmount
+			mdrs.ExpAdjTotalPtdEducatorBinderAmount += mr.ExpAdjPtdEducatorBinderAmount
+			mdrs.ExpAdjTotalPtdEducatorOutsourcedAmount += mr.ExpAdjPtdEducatorOutsourcedAmount
 		}
+
+		// Funeral sum assured aggregate — used as denominator for
+		// FunConversionOnWithdrawal rate-per-1000.
+		if category != nil && category.FamilyFuneralBenefit {
+			mdrs.TotalFamilyFuneralSumAssured += mr.MemberFuneralSumAssured + mr.SpouseFuneralSumAssured + mr.ChildFuneralSumAssured + mr.DependantFuneralSumAssured + mr.ParentFuneralSumAssured
+		}
+
+		// Conversion / continuity slice rollups — risk + office (both ExpAdj
+		// and non-ExpAdj). NOT added to any benefit total; these are a
+		// reportable slice of the benefit's premium.
+		mdrs.TotalGlaConversionOnWithdrawalAnnualRiskPremium += mr.GlaConversionOnWithdrawalRiskPremium
+		mdrs.TotalGlaConversionOnWithdrawalAnnualOfficePremium += mr.GlaConversionOnWithdrawalOfficePremium
+		mdrs.ExpAdjTotalGlaConversionOnWithdrawalAnnualRiskPremium += mr.ExpAdjGlaConversionOnWithdrawalRiskPremium
+		mdrs.ExpAdjTotalGlaConversionOnWithdrawalAnnualOfficePremium += mr.ExpAdjGlaConversionOnWithdrawalOfficePremium
+		mdrs.TotalGlaConversionOnRetirementAnnualRiskPremium += mr.GlaConversionOnRetirementRiskPremium
+		mdrs.TotalGlaConversionOnRetirementAnnualOfficePremium += mr.GlaConversionOnRetirementOfficePremium
+		mdrs.ExpAdjTotalGlaConversionOnRetirementAnnualRiskPremium += mr.ExpAdjGlaConversionOnRetirementRiskPremium
+		mdrs.ExpAdjTotalGlaConversionOnRetirementAnnualOfficePremium += mr.ExpAdjGlaConversionOnRetirementOfficePremium
+		mdrs.TotalGlaContinuityDuringDisabilityAnnualRiskPremium += mr.GlaContinuityDuringDisabilityRiskPremium
+		mdrs.TotalGlaContinuityDuringDisabilityAnnualOfficePremium += mr.GlaContinuityDuringDisabilityOfficePremium
+		mdrs.ExpAdjTotalGlaContinuityDuringDisabilityAnnualRiskPremium += mr.ExpAdjGlaContinuityDuringDisabilityRiskPremium
+		mdrs.ExpAdjTotalGlaContinuityDuringDisabilityAnnualOfficePremium += mr.ExpAdjGlaContinuityDuringDisabilityOfficePremium
+		mdrs.TotalGlaEducatorConversionOnWithdrawalAnnualRiskPremium += mr.GlaEducatorConversionOnWithdrawalRiskPremium
+		mdrs.TotalGlaEducatorConversionOnWithdrawalAnnualOfficePremium += mr.GlaEducatorConversionOnWithdrawalOfficePremium
+		mdrs.ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualRiskPremium += mr.ExpAdjGlaEducatorConversionOnWithdrawalRiskPremium
+		mdrs.ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualOfficePremium += mr.ExpAdjGlaEducatorConversionOnWithdrawalOfficePremium
+		mdrs.TotalGlaEducatorConversionOnRetirementAnnualRiskPremium += mr.GlaEducatorConversionOnRetirementRiskPremium
+		mdrs.TotalGlaEducatorConversionOnRetirementAnnualOfficePremium += mr.GlaEducatorConversionOnRetirementOfficePremium
+		mdrs.ExpAdjTotalGlaEducatorConversionOnRetirementAnnualRiskPremium += mr.ExpAdjGlaEducatorConversionOnRetirementRiskPremium
+		mdrs.ExpAdjTotalGlaEducatorConversionOnRetirementAnnualOfficePremium += mr.ExpAdjGlaEducatorConversionOnRetirementOfficePremium
+		mdrs.TotalGlaEducatorContinuityDuringDisabilityAnnualRiskPremium += mr.GlaEducatorContinuityDuringDisabilityRiskPremium
+		mdrs.TotalGlaEducatorContinuityDuringDisabilityAnnualOfficePremium += mr.GlaEducatorContinuityDuringDisabilityOfficePremium
+		mdrs.ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualRiskPremium += mr.ExpAdjGlaEducatorContinuityDuringDisabilityRiskPremium
+		mdrs.ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualOfficePremium += mr.ExpAdjGlaEducatorContinuityDuringDisabilityOfficePremium
+		mdrs.TotalPtdConversionOnWithdrawalAnnualRiskPremium += mr.PtdConversionOnWithdrawalRiskPremium
+		mdrs.TotalPtdConversionOnWithdrawalAnnualOfficePremium += mr.PtdConversionOnWithdrawalOfficePremium
+		mdrs.ExpAdjTotalPtdConversionOnWithdrawalAnnualRiskPremium += mr.ExpAdjPtdConversionOnWithdrawalRiskPremium
+		mdrs.ExpAdjTotalPtdConversionOnWithdrawalAnnualOfficePremium += mr.ExpAdjPtdConversionOnWithdrawalOfficePremium
+		mdrs.TotalPtdEducatorConversionOnWithdrawalAnnualRiskPremium += mr.PtdEducatorConversionOnWithdrawalRiskPremium
+		mdrs.TotalPtdEducatorConversionOnWithdrawalAnnualOfficePremium += mr.PtdEducatorConversionOnWithdrawalOfficePremium
+		mdrs.ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualRiskPremium += mr.ExpAdjPtdEducatorConversionOnWithdrawalRiskPremium
+		mdrs.ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualOfficePremium += mr.ExpAdjPtdEducatorConversionOnWithdrawalOfficePremium
+		mdrs.TotalPtdEducatorConversionOnRetirementAnnualRiskPremium += mr.PtdEducatorConversionOnRetirementRiskPremium
+		mdrs.TotalPtdEducatorConversionOnRetirementAnnualOfficePremium += mr.PtdEducatorConversionOnRetirementOfficePremium
+		mdrs.ExpAdjTotalPtdEducatorConversionOnRetirementAnnualRiskPremium += mr.ExpAdjPtdEducatorConversionOnRetirementRiskPremium
+		mdrs.ExpAdjTotalPtdEducatorConversionOnRetirementAnnualOfficePremium += mr.ExpAdjPtdEducatorConversionOnRetirementOfficePremium
+		mdrs.TotalPhiConversionOnWithdrawalAnnualRiskPremium += mr.PhiConversionOnWithdrawalRiskPremium
+		mdrs.TotalPhiConversionOnWithdrawalAnnualOfficePremium += mr.PhiConversionOnWithdrawalOfficePremium
+		mdrs.ExpAdjTotalPhiConversionOnWithdrawalAnnualRiskPremium += mr.ExpAdjPhiConversionOnWithdrawalRiskPremium
+		mdrs.ExpAdjTotalPhiConversionOnWithdrawalAnnualOfficePremium += mr.ExpAdjPhiConversionOnWithdrawalOfficePremium
+		mdrs.TotalCiConversionOnWithdrawalAnnualRiskPremium += mr.CiConversionOnWithdrawalRiskPremium
+		mdrs.TotalCiConversionOnWithdrawalAnnualOfficePremium += mr.CiConversionOnWithdrawalOfficePremium
+		mdrs.ExpAdjTotalCiConversionOnWithdrawalAnnualRiskPremium += mr.ExpAdjCiConversionOnWithdrawalRiskPremium
+		mdrs.ExpAdjTotalCiConversionOnWithdrawalAnnualOfficePremium += mr.ExpAdjCiConversionOnWithdrawalOfficePremium
+		mdrs.TotalSglaConversionOnWithdrawalAnnualRiskPremium += mr.SglaConversionOnWithdrawalRiskPremium
+		mdrs.TotalSglaConversionOnWithdrawalAnnualOfficePremium += mr.SglaConversionOnWithdrawalOfficePremium
+		mdrs.ExpAdjTotalSglaConversionOnWithdrawalAnnualRiskPremium += mr.ExpAdjSglaConversionOnWithdrawalRiskPremium
+		mdrs.ExpAdjTotalSglaConversionOnWithdrawalAnnualOfficePremium += mr.ExpAdjSglaConversionOnWithdrawalOfficePremium
+		mdrs.TotalFunConversionOnWithdrawalAnnualRiskPremium += mr.FunConversionOnWithdrawalRiskPremium
+		mdrs.TotalFunConversionOnWithdrawalAnnualOfficePremium += mr.FunConversionOnWithdrawalOfficePremium
+		mdrs.ExpAdjTotalFunConversionOnWithdrawalAnnualRiskPremium += mr.ExpAdjFunConversionOnWithdrawalRiskPremium
+		mdrs.ExpAdjTotalFunConversionOnWithdrawalAnnualOfficePremium += mr.ExpAdjFunConversionOnWithdrawalOfficePremium
 
 		// Binder and outsource fee aggregates per benefit (see applyBinderOutsourceAmounts).
 		// Non-zero only when the quote's distribution channel is "binder".
@@ -2064,10 +2146,70 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.ExpProportionSglaAnnualRiskPremiumSalary = mdrs.ExpTotalSglaAnnualRiskPremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
 		mdrs.ExpProportionSglaOfficePremiumSalary = mdrs.ExpTotalSglaAnnualOfficePremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
 
-		mdrs.ProportionEducatorRiskPremiumSalary = mdrs.TotalEducatorRiskPremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
-		mdrs.ProportionEducatorOfficePremiumSalary = mdrs.TotalEducatorOfficePremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
-		mdrs.ExpAdjProportionEducatorRiskPremiumSalary = mdrs.ExpAdjTotalEducatorRiskPremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
-		mdrs.ExpAdjProportionEducatorOfficePremiumSalary = mdrs.ExpAdjTotalEducatorOfficePremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
+		// Conversion / continuity slice proportions of salary
+		denomSalary := mdrs.TotalAnnualSalary * indicativeRatesCount
+		mdrs.ProportionGlaConversionOnWithdrawalRiskPremiumSalary = mdrs.TotalGlaConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ProportionGlaConversionOnWithdrawalOfficePremiumSalary = mdrs.TotalGlaConversionOnWithdrawalAnnualOfficePremium / denomSalary
+		mdrs.ExpAdjProportionGlaConversionOnWithdrawalRiskPremiumSalary = mdrs.ExpAdjTotalGlaConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ExpAdjProportionGlaConversionOnWithdrawalOfficePremiumSalary = mdrs.ExpAdjTotalGlaConversionOnWithdrawalAnnualOfficePremium / denomSalary
+		mdrs.ProportionGlaConversionOnRetirementRiskPremiumSalary = mdrs.TotalGlaConversionOnRetirementAnnualRiskPremium / denomSalary
+		mdrs.ProportionGlaConversionOnRetirementOfficePremiumSalary = mdrs.TotalGlaConversionOnRetirementAnnualOfficePremium / denomSalary
+		mdrs.ExpAdjProportionGlaConversionOnRetirementRiskPremiumSalary = mdrs.ExpAdjTotalGlaConversionOnRetirementAnnualRiskPremium / denomSalary
+		mdrs.ExpAdjProportionGlaConversionOnRetirementOfficePremiumSalary = mdrs.ExpAdjTotalGlaConversionOnRetirementAnnualOfficePremium / denomSalary
+		mdrs.ProportionGlaContinuityDuringDisabilityRiskPremiumSalary = mdrs.TotalGlaContinuityDuringDisabilityAnnualRiskPremium / denomSalary
+		mdrs.ProportionGlaContinuityDuringDisabilityOfficePremiumSalary = mdrs.TotalGlaContinuityDuringDisabilityAnnualOfficePremium / denomSalary
+		mdrs.ExpAdjProportionGlaContinuityDuringDisabilityRiskPremiumSalary = mdrs.ExpAdjTotalGlaContinuityDuringDisabilityAnnualRiskPremium / denomSalary
+		mdrs.ExpAdjProportionGlaContinuityDuringDisabilityOfficePremiumSalary = mdrs.ExpAdjTotalGlaContinuityDuringDisabilityAnnualOfficePremium / denomSalary
+		mdrs.ProportionGlaEducatorConversionOnWithdrawalRiskPremiumSalary = mdrs.TotalGlaEducatorConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ProportionGlaEducatorConversionOnWithdrawalOfficePremiumSalary = mdrs.TotalGlaEducatorConversionOnWithdrawalAnnualOfficePremium / denomSalary
+		mdrs.ExpAdjProportionGlaEducatorConversionOnWithdrawalRiskPremiumSalary = mdrs.ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ExpAdjProportionGlaEducatorConversionOnWithdrawalOfficePremiumSalary = mdrs.ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualOfficePremium / denomSalary
+		mdrs.ProportionGlaEducatorConversionOnRetirementRiskPremiumSalary = mdrs.TotalGlaEducatorConversionOnRetirementAnnualRiskPremium / denomSalary
+		mdrs.ProportionGlaEducatorConversionOnRetirementOfficePremiumSalary = mdrs.TotalGlaEducatorConversionOnRetirementAnnualOfficePremium / denomSalary
+		mdrs.ExpAdjProportionGlaEducatorConversionOnRetirementRiskPremiumSalary = mdrs.ExpAdjTotalGlaEducatorConversionOnRetirementAnnualRiskPremium / denomSalary
+		mdrs.ExpAdjProportionGlaEducatorConversionOnRetirementOfficePremiumSalary = mdrs.ExpAdjTotalGlaEducatorConversionOnRetirementAnnualOfficePremium / denomSalary
+		mdrs.ProportionGlaEducatorContinuityDuringDisabilityRiskPremiumSalary = mdrs.TotalGlaEducatorContinuityDuringDisabilityAnnualRiskPremium / denomSalary
+		mdrs.ProportionGlaEducatorContinuityDuringDisabilityOfficePremiumSalary = mdrs.TotalGlaEducatorContinuityDuringDisabilityAnnualOfficePremium / denomSalary
+		mdrs.ExpAdjProportionGlaEducatorContinuityDuringDisabilityRiskPremiumSalary = mdrs.ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualRiskPremium / denomSalary
+		mdrs.ExpAdjProportionGlaEducatorContinuityDuringDisabilityOfficePremiumSalary = mdrs.ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualOfficePremium / denomSalary
+		mdrs.ProportionPtdConversionOnWithdrawalRiskPremiumSalary = mdrs.TotalPtdConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ProportionPtdConversionOnWithdrawalOfficePremiumSalary = mdrs.TotalPtdConversionOnWithdrawalAnnualOfficePremium / denomSalary
+		mdrs.ExpAdjProportionPtdConversionOnWithdrawalRiskPremiumSalary = mdrs.ExpAdjTotalPtdConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ExpAdjProportionPtdConversionOnWithdrawalOfficePremiumSalary = mdrs.ExpAdjTotalPtdConversionOnWithdrawalAnnualOfficePremium / denomSalary
+		mdrs.ProportionPtdEducatorConversionOnWithdrawalRiskPremiumSalary = mdrs.TotalPtdEducatorConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ProportionPtdEducatorConversionOnWithdrawalOfficePremiumSalary = mdrs.TotalPtdEducatorConversionOnWithdrawalAnnualOfficePremium / denomSalary
+		mdrs.ExpAdjProportionPtdEducatorConversionOnWithdrawalRiskPremiumSalary = mdrs.ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ExpAdjProportionPtdEducatorConversionOnWithdrawalOfficePremiumSalary = mdrs.ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualOfficePremium / denomSalary
+		mdrs.ProportionPtdEducatorConversionOnRetirementRiskPremiumSalary = mdrs.TotalPtdEducatorConversionOnRetirementAnnualRiskPremium / denomSalary
+		mdrs.ProportionPtdEducatorConversionOnRetirementOfficePremiumSalary = mdrs.TotalPtdEducatorConversionOnRetirementAnnualOfficePremium / denomSalary
+		mdrs.ExpAdjProportionPtdEducatorConversionOnRetirementRiskPremiumSalary = mdrs.ExpAdjTotalPtdEducatorConversionOnRetirementAnnualRiskPremium / denomSalary
+		mdrs.ExpAdjProportionPtdEducatorConversionOnRetirementOfficePremiumSalary = mdrs.ExpAdjTotalPtdEducatorConversionOnRetirementAnnualOfficePremium / denomSalary
+		mdrs.ProportionPhiConversionOnWithdrawalRiskPremiumSalary = mdrs.TotalPhiConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ProportionPhiConversionOnWithdrawalOfficePremiumSalary = mdrs.TotalPhiConversionOnWithdrawalAnnualOfficePremium / denomSalary
+		mdrs.ExpAdjProportionPhiConversionOnWithdrawalRiskPremiumSalary = mdrs.ExpAdjTotalPhiConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ExpAdjProportionPhiConversionOnWithdrawalOfficePremiumSalary = mdrs.ExpAdjTotalPhiConversionOnWithdrawalAnnualOfficePremium / denomSalary
+		mdrs.ProportionCiConversionOnWithdrawalRiskPremiumSalary = mdrs.TotalCiConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ProportionCiConversionOnWithdrawalOfficePremiumSalary = mdrs.TotalCiConversionOnWithdrawalAnnualOfficePremium / denomSalary
+		mdrs.ExpAdjProportionCiConversionOnWithdrawalRiskPremiumSalary = mdrs.ExpAdjTotalCiConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ExpAdjProportionCiConversionOnWithdrawalOfficePremiumSalary = mdrs.ExpAdjTotalCiConversionOnWithdrawalAnnualOfficePremium / denomSalary
+		mdrs.ProportionSglaConversionOnWithdrawalRiskPremiumSalary = mdrs.TotalSglaConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ProportionSglaConversionOnWithdrawalOfficePremiumSalary = mdrs.TotalSglaConversionOnWithdrawalAnnualOfficePremium / denomSalary
+		mdrs.ExpAdjProportionSglaConversionOnWithdrawalRiskPremiumSalary = mdrs.ExpAdjTotalSglaConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ExpAdjProportionSglaConversionOnWithdrawalOfficePremiumSalary = mdrs.ExpAdjTotalSglaConversionOnWithdrawalAnnualOfficePremium / denomSalary
+		mdrs.ProportionFunConversionOnWithdrawalRiskPremiumSalary = mdrs.TotalFunConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ProportionFunConversionOnWithdrawalOfficePremiumSalary = mdrs.TotalFunConversionOnWithdrawalAnnualOfficePremium / denomSalary
+		mdrs.ExpAdjProportionFunConversionOnWithdrawalRiskPremiumSalary = mdrs.ExpAdjTotalFunConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ExpAdjProportionFunConversionOnWithdrawalOfficePremiumSalary = mdrs.ExpAdjTotalFunConversionOnWithdrawalAnnualOfficePremium / denomSalary
+
+		// Educator proportions of salary (split only — no combined)
+		mdrs.ProportionGlaEducatorRiskPremiumSalary = mdrs.TotalGlaEducatorRiskPremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
+		mdrs.ProportionGlaEducatorOfficePremiumSalary = mdrs.TotalGlaEducatorOfficePremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
+		mdrs.ExpAdjProportionGlaEducatorRiskPremiumSalary = mdrs.ExpAdjTotalGlaEducatorRiskPremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
+		mdrs.ExpAdjProportionGlaEducatorOfficePremiumSalary = mdrs.ExpAdjTotalGlaEducatorOfficePremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
+		mdrs.ProportionPtdEducatorRiskPremiumSalary = mdrs.TotalPtdEducatorRiskPremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
+		mdrs.ProportionPtdEducatorOfficePremiumSalary = mdrs.TotalPtdEducatorOfficePremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
+		mdrs.ExpAdjProportionPtdEducatorRiskPremiumSalary = mdrs.ExpAdjTotalPtdEducatorRiskPremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
+		mdrs.ExpAdjProportionPtdEducatorOfficePremiumSalary = mdrs.ExpAdjTotalPtdEducatorOfficePremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
 
 		mdrs.ProportionExpTotalPremiumExclFuneralSalary = mdrs.ExpTotalAnnualPremiumExclFuneral / (mdrs.TotalAnnualSalary * indicativeRatesCount)
 
@@ -2135,6 +2277,98 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.ExpSglaRiskRatePer1000SA = mdrs.ExpTotalSglaAnnualRiskPremium * 1000.0 / mdrs.TotalSglaCappedSumAssured
 		mdrs.ExpSglaOfficeRatePer1000SA = mdrs.ExpTotalSglaAnnualOfficePremium * 1000.0 / mdrs.TotalSglaCappedSumAssured
 
+	}
+
+	// Educator rate per 1000 (split between GLA and PTD components). Uses
+	// TotalEducatorSumAssured (Grade0+17+812+Tertiary summed across members)
+	// as the denominator so the rates are directly comparable.
+	if mdrs.TotalEducatorSumAssured > 0 {
+		mdrs.GlaEducatorRiskRatePer1000SA = mdrs.TotalGlaEducatorRiskPremium * 1000.0 / mdrs.TotalEducatorSumAssured
+		mdrs.GlaEducatorOfficeRatePer1000SA = mdrs.TotalGlaEducatorOfficePremium * 1000.0 / mdrs.TotalEducatorSumAssured
+		mdrs.ExpGlaEducatorRiskRatePer1000SA = mdrs.ExpAdjTotalGlaEducatorRiskPremium * 1000.0 / mdrs.TotalEducatorSumAssured
+		mdrs.ExpGlaEducatorOfficeRatePer1000SA = mdrs.ExpAdjTotalGlaEducatorOfficePremium * 1000.0 / mdrs.TotalEducatorSumAssured
+		mdrs.PtdEducatorRiskRatePer1000SA = mdrs.TotalPtdEducatorRiskPremium * 1000.0 / mdrs.TotalEducatorSumAssured
+		mdrs.PtdEducatorOfficeRatePer1000SA = mdrs.TotalPtdEducatorOfficePremium * 1000.0 / mdrs.TotalEducatorSumAssured
+		mdrs.ExpPtdEducatorRiskRatePer1000SA = mdrs.ExpAdjTotalPtdEducatorRiskPremium * 1000.0 / mdrs.TotalEducatorSumAssured
+		mdrs.ExpPtdEducatorOfficeRatePer1000SA = mdrs.ExpAdjTotalPtdEducatorOfficePremium * 1000.0 / mdrs.TotalEducatorSumAssured
+	}
+
+	// Conversion / continuity slice rate-per-1000. Denominator uses the
+	// relevant benefit's TotalCappedSumAssured (or TotalEducatorSumAssured
+	// for educator slices, TotalPhiCappedIncome for PHI, and
+	// TotalFamilyFuneralSumAssured for funeral).
+	if mdrs.TotalGlaCappedSumAssured > 0 {
+		d := mdrs.TotalGlaCappedSumAssured
+		mdrs.GlaConversionOnWithdrawalRiskRatePer1000SA = mdrs.TotalGlaConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.GlaConversionOnWithdrawalOfficeRatePer1000SA = mdrs.TotalGlaConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
+		mdrs.ExpGlaConversionOnWithdrawalRiskRatePer1000SA = mdrs.ExpAdjTotalGlaConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.ExpGlaConversionOnWithdrawalOfficeRatePer1000SA = mdrs.ExpAdjTotalGlaConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
+		mdrs.GlaConversionOnRetirementRiskRatePer1000SA = mdrs.TotalGlaConversionOnRetirementAnnualRiskPremium * 1000.0 / d
+		mdrs.GlaConversionOnRetirementOfficeRatePer1000SA = mdrs.TotalGlaConversionOnRetirementAnnualOfficePremium * 1000.0 / d
+		mdrs.ExpGlaConversionOnRetirementRiskRatePer1000SA = mdrs.ExpAdjTotalGlaConversionOnRetirementAnnualRiskPremium * 1000.0 / d
+		mdrs.ExpGlaConversionOnRetirementOfficeRatePer1000SA = mdrs.ExpAdjTotalGlaConversionOnRetirementAnnualOfficePremium * 1000.0 / d
+		mdrs.GlaContinuityDuringDisabilityRiskRatePer1000SA = mdrs.TotalGlaContinuityDuringDisabilityAnnualRiskPremium * 1000.0 / d
+		mdrs.GlaContinuityDuringDisabilityOfficeRatePer1000SA = mdrs.TotalGlaContinuityDuringDisabilityAnnualOfficePremium * 1000.0 / d
+		mdrs.ExpGlaContinuityDuringDisabilityRiskRatePer1000SA = mdrs.ExpAdjTotalGlaContinuityDuringDisabilityAnnualRiskPremium * 1000.0 / d
+		mdrs.ExpGlaContinuityDuringDisabilityOfficeRatePer1000SA = mdrs.ExpAdjTotalGlaContinuityDuringDisabilityAnnualOfficePremium * 1000.0 / d
+	}
+	if mdrs.TotalEducatorSumAssured > 0 {
+		d := mdrs.TotalEducatorSumAssured
+		mdrs.GlaEducatorConversionOnWithdrawalRiskRatePer1000SA = mdrs.TotalGlaEducatorConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.GlaEducatorConversionOnWithdrawalOfficeRatePer1000SA = mdrs.TotalGlaEducatorConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
+		mdrs.ExpGlaEducatorConversionOnWithdrawalRiskRatePer1000SA = mdrs.ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.ExpGlaEducatorConversionOnWithdrawalOfficeRatePer1000SA = mdrs.ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
+		mdrs.GlaEducatorConversionOnRetirementRiskRatePer1000SA = mdrs.TotalGlaEducatorConversionOnRetirementAnnualRiskPremium * 1000.0 / d
+		mdrs.GlaEducatorConversionOnRetirementOfficeRatePer1000SA = mdrs.TotalGlaEducatorConversionOnRetirementAnnualOfficePremium * 1000.0 / d
+		mdrs.ExpGlaEducatorConversionOnRetirementRiskRatePer1000SA = mdrs.ExpAdjTotalGlaEducatorConversionOnRetirementAnnualRiskPremium * 1000.0 / d
+		mdrs.ExpGlaEducatorConversionOnRetirementOfficeRatePer1000SA = mdrs.ExpAdjTotalGlaEducatorConversionOnRetirementAnnualOfficePremium * 1000.0 / d
+		mdrs.GlaEducatorContinuityDuringDisabilityRiskRatePer1000SA = mdrs.TotalGlaEducatorContinuityDuringDisabilityAnnualRiskPremium * 1000.0 / d
+		mdrs.GlaEducatorContinuityDuringDisabilityOfficeRatePer1000SA = mdrs.TotalGlaEducatorContinuityDuringDisabilityAnnualOfficePremium * 1000.0 / d
+		mdrs.ExpGlaEducatorContinuityDuringDisabilityRiskRatePer1000SA = mdrs.ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualRiskPremium * 1000.0 / d
+		mdrs.ExpGlaEducatorContinuityDuringDisabilityOfficeRatePer1000SA = mdrs.ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualOfficePremium * 1000.0 / d
+		mdrs.PtdEducatorConversionOnWithdrawalRiskRatePer1000SA = mdrs.TotalPtdEducatorConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.PtdEducatorConversionOnWithdrawalOfficeRatePer1000SA = mdrs.TotalPtdEducatorConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
+		mdrs.ExpPtdEducatorConversionOnWithdrawalRiskRatePer1000SA = mdrs.ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.ExpPtdEducatorConversionOnWithdrawalOfficeRatePer1000SA = mdrs.ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
+		mdrs.PtdEducatorConversionOnRetirementRiskRatePer1000SA = mdrs.TotalPtdEducatorConversionOnRetirementAnnualRiskPremium * 1000.0 / d
+		mdrs.PtdEducatorConversionOnRetirementOfficeRatePer1000SA = mdrs.TotalPtdEducatorConversionOnRetirementAnnualOfficePremium * 1000.0 / d
+		mdrs.ExpPtdEducatorConversionOnRetirementRiskRatePer1000SA = mdrs.ExpAdjTotalPtdEducatorConversionOnRetirementAnnualRiskPremium * 1000.0 / d
+		mdrs.ExpPtdEducatorConversionOnRetirementOfficeRatePer1000SA = mdrs.ExpAdjTotalPtdEducatorConversionOnRetirementAnnualOfficePremium * 1000.0 / d
+	}
+	if mdrs.TotalPtdCappedSumAssured > 0 {
+		d := mdrs.TotalPtdCappedSumAssured
+		mdrs.PtdConversionOnWithdrawalRiskRatePer1000SA = mdrs.TotalPtdConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.PtdConversionOnWithdrawalOfficeRatePer1000SA = mdrs.TotalPtdConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
+		mdrs.ExpPtdConversionOnWithdrawalRiskRatePer1000SA = mdrs.ExpAdjTotalPtdConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.ExpPtdConversionOnWithdrawalOfficeRatePer1000SA = mdrs.ExpAdjTotalPtdConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
+	}
+	if mdrs.TotalCiCappedSumAssured > 0 {
+		d := mdrs.TotalCiCappedSumAssured
+		mdrs.CiConversionOnWithdrawalRiskRatePer1000SA = mdrs.TotalCiConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.CiConversionOnWithdrawalOfficeRatePer1000SA = mdrs.TotalCiConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
+		mdrs.ExpCiConversionOnWithdrawalRiskRatePer1000SA = mdrs.ExpAdjTotalCiConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.ExpCiConversionOnWithdrawalOfficeRatePer1000SA = mdrs.ExpAdjTotalCiConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
+	}
+	if mdrs.TotalSglaCappedSumAssured > 0 {
+		d := mdrs.TotalSglaCappedSumAssured
+		mdrs.SglaConversionOnWithdrawalRiskRatePer1000SA = mdrs.TotalSglaConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.SglaConversionOnWithdrawalOfficeRatePer1000SA = mdrs.TotalSglaConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
+		mdrs.ExpSglaConversionOnWithdrawalRiskRatePer1000SA = mdrs.ExpAdjTotalSglaConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.ExpSglaConversionOnWithdrawalOfficeRatePer1000SA = mdrs.ExpAdjTotalSglaConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
+	}
+	if mdrs.TotalPhiCappedIncome > 0 {
+		d := mdrs.TotalPhiCappedIncome
+		mdrs.PhiConversionOnWithdrawalRiskRatePer1000SA = mdrs.TotalPhiConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.PhiConversionOnWithdrawalOfficeRatePer1000SA = mdrs.TotalPhiConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
+		mdrs.ExpPhiConversionOnWithdrawalRiskRatePer1000SA = mdrs.ExpAdjTotalPhiConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.ExpPhiConversionOnWithdrawalOfficeRatePer1000SA = mdrs.ExpAdjTotalPhiConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
+	}
+	if mdrs.TotalFamilyFuneralSumAssured > 0 {
+		d := mdrs.TotalFamilyFuneralSumAssured
+		mdrs.FunConversionOnWithdrawalRiskRatePer1000SA = mdrs.TotalFunConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.FunConversionOnWithdrawalOfficeRatePer1000SA = mdrs.TotalFunConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
+		mdrs.ExpFunConversionOnWithdrawalRiskRatePer1000SA = mdrs.ExpAdjTotalFunConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.ExpFunConversionOnWithdrawalOfficeRatePer1000SA = mdrs.ExpAdjTotalFunConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
 	}
 
 	mdrs.IfStatus = groupQuote.Status
@@ -2220,6 +2454,176 @@ func calculateAgeNextBirthday(commencementDate, dob time.Time) int {
 		return age
 	}
 	return age + 1
+}
+
+// resolveConvContLoadings populates per-member conversion-on-withdrawal,
+// conversion-on-retirement, and continuity-during-disability slice loadings
+// from the matching GeneralLoading row. Each slice is gated by its
+// SchemeCategory flag and the underlying base benefit flag; missing flags
+// leave the member loading at zero (no premium impact).
+// GlaContinuityDuringDisability reuses the existing ContinuationLoading
+// (resolved elsewhere) — no separate handling here.
+func resolveConvContLoadings(m *models.MemberRatingResult, sc *models.SchemeCategory, gl *models.GeneralLoading) {
+	if sc.GlaBenefit {
+		if sc.GlaConversionOnWithdrawal {
+			m.GlaConversionOnWithdrawalLoading = gl.GlaConversionOnWithdrawalLoadingRate
+		}
+		if sc.GlaConversionOnRetirement {
+			m.GlaConversionOnRetirementLoading = gl.GlaConversionOnRetirementLoadingRate
+		}
+		if sc.GlaEducatorBenefit == "Yes" {
+			if sc.GlaEducatorConversionOnWithdrawal {
+				m.GlaEducatorConversionOnWithdrawalLoading = gl.GlaEducatorConversionOnWithdrawalLoadingRate
+			}
+			if sc.GlaEducatorConversionOnRetirement {
+				m.GlaEducatorConversionOnRetirementLoading = gl.GlaEducatorConversionOnRetirementLoadingRate
+			}
+			if sc.GlaEducatorContinuityDuringDisability {
+				m.GlaEducatorContinuityDuringDisabilityLoading = gl.GlaEducatorContinuityDuringDisabilityLoadingRate
+			}
+		}
+	}
+	if sc.PtdBenefit {
+		if sc.PtdConversionOnWithdrawal {
+			m.PtdConversionOnWithdrawalLoading = gl.PtdConversionOnWithdrawalLoadingRate
+		}
+		if sc.PtdEducatorBenefit == "Yes" {
+			if sc.PtdEducatorConversionOnWithdrawal {
+				m.PtdEducatorConversionOnWithdrawalLoading = gl.PtdEducatorConversionOnWithdrawalLoadingRate
+			}
+			if sc.PtdEducatorConversionOnRetirement {
+				m.PtdEducatorConversionOnRetirementLoading = gl.PtdEducatorConversionOnRetirementLoadingRate
+			}
+		}
+	}
+	if sc.CiBenefit && sc.CiConversionOnWithdrawal {
+		m.CiConversionOnWithdrawalLoading = gl.CiConversionOnWithdrawalLoadingRate
+	}
+	if sc.PhiBenefit && sc.PhiConversionOnWithdrawal {
+		m.PhiConversionOnWithdrawalLoading = gl.PhiConversionOnWithdrawalLoadingRate
+	}
+	if sc.SglaBenefit && sc.SglaConversionOnWithdrawal {
+		m.SglaConversionOnWithdrawalLoading = gl.SglaConversionOnWithdrawalLoadingRate
+	}
+	if sc.FamilyFuneralBenefit && sc.FunConversionOnWithdrawal {
+		m.FunConversionOnWithdrawalLoading = gl.FunConversionOnWithdrawalLoadingRate
+	}
+}
+
+// computeEducatorLoadedRates folds the educator-specific conversion and
+// continuity loadings into the GLA- and PTD-educator loaded rate columns.
+// Must be called after LoadedGlaRate, ExpAdjLoadedGlaRate, LoadedPtdRate
+// and ExpAdjLoadedPtdRate are set for the member.
+func computeEducatorLoadedRates(m *models.MemberRatingResult) {
+	edGlaMul := 1.0 + m.GlaEducatorConversionOnWithdrawalLoading +
+		m.GlaEducatorConversionOnRetirementLoading +
+		m.GlaEducatorContinuityDuringDisabilityLoading
+	m.LoadedGlaEducatorRate = m.LoadedGlaRate * edGlaMul
+	m.ExpAdjLoadedGlaEducatorRate = m.ExpAdjLoadedGlaRate * edGlaMul
+
+	edPtdMul := 1.0 + m.PtdEducatorConversionOnWithdrawalLoading +
+		m.PtdEducatorConversionOnRetirementLoading
+	m.LoadedPtdEducatorRate = m.LoadedPtdRate * edPtdMul
+	m.ExpAdjLoadedPtdEducatorRate = m.ExpAdjLoadedPtdRate * edPtdMul
+}
+
+// computeConvContSlicePremiums computes all non-educator conversion/continuity
+// slice risk and office premiums. Educator slice premiums are computed inline
+// in the educator block (they need the per-member riskWeightedSA factor).
+// Must be called after every Loaded*Rate and TotalFuneralRiskCost are final.
+func computeConvContSlicePremiums(m *models.MemberRatingResult) {
+	divisor := 1.0 - m.TotalLoading
+	if divisor == 0 {
+		divisor = 1.0
+	}
+
+	// Slice 1: GLA conversion on withdrawal
+	m.GlaConversionOnWithdrawalRiskPremium = m.LoadedGlaRate * m.GlaConversionOnWithdrawalLoading * m.GlaCappedSumAssured
+	m.ExpAdjGlaConversionOnWithdrawalRiskPremium = m.ExpAdjLoadedGlaRate * m.GlaConversionOnWithdrawalLoading * m.GlaCappedSumAssured
+	m.GlaConversionOnWithdrawalOfficePremium = m.GlaConversionOnWithdrawalRiskPremium / divisor
+	m.ExpAdjGlaConversionOnWithdrawalOfficePremium = m.ExpAdjGlaConversionOnWithdrawalRiskPremium / divisor
+
+	// Slice 9: GLA conversion on retirement
+	m.GlaConversionOnRetirementRiskPremium = m.LoadedGlaRate * m.GlaConversionOnRetirementLoading * m.GlaCappedSumAssured
+	m.ExpAdjGlaConversionOnRetirementRiskPremium = m.ExpAdjLoadedGlaRate * m.GlaConversionOnRetirementLoading * m.GlaCappedSumAssured
+	m.GlaConversionOnRetirementOfficePremium = m.GlaConversionOnRetirementRiskPremium / divisor
+	m.ExpAdjGlaConversionOnRetirementOfficePremium = m.ExpAdjGlaConversionOnRetirementRiskPremium / divisor
+
+	// Slice 12: GLA continuity during disability (reuses ContinuationLoading)
+	m.GlaContinuityDuringDisabilityRiskPremium = m.LoadedGlaRate * m.ContinuationLoading * m.GlaCappedSumAssured
+	m.ExpAdjGlaContinuityDuringDisabilityRiskPremium = m.ExpAdjLoadedGlaRate * m.ContinuationLoading * m.GlaCappedSumAssured
+	m.GlaContinuityDuringDisabilityOfficePremium = m.GlaContinuityDuringDisabilityRiskPremium / divisor
+	m.ExpAdjGlaContinuityDuringDisabilityOfficePremium = m.ExpAdjGlaContinuityDuringDisabilityRiskPremium / divisor
+
+	// Slice 4: PTD conversion on withdrawal
+	m.PtdConversionOnWithdrawalRiskPremium = m.LoadedPtdRate * m.PtdConversionOnWithdrawalLoading * m.PtdCappedSumAssured
+	m.ExpAdjPtdConversionOnWithdrawalRiskPremium = m.ExpAdjLoadedPtdRate * m.PtdConversionOnWithdrawalLoading * m.PtdCappedSumAssured
+	m.PtdConversionOnWithdrawalOfficePremium = m.PtdConversionOnWithdrawalRiskPremium / divisor
+	m.ExpAdjPtdConversionOnWithdrawalOfficePremium = m.ExpAdjPtdConversionOnWithdrawalRiskPremium / divisor
+
+	// Slice 5: PHI conversion on withdrawal (base = PhiMonthlyBenefit, not SA)
+	m.PhiConversionOnWithdrawalRiskPremium = m.LoadedPhiRate * m.PhiConversionOnWithdrawalLoading * m.PhiMonthlyBenefit
+	m.ExpAdjPhiConversionOnWithdrawalRiskPremium = m.ExpAdjLoadedPhiRate * m.PhiConversionOnWithdrawalLoading * m.PhiMonthlyBenefit
+	m.PhiConversionOnWithdrawalOfficePremium = m.PhiConversionOnWithdrawalRiskPremium / divisor
+	m.ExpAdjPhiConversionOnWithdrawalOfficePremium = m.ExpAdjPhiConversionOnWithdrawalRiskPremium / divisor
+
+	// Slice 6: CI conversion on withdrawal
+	m.CiConversionOnWithdrawalRiskPremium = m.LoadedCiRate * m.CiConversionOnWithdrawalLoading * m.CiCappedSumAssured
+	m.ExpAdjCiConversionOnWithdrawalRiskPremium = m.ExpAdjLoadedCiRate * m.CiConversionOnWithdrawalLoading * m.CiCappedSumAssured
+	m.CiConversionOnWithdrawalOfficePremium = m.CiConversionOnWithdrawalRiskPremium / divisor
+	m.ExpAdjCiConversionOnWithdrawalOfficePremium = m.ExpAdjCiConversionOnWithdrawalRiskPremium / divisor
+
+	// Slice 7: SGLA conversion on withdrawal
+	m.SglaConversionOnWithdrawalRiskPremium = m.LoadedSpouseGlaRate * m.SglaConversionOnWithdrawalLoading * m.SpouseGlaCappedSumAssured
+	m.ExpAdjSglaConversionOnWithdrawalRiskPremium = m.ExpAdjLoadedSpouseGlaRate * m.SglaConversionOnWithdrawalLoading * m.SpouseGlaCappedSumAssured
+	m.SglaConversionOnWithdrawalOfficePremium = m.SglaConversionOnWithdrawalRiskPremium / divisor
+	m.ExpAdjSglaConversionOnWithdrawalOfficePremium = m.ExpAdjSglaConversionOnWithdrawalRiskPremium / divisor
+
+	// Slice 8: FUN conversion on withdrawal — scales TotalFuneralRiskCost
+	m.FunConversionOnWithdrawalRiskPremium = m.TotalFuneralRiskCost * m.FunConversionOnWithdrawalLoading
+	m.ExpAdjFunConversionOnWithdrawalRiskPremium = m.ExpAdjTotalFuneralRiskCost * m.FunConversionOnWithdrawalLoading
+	m.FunConversionOnWithdrawalOfficePremium = m.FunConversionOnWithdrawalRiskPremium / divisor
+	m.ExpAdjFunConversionOnWithdrawalOfficePremium = m.ExpAdjFunConversionOnWithdrawalRiskPremium / divisor
+}
+
+// computeEducatorSlicePremiums computes the 5 educator-based slice premiums
+// (GLA-ed withdrawal/retirement/continuity, PTD-ed withdrawal/retirement).
+// Pass riskWeightedSA computed at the educator block call site.
+func computeEducatorSlicePremiums(m *models.MemberRatingResult, riskWeightedSA float64) {
+	divisor := 1.0 - m.TotalLoading
+	if divisor == 0 {
+		divisor = 1.0
+	}
+
+	// Slice 2: GLA Educator conversion on withdrawal
+	m.GlaEducatorConversionOnWithdrawalRiskPremium = riskWeightedSA * m.LoadedGlaEducatorRate * m.GlaEducatorConversionOnWithdrawalLoading
+	m.ExpAdjGlaEducatorConversionOnWithdrawalRiskPremium = riskWeightedSA * m.ExpAdjLoadedGlaEducatorRate * m.GlaEducatorConversionOnWithdrawalLoading
+	m.GlaEducatorConversionOnWithdrawalOfficePremium = m.GlaEducatorConversionOnWithdrawalRiskPremium / divisor
+	m.ExpAdjGlaEducatorConversionOnWithdrawalOfficePremium = m.ExpAdjGlaEducatorConversionOnWithdrawalRiskPremium / divisor
+
+	// Slice 10: GLA Educator conversion on retirement
+	m.GlaEducatorConversionOnRetirementRiskPremium = riskWeightedSA * m.LoadedGlaEducatorRate * m.GlaEducatorConversionOnRetirementLoading
+	m.ExpAdjGlaEducatorConversionOnRetirementRiskPremium = riskWeightedSA * m.ExpAdjLoadedGlaEducatorRate * m.GlaEducatorConversionOnRetirementLoading
+	m.GlaEducatorConversionOnRetirementOfficePremium = m.GlaEducatorConversionOnRetirementRiskPremium / divisor
+	m.ExpAdjGlaEducatorConversionOnRetirementOfficePremium = m.ExpAdjGlaEducatorConversionOnRetirementRiskPremium / divisor
+
+	// Slice 13: GLA Educator continuity during disability
+	m.GlaEducatorContinuityDuringDisabilityRiskPremium = riskWeightedSA * m.LoadedGlaEducatorRate * m.GlaEducatorContinuityDuringDisabilityLoading
+	m.ExpAdjGlaEducatorContinuityDuringDisabilityRiskPremium = riskWeightedSA * m.ExpAdjLoadedGlaEducatorRate * m.GlaEducatorContinuityDuringDisabilityLoading
+	m.GlaEducatorContinuityDuringDisabilityOfficePremium = m.GlaEducatorContinuityDuringDisabilityRiskPremium / divisor
+	m.ExpAdjGlaEducatorContinuityDuringDisabilityOfficePremium = m.ExpAdjGlaEducatorContinuityDuringDisabilityRiskPremium / divisor
+
+	// Slice 3: PTD Educator conversion on withdrawal
+	m.PtdEducatorConversionOnWithdrawalRiskPremium = riskWeightedSA * m.LoadedPtdEducatorRate * m.PtdEducatorConversionOnWithdrawalLoading
+	m.ExpAdjPtdEducatorConversionOnWithdrawalRiskPremium = riskWeightedSA * m.ExpAdjLoadedPtdEducatorRate * m.PtdEducatorConversionOnWithdrawalLoading
+	m.PtdEducatorConversionOnWithdrawalOfficePremium = m.PtdEducatorConversionOnWithdrawalRiskPremium / divisor
+	m.ExpAdjPtdEducatorConversionOnWithdrawalOfficePremium = m.ExpAdjPtdEducatorConversionOnWithdrawalRiskPremium / divisor
+
+	// Slice 11: PTD Educator conversion on retirement
+	m.PtdEducatorConversionOnRetirementRiskPremium = riskWeightedSA * m.LoadedPtdEducatorRate * m.PtdEducatorConversionOnRetirementLoading
+	m.ExpAdjPtdEducatorConversionOnRetirementRiskPremium = riskWeightedSA * m.ExpAdjLoadedPtdEducatorRate * m.PtdEducatorConversionOnRetirementLoading
+	m.PtdEducatorConversionOnRetirementOfficePremium = m.PtdEducatorConversionOnRetirementRiskPremium / divisor
+	m.ExpAdjPtdEducatorConversionOnRetirementOfficePremium = m.ExpAdjPtdEducatorConversionOnRetirementRiskPremium / divisor
 }
 
 func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingResult, bordereauxDatapoint models.Bordereaux, memberPremiumScheduleDatapoint *models.MemberPremiumSchedule, addedMemberInForce models.GPricingMemberDataInForce, groupQuote models.GroupPricingQuote,
@@ -2428,7 +2832,18 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		memberDataPointResult.FunVoluntaryLoading = gl1.FunVoluntaryLoadingRate
 	}
 
-	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.ContinuationLoading)
+	// TaxSaver: resolved per-member from GeneralLoading (by age/gender/
+	// risk_rate_code) when the category opts into the rider. Added to the
+	// GLA loading chain so LoadedGlaRate reflects the full premium.
+	if schemeCategory.GlaBenefit && schemeCategory.TaxSaverBenefit {
+		memberDataPointResult.TaxSaverLoading = gl1.TaxSaverLoadingRate
+	}
+
+	// Conversion / continuity slice loadings (folded into each benefit's
+	// Loaded*Rate below; slice premiums computed after rates are final).
+	resolveConvContLoadings(memberDataPointResult, &schemeCategory, &gl1)
+
+	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.ContinuationLoading + memberDataPointResult.TaxSaverLoading + memberDataPointResult.GlaConversionOnWithdrawalLoading + memberDataPointResult.GlaConversionOnRetirementLoading)
 
 	memberDataPointResult.ExpAdjLoadedGlaRate = memberDataPointResult.LoadedGlaRate * memberDataPointResult.GlaExperienceAdjustment
 
@@ -2457,7 +2872,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		} else {
 			memberDataPointResult.BasePtdRate = ptdRate * (1 + memberDataPointResult.PtdIndustryLoading + memberDataPointResult.PtdRegionLoading)
 		}
-		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate * (1 + memberDataPointResult.PtdContingencyLoading + memberDataPointResult.PtdVoluntaryLoading)
+		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate * (1 + memberDataPointResult.PtdContingencyLoading + memberDataPointResult.PtdVoluntaryLoading + memberDataPointResult.PtdConversionOnWithdrawalLoading)
 		memberDataPointResult.ExpAdjLoadedPtdRate = memberDataPointResult.LoadedPtdRate * memberDataPointResult.PtdExperienceAdjustment
 	}
 
@@ -2472,7 +2887,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		phiRate := GetPhiRate(&originalMemberDataPointResult, groupParameter, groupQuote, schemeCategory, mpIncomeLevel)
 		memberDataPointResult.PhiSalaryLevel = float64(mpIncomeLevel)
 		memberDataPointResult.BasePhiRate = phiRate * (1 + memberDataPointResult.PhiIndustryLoading + memberDataPointResult.PhiRegionLoading)
-		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate * (1 + memberDataPointResult.PhiContingencyLoading + memberDataPointResult.PhiVoluntaryLoading)
+		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate * (1 + memberDataPointResult.PhiContingencyLoading + memberDataPointResult.PhiVoluntaryLoading + memberDataPointResult.PhiConversionOnWithdrawalLoading)
 		memberDataPointResult.ExpAdjLoadedPhiRate = memberDataPointResult.LoadedPhiRate * memberDataPointResult.PhiExperienceAdjustment
 	}
 
@@ -2483,7 +2898,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		} else {
 			memberDataPointResult.BaseCiRate = ciRate * (1 + memberDataPointResult.CiIndustryLoading + memberDataPointResult.CiRegionLoading)
 		}
-		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate * (1 + memberDataPointResult.CiContingencyLoading + memberDataPointResult.CiVoluntaryLoading)
+		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate * (1 + memberDataPointResult.CiContingencyLoading + memberDataPointResult.CiVoluntaryLoading + memberDataPointResult.CiConversionOnWithdrawalLoading)
 		memberDataPointResult.ExpAdjLoadedCiRate = memberDataPointResult.LoadedCiRate * memberDataPointResult.CiExperienceAdjustment
 	}
 
@@ -2494,12 +2909,24 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		memberDataPointResult.SpouseGlaAidsQx = GetSpouseGlaAidsRate(memberDataPointResult, groupParameter)
 		memberDataPointResult.SpouseGlaLoading = spouseIndustryLoading.GlaIndustryLoadingRate
 		memberDataPointResult.BaseSpouseGlaRate = memberDataPointResult.SpouseGlaQx*(1+memberDataPointResult.SpouseGlaLoading+spouseRegionLoading.GlaRegionLoadingRate) + memberDataPointResult.SpouseGlaAidsQx*(1+spouseRegionLoading.GlaAidsRegionLoadingRate)
-		memberDataPointResult.LoadedSpouseGlaRate = memberDataPointResult.BaseSpouseGlaRate
+		memberDataPointResult.LoadedSpouseGlaRate = memberDataPointResult.BaseSpouseGlaRate * (1 + memberDataPointResult.SglaConversionOnWithdrawalLoading)
 		memberDataPointResult.ExpAdjLoadedSpouseGlaRate = memberDataPointResult.LoadedSpouseGlaRate * memberDataPointResult.GlaExperienceAdjustment
 	}
 
+	// Compute educator loaded rates (includes educator-specific conversion
+	// and continuity loadings). Safe to call even when educator isn't enabled —
+	// missing loadings are zero, rate equals LoadedGlaRate / LoadedPtdRate.
+	computeEducatorLoadedRates(memberDataPointResult)
+
 	memberDataPointResult.GlaRiskPremium = memberDataPointResult.LoadedGlaRate * memberDataPointResult.GlaCappedSumAssured
 	memberDataPointResult.ExpAdjGlaRiskPremium = memberDataPointResult.ExpAdjLoadedGlaRate * memberDataPointResult.GlaCappedSumAssured
+
+	// TaxSaver slice of GlaRiskPremium. Per business spec, computed against
+	// the already-loaded rate (LoadedGlaRate × TaxSaverLoading × SumAssured),
+	// not BaseGlaRate × TaxSaverLoading × SumAssured — this intentionally
+	// over-attributes relative to a pure linear share.
+	memberDataPointResult.TaxSaverRiskPremium = memberDataPointResult.LoadedGlaRate * memberDataPointResult.TaxSaverLoading * memberDataPointResult.GlaCappedSumAssured
+	memberDataPointResult.ExpAdjTaxSaverRiskPremium = memberDataPointResult.ExpAdjLoadedGlaRate * memberDataPointResult.TaxSaverLoading * memberDataPointResult.GlaCappedSumAssured
 
 	memberDataPointResult.AdditionalAccidentalGlaRiskPremium = memberDataPointResult.LoadedAdditionalAccidentalGlaRate * memberDataPointResult.AdditionalAccidentalGlaCappedSumAssured
 	memberDataPointResult.ExpAdjAdditionalAccidentalGlaRiskPremium = memberDataPointResult.ExpAdjLoadedAdditionalAccidentalGlaRate * memberDataPointResult.AdditionalAccidentalGlaCappedSumAssured
@@ -2662,6 +3089,9 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	memberDataPointResult.GlaOfficePremium = memberDataPointResult.GlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjGlaOfficePremium = memberDataPointResult.ExpAdjGlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 
+	memberDataPointResult.TaxSaverOfficePremium = memberDataPointResult.TaxSaverRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.ExpAdjTaxSaverOfficePremium = memberDataPointResult.ExpAdjTaxSaverRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+
 	memberDataPointResult.AdditionalAccidentalGlaOfficePremium = memberDataPointResult.AdditionalAccidentalGlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjAdditionalAccidentalGlaOfficePremium = memberDataPointResult.ExpAdjAdditionalAccidentalGlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 
@@ -2702,10 +3132,16 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	memberDataPointResult.ChildrenFuneralOfficePremium = memberDataPointResult.ChildrenFuneralCost / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.DependantsFuneralOfficePremium = memberDataPointResult.DependantsFuneralCost / (1.0 - memberDataPointResult.TotalLoading)
 
-	memberDataPointResult.TotalFuneralRiskCost = memberDataPointResult.MainMemberFuneralCost + memberDataPointResult.SpouseFuneralCost + memberDataPointResult.ChildrenFuneralCost + memberDataPointResult.DependantsFuneralCost
-	memberDataPointResult.ExpAdjTotalFuneralRiskCost = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralCost + memberDataPointResult.SpouseFuneralCost + memberDataPointResult.ChildrenFuneralCost + memberDataPointResult.DependantsFuneralCost)
+	memberDataPointResult.TotalFuneralRiskCost = (memberDataPointResult.MainMemberFuneralCost + memberDataPointResult.SpouseFuneralCost + memberDataPointResult.ChildrenFuneralCost + memberDataPointResult.DependantsFuneralCost) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
+	memberDataPointResult.ExpAdjTotalFuneralRiskCost = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralCost + memberDataPointResult.SpouseFuneralCost + memberDataPointResult.ChildrenFuneralCost + memberDataPointResult.DependantsFuneralCost) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
 	memberDataPointResult.TotalFuneralOfficeCost = memberDataPointResult.TotalFuneralRiskCost / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjTotalFuneralOfficeCost = memberDataPointResult.ExpAdjTotalFuneralRiskCost / (1.0 - memberDataPointResult.TotalLoading)
+
+	// Compute all non-educator conversion / continuity slice premiums now
+	// that Loaded*Rates and TotalFuneralRiskCost are final. Educator slice
+	// premiums are computed inline in the educator block (they need
+	// riskWeightedSA).
+	computeConvContSlicePremiums(memberDataPointResult)
 
 	applyBinderOutsourceAmounts(memberDataPointResult, binderFeeRate, outsourceFeeRate)
 
@@ -3034,7 +3470,12 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 		memberDataPointResult.FunVoluntaryLoading = gl2.FunVoluntaryLoadingRate
 	}
 
-	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.ContinuationLoading)
+	if groupQuote.SchemeCategories[i].GlaBenefit && groupQuote.SchemeCategories[i].TaxSaverBenefit {
+		memberDataPointResult.TaxSaverLoading = gl2.TaxSaverLoadingRate
+	}
+	resolveConvContLoadings(&memberDataPointResult, &groupQuote.SchemeCategories[i], &gl2)
+
+	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.ContinuationLoading + memberDataPointResult.TaxSaverLoading + memberDataPointResult.GlaConversionOnWithdrawalLoading + memberDataPointResult.GlaConversionOnRetirementLoading)
 
 	if groupQuote.SchemeCategories[i].PtdBenefit {
 		ptdRate := GetPtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
@@ -3043,7 +3484,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 		} else {
 			memberDataPointResult.BasePtdRate = ptdRate * (1 + memberDataPointResult.PtdIndustryLoading + memberDataPointResult.PtdRegionLoading)
 		}
-		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate * (1 + memberDataPointResult.PtdContingencyLoading + memberDataPointResult.PtdVoluntaryLoading)
+		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate * (1 + memberDataPointResult.PtdContingencyLoading + memberDataPointResult.PtdVoluntaryLoading + memberDataPointResult.PtdConversionOnWithdrawalLoading)
 	}
 
 	if groupQuote.SchemeCategories[i].TtdBenefit {
@@ -3056,7 +3497,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 		phiRate := GetPhiRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
 		memberDataPointResult.PhiSalaryLevel = float64(mpIncomeLevel)
 		memberDataPointResult.BasePhiRate = phiRate * (1 + memberDataPointResult.PhiIndustryLoading + memberDataPointResult.PhiRegionLoading)
-		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate * (1 + memberDataPointResult.PhiContingencyLoading + memberDataPointResult.PhiVoluntaryLoading)
+		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate * (1 + memberDataPointResult.PhiContingencyLoading + memberDataPointResult.PhiVoluntaryLoading + memberDataPointResult.PhiConversionOnWithdrawalLoading)
 	}
 
 	if groupQuote.SchemeCategories[i].CiBenefit {
@@ -3066,7 +3507,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 		} else {
 			memberDataPointResult.BaseCiRate = ciRate * (1 + memberDataPointResult.CiIndustryLoading + memberDataPointResult.CiRegionLoading)
 		}
-		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate * (1 + memberDataPointResult.CiContingencyLoading + memberDataPointResult.CiVoluntaryLoading)
+		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate * (1 + memberDataPointResult.CiContingencyLoading + memberDataPointResult.CiVoluntaryLoading + memberDataPointResult.CiConversionOnWithdrawalLoading)
 	}
 
 	if groupQuote.SchemeCategories[i].SglaBenefit && len(memberDataPointResult.SpouseGender) > 0 {
@@ -3076,7 +3517,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 		memberDataPointResult.SpouseGlaAidsQx = GetSpouseGlaAidsRate(&memberDataPointResult, groupParameter)
 		memberDataPointResult.SpouseGlaLoading = spouseIndustryLoading.GlaIndustryLoadingRate
 		memberDataPointResult.BaseSpouseGlaRate = memberDataPointResult.SpouseGlaQx*(1+memberDataPointResult.SpouseGlaLoading+spouseRegionLoading.GlaRegionLoadingRate) + memberDataPointResult.SpouseGlaAidsQx*(1+spouseRegionLoading.GlaAidsRegionLoadingRate)
-		memberDataPointResult.LoadedSpouseGlaRate = memberDataPointResult.BaseSpouseGlaRate
+		memberDataPointResult.LoadedSpouseGlaRate = memberDataPointResult.BaseSpouseGlaRate * (1 + memberDataPointResult.SglaConversionOnWithdrawalLoading)
 	}
 
 	memberDataPointResult.GlaRiskPremium = memberDataPointResult.LoadedGlaRate * memberDataPointResult.GlaCappedSumAssured
@@ -3369,7 +3810,12 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		memberDataPointResult.FunVoluntaryLoading = gl3.FunVoluntaryLoadingRate
 	}
 
-	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.ContinuationLoading)
+	if groupQuote.SchemeCategories[i].GlaBenefit && groupQuote.SchemeCategories[i].TaxSaverBenefit {
+		memberDataPointResult.TaxSaverLoading = gl3.TaxSaverLoadingRate
+	}
+	resolveConvContLoadings(&memberDataPointResult, &groupQuote.SchemeCategories[i], &gl3)
+
+	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.ContinuationLoading + memberDataPointResult.TaxSaverLoading + memberDataPointResult.GlaConversionOnWithdrawalLoading + memberDataPointResult.GlaConversionOnRetirementLoading)
 
 	if groupQuote.SchemeCategories[i].PtdBenefit {
 		ptdRate := GetPtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
@@ -3378,7 +3824,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		} else {
 			memberDataPointResult.BasePtdRate = ptdRate * (1 + memberDataPointResult.PtdIndustryLoading + memberDataPointResult.PtdRegionLoading)
 		}
-		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate * (1 + memberDataPointResult.PtdContingencyLoading + memberDataPointResult.PtdVoluntaryLoading)
+		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate * (1 + memberDataPointResult.PtdContingencyLoading + memberDataPointResult.PtdVoluntaryLoading + memberDataPointResult.PtdConversionOnWithdrawalLoading)
 	}
 
 	if groupQuote.SchemeCategories[i].TtdBenefit {
@@ -3391,7 +3837,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		phiRate := GetPhiRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
 		memberDataPointResult.PhiSalaryLevel = float64(mpIncomeLevel)
 		memberDataPointResult.BasePhiRate = phiRate * (1 + memberDataPointResult.PhiIndustryLoading + memberDataPointResult.PhiRegionLoading)
-		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate * (1 + memberDataPointResult.PhiContingencyLoading + memberDataPointResult.PhiVoluntaryLoading)
+		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate * (1 + memberDataPointResult.PhiContingencyLoading + memberDataPointResult.PhiVoluntaryLoading + memberDataPointResult.PhiConversionOnWithdrawalLoading)
 	}
 
 	if groupQuote.SchemeCategories[i].CiBenefit {
@@ -3401,7 +3847,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		} else {
 			memberDataPointResult.BaseCiRate = ciRate * (1 + memberDataPointResult.CiIndustryLoading + memberDataPointResult.CiRegionLoading)
 		}
-		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate * (1 + memberDataPointResult.CiContingencyLoading + memberDataPointResult.CiVoluntaryLoading)
+		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate * (1 + memberDataPointResult.CiContingencyLoading + memberDataPointResult.CiVoluntaryLoading + memberDataPointResult.CiConversionOnWithdrawalLoading)
 	}
 
 	if groupQuote.SchemeCategories[i].SglaBenefit && len(memberDataPointResult.SpouseGender) > 0 {
@@ -3411,7 +3857,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		memberDataPointResult.SpouseGlaAidsQx = GetSpouseGlaAidsRate(&memberDataPointResult, groupParameter)
 		memberDataPointResult.SpouseGlaLoading = spouseIndustryLoading.GlaIndustryLoadingRate
 		memberDataPointResult.BaseSpouseGlaRate = memberDataPointResult.SpouseGlaQx*(1+memberDataPointResult.SpouseGlaLoading+spouseRegionLoading.GlaRegionLoadingRate) + memberDataPointResult.SpouseGlaAidsQx*(1+spouseRegionLoading.GlaAidsRegionLoadingRate)
-		memberDataPointResult.LoadedSpouseGlaRate = memberDataPointResult.BaseSpouseGlaRate * (1 + gl3.GlaContigencyLoadingRate)
+		memberDataPointResult.LoadedSpouseGlaRate = memberDataPointResult.BaseSpouseGlaRate * (1 + gl3.GlaContigencyLoadingRate + memberDataPointResult.SglaConversionOnWithdrawalLoading)
 	}
 
 	// ── Reinsurance rates & loadings ───────────────────────────────────────
@@ -3539,6 +3985,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	}
 
 	memberDataPointResult.GlaRiskPremium = memberDataPointResult.LoadedGlaRate * memberDataPointResult.GlaCappedSumAssured
+	memberDataPointResult.TaxSaverRiskPremium = memberDataPointResult.LoadedGlaRate * memberDataPointResult.TaxSaverLoading * memberDataPointResult.GlaCappedSumAssured
 	memberDataPointResult.PtdRiskPremium = memberDataPointResult.LoadedPtdRate * memberDataPointResult.PtdCappedSumAssured
 	memberDataPointResult.TtdNumberOfMonthlyPayments = groupParameter.TtdNumberMonthlyPayments
 	memberDataPointResult.TtdRiskPremium = memberDataPointResult.LoadedTtdRate * memberDataPointResult.TtdCappedIncome * groupParameter.TtdNumberMonthlyPayments
@@ -3547,6 +3994,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.SpouseGlaRiskPremium = memberDataPointResult.LoadedSpouseGlaRate * memberDataPointResult.SpouseGlaCappedSumAssured
 
 	memberDataPointResult.GlaOfficePremium = memberDataPointResult.GlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.TaxSaverOfficePremium = memberDataPointResult.TaxSaverRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.PtdOfficePremium = memberDataPointResult.PtdRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.TtdOfficePremium = memberDataPointResult.TtdRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.PhiOfficePremium = memberDataPointResult.PhiRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
@@ -3595,8 +4043,13 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.ChildrenFuneralOfficePremium = memberDataPointResult.ChildrenFuneralCost / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.DependantsFuneralOfficePremium = memberDataPointResult.DependantsFuneralCost / (1.0 - memberDataPointResult.TotalLoading)
 
-	memberDataPointResult.TotalFuneralRiskCost = memberDataPointResult.MainMemberFuneralCost + memberDataPointResult.SpouseFuneralCost + memberDataPointResult.ChildrenFuneralCost + memberDataPointResult.DependantsFuneralCost
+	memberDataPointResult.TotalFuneralRiskCost = (memberDataPointResult.MainMemberFuneralCost + memberDataPointResult.SpouseFuneralCost + memberDataPointResult.ChildrenFuneralCost + memberDataPointResult.DependantsFuneralCost) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
 	memberDataPointResult.TotalFuneralOfficeCost = memberDataPointResult.TotalFuneralRiskCost / (1.0 - memberDataPointResult.TotalLoading)
+
+	// Derive LoadedGla/PtdEducatorRate now that the parent LoadedRates are
+	// set but before the educator block so educator premiums (and their
+	// slices) can use the educator-specific loaded rates.
+	computeEducatorLoadedRates(&memberDataPointResult)
 
 	if groupQuote.SchemeCategories[i].GlaEducatorBenefit == "Yes" || groupQuote.SchemeCategories[i].PtdEducatorBenefit == "Yes" { //groupQuote.Educator
 		educatorRates := GetEducatorRate(groupParameter, memberDataPointResult.AgeNextBirthday)
@@ -3608,10 +4061,25 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		memberDataPointResult.Grade17RiskRate = educatorRates.Grade17RiskRate
 		memberDataPointResult.Grade812RiskRate = educatorRates.Grade812RiskRate
 		memberDataPointResult.TertiaryRiskRate = educatorRates.TertiaryRiskRate
-		memberDataPointResult.EducatorRiskPremium = (memberDataPointResult.Grade0SumAssured*educatorRates.Grade0RiskRate + memberDataPointResult.Grade17SumAssured*educatorRates.Grade17RiskRate + memberDataPointResult.Grade812SumAssured*educatorRates.Grade812RiskRate + memberDataPointResult.TertiarySumAssured*educatorRates.TertiaryRiskRate) * (memberDataPointResult.LoadedGlaRate + memberDataPointResult.LoadedPtdRate)
-		memberDataPointResult.EducatorOfficePremium = memberDataPointResult.EducatorRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
-		memberDataPointResult.ExpAdjEducatorRiskPremium = (memberDataPointResult.Grade0SumAssured*educatorRates.Grade0RiskRate + memberDataPointResult.Grade17SumAssured*educatorRates.Grade17RiskRate + memberDataPointResult.Grade812SumAssured*educatorRates.Grade812RiskRate + memberDataPointResult.TertiarySumAssured*educatorRates.TertiaryRiskRate) * (memberDataPointResult.ExpAdjLoadedGlaRate + memberDataPointResult.ExpAdjLoadedTtdRate)
-		memberDataPointResult.ExpAdjEducatorOfficePremium = memberDataPointResult.ExpAdjEducatorRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+		// Educator premium uses LoadedGla/PtdEducatorRate (which folds in
+		// educator-specific conversion / continuity loadings). The split
+		// Gla/Ptd educator premiums are computed only when the respective
+		// toggle is "Yes". ExpAdj variants come in the Experience Rating block.
+		riskWeightedSA := memberDataPointResult.Grade0SumAssured*educatorRates.Grade0RiskRate +
+			memberDataPointResult.Grade17SumAssured*educatorRates.Grade17RiskRate +
+			memberDataPointResult.Grade812SumAssured*educatorRates.Grade812RiskRate +
+			memberDataPointResult.TertiarySumAssured*educatorRates.TertiaryRiskRate
+		if groupQuote.SchemeCategories[i].GlaEducatorBenefit == "Yes" {
+			memberDataPointResult.GlaEducatorRiskPremium = riskWeightedSA * memberDataPointResult.LoadedGlaEducatorRate
+			memberDataPointResult.GlaEducatorOfficePremium = memberDataPointResult.GlaEducatorRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+		}
+		if groupQuote.SchemeCategories[i].PtdEducatorBenefit == "Yes" {
+			memberDataPointResult.PtdEducatorRiskPremium = riskWeightedSA * memberDataPointResult.LoadedPtdEducatorRate
+			memberDataPointResult.PtdEducatorOfficePremium = memberDataPointResult.PtdEducatorRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+		}
+		// Educator conversion / continuity slice premiums (risk leg).
+		// ExpAdj variants computed in the Experience Rating block below.
+		computeEducatorSlicePremiums(&memberDataPointResult, riskWeightedSA)
 	}
 
 	//Experience Rating
@@ -3632,6 +4100,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		memberDataPointResult.ExpAdjLoadedSpouseGlaRate = memberDataPointResult.LoadedSpouseGlaRate * memberDataPointResult.GlaExperienceAdjustment
 	}
 	memberDataPointResult.ExpAdjGlaRiskPremium = memberDataPointResult.ExpAdjLoadedGlaRate * memberDataPointResult.GlaCappedSumAssured
+	memberDataPointResult.ExpAdjTaxSaverRiskPremium = memberDataPointResult.ExpAdjLoadedGlaRate * memberDataPointResult.TaxSaverLoading * memberDataPointResult.GlaCappedSumAssured
 	memberDataPointResult.ExpAdjPtdRiskPremium = memberDataPointResult.ExpAdjLoadedPtdRate * memberDataPointResult.PtdCappedSumAssured
 	memberDataPointResult.ExpAdjTtdRiskPremium = memberDataPointResult.ExpAdjLoadedTtdRate * memberDataPointResult.TtdCappedIncome * groupParameter.TtdNumberMonthlyPayments
 	memberDataPointResult.ExpAdjPhiRiskPremium = memberDataPointResult.ExpAdjLoadedPhiRate * memberDataPointResult.PhiMonthlyBenefit
@@ -3639,20 +4108,47 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.ExpAdjSpouseGlaRiskPremium = memberDataPointResult.ExpAdjLoadedSpouseGlaRate * memberDataPointResult.SpouseGlaCappedSumAssured
 
 	memberDataPointResult.ExpAdjGlaOfficePremium = memberDataPointResult.ExpAdjGlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.ExpAdjTaxSaverOfficePremium = memberDataPointResult.ExpAdjTaxSaverRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjPtdOfficePremium = memberDataPointResult.ExpAdjPtdRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjTtdOfficePremium = memberDataPointResult.ExpAdjTtdRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjPhiOfficePremium = memberDataPointResult.ExpAdjPhiRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjCiOfficePremium = memberDataPointResult.ExpAdjCiRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjSpouseGlaOfficePremium = memberDataPointResult.ExpAdjSpouseGlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 
-	memberDataPointResult.ExpAdjTotalFuneralRiskCost = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralCost + memberDataPointResult.SpouseFuneralCost + memberDataPointResult.ChildrenFuneralCost + memberDataPointResult.DependantsFuneralCost)
+	memberDataPointResult.ExpAdjTotalFuneralRiskCost = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralCost + memberDataPointResult.SpouseFuneralCost + memberDataPointResult.ChildrenFuneralCost + memberDataPointResult.DependantsFuneralCost) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
 	memberDataPointResult.ExpAdjTotalFuneralOfficeCost = memberDataPointResult.ExpAdjTotalFuneralRiskCost / (1.0 - memberDataPointResult.TotalLoading)
+
+	// Re-derive the educator loaded rates now that ExpAdjLoaded*Rate values
+	// are set so the ExpAdjLoadedGla/PtdEducatorRate fields are accurate.
+	computeEducatorLoadedRates(&memberDataPointResult)
 
 	if groupQuote.SchemeCategories[i].GlaEducatorBenefit == "Yes" || groupQuote.SchemeCategories[i].PtdEducatorBenefit == "Yes" { //groupQuote.Educator
 		educatorRates := GetEducatorRate(groupParameter, memberDataPointResult.AgeNextBirthday)
-		memberDataPointResult.ExpAdjEducatorRiskPremium = (memberDataPointResult.Grade0SumAssured*educatorRates.Grade0RiskRate + memberDataPointResult.Grade17SumAssured*educatorRates.Grade17RiskRate + memberDataPointResult.Grade812SumAssured*educatorRates.Grade812RiskRate + memberDataPointResult.TertiarySumAssured*educatorRates.TertiaryRiskRate) * (memberDataPointResult.ExpAdjLoadedGlaRate + memberDataPointResult.ExpAdjLoadedTtdRate)
-		memberDataPointResult.ExpAdjEducatorOfficePremium = memberDataPointResult.ExpAdjEducatorRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+		// ExpAdj split uses ExpAdjLoadedGla/PtdEducatorRate (the pre-split
+		// implementation used ExpAdjLoadedTtdRate by mistake).
+		riskWeightedSA := memberDataPointResult.Grade0SumAssured*educatorRates.Grade0RiskRate +
+			memberDataPointResult.Grade17SumAssured*educatorRates.Grade17RiskRate +
+			memberDataPointResult.Grade812SumAssured*educatorRates.Grade812RiskRate +
+			memberDataPointResult.TertiarySumAssured*educatorRates.TertiaryRiskRate
+		if groupQuote.SchemeCategories[i].GlaEducatorBenefit == "Yes" {
+			memberDataPointResult.ExpAdjGlaEducatorRiskPremium = riskWeightedSA * memberDataPointResult.ExpAdjLoadedGlaEducatorRate
+			memberDataPointResult.ExpAdjGlaEducatorOfficePremium = memberDataPointResult.ExpAdjGlaEducatorRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+		}
+		if groupQuote.SchemeCategories[i].PtdEducatorBenefit == "Yes" {
+			memberDataPointResult.ExpAdjPtdEducatorRiskPremium = riskWeightedSA * memberDataPointResult.ExpAdjLoadedPtdEducatorRate
+			memberDataPointResult.ExpAdjPtdEducatorOfficePremium = memberDataPointResult.ExpAdjPtdEducatorRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+		}
+		// Recompute educator slice premiums using the finalised ExpAdj
+		// educator loaded rates. This overwrites the partial values from the
+		// first pass (non-ExpAdj risk + office) so that ExpAdj fields are
+		// populated correctly.
+		computeEducatorSlicePremiums(&memberDataPointResult, riskWeightedSA)
 	}
+
+	// Non-educator conversion / continuity slice premiums (risk + office +
+	// ExpAdj variants). Called after all LoadedRates and TotalFuneralRiskCost
+	// are final, including ExpAdj* rates set in the Experience Rating block.
+	computeConvContSlicePremiums(&memberDataPointResult)
 
 	applyBinderOutsourceAmounts(&memberDataPointResult, binderFeeRate3, outsourceFeeRate3)
 
@@ -6787,10 +7283,16 @@ func applySchemeWideCommission(quoteID int, groupQuote models.GroupPricingQuote,
 			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalFunAnnualCommissionAmount = v },
 		},
 		{
-			name:       "educator",
-			premium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpAdjTotalEducatorOfficePremium },
-			addPremium: func(s *models.MemberRatingResultSummary, v float64) { s.ExpAdjTotalEducatorOfficePremium += v },
-			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpAdjTotalEducatorCommissionAmount = v },
+			name:       "gla_educator",
+			premium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpAdjTotalGlaEducatorOfficePremium },
+			addPremium: func(s *models.MemberRatingResultSummary, v float64) { s.ExpAdjTotalGlaEducatorOfficePremium += v },
+			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpAdjTotalGlaEducatorCommissionAmount = v },
+		},
+		{
+			name:       "ptd_educator",
+			premium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpAdjTotalPtdEducatorOfficePremium },
+			addPremium: func(s *models.MemberRatingResultSummary, v float64) { s.ExpAdjTotalPtdEducatorOfficePremium += v },
+			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpAdjTotalPtdEducatorCommissionAmount = v },
 		},
 	}
 
@@ -6949,19 +7451,23 @@ func applyBinderOutsourceAmounts(r *models.MemberRatingResult, binderRate, outso
 	r.ExpAdjTotalFuneralBinderAmount = r.ExpAdjTotalFuneralOfficeCost * binderRate
 	r.ExpAdjTotalFuneralOutsourcedAmount = r.ExpAdjTotalFuneralOfficeCost * outsourceRate
 
-	r.EducatorBinderAmount = r.EducatorOfficePremium * binderRate
-	r.EducatorOutsourcedAmount = r.EducatorOfficePremium * outsourceRate
-	r.ExpAdjEducatorBinderAmount = r.ExpAdjEducatorOfficePremium * binderRate
-	r.ExpAdjEducatorOutsourcedAmount = r.ExpAdjEducatorOfficePremium * outsourceRate
+	r.GlaEducatorBinderAmount = r.GlaEducatorOfficePremium * binderRate
+	r.GlaEducatorOutsourcedAmount = r.GlaEducatorOfficePremium * outsourceRate
+	r.ExpAdjGlaEducatorBinderAmount = r.ExpAdjGlaEducatorOfficePremium * binderRate
+	r.ExpAdjGlaEducatorOutsourcedAmount = r.ExpAdjGlaEducatorOfficePremium * outsourceRate
+	r.PtdEducatorBinderAmount = r.PtdEducatorOfficePremium * binderRate
+	r.PtdEducatorOutsourcedAmount = r.PtdEducatorOfficePremium * outsourceRate
+	r.ExpAdjPtdEducatorBinderAmount = r.ExpAdjPtdEducatorOfficePremium * binderRate
+	r.ExpAdjPtdEducatorOutsourcedAmount = r.ExpAdjPtdEducatorOfficePremium * outsourceRate
 
 	r.TotalBinderAmount = r.GlaBinderAmount + r.AdditionalAccidentalGlaBinderAmount +
 		r.PtdBinderAmount + r.CiBinderAmount + r.SpouseGlaBinderAmount +
 		r.TtdBinderAmount + r.PhiBinderAmount + r.TotalFuneralBinderAmount +
-		r.EducatorBinderAmount
+		r.GlaEducatorBinderAmount + r.PtdEducatorBinderAmount
 	r.TotalOutsourcedAmount = r.GlaOutsourcedAmount + r.AdditionalAccidentalGlaOutsourcedAmount +
 		r.PtdOutsourcedAmount + r.CiOutsourcedAmount + r.SpouseGlaOutsourcedAmount +
 		r.TtdOutsourcedAmount + r.PhiOutsourcedAmount + r.TotalFuneralOutsourcedAmount +
-		r.EducatorOutsourcedAmount
+		r.GlaEducatorOutsourcedAmount + r.PtdEducatorOutsourcedAmount
 }
 
 func GetSchemeSizeLevel(groupPricingParameter models.GroupPricingParameters, memberCount int) int {
@@ -7051,6 +7557,8 @@ func ApplyDiscountToQuote(quoteId string, discountPct float64, user models.AppUs
 		}
 		r.GlaOfficePremium = r.GlaRiskPremium / divisor
 		r.ExpAdjGlaOfficePremium = r.ExpAdjGlaRiskPremium / divisor
+		r.TaxSaverOfficePremium = r.TaxSaverRiskPremium / divisor
+		r.ExpAdjTaxSaverOfficePremium = r.ExpAdjTaxSaverRiskPremium / divisor
 		r.PtdOfficePremium = r.PtdRiskPremium / divisor
 		r.ExpAdjPtdOfficePremium = r.ExpAdjPtdRiskPremium / divisor
 		r.TtdOfficePremium = r.TtdRiskPremium / divisor
@@ -7067,6 +7575,34 @@ func ApplyDiscountToQuote(quoteId string, discountPct float64, user models.AppUs
 		r.DependantsFuneralOfficePremium = r.DependantsFuneralCost / divisor
 		r.TotalFuneralOfficeCost = r.TotalFuneralRiskCost / divisor
 		r.ExpAdjTotalFuneralOfficeCost = r.ExpAdjTotalFuneralRiskCost / divisor
+		// Conversion / continuity slice office premiums — recomputed from the
+		// persisted risk legs whenever the divisor changes.
+		r.GlaConversionOnWithdrawalOfficePremium = r.GlaConversionOnWithdrawalRiskPremium / divisor
+		r.ExpAdjGlaConversionOnWithdrawalOfficePremium = r.ExpAdjGlaConversionOnWithdrawalRiskPremium / divisor
+		r.GlaConversionOnRetirementOfficePremium = r.GlaConversionOnRetirementRiskPremium / divisor
+		r.ExpAdjGlaConversionOnRetirementOfficePremium = r.ExpAdjGlaConversionOnRetirementRiskPremium / divisor
+		r.GlaContinuityDuringDisabilityOfficePremium = r.GlaContinuityDuringDisabilityRiskPremium / divisor
+		r.ExpAdjGlaContinuityDuringDisabilityOfficePremium = r.ExpAdjGlaContinuityDuringDisabilityRiskPremium / divisor
+		r.GlaEducatorConversionOnWithdrawalOfficePremium = r.GlaEducatorConversionOnWithdrawalRiskPremium / divisor
+		r.ExpAdjGlaEducatorConversionOnWithdrawalOfficePremium = r.ExpAdjGlaEducatorConversionOnWithdrawalRiskPremium / divisor
+		r.GlaEducatorConversionOnRetirementOfficePremium = r.GlaEducatorConversionOnRetirementRiskPremium / divisor
+		r.ExpAdjGlaEducatorConversionOnRetirementOfficePremium = r.ExpAdjGlaEducatorConversionOnRetirementRiskPremium / divisor
+		r.GlaEducatorContinuityDuringDisabilityOfficePremium = r.GlaEducatorContinuityDuringDisabilityRiskPremium / divisor
+		r.ExpAdjGlaEducatorContinuityDuringDisabilityOfficePremium = r.ExpAdjGlaEducatorContinuityDuringDisabilityRiskPremium / divisor
+		r.PtdConversionOnWithdrawalOfficePremium = r.PtdConversionOnWithdrawalRiskPremium / divisor
+		r.ExpAdjPtdConversionOnWithdrawalOfficePremium = r.ExpAdjPtdConversionOnWithdrawalRiskPremium / divisor
+		r.PtdEducatorConversionOnWithdrawalOfficePremium = r.PtdEducatorConversionOnWithdrawalRiskPremium / divisor
+		r.ExpAdjPtdEducatorConversionOnWithdrawalOfficePremium = r.ExpAdjPtdEducatorConversionOnWithdrawalRiskPremium / divisor
+		r.PtdEducatorConversionOnRetirementOfficePremium = r.PtdEducatorConversionOnRetirementRiskPremium / divisor
+		r.ExpAdjPtdEducatorConversionOnRetirementOfficePremium = r.ExpAdjPtdEducatorConversionOnRetirementRiskPremium / divisor
+		r.PhiConversionOnWithdrawalOfficePremium = r.PhiConversionOnWithdrawalRiskPremium / divisor
+		r.ExpAdjPhiConversionOnWithdrawalOfficePremium = r.ExpAdjPhiConversionOnWithdrawalRiskPremium / divisor
+		r.CiConversionOnWithdrawalOfficePremium = r.CiConversionOnWithdrawalRiskPremium / divisor
+		r.ExpAdjCiConversionOnWithdrawalOfficePremium = r.ExpAdjCiConversionOnWithdrawalRiskPremium / divisor
+		r.SglaConversionOnWithdrawalOfficePremium = r.SglaConversionOnWithdrawalRiskPremium / divisor
+		r.ExpAdjSglaConversionOnWithdrawalOfficePremium = r.ExpAdjSglaConversionOnWithdrawalRiskPremium / divisor
+		r.FunConversionOnWithdrawalOfficePremium = r.FunConversionOnWithdrawalRiskPremium / divisor
+		r.ExpAdjFunConversionOnWithdrawalOfficePremium = r.ExpAdjFunConversionOnWithdrawalRiskPremium / divisor
 		applyBinderOutsourceAmounts(r, binderFeeRate, outsourceFeeRate)
 	}
 

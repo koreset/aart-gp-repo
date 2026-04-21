@@ -233,7 +233,8 @@ const SECTION_DEFS = [
       'grade1_7_sum_assured',
       'grade8_12_sum_assured',
       'tertiary_sum_assured',
-      'educator_risk_premium'
+      'gla_educator_risk_premium',
+      'ptd_educator_risk_premium'
     ]
   },
   {

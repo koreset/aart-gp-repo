@@ -170,11 +170,21 @@ export const groupPricing = [
     data_source_type: 'Calculation Engine'
   },
   {
-    data_variable: 'educator_risk_premium',
+    data_variable: 'gla_educator_risk_premium',
     data_type: 'number',
-    data_description: 'Educator Risk Premium',
+    data_description:
+      'GLA component of the educator risk premium. Present when the GLA educator benefit is enabled on the scheme category.',
     data_source:
-      '( Grade0SumAssured*Grade0RiskRate + Grade17SumAssured*Grade17RiskRate\n\t\t + Grade812SumAssured*Grade812RiskRate + TertiarySumAssured*TertiaryRiskRate ) *\n\t\t(ExpAdjLoadedGlaRate + ExpAdjLoadedTtdRate)',
+      '( Grade0SumAssured*Grade0RiskRate + Grade17SumAssured*Grade17RiskRate\n\t\t + Grade812SumAssured*Grade812RiskRate + TertiarySumAssured*TertiaryRiskRate ) *\n\t\tLoadedGlaRate',
+    data_source_type: 'Calculation Engine'
+  },
+  {
+    data_variable: 'ptd_educator_risk_premium',
+    data_type: 'number',
+    data_description:
+      'PTD component of the educator risk premium. Present when the PTD educator benefit is enabled on the scheme category.',
+    data_source:
+      '( Grade0SumAssured*Grade0RiskRate + Grade17SumAssured*Grade17RiskRate\n\t\t + Grade812SumAssured*Grade812RiskRate + TertiarySumAssured*TertiaryRiskRate ) *\n\t\tLoadedPtdRate',
     data_source_type: 'Calculation Engine'
   },
   {

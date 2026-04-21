@@ -114,6 +114,16 @@
                         :subtitle="selectedCategoryDetails.gla_waiting_period"
                       ></v-list-item>
                     </v-col>
+                    <v-col
+                      v-if="selectedCategoryDetails.tax_saver_benefit"
+                      cols="6"
+                      md="4"
+                    >
+                      <v-list-item
+                        title="Tax Saver"
+                        subtitle="Enabled"
+                      ></v-list-item>
+                    </v-col>
                   </v-row>
                 </v-list>
               </v-col> </v-row
@@ -547,6 +557,7 @@ const benefitTitles = computed(() => ({
   ttdBenefitTitle: ttdBenefitTitle.value,
   familyFuneralBenefitTitle: familyFuneralBenefitTitle.value
 }))
+
 
 const downloadWord = () => {
   generateBenefitScheduleDocx(

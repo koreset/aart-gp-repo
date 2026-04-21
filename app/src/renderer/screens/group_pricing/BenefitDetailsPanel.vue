@@ -226,6 +226,28 @@ const officePremiumItems = computed(() => {
     })
   }
 
+  // Tax Saver slice: only shown on the GLA panel when the rider is enabled.
+  // These fields are already included in the GLA office premium above; the
+  // extra row makes the attributable portion explicit for the business.
+  if (
+    data.tax_saver_annual_premium &&
+    data.exp_tax_saver_annual_premium &&
+    props.resultSummary?.tax_saver_benefit
+  ) {
+    items.push({
+      name: 'Tax Saver Office Premium (portion of GLA)',
+      theoretical: formatValue(
+        props.resultSummary[data.tax_saver_annual_premium]
+      ),
+      experience: formatValue(
+        props.resultSummary[data.exp_tax_saver_annual_premium]
+      ),
+      discounted: formatValue(
+        props.resultSummary[data.exp_tax_saver_annual_premium]
+      )
+    })
+  }
+
   return items
 })
 </script>

@@ -709,6 +709,26 @@ const convertExcelDataToGridData = () => {
       ratePer1000SA: resultSummary.exp_gla_office_rate_per_1000_sa
     })
 
+    // Tax Saver slice of GLA — already included in the GLA row above; this
+    // extra row makes the attributable portion explicit for the business.
+    // Not added to totals.
+    if (resultSummary.tax_saver_benefit) {
+      const salary = resultSummary.total_annual_salary || 0
+      const taxSaverPremium =
+        resultSummary.exp_total_tax_saver_annual_office_premium || 0
+      gridData.push({
+        category,
+        benefit: `${glaBenefitTitle.value} — Tax Saver (of GLA)`,
+        annualSalary: 0,
+        totalSumAssured: 0,
+        annualPremium: taxSaverPremium,
+        percentSalary: `${roundUpToTwoDecimalsAccounting(
+          (salary > 0 ? taxSaverPremium / salary : 0) * 100
+        )}%`,
+        ratePer1000SA: ''
+      })
+    }
+
     gridData.push({
       category,
       benefit: ptdBenefitTitle.value,

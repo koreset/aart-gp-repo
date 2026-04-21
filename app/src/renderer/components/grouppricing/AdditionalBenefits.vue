@@ -235,6 +235,26 @@
             </v-row>
 
             <v-divider class="my-4"></v-divider>
+            <div class="text-subtitle-2 mb-2">Tax Saver</div>
+            <v-row>
+              <v-col cols="4">
+                <v-switch
+                  v-model="taxSaverBenefit"
+                  color="primary"
+                  label="Enable Tax Saver"
+                  density="compact"
+                  :disabled="!glaBenefit || !selectedSchemeType"
+                  :hint="
+                    !glaBenefit
+                      ? 'Enable base GLA first — tax saver is a GLA rider.'
+                      : 'Loading rate is read from the general loadings table.'
+                  "
+                  persistent-hint
+                ></v-switch>
+              </v-col>
+            </v-row>
+
+            <v-divider class="my-4"></v-divider>
             <div class="text-subtitle-2 mb-2">
               {{ additionalGlaCoverLabel }} (rate per 1,000 by age band)
             </div>
@@ -1504,6 +1524,7 @@ function onSchemeTypeChange(schemeType) {
       data.additional_accidental_gla_benefit || false
     additionalAccidentalGlaBenefitType.value =
       data.additional_accidental_gla_benefit_type || null
+    taxSaverBenefit.value = data.tax_saver_benefit || false
     additionalGlaCoverBenefit.value = data.additional_gla_cover_benefit || false
     additionalGlaCoverAgeBandSource.value =
       data.additional_gla_cover_age_band_source === 'custom'
@@ -1647,6 +1668,7 @@ function onSchemeTypeChange(schemeType) {
     glaConversionOnRetirement.value = false
     additionalAccidentalGlaBenefit.value = false
     additionalAccidentalGlaBenefitType.value = null
+    taxSaverBenefit.value = false
     additionalGlaCoverBenefit.value = false
     additionalGlaCoverAgeBandSource.value = 'standard'
     additionalGlaCoverAgeBandType.value = ''
@@ -1754,6 +1776,20 @@ function saveCurrentSchemeCategory() {
             additional_accidental_gla_benefit_type:
               additionalAccidentalGlaBenefitType.value
           }),
+          tax_saver_benefit: !!taxSaverBenefit.value,
+          gla_educator_conversion_on_withdrawal:
+            !!glaEducatorConversionOnWithdrawal.value,
+          gla_educator_conversion_on_retirement:
+            !!glaEducatorConversionOnRetirement.value,
+          gla_educator_continuity_during_disability:
+            !!glaEducatorContinuityDuringDisability.value,
+          ptd_educator_conversion_on_withdrawal:
+            !!ptdEducatorConversionOnWithdrawal.value,
+          ptd_educator_conversion_on_retirement:
+            !!ptdEducatorConversionOnRetirement.value,
+          phi_conversion_on_withdrawal: !!phiConversionOnWithdrawal.value,
+          sgla_conversion_on_withdrawal: !!sglaConversionOnWithdrawal.value,
+          fun_conversion_on_withdrawal: !!funConversionOnWithdrawal.value,
           additional_gla_cover_benefit: !!additionalGlaCoverBenefit.value,
           ...(additionalGlaCoverBenefit.value && {
             additional_gla_cover_age_band_source:
@@ -2003,6 +2039,7 @@ const validationSchema = yup.object({
           ),
       otherwise: (schema) => schema.nullable()
     }),
+  tax_saver_benefit: yup.boolean().nullable(),
   ptd_conversion_on_withdrawal: yup.boolean().nullable(),
   ci_conversion_on_withdrawal: yup.boolean().nullable(),
   ptd_benefit: yup.boolean().nullable(),
@@ -2314,10 +2351,32 @@ const { handleSubmit, defineField, errors, validate } = useForm({
     additional_accidental_gla_benefit_type:
       groupStore.scheme_category_template
         .additional_accidental_gla_benefit_type,
+    tax_saver_benefit: groupStore.scheme_category_template.tax_saver_benefit,
     ptd_conversion_on_withdrawal:
       groupStore.scheme_category_template.ptd_conversion_on_withdrawal,
     ci_conversion_on_withdrawal:
       groupStore.scheme_category_template.ci_conversion_on_withdrawal,
+    gla_educator_conversion_on_withdrawal:
+      groupStore.scheme_category_template
+        .gla_educator_conversion_on_withdrawal,
+    gla_educator_conversion_on_retirement:
+      groupStore.scheme_category_template
+        .gla_educator_conversion_on_retirement,
+    gla_educator_continuity_during_disability:
+      groupStore.scheme_category_template
+        .gla_educator_continuity_during_disability,
+    ptd_educator_conversion_on_withdrawal:
+      groupStore.scheme_category_template
+        .ptd_educator_conversion_on_withdrawal,
+    ptd_educator_conversion_on_retirement:
+      groupStore.scheme_category_template
+        .ptd_educator_conversion_on_retirement,
+    phi_conversion_on_withdrawal:
+      groupStore.scheme_category_template.phi_conversion_on_withdrawal,
+    sgla_conversion_on_withdrawal:
+      groupStore.scheme_category_template.sgla_conversion_on_withdrawal,
+    fun_conversion_on_withdrawal:
+      groupStore.scheme_category_template.fun_conversion_on_withdrawal,
 
     gla_benefit: groupStore.scheme_category_template.gla_benefit,
     ptd_benefit: groupStore.scheme_category_template.ptd_benefit,
@@ -2432,12 +2491,36 @@ const [
 const additionalAccidentalGlaBenefitTypes = computed(() =>
   glaBenefitTypes.value.filter((bt: string) => bt !== glaBenefitType.value)
 )
+const [taxSaverBenefit] = defineField('tax_saver_benefit')
 const [ptdConversionOnWithdrawal, ptdConversionOnWithdrawalAttrs] = defineField(
   'ptd_conversion_on_withdrawal'
 )
 const [ciConversionOnWithdrawal, ciConversionOnWithdrawalAttrs] = defineField(
   'ci_conversion_on_withdrawal'
 )
+// Conversion / continuity flags (8 new). UI toggles can be added later —
+// for now we persist them so actuaries can flip them via API / DB until
+// the UI is built out.
+const [glaEducatorConversionOnWithdrawal] = defineField(
+  'gla_educator_conversion_on_withdrawal'
+)
+const [glaEducatorConversionOnRetirement] = defineField(
+  'gla_educator_conversion_on_retirement'
+)
+const [glaEducatorContinuityDuringDisability] = defineField(
+  'gla_educator_continuity_during_disability'
+)
+const [ptdEducatorConversionOnWithdrawal] = defineField(
+  'ptd_educator_conversion_on_withdrawal'
+)
+const [ptdEducatorConversionOnRetirement] = defineField(
+  'ptd_educator_conversion_on_retirement'
+)
+const [phiConversionOnWithdrawal] = defineField('phi_conversion_on_withdrawal')
+const [sglaConversionOnWithdrawal] = defineField(
+  'sgla_conversion_on_withdrawal'
+)
+const [funConversionOnWithdrawal] = defineField('fun_conversion_on_withdrawal')
 const [glaBenefit] = defineField('gla_benefit')
 const [ptdBenefit] = defineField('ptd_benefit')
 const [ciBenefit] = defineField('ci_benefit')
@@ -2802,6 +2885,14 @@ watch(glaEducatorBenefit, (newVal) => {
     glaEducatorBenefitType.value = null
   }
 })
+
+// Clear Tax Saver when GLA is disabled — it rides on GLA.
+watch(glaBenefit, (newVal) => {
+  if (!newVal) {
+    taxSaverBenefit.value = false
+  }
+})
+
 
 // Keep the Additional Accidental GLA selection consistent: clear it when the
 // main GLA is turned off, when only one benefit type is available, or when the

@@ -45,6 +45,20 @@ export const useGroupPricingStore = defineStore('groupPricing', {
       gla_conversion_on_retirement: false,
       additional_accidental_gla_benefit: false,
       additional_accidental_gla_benefit_type: null,
+      tax_saver_benefit: false,
+      // Conversion / continuity flags. Default off so pricing is unchanged
+      // until the scheme actuary populates the matching general_loadings
+      // rate column. The four GLA/PTD/CI base-conversion flags already exist
+      // above via gla_conversion_on_withdrawal / gla_conversion_on_retirement
+      // / ptd_conversion_on_withdrawal / ci_conversion_on_withdrawal.
+      gla_educator_conversion_on_withdrawal: false,
+      gla_educator_conversion_on_retirement: false,
+      gla_educator_continuity_during_disability: false,
+      ptd_educator_conversion_on_withdrawal: false,
+      ptd_educator_conversion_on_retirement: false,
+      phi_conversion_on_withdrawal: false,
+      sgla_conversion_on_withdrawal: false,
+      fun_conversion_on_withdrawal: false,
       additional_gla_cover_benefit: false,
       additional_gla_cover_age_band_source: 'standard',
       additional_gla_cover_age_band_type: '',

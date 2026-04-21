@@ -101,7 +101,6 @@ func expectedTokenSet() []string {
 		zc models.SchemeCategory
 		zq models.GroupPricingQuote
 		zi models.GroupPricingInsurerDetail
-		zt quote_docx.BenefitTitles
 		zT quote_docx.QuoteTotals
 	)
 	var out []string
