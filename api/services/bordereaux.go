@@ -1704,7 +1704,7 @@ func GenerateMemberBordereaux(ctx context.Context, req GenerateBordereauxRequest
 				return *r.ExitDate
 			}(),
 			Period: periodStr,
-			Gender:         r.Gender,
+			Gender: r.Gender,
 			DateOfBirth: func() *time.Time {
 				if r.DateOfBirth.IsZero() {
 					return nil
@@ -3223,13 +3223,14 @@ func AddBordereauxTimelineEntry(generatedID string, entry models.BordereauxTimel
 		if entry.Type != "" {
 			updates["status"] = strings.Title(entry.Type)
 		}
-		// logic for progress could be more complex, but simple for now
-		if entry.Type == "confirmed" || entry.Type == "reconciled" {
+		// Submitting to the employer is the final step — the cycle is
+		// considered complete once a bordereaux has been submitted.
+		if entry.Type == "submitted" || entry.Type == "confirmed" || entry.Type == "reconciled" {
+			if entry.Type == "submitted" {
+				now := time.Now()
+				updates["submission_date"] = &now
+			}
 			updates["progress"] = 100
-		} else if entry.Type == "submitted" {
-			now := time.Now()
-			updates["submission_date"] = &now
-			updates["progress"] = 66
 		} else if entry.Type == "generated" {
 			updates["progress"] = 33
 		}
@@ -3388,12 +3389,13 @@ func SubmitBordereauxBatch(ctx context.Context, req BordereauxBatchSubmitRequest
 			}
 
 			before := bordereaux
-			// Update bordereaux status and submission date
+			// Update bordereaux status and submission date. Submission is the
+			// final step in the cycle, so progress reaches 100%.
 			updates := map[string]interface{}{
 				"status":          "submitted",
 				"submission_date": req.SubmissionDate,
 				"last_updated":    time.Now(),
-				"progress":        66,
+				"progress":        100,
 			}
 			if err := tx.Model(&bordereaux).Updates(updates).Error; err != nil {
 				return fmt.Errorf("failed to update bordereaux status: %w", err)
@@ -3682,7 +3684,7 @@ func monthIntToName(month int) string {
 	return time.Month(month).String()
 }
 
-// SumsAssured calculates the covered, retained, and ceded sums assured
+// CoveredSumsAssured calculates the covered, retained, and ceded sums assured
 // for all benefits of a member in force, based on their category and quote.
 //
 // Parameters:

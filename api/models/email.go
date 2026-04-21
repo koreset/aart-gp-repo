@@ -67,6 +67,10 @@ type EmailOutbox struct {
 	CreatedAt         time.Time  `json:"created_at"`
 }
 
+// TableName keeps the table at the singular name the Phase 1 migration
+// created, since GORM would otherwise pluralize EmailOutbox to email_outboxes.
+func (EmailOutbox) TableName() string { return "email_outbox" }
+
 // Status constants for EmailOutbox.
 const (
 	EmailOutboxPending = "pending"

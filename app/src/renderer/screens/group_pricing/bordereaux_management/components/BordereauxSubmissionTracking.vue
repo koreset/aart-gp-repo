@@ -107,6 +107,7 @@
                       :column-defs="columnDefs"
                       table-title="Bordereaux Submissions"
                       :show-export="false"
+                      :show-delete="false"
                       density="compact"
                       row-selection="multiple"
                       @row-clicked="onRowClicked"

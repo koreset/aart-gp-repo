@@ -39,7 +39,7 @@
         >
 
         <v-btn
-          v-if="showDeleteButton"
+          v-if="showDeleteButton && props.showDelete !== false"
           size="small"
           variant="outlined"
           rounded

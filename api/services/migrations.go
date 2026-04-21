@@ -458,6 +458,9 @@ func MigrateGroupPricingTables() error {
 		&models.InsurerQuoteTemplate{},
 		&models.InsurerOnRiskLetterTemplate{},
 		&models.BAVVerificationLog{},
+		&models.EmailSettings{},
+		&models.EmailTemplate{},
+		&models.EmailOutbox{},
 	)
 
 	if err != nil {
