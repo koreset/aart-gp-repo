@@ -23,5 +23,15 @@ ALTER TABLE commission_structures ADD COLUMN IF NOT EXISTS applicable_rate DOUBL
 ALTER TABLE commission_structures ADD COLUMN IF NOT EXISTS creation_date TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE commission_structures ADD COLUMN IF NOT EXISTS created_by VARCHAR(255);
 
+-- Dedupe duplicate (channel, lower_bound) rows before the unique index is
+-- created. Keeps the earliest-inserted row (smallest id) for each pair.
+-- No-op once the unique index exists. IS NOT DISTINCT FROM treats NULLs as
+-- equal so NULL channels also dedupe.
+DELETE FROM commission_structures c1
+USING commission_structures c2
+WHERE c1.id > c2.id
+  AND c1.channel IS NOT DISTINCT FROM c2.channel
+  AND c1.lower_bound IS NOT DISTINCT FROM c2.lower_bound;
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_commission_channel_lower
     ON commission_structures (channel, lower_bound);

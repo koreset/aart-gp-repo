@@ -1435,6 +1435,11 @@ export default {
       data
     )
   },
+  regenerateGeneratedBordereaux(generatedId) {
+    return Api.post(
+      `/group-pricing/bordereaux/generated/${generatedId}/regenerate`
+    )
+  },
 
   // Reinsurer Acceptance & Recovery Tracking
   createReinsurerAcceptance(data) {
@@ -1802,5 +1807,77 @@ export default {
         'Content-Type': 'application/json'
       }
     })
+  },
+
+  // ─── Email system ─────────────────────────────────────────────────────────
+  getEmailSettings() {
+    return Api.get('/group-pricing/email/settings')
+  },
+  saveEmailSettings(settings) {
+    return Api.put('/group-pricing/email/settings', settings, {
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      }
+    })
+  },
+  sendTestEmail() {
+    return Api.post('/group-pricing/email/settings/test')
+  },
+
+  listEmailTemplates() {
+    return Api.get('/group-pricing/email/templates')
+  },
+  getEmailTemplate(code) {
+    return Api.get(`/group-pricing/email/templates/${encodeURIComponent(code)}`)
+  },
+  createEmailTemplate(template) {
+    return Api.post('/group-pricing/email/templates', template, {
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      }
+    })
+  },
+  updateEmailTemplate(code, template) {
+    return Api.put(
+      `/group-pricing/email/templates/${encodeURIComponent(code)}`,
+      template,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        }
+      }
+    )
+  },
+  deleteEmailTemplate(code) {
+    return Api.delete(
+      `/group-pricing/email/templates/${encodeURIComponent(code)}`
+    )
+  },
+  previewEmailTemplate(code, payload) {
+    return Api.post(
+      `/group-pricing/email/templates/${encodeURIComponent(code)}/preview`,
+      payload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        }
+      }
+    )
+  },
+
+  listEmailOutbox(
+    params: { status?: string; page?: number; page_size?: number } = {}
+  ) {
+    return Api.get('/group-pricing/email/outbox', { params })
+  },
+  getEmailOutboxItem(id) {
+    return Api.get(`/group-pricing/email/outbox/${id}`)
+  },
+  retryEmailOutbox(id) {
+    return Api.post(`/group-pricing/email/outbox/${id}/retry`)
   }
 }

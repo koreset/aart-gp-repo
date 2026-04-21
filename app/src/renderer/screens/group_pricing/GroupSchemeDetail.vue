@@ -28,7 +28,6 @@
             </div>
           </template>
           <template #default>
-
             <v-row>
               <v-col cols="12" md="3">
                 <v-card variant="tonal" class="pa-2">

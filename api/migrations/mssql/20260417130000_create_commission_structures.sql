@@ -21,6 +21,16 @@ BEGIN
     ALTER TABLE commission_structures ALTER COLUMN channel NVARCHAR(20);
 END
 
+-- Dedupe duplicate (channel, lower_bound) rows before the unique index is
+-- created. Keeps the earliest-inserted row (smallest id) for each pair.
+-- No-op once the unique index exists. NULL-safe so NULL channels also dedupe.
+DELETE c1
+FROM commission_structures c1
+INNER JOIN commission_structures c2
+    ON c1.id > c2.id
+   AND (c1.channel = c2.channel OR (c1.channel IS NULL AND c2.channel IS NULL))
+   AND (c1.lower_bound = c2.lower_bound OR (c1.lower_bound IS NULL AND c2.lower_bound IS NULL));
+
 IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('commission_structures') AND name = 'idx_commission_channel_lower')
 BEGIN
     CREATE UNIQUE INDEX idx_commission_channel_lower

@@ -699,7 +699,6 @@ onUnmounted(() => statusBarStore.clear())
 </script>
 
 <style scoped>
-
 .cursor-pointer {
   cursor: pointer;
 }

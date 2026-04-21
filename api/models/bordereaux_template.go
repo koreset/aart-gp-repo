@@ -63,6 +63,10 @@ type GeneratedBordereaux struct {
 	ReturnReason   string               `json:"return_reason" gorm:"default:''"`
 	CreatedBy      string               `json:"created_by"`
 	CreatedAt      time.Time            `json:"created_at"`
+	// RequestPayload stores the original GenerateBordereauxRequest so the row
+	// can be regenerated in-place while keeping the same generated_id, timeline
+	// and audit trail. Null for rows created before regenerate was added.
+	RequestPayload JSON `json:"request_payload,omitempty" gorm:"type:json"`
 }
 
 // BordereauxTimeline tracks events for a generated bordereaux

@@ -709,10 +709,9 @@ const handleUpload = async (payload: any) => {
     })
     .catch((error) => {
       // console.log('Error:', error)
+      const errMsg = error.response?.data?.error
       snackbarText.value =
-        error.data && error.data.error.trim() !== ''
-          ? error.data.error
-          : (error.data.error ?? 'Failed to upload table')
+        errMsg && errMsg.trim() !== '' ? errMsg : 'Failed to upload table'
       snackbar.value = true
       uploadingData.value = false
     })

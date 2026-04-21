@@ -14,7 +14,9 @@
               >
                 Back
               </v-btn>
-              <span class="headline">RI Technical Accounts &amp; Settlement</span>
+              <span class="headline"
+                >RI Technical Accounts &amp; Settlement</span
+              >
             </div>
           </template>
 

@@ -772,11 +772,13 @@ const statusOptions = [
   { title: 'Cancelled', value: 'cancelled' }
 ]
 
+// Non-member bordereaux types temporarily disabled — only member is a valid
+// use case right now. Uncomment entries below to restore them.
 const bordereauTypes = [
-  { title: 'Member', value: 'member' },
-  { title: 'Premium', value: 'premium' },
-  { title: 'Claims', value: 'claims' },
-  { title: 'Benefits', value: 'benefits' }
+  { title: 'Member', value: 'member' }
+  // { title: 'Premium', value: 'premium' },
+  // { title: 'Claims', value: 'claims' },
+  // { title: 'Benefits', value: 'benefits' }
 ]
 
 const deliveryMethods = [
@@ -1273,6 +1275,27 @@ const returnToDraftItem = (item: any) => {
   showReturnDialog.value = true
 }
 
+const regenerateItem = async (item: any) => {
+  if (!item?.generated_id) return
+  try {
+    loading.value = true
+    const response = await GroupPricingService.regenerateGeneratedBordereaux(
+      item.generated_id
+    )
+    if (response.data?.success) {
+      flash.show('Bordereaux regenerated', 'success')
+      await refreshSubmissions()
+    }
+  } catch (error: any) {
+    flash.show(
+      error.response?.data?.error || 'Failed to regenerate bordereaux',
+      'error'
+    )
+  } finally {
+    loading.value = false
+  }
+}
+
 const performReview = async () => {
   if (!selectedApprovalItem.value) return
   try {
@@ -1365,15 +1388,22 @@ let activeSubmissionMenuCleanup: (() => void) | null = null
 function showContextMenu(event: MouseEvent, data: any) {
   if (activeSubmissionMenuCleanup) activeSubmissionMenuCleanup()
 
-  const isDraftOrGenerated =
-    data.status === 'draft' || data.status === 'generated'
+  const isDraft = data.status === 'draft'
+  const isGenerated = data.status === 'generated'
   const isReviewed = data.status === 'reviewed'
   const isApproved = data.status === 'approved'
   const isSubmitted = data.status === 'submitted'
 
   const menuItems = [
     { label: 'View', color: '#0288d1', fn: () => viewSubmission(data) },
-    isDraftOrGenerated && hasPermission('bordereaux:approve_outbound')
+    isDraft && hasPermission('bordereaux:generate_outbound')
+      ? {
+          label: 'Regenerate',
+          color: '#9c27b0',
+          fn: () => regenerateItem(data)
+        }
+      : null,
+    isGenerated && hasPermission('bordereaux:approve_outbound')
       ? {
           label: 'Mark as Reviewed',
           color: '#1976d2',

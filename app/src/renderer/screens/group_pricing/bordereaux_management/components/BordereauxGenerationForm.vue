@@ -928,6 +928,8 @@ const rules = {
 }
 
 // Static data
+// Non-member bordereaux types temporarily disabled — only member is a valid
+// use case right now. Uncomment entries below to restore them.
 const bordereauTypes = [
   {
     value: 'member',
@@ -935,42 +937,42 @@ const bordereauTypes = [
     description: 'Member enrollment, changes, and terminations',
     icon: 'mdi-account-group',
     color: 'blue'
-  },
-  {
-    value: 'premium',
-    label: 'Premium Bordereaux',
-    description: 'Premium calculations and collections',
-    icon: 'mdi-currency-usd',
-    color: 'green'
-  },
-  {
-    value: 'claims',
-    label: 'Claims Bordereaux',
-    description: 'Claims submissions and settlements',
-    icon: 'mdi-medical-bag',
-    color: 'orange'
-  },
-  {
-    value: 'reinsurance_premium',
-    label: 'Reinsurance Premium Bordereaux',
-    description: 'Reinsurance Premium calculations and collections',
-    icon: 'mdi-currency-usd',
-    color: 'green'
-  },
-  {
-    value: 'reinsurance_claims',
-    label: 'Reinsurance Claims Bordereaux',
-    description: 'Reinsurance Claims submissions and settlements',
-    icon: 'mdi-medical-bag',
-    color: 'orange'
-  },
-  {
-    value: 'benefits',
-    label: 'Benefits Bordereaux',
-    description: 'Benefit payments and adjustments',
-    icon: 'mdi-gift',
-    color: 'purple'
   }
+  // {
+  //   value: 'premium',
+  //   label: 'Premium Bordereaux',
+  //   description: 'Premium calculations and collections',
+  //   icon: 'mdi-currency-usd',
+  //   color: 'green'
+  // },
+  // {
+  //   value: 'claims',
+  //   label: 'Claims Bordereaux',
+  //   description: 'Claims submissions and settlements',
+  //   icon: 'mdi-medical-bag',
+  //   color: 'orange'
+  // },
+  // {
+  //   value: 'reinsurance_premium',
+  //   label: 'Reinsurance Premium Bordereaux',
+  //   description: 'Reinsurance Premium calculations and collections',
+  //   icon: 'mdi-currency-usd',
+  //   color: 'green'
+  // },
+  // {
+  //   value: 'reinsurance_claims',
+  //   label: 'Reinsurance Claims Bordereaux',
+  //   description: 'Reinsurance Claims submissions and settlements',
+  //   icon: 'mdi-medical-bag',
+  //   color: 'orange'
+  // },
+  // {
+  //   value: 'benefits',
+  //   label: 'Benefits Bordereaux',
+  //   description: 'Benefit payments and adjustments',
+  //   icon: 'mdi-gift',
+  //   color: 'purple'
+  // }
 ]
 
 const periodTypes = [

@@ -540,6 +540,23 @@ func ApproveGeneratedBordereaux(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": brd})
 }
 
+// RegenerateGeneratedBordereaux handles POST /group-pricing/bordereaux/generated/:id/regenerate
+func RegenerateGeneratedBordereaux(c *gin.Context) {
+	generatedID := c.Param("id")
+	if generatedID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "generated_id is required"})
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+
+	brd, err := services.RegenerateGeneratedBordereaux(c.Request.Context(), generatedID, user)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": brd})
+}
+
 // ReturnOutboundToDraft handles POST /group-pricing/bordereaux/generated/:id/return-to-draft
 func ReturnOutboundToDraft(c *gin.Context) {
 	generatedID := c.Param("id")

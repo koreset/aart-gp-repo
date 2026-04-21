@@ -374,6 +374,57 @@
         <v-list-item-title>Messages</v-list-item-title>
       </v-list-item>
 
+      <!-- Email -->
+      <v-list-group v-model="expandedGroups" value="Email">
+        <template #activator="{ props }">
+          <v-list-item
+            v-bind="props"
+            :class="{ 'disabled-item': !canAccess('navigation:manage_email') }"
+            prepend-icon="mdi-email-outline"
+            title="Email"
+          ></v-list-item>
+        </template>
+        <v-list-item
+          :class="{ 'disabled-item': !canAccess('navigation:manage_email') }"
+          prepend-icon="mdi-cog-outline"
+          @click="
+            navigateGroup(
+              'group-pricing-email-settings',
+              'Email',
+              'navigation:manage_email'
+            )
+          "
+        >
+          <v-list-item-title>Settings</v-list-item-title>
+        </v-list-item>
+        <v-list-item
+          :class="{ 'disabled-item': !canAccess('navigation:manage_email') }"
+          prepend-icon="mdi-file-document-multiple-outline"
+          @click="
+            navigateGroup(
+              'group-pricing-email-templates',
+              'Email',
+              'navigation:manage_email'
+            )
+          "
+        >
+          <v-list-item-title>Templates</v-list-item-title>
+        </v-list-item>
+        <v-list-item
+          :class="{ 'disabled-item': !canAccess('navigation:manage_email') }"
+          prepend-icon="mdi-tray-arrow-up"
+          @click="
+            navigateGroup(
+              'group-pricing-email-outbox',
+              'Email',
+              'navigation:manage_email'
+            )
+          "
+        >
+          <v-list-item-title>Outbox</v-list-item-title>
+        </v-list-item>
+      </v-list-group>
+
       <!-- Documentation -->
       <v-list-item
         :to="{ name: 'documentation' }"

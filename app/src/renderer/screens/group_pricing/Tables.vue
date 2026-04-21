@@ -644,10 +644,10 @@ const handleUpload = async (payload: DataPayload) => {
   } catch (error: any) {
     let errorMessage = 'An error occurred while uploading the file'
 
-    console.log('Upload error details:', error.data)
+    console.log('Upload error details:', error.response?.data)
 
-    if (error.status === 400 && error.data && error.data.error) {
-      errorMessage = error.data.error
+    if (error.response?.status === 400 && error.response?.data?.error) {
+      errorMessage = error.response.data.error
     }
 
     snackbarText.value = errorMessage

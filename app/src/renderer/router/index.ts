@@ -445,6 +445,31 @@ const router = createRouter({
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
 
+    // ── Email System ─────────────────────────────────────────────────────────
+    {
+      path: '/group-pricing/email/settings',
+      name: 'group-pricing-email-settings',
+      component: () =>
+        import('../screens/group_pricing/email/EmailSettings.vue'),
+      meta: { required_permission: 'navigation:manage_email' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/email/templates',
+      name: 'group-pricing-email-templates',
+      component: () =>
+        import('../screens/group_pricing/email/EmailTemplates.vue'),
+      meta: { required_permission: 'navigation:manage_email' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/email/outbox',
+      name: 'group-pricing-email-outbox',
+      component: () => import('../screens/group_pricing/email/EmailOutbox.vue'),
+      meta: { required_permission: 'navigation:manage_email' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+
     // ── User Management ──────────────────────────────────────────────────────
     {
       path: '/user-management-list',

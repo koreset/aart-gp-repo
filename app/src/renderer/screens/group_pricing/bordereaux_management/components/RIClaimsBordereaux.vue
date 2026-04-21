@@ -14,7 +14,9 @@
               >
                 Back
               </v-btn>
-              <span class="headline">RI Claims Notifications &amp; Cat Register</span>
+              <span class="headline"
+                >RI Claims Notifications &amp; Cat Register</span
+              >
             </div>
           </template>
 

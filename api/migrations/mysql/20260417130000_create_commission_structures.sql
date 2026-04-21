@@ -18,6 +18,16 @@ CREATE TABLE IF NOT EXISTS commission_structures (
 -- unique index doesn't hit error 1170.
 ALTER TABLE commission_structures MODIFY COLUMN channel VARCHAR(20);
 
+-- Dedupe duplicate (channel, lower_bound) rows before the unique index is
+-- created. Keeps the earliest-inserted row (smallest id) for each pair.
+-- No-op once the unique index exists, so safe to run repeatedly.
+-- `<=>` is MySQL's null-safe equal, so NULL channels also dedupe.
+DELETE c1 FROM commission_structures c1
+JOIN commission_structures c2
+    ON c1.channel <=> c2.channel
+   AND c1.lower_bound <=> c2.lower_bound
+   AND c1.id > c2.id;
+
 SET @sql := (
     SELECT IF(
         EXISTS(

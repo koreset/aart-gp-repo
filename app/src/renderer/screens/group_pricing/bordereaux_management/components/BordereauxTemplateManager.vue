@@ -462,7 +462,7 @@
                             <v-col cols="5">
                               <v-select
                                 v-model="mapping.source_field"
-                                :items="bordereauFields"
+                                :items="availableSourceFieldsFor(index)"
                                 item-title="display_name"
                                 item-value="field_name"
                                 label="Source Field"
@@ -831,13 +831,15 @@ const headers = [
   { title: 'Actions', key: 'actions', sortable: false, width: '250px' }
 ]
 
+// Non-member bordereaux types temporarily disabled — only member is a valid
+// use case right now. Uncomment entries below to restore them.
 const bordereauTypes = [
-  { title: 'Member', value: 'member' },
-  { title: 'Premium', value: 'premium' },
-  { title: 'Claims', value: 'claims' },
-  { title: 'Benefits', value: 'benefits' },
-  { title: 'Reinsurance Premium', value: 'reinsurance_premium' },
-  { title: 'Reinsurance Claims', value: 'reinsurance_claims' }
+  { title: 'Member', value: 'member' }
+  // { title: 'Premium', value: 'premium' },
+  // { title: 'Claims', value: 'claims' },
+  // { title: 'Benefits', value: 'benefits' },
+  // { title: 'Reinsurance Premium', value: 'reinsurance_premium' },
+  // { title: 'Reinsurance Claims', value: 'reinsurance_claims' }
 ]
 
 const statusOptions = [
@@ -907,32 +909,35 @@ const canTest = computed(() => {
 })
 
 // Methods
+// Non-member bordereaux types temporarily disabled — only member is a valid
+// use case right now. Type maps below retain only the member entry; other
+// entries are commented for easy restoration.
 const getTypeColor = (type: string): string => {
   const colors: Record<string, string> = {
-    member: 'blue',
-    premium: 'green',
-    claims: 'orange',
-    benefits: 'purple'
+    member: 'blue'
+    // premium: 'green',
+    // claims: 'orange',
+    // benefits: 'purple'
   }
   return colors[type] || 'grey'
 }
 
 const getTypeIcon = (type: string): string => {
   const icons: Record<string, string> = {
-    member: 'mdi-account-group',
-    premium: 'mdi-currency-usd',
-    claims: 'mdi-medical-bag',
-    benefits: 'mdi-gift'
+    member: 'mdi-account-group'
+    // premium: 'mdi-currency-usd',
+    // claims: 'mdi-medical-bag',
+    // benefits: 'mdi-gift'
   }
   return icons[type] || 'mdi-file'
 }
 
 const formatType = (type: string): string => {
   const types: Record<string, string> = {
-    member: 'Member',
-    premium: 'Premium',
-    claims: 'Claims',
-    benefits: 'Benefits'
+    member: 'Member'
+    // premium: 'Premium',
+    // claims: 'Claims',
+    // benefits: 'Benefits'
   }
   return types[type] || type
 }
@@ -1164,6 +1169,21 @@ const testCurrentTemplate = () => {
   runTemplateTest(editingTemplate.value.id, editingTemplate.value.name)
 }
 
+const availableSourceFieldsFor = (index: number) => {
+  const mappings = editingTemplate.value?.field_mappings || []
+  const currentValue = mappings[index]?.source_field
+  const usedElsewhere = new Set(
+    mappings
+      .filter((_: any, i: number) => i !== index)
+      .map((m: any) => m.source_field)
+      .filter((v: string) => !!v)
+  )
+  return bordereauFields.value.filter(
+    (f: any) =>
+      !usedElsewhere.has(f.field_name) || f.field_name === currentValue
+  )
+}
+
 const addFieldMapping = () => {
   if (!editingTemplate.value.field_mappings) {
     editingTemplate.value.field_mappings = []
@@ -1183,6 +1203,22 @@ const removeFieldMapping = (index: number | string) => {
 const saveTemplate = async () => {
   try {
     saving.value = true
+
+    const mappings = editingTemplate.value.field_mappings || []
+    const seen = new Set<string>()
+    const duplicates = new Set<string>()
+    for (const m of mappings) {
+      if (!m.source_field) continue
+      if (seen.has(m.source_field)) duplicates.add(m.source_field)
+      seen.add(m.source_field)
+    }
+    if (duplicates.size > 0) {
+      flash.show(
+        `Duplicate source fields not allowed: ${[...duplicates].join(', ')}`,
+        'error'
+      )
+      return
+    }
 
     console.log('Saving template:', editingTemplate.value)
 
@@ -1471,5 +1507,4 @@ onMounted(() => {
 .w-100 {
   width: 100%;
 }
-
 </style>

@@ -985,46 +985,48 @@ func GetBordereauxFieldsByType(bType string) ([]map[string]string, error) {
 		add("Parent Funeral Sum Assured", "parent_funeral_sum_assured")
 
 		// extend with additional member fields as needed
-	case "premium", "premiums", "reinsurance_premium", "reinsurance_premiums":
-		add("Scheme Name", "scheme_name")
-		add("Member Name", "member_name")
-		add("Employee Number", "employee_number")
-		add("Member ID Number", "member_id_number")
-		add("Category", "category")
-		add("Annual Salary", "annual_salary")
-		add("Valuation Month", "valuation_month")
-		add("Age at Month", "age_at_month")
-		add("GLA Annual Premium", "gla_annual_premium")
-		add("SGLA Annual Premium", "sgla_annual_premium")
-		add("PTD Annual Premium", "ptd_annual_premium")
-		add("CI Annual Premium", "ci_annual_premium")
-		add("TTD Annual Premium", "ttd_annual_premium")
-		add("PHI Annual Premium", "phi_annual_premium")
-		add("Total Annual Premium Excl Funeral", "total_annual_premium_excl_funeral")
-		add("Total Annual Funeral Premium", "total_annual_funeral_premium")
-		add("Total Annual Premium", "total_annual_premium")
-		//add("Main Member Funeral Annual Premium", "main_member_funeral_annual_premium")
-		//add("Spouse Funeral Annual Premium", "spouse_funeral_annual_premium")
-		//add("Children Funeral Annual Premium", "children_funeral_annual_premium")
-		//add("Dependants Funeral Annual Premium", "dependants_funeral_annual_premium")
-		//add("Total Annual Premium Payable", "total_annual_premium_payable")
-	case "claim", "claims", "reinsurance_claim", "reinsurance_claims":
-		add("Claim Number", "claim_number")
-		add("Employee Number", "employee_number")
-		add("Member Name", "member_name")
-		add("Member ID Number", "member_id_number")
-		add("Scheme ID", "scheme_id")
-		add("Scheme Name", "scheme_name")
-		add("Benefit Name", "benefit_name")
-		add("Member Type", "member_type")
-		add("Date Of Event", "date_of_event")
-		add("Date Notified", "date_notified")
-		add("Status", "status")
-		add("Claim Amount", "claim_amount")
-		add("Date Registered", "date_registered")
-		add("Claimant Name", "claimant_name")
-		add("Claimant ID Number", "claimant_id_number")
-		add("Relationship To Member", "relationship_to_member")
+	// Premium / claim / reinsurance field catalogues temporarily disabled — only
+	// member is a valid use case right now. Uncomment to re-enable.
+	// case "premium", "premiums", "reinsurance_premium", "reinsurance_premiums":
+	// 	add("Scheme Name", "scheme_name")
+	// 	add("Member Name", "member_name")
+	// 	add("Employee Number", "employee_number")
+	// 	add("Member ID Number", "member_id_number")
+	// 	add("Category", "category")
+	// 	add("Annual Salary", "annual_salary")
+	// 	add("Valuation Month", "valuation_month")
+	// 	add("Age at Month", "age_at_month")
+	// 	add("GLA Annual Premium", "gla_annual_premium")
+	// 	add("SGLA Annual Premium", "sgla_annual_premium")
+	// 	add("PTD Annual Premium", "ptd_annual_premium")
+	// 	add("CI Annual Premium", "ci_annual_premium")
+	// 	add("TTD Annual Premium", "ttd_annual_premium")
+	// 	add("PHI Annual Premium", "phi_annual_premium")
+	// 	add("Total Annual Premium Excl Funeral", "total_annual_premium_excl_funeral")
+	// 	add("Total Annual Funeral Premium", "total_annual_funeral_premium")
+	// 	add("Total Annual Premium", "total_annual_premium")
+	// 	//add("Main Member Funeral Annual Premium", "main_member_funeral_annual_premium")
+	// 	//add("Spouse Funeral Annual Premium", "spouse_funeral_annual_premium")
+	// 	//add("Children Funeral Annual Premium", "children_funeral_annual_premium")
+	// 	//add("Dependants Funeral Annual Premium", "dependants_funeral_annual_premium")
+	// 	//add("Total Annual Premium Payable", "total_annual_premium_payable")
+	// case "claim", "claims", "reinsurance_claim", "reinsurance_claims":
+	// 	add("Claim Number", "claim_number")
+	// 	add("Employee Number", "employee_number")
+	// 	add("Member Name", "member_name")
+	// 	add("Member ID Number", "member_id_number")
+	// 	add("Scheme ID", "scheme_id")
+	// 	add("Scheme Name", "scheme_name")
+	// 	add("Benefit Name", "benefit_name")
+	// 	add("Member Type", "member_type")
+	// 	add("Date Of Event", "date_of_event")
+	// 	add("Date Notified", "date_notified")
+	// 	add("Status", "status")
+	// 	add("Claim Amount", "claim_amount")
+	// 	add("Date Registered", "date_registered")
+	// 	add("Claimant Name", "claimant_name")
+	// 	add("Claimant ID Number", "claimant_id_number")
+	// 	add("Relationship To Member", "relationship_to_member")
 	default:
 		return nil, fmt.Errorf("unsupported bordereaux type: %s", bType)
 	}
@@ -1074,6 +1076,10 @@ type GenerateBordereauxRequest struct {
 	Notes                  string `json:"notes"`
 	Category               string `json:"category"` // optional scheme category filter
 	GeneratePerScheme      bool   `json:"generate_per_scheme"`
+	// ExistingGeneratedID is set only by the regenerate service to replay a
+	// prior request against the same generated_id. Never deserialized from
+	// client input (tag is "-").
+	ExistingGeneratedID string `json:"-"`
 }
 
 type BordereauxBatchSubmitRequest struct {
@@ -1152,12 +1158,15 @@ func GenerateBordereaux(ctx context.Context, req GenerateBordereauxRequest) (any
 			case "", "member":
 				singleReq.Type = "member"
 				res, err = GenerateMemberBordereaux(ctx, singleReq)
-			case "premium", "premiums":
-				singleReq.Type = "premium"
-				res, err = GeneratePremiumBordereaux(ctx, singleReq)
-			case "claim", "claims":
-				singleReq.Type = "claim"
-				res, err = GenerateClaimBordereaux(ctx, singleReq)
+			// Premium / claim bordereaux generation temporarily disabled — only
+			// member is a valid use case right now. Restore these cases when the
+			// corresponding generators are re-enabled.
+			// case "premium", "premiums":
+			// 	singleReq.Type = "premium"
+			// 	res, err = GeneratePremiumBordereaux(ctx, singleReq)
+			// case "claim", "claims":
+			// 	singleReq.Type = "claim"
+			// 	res, err = GenerateClaimBordereaux(ctx, singleReq)
 			default:
 				sendBordereauxProgress(ctx, BordereauxProgressEvent{
 					Type:     t,
@@ -1297,12 +1306,14 @@ func GenerateBordereaux(ctx context.Context, req GenerateBordereauxRequest) (any
 		case "", "member":
 			req.Type = "member"
 			out, err = GenerateMemberBordereaux(ctx, req)
-		case "premium", "premiums":
-			req.Type = "premium"
-			out, err = GeneratePremiumBordereaux(ctx, req)
-		case "claim", "claims":
-			req.Type = "claim"
-			out, err = GenerateClaimBordereaux(ctx, req)
+		// Premium / claim bordereaux generation temporarily disabled — only
+		// member is a valid use case right now.
+		// case "premium", "premiums":
+		// 	req.Type = "premium"
+		// 	out, err = GeneratePremiumBordereaux(ctx, req)
+		// case "claim", "claims":
+		// 	req.Type = "claim"
+		// 	out, err = GenerateClaimBordereaux(ctx, req)
 		default:
 			sendBordereauxProgress(ctx, BordereauxProgressEvent{
 				Type: t, Phase: "failed", Progress: 100,
@@ -1369,6 +1380,67 @@ func createZipArchive(zipPath string, results []BordereauxReportMeta) error {
 			return err
 		}
 		fileToZip.Close() // close immediately to avoid too many open files if list is long
+	}
+	return nil
+}
+
+// ensureNoConflictingMemberBordereaux rejects creation when any of the
+// requested schemes already has an active (non-cancelled, non-failed) member
+// bordereaux covering the same reporting month. Regenerate callers bypass this
+// check because they reuse the existing row.
+func ensureNoConflictingMemberBordereaux(ctx context.Context, req GenerateBordereauxRequest, start time.Time) error {
+	if len(req.SchemeIDs) == 0 || start.IsZero() {
+		return nil
+	}
+
+	monthStart := time.Date(start.Year(), start.Month(), 1, 0, 0, 0, 0, start.Location())
+	monthEnd := monthStart.AddDate(0, 1, 0)
+
+	var existing []models.GeneratedBordereaux
+	err := DB.WithContext(ctx).
+		Where("type = ? AND status NOT IN ? AND period_start >= ? AND period_start < ?",
+			"member",
+			[]string{StatusGeneratedCancelled, StatusGeneratedFailed},
+			monthStart, monthEnd).
+		Find(&existing).Error
+	if err != nil {
+		// Don't block generation on a transient query failure; surface it instead.
+		return fmt.Errorf("failed to check for existing bordereaux: %w", err)
+	}
+	if len(existing) == 0 {
+		return nil
+	}
+
+	requested := make(map[int]struct{}, len(req.SchemeIDs))
+	for _, id := range req.SchemeIDs {
+		requested[id] = struct{}{}
+	}
+
+	for _, row := range existing {
+		// Prefer the exact scheme set from the original request payload; fall
+		// back to the human-readable scheme_name string for pre-payload rows.
+		var existingReq GenerateBordereauxRequest
+		if len(row.RequestPayload) > 0 {
+			_ = json.Unmarshal(row.RequestPayload, &existingReq)
+		}
+		for _, sid := range existingReq.SchemeIDs {
+			if _, clash := requested[sid]; clash {
+				return fmt.Errorf(
+					"scheme %q already has a member bordereaux for %s %d (existing %s, status %s) — cancel or regenerate it instead",
+					resolveSchemeNames([]int{sid}), start.Month(), start.Year(), row.GeneratedID, row.Status,
+				)
+			}
+		}
+		// Legacy row without payload: best-effort name-level check.
+		if len(existingReq.SchemeIDs) == 0 && row.SchemeName != "" {
+			wanted := resolveSchemeNames(req.SchemeIDs)
+			if wanted != "" && wanted == row.SchemeName {
+				return fmt.Errorf(
+					"%s already has a member bordereaux for %s %d (existing %s, status %s) — cancel or regenerate it instead",
+					row.SchemeName, start.Month(), start.Year(), row.GeneratedID, row.Status,
+				)
+			}
+		}
 	}
 	return nil
 }
@@ -1441,6 +1513,14 @@ func GenerateMemberBordereaux(ctx context.Context, req GenerateBordereauxRequest
 
 	if tpl.Type != "member" {
 		return BordereauxReportMeta{}, fmt.Errorf("template type %s not supported for member generation", tpl.Type)
+	}
+
+	// Uniqueness: a scheme may only have one active member bordereaux per
+	// period. Regenerate reuses the existing row, so skip this check then.
+	if req.ExistingGeneratedID == "" {
+		if err := ensureNoConflictingMemberBordereaux(ctx, req, start); err != nil {
+			return BordereauxReportMeta{}, err
+		}
 	}
 
 	// Fire-and-forget: increment usage asynchronously
@@ -1577,7 +1657,12 @@ func GenerateMemberBordereaux(ctx context.Context, req GenerateBordereauxRequest
 
 	out := make([]models.Bordereaux, 0, len(rows))
 	memberData := make([]models.MemberBordereauxData, 0, len(rows))
-	generatedID, _ := generateUniqueBordereauxID(DB.WithContext(ctx))
+	var generatedID string
+	if req.ExistingGeneratedID != "" {
+		generatedID = req.ExistingGeneratedID
+	} else {
+		generatedID, _ = generateUniqueBordereauxID(DB.WithContext(ctx))
+	}
 
 	for _, r := range rows {
 		rk := rateKey{QuoteID: r.QuoteId, Category: r.SchemeCategory}
@@ -1603,16 +1688,23 @@ func GenerateMemberBordereaux(ctx context.Context, req GenerateBordereauxRequest
 		)
 
 		b := models.Bordereaux{
-			SchemeId:                    r.SchemeId,
-			MemberName:                  r.MemberName,
-			EmployeeNumber:              r.EmployeeNumber,
-			QuoteId:                     r.QuoteId,
-			MemberIdNumber:              r.MemberIdNumber,
-			Category:                    r.SchemeCategory,
-			Month:                       time.Month(req.Month),
-			Year:                        req.Year,
-			Period:                      periodStr,
-			Gender:                      r.Gender,
+			SchemeId:       r.SchemeId,
+			MemberName:     r.MemberName,
+			EmployeeNumber: r.EmployeeNumber,
+			QuoteId:        r.QuoteId,
+			MemberIdNumber: r.MemberIdNumber,
+			Category:       r.SchemeCategory,
+			Month:          time.Month(req.Month),
+			Year:           req.Year,
+			EntryDate:      r.EntryDate,
+			ExitDate: func() time.Time {
+				if r.ExitDate == nil {
+					return time.Time{}
+				}
+				return *r.ExitDate
+			}(),
+			Period: periodStr,
+			Gender:         r.Gender,
 			DateOfBirth: func() *time.Time {
 				if r.DateOfBirth.IsZero() {
 					return nil
@@ -1654,16 +1746,16 @@ func GenerateMemberBordereaux(ctx context.Context, req GenerateBordereauxRequest
 		}
 
 		md := models.MemberBordereauxData{
-			BordereauxID:           generatedID, // set after ID generation below
-			SchemeName:             schemeNames[r.SchemeId],
-			MemberName:             b.MemberName,
-			EmployeeNumber:         b.EmployeeNumber,
-			MemberIdNumber:         b.MemberIdNumber,
-			Category:               b.Category,
-			Month:                  monthName,
-			Year:                   req.Year,
-			Period:                 fmt.Sprintf("%s %d", monthName, req.Year),
-			Gender:                 b.Gender,
+			BordereauxID:   generatedID, // set after ID generation below
+			SchemeName:     schemeNames[r.SchemeId],
+			MemberName:     b.MemberName,
+			EmployeeNumber: b.EmployeeNumber,
+			MemberIdNumber: b.MemberIdNumber,
+			Category:       b.Category,
+			Month:          monthName,
+			Year:           req.Year,
+			Period:         fmt.Sprintf("%s %d", monthName, req.Year),
+			Gender:         b.Gender,
 			DateOfBirth: func() time.Time {
 				if b.DateOfBirth == nil {
 					return time.Time{}
@@ -1764,35 +1856,88 @@ func GenerateMemberBordereaux(ctx context.Context, req GenerateBordereauxRequest
 	schemeName := resolveSchemeNames(req.SchemeIDs)
 	insurerName := resolveInsurerName(tpl.InsurerID)
 
-	_ = DB.WithContext(ctx).Create(&models.GeneratedBordereaux{
-		GeneratedID:    generatedID,
-		TemplateID:     req.TemplateID,
-		Type:           "member",
-		FileName:       fileName,
-		FilePath:       outPath,
-		FileSize:       fileSize,
-		Records:        len(out),
-		ProcessingTime: time.Since(startTime).String(),
-		SchemeName:     schemeName,
-		InsurerName:    insurerName,
-		Status:         "generated",
-		Progress:       33,
-		LastUpdated:    time.Now(),
-		SLAStatus:      "on_time",
-		PeriodStart:    start,
-		PeriodEnd:      end,
-		CreatedBy:      userEmail,
-		CreatedAt:      time.Now(),
-		SubmissionDate: &start,
-		Timeline: []models.BordereauxTimeline{
-			{
-				Date:        time.Now(),
-				Type:        "generated",
-				Title:       "Generated",
-				Description: "Bordereaux generated successfully",
+	if req.ExistingGeneratedID != "" {
+		// Regenerate path: update the existing row in place so generated_id,
+		// timeline, audit and created_at/created_by survive. Reviewer / approver
+		// fields are cleared because the file has been refreshed.
+		var existing models.GeneratedBordereaux
+		_ = DB.WithContext(ctx).Where("generated_id = ?", req.ExistingGeneratedID).First(&existing).Error
+		oldFilePath := existing.FilePath
+
+		updates := map[string]any{
+			"template_id":     req.TemplateID,
+			"file_name":       fileName,
+			"file_path":       outPath,
+			"file_size":       fileSize,
+			"records":         len(out),
+			"processing_time": time.Since(startTime).String(),
+			"scheme_name":     schemeName,
+			"insurer_name":    insurerName,
+			"status":          StatusGeneratedGenerated,
+			"progress":        33,
+			"last_updated":    time.Now(),
+			"sla_status":      "on_time",
+			"period_start":    start,
+			"period_end":      end,
+			"submission_date": &start,
+			"reviewed_by":     "",
+			"reviewed_at":     gorm.Expr("NULL"),
+			"approved_by":     "",
+			"approved_at":     gorm.Expr("NULL"),
+			"return_reason":   "",
+		}
+		_ = DB.WithContext(ctx).Model(&models.GeneratedBordereaux{}).
+			Where("generated_id = ?", req.ExistingGeneratedID).
+			Updates(updates).Error
+
+		_ = DB.WithContext(ctx).Create(&models.BordereauxTimeline{
+			GeneratedBordereauxID: req.ExistingGeneratedID,
+			Date:                  time.Now(),
+			Type:                  "regenerated",
+			Title:                 "Regenerated",
+			Description:           "Bordereaux regenerated successfully",
+		})
+
+		if oldFilePath != "" && oldFilePath != outPath {
+			if err := os.Remove(oldFilePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+				appLog.WithField("error", err.Error()).Warn("Failed to delete old bordereaux file")
+			}
+		}
+	} else {
+		// Create path: persist the original request so a future regenerate can
+		// replay it without asking the user to re-enter parameters.
+		payload, _ := json.Marshal(req)
+		_ = DB.WithContext(ctx).Create(&models.GeneratedBordereaux{
+			GeneratedID:    generatedID,
+			TemplateID:     req.TemplateID,
+			Type:           "member",
+			FileName:       fileName,
+			FilePath:       outPath,
+			FileSize:       fileSize,
+			Records:        len(out),
+			ProcessingTime: time.Since(startTime).String(),
+			SchemeName:     schemeName,
+			InsurerName:    insurerName,
+			Status:         StatusGeneratedGenerated,
+			Progress:       33,
+			LastUpdated:    time.Now(),
+			SLAStatus:      "on_time",
+			PeriodStart:    start,
+			PeriodEnd:      end,
+			CreatedBy:      userEmail,
+			CreatedAt:      time.Now(),
+			SubmissionDate: &start,
+			RequestPayload: models.JSON(payload),
+			Timeline: []models.BordereauxTimeline{
+				{
+					Date:        time.Now(),
+					Type:        "generated",
+					Title:       "Generated",
+					Description: "Bordereaux generated successfully",
+				},
 			},
-		},
-	})
+		})
+	}
 
 	return BordereauxReportMeta{
 		BordereauxID:   req.TemplateID,
@@ -1877,6 +2022,25 @@ func maskID(id string) string {
 	return id[:len(id)-4] + "****"
 }
 
+// formatDate renders date values consistently as YYYY-MM-DD strings so Excel /
+// CSV output is readable. Non-date values pass through unchanged.
+func formatDate(v any) any {
+	switch d := v.(type) {
+	case time.Time:
+		if d.IsZero() {
+			return ""
+		}
+		return d.Format("2006-01-02")
+	case *time.Time:
+		if d == nil || d.IsZero() {
+			return ""
+		}
+		return d.Format("2006-01-02")
+	default:
+		return v
+	}
+}
+
 // mapFields evaluates template field mappings against a Bordereaux row
 func mapFields(tpl models.BordereauxTemplate, b models.Bordereaux, req GenerateBordereauxRequest) ([]any, []string) {
 	vals := make([]any, 0, len(tpl.FieldMappings))
@@ -1904,25 +2068,57 @@ func mapFields(tpl models.BordereauxTemplate, b models.Bordereaux, req GenerateB
 	return vals, errs
 }
 
-// resolveSourceField maps a dot-path to data. Start with fields on models.Bordereaux
+// resolveSourceField maps a source field name to a value on models.Bordereaux.
+// Covers every field advertised by GetBordereauxFieldsByType("member").
 func resolveSourceField(path string, b models.Bordereaux) (any, bool) {
 	switch strings.ToLower(path) {
 	case "id":
 		return 0, true // placeholder id; extend as needed
 	case "member.member_name", "member_name":
 		return b.MemberName, true
+	case "employee_number":
+		return b.EmployeeNumber, true
 	case "member.member_id", "member.id_number", "member_id_number":
-		// Not currently on Bordereaux; return empty
-		return "", false
+		return b.MemberIdNumber, true
 	case "member.annual_salary", "annual_salary":
 		return b.AnnualSalary, true
+	case "entry_date":
+		return formatDate(b.EntryDate), true
+	case "exit_date":
+		return formatDate(b.ExitDate), true
+	case "gla_salary_multiple":
+		return b.GlaMultiple, true
+	case "sgla_salary_multiple":
+		return b.SglaMultiple, true
+	case "ptd_salary_multiple":
+		return b.PtdMultiple, true
+	case "ci_salary_multiple":
+		return b.CiMultiple, true
 	case "gla.sum_assured", "gla_covered_sum_assured":
 		return b.GlaCoveredSumAssured, true
+	case "ptd_capped_sum_assured":
+		return b.PtdCoveredSumAssured, true
+	case "ci_capped_sum_assured":
+		return b.CiCoveredSumAssured, true
+	case "spouse_gla_capped_sum_assured":
+		return b.SglaCoveredSumAssured, true
+	case "ttd_capped_income":
+		return b.TtdMonthlyBenefit, true
+	case "phi_capped_income":
+		return b.PhiMonthlyBenefit, true
+	case "member_funeral_sum_assured":
+		return b.MainMemberFuneralSumAssured, true
+	case "spouse_funeral_sum_assured":
+		return b.SpouseFuneralSumAssured, true
+	case "child_funeral_sum_assured":
+		return b.ChildFuneralSumAssured, true
+	case "dependant_funeral_sum_assured":
+		return b.DependantFuneralSumAssured, true
+	case "parent_funeral_sum_assured":
+		return b.ParentFuneralSumAssured, true
 	case "gla.rate_per_1000", "loaded_gla_risk_rate":
 		return b.LoadedGlaRiskRate, true
 	default:
-		// try reflection as last resort for simple field names
-		// keep minimal to avoid heavy reflection in hot path
 		return "", false
 	}
 }
@@ -2020,7 +2216,10 @@ func resolveLatestQuotesForSchemes(schemeIDs []int, atDate time.Time) ([]int, er
 }
 
 // ================= Premiums Bordereaux =================
-
+// Premium bordereaux generation is temporarily disabled — only member is a
+// valid use case right now. The entire block below is commented out so it can
+// be restored in one go.
+/*
 // GeneratePremiumBordereaux creates a Premiums bordereaux using MemberPremiumSchedule data
 func GeneratePremiumBordereaux(ctx context.Context, req GenerateBordereauxRequest) (BordereauxReportMeta, error) {
 	startTime := time.Now()
@@ -2407,6 +2606,8 @@ func resolvePremiumSourceField(path string, b models.GPricingMemberDataInForce, 
 		return b.EmployeeNumber, true
 	case "category":
 		return b.SchemeCategory, true
+	case "annual_salary":
+		return b.AnnualSalary, true
 	case "gla.annual_premium", "gla_annual_premium":
 		return utils.FloatPrecision(b.AnnualSalary*mrss.ExpProportionGlaOfficePremiumSalary/12.0, AccountingPrecision), true
 	case "sgla.annual_premium", "sgla_annual_premium":
@@ -2436,9 +2637,14 @@ func resolvePremiumSourceField(path string, b models.GPricingMemberDataInForce, 
 		return "", false
 	}
 }
+*/
+// End of disabled premium bordereaux block.
 
 // ================= Claims Bordereaux =================
-
+// Claim bordereaux generation is temporarily disabled — only member is a valid
+// use case right now. The entire block below is commented out so it can be
+// restored in one go.
+/*
 // GenerateClaimBordereaux creates a Claims bordereaux from GroupSchemeClaim data
 func GenerateClaimBordereaux(ctx context.Context, req GenerateBordereauxRequest) (BordereauxReportMeta, error) {
 	startTime := time.Now()
@@ -2510,13 +2716,17 @@ func GenerateClaimBordereaux(ctx context.Context, req GenerateBordereauxRequest)
 	outPath := filepath.Join(reportDir, fileName)
 	downloadURL := fmt.Sprintf("/group-pricing/bordereaux/download/%s", fileName)
 
+	// Back-join member employee numbers — GroupSchemeClaim has no EmployeeNumber,
+	// so templates that request employee_number need a lookup keyed by ID number.
+	empNoByID := buildClaimEmployeeNumberLookup(ctx, req.SchemeIDs, filtered)
+
 	switch format {
 	case "excel", "xlsx":
-		if err := writeExcelClaim(outPath, tpl, filtered, req); err != nil {
+		if err := writeExcelClaim(outPath, tpl, filtered, req, empNoByID); err != nil {
 			return BordereauxReportMeta{}, err
 		}
 	case "csv":
-		if err := writeCSVClaim(outPath, tpl, filtered, req); err != nil {
+		if err := writeCSVClaim(outPath, tpl, filtered, req, empNoByID); err != nil {
 			return BordereauxReportMeta{}, err
 		}
 	default:
@@ -2638,7 +2848,7 @@ func GenerateClaimBordereaux(ctx context.Context, req GenerateBordereauxRequest)
 	}, nil
 }
 
-func writeExcelClaim(path string, tpl models.BordereauxTemplate, rows []models.GroupSchemeClaim, req GenerateBordereauxRequest) error {
+func writeExcelClaim(path string, tpl models.BordereauxTemplate, rows []models.GroupSchemeClaim, req GenerateBordereauxRequest, empNoByID map[string]string) error {
 	f := excelize.NewFile()
 	sheet := "Bordereaux"
 	f.SetSheetName("Sheet1", sheet)
@@ -2647,7 +2857,7 @@ func writeExcelClaim(path string, tpl models.BordereauxTemplate, rows []models.G
 		_ = f.SetCellValue(sheet, cell, m.TargetField)
 	}
 	for rIdx, b := range rows {
-		values, _ := mapFieldsClaim(tpl, b, req)
+		values, _ := mapFieldsClaim(tpl, b, req, empNoByID)
 		for cIdx, v := range values {
 			cell, _ := excelize.CoordinatesToCellName(cIdx+1, rIdx+2)
 			_ = f.SetCellValue(sheet, cell, v)
@@ -2656,7 +2866,7 @@ func writeExcelClaim(path string, tpl models.BordereauxTemplate, rows []models.G
 	return f.SaveAs(path)
 }
 
-func writeCSVClaim(path string, tpl models.BordereauxTemplate, rows []models.GroupSchemeClaim, req GenerateBordereauxRequest) error {
+func writeCSVClaim(path string, tpl models.BordereauxTemplate, rows []models.GroupSchemeClaim, req GenerateBordereauxRequest, empNoByID map[string]string) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return err
@@ -2668,7 +2878,7 @@ func writeCSVClaim(path string, tpl models.BordereauxTemplate, rows []models.Gro
 	}
 	file.WriteString(strings.Join(header, ",") + "\n")
 	for _, b := range rows {
-		values, _ := mapFieldsClaim(tpl, b, req)
+		values, _ := mapFieldsClaim(tpl, b, req, empNoByID)
 		strVals := make([]string, len(values))
 		for i, v := range values {
 			strVals[i] = fmt.Sprint(v)
@@ -2678,11 +2888,11 @@ func writeCSVClaim(path string, tpl models.BordereauxTemplate, rows []models.Gro
 	return nil
 }
 
-func mapFieldsClaim(tpl models.BordereauxTemplate, b models.GroupSchemeClaim, req GenerateBordereauxRequest) ([]any, []string) {
+func mapFieldsClaim(tpl models.BordereauxTemplate, b models.GroupSchemeClaim, req GenerateBordereauxRequest, empNoByID map[string]string) ([]any, []string) {
 	vals := make([]any, 0, len(tpl.FieldMappings))
 	var errs []string
 	for _, m := range tpl.FieldMappings {
-		v, ok := resolveClaimSourceField(m.SourceField, b)
+		v, ok := resolveClaimSourceField(m.SourceField, b, empNoByID)
 		if !ok && m.Required {
 			errs = append(errs, fmt.Sprintf("missing required field: %s", m.SourceField))
 		}
@@ -2705,10 +2915,68 @@ func mapFieldsClaim(tpl models.BordereauxTemplate, b models.GroupSchemeClaim, re
 	return vals, errs
 }
 
-func resolveClaimSourceField(path string, b models.GroupSchemeClaim) (any, bool) {
+// buildClaimEmployeeNumberLookup returns a map of member_id_number ->
+// employee_number, sourced from GPricingMemberDataInForce. Used to populate the
+// employee_number column on claims bordereaux, since GroupSchemeClaim does not
+// carry an employee number directly.
+func buildClaimEmployeeNumberLookup(ctx context.Context, schemeIDs []int, claims []models.GroupSchemeClaim) map[string]string {
+	out := map[string]string{}
+	if len(claims) == 0 {
+		return out
+	}
+
+	ids := make([]string, 0, len(claims))
+	seen := map[string]struct{}{}
+	for _, c := range claims {
+		if c.MemberIDNumber == "" {
+			continue
+		}
+		if _, ok := seen[c.MemberIDNumber]; ok {
+			continue
+		}
+		seen[c.MemberIDNumber] = struct{}{}
+		ids = append(ids, c.MemberIDNumber)
+	}
+	if len(ids) == 0 {
+		return out
+	}
+
+	type row struct {
+		MemberIdNumber string
+		EmployeeNumber string
+	}
+	var rows []row
+	q := DB.WithContext(ctx).
+		Model(&models.GPricingMemberDataInForce{}).
+		Select("member_id_number, employee_number").
+		Where("member_id_number IN ?", ids).
+		Order("creation_date DESC")
+	if len(schemeIDs) > 0 {
+		q = q.Where("scheme_id IN ?", schemeIDs)
+	}
+	if err := q.Find(&rows).Error; err != nil {
+		return out
+	}
+	// First (latest) row per member wins.
+	for _, r := range rows {
+		if _, ok := out[r.MemberIdNumber]; ok {
+			continue
+		}
+		if r.EmployeeNumber == "" {
+			continue
+		}
+		out[r.MemberIdNumber] = r.EmployeeNumber
+	}
+	return out
+}
+
+func resolveClaimSourceField(path string, b models.GroupSchemeClaim, empNoByID map[string]string) (any, bool) {
 	switch strings.ToLower(path) {
 	case "claim.claim_number", "claim_number":
 		return b.ClaimNumber, true
+	case "employee_number":
+		// GroupSchemeClaim has no employee number; join via member ID.
+		return empNoByID[b.MemberIDNumber], true
 	case "member.name", "member_name":
 		return b.MemberName, true
 	case "member.id_number", "member_id_number":
@@ -2719,6 +2987,8 @@ func resolveClaimSourceField(path string, b models.GroupSchemeClaim) (any, bool)
 		return b.SchemeName, true
 	case "benefit.type", "benefit_type":
 		return b.BenefitAlias, true
+	case "benefit_name":
+		return b.BenefitName, true
 	case "member.type", "member_type":
 		return b.MemberType, true
 	case "claim.date_of_event", "date_of_event":
@@ -2741,6 +3011,8 @@ func resolveClaimSourceField(path string, b models.GroupSchemeClaim) (any, bool)
 		return "", false
 	}
 }
+*/
+// End of disabled claim bordereaux block.
 
 // firstParsableDate tries multiple formats and returns the first successfully parsed date
 func firstParsableDate(values ...string) time.Time {
@@ -3232,6 +3504,49 @@ func ApproveGeneratedBordereaux(generatedID string, notes string, user models.Ap
 	}
 	DB.Create(&timeline)
 	go NotifyBordereauxApproved(brd, user)
+	return brd, nil
+}
+
+// RegenerateGeneratedBordereaux re-runs generation for a draft bordereaux
+// in-place: same generated_id, refreshed file, status returns to "generated".
+// Requires the original request to have been persisted on the row.
+func RegenerateGeneratedBordereaux(ctx context.Context, generatedID string, user models.AppUser) (models.GeneratedBordereaux, error) {
+	var brd models.GeneratedBordereaux
+	if err := DB.Where("generated_id = ?", generatedID).First(&brd).Error; err != nil {
+		return brd, fmt.Errorf("bordereaux not found: %w", err)
+	}
+	if err := ValidateGeneratedBordereauxTransition(brd.Status, StatusGeneratedGenerated); err != nil {
+		return brd, err
+	}
+	if len(brd.RequestPayload) == 0 {
+		return brd, fmt.Errorf("regenerate unavailable: original request not stored for this bordereaux")
+	}
+
+	var req GenerateBordereauxRequest
+	if err := json.Unmarshal(brd.RequestPayload, &req); err != nil {
+		return brd, fmt.Errorf("stored request payload is invalid: %w", err)
+	}
+	req.ExistingGeneratedID = generatedID
+	if req.Type == "" {
+		req.Type = brd.Type
+	}
+
+	before := brd
+	if _, err := GenerateMemberBordereaux(ctx, req); err != nil {
+		return brd, fmt.Errorf("regeneration failed: %w", err)
+	}
+
+	// Reload the updated row for the caller and audit trail.
+	if err := DB.Where("generated_id = ?", generatedID).First(&brd).Error; err != nil {
+		return brd, err
+	}
+	_ = writeAudit(DB, AuditContext{
+		Area:      "group-pricing",
+		Entity:    "generated_bordereaux",
+		EntityID:  brd.GeneratedID,
+		Action:    "REGENERATE",
+		ChangedBy: user.UserName,
+	}, before, brd)
 	return brd, nil
 }
 

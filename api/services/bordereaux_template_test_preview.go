@@ -142,10 +142,12 @@ func previewTableForType(t string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(t)) {
 	case "member", "members":
 		return "member_bordereaux_data", nil
-	case "premium", "premiums":
-		return "premium_bordereaux_data", nil
-	case "claim", "claims":
-		return "group_scheme_claims", nil
+	// Premium / claim template preview temporarily disabled — only member is a
+	// valid use case right now.
+	// case "premium", "premiums":
+	// 	return "premium_bordereaux_data", nil
+	// case "claim", "claims":
+	// 	return "group_scheme_claims", nil
 	default:
 		return "", fmt.Errorf("template type %q has no preview source configured", t)
 	}

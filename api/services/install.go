@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/rs/zerolog/log"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 type PublicKey struct {
@@ -35,73 +36,13 @@ func BaseData(initTables bool) {
 	defer ReleaseLock("base_data_loading")
 
 	log.Info().Msg("Loading Base Data")
-	//BaseFeatures
-	file, err := installer.Files.Open("base_features.json")
-	//file, err := installer.Files.Open("/installer/base_features.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	featuresBody, err := io.ReadAll(file)
-	baseFeatures := make([]models.BaseFeature, 0)
 
-	_ = json.Unmarshal(featuresBody, &baseFeatures)
-	DB.Where("id > 0").Delete(&models.BaseFeature{})
-	DB.CreateInBatches(baseFeatures, 100)
-
-	//BaseAssumptionVariables
-	file, err = installer.Files.Open("base_assumption_variables.json")
+	// Group Pricing User Permissions
+	file, err := installer.Files.Open("gp_permissions.json")
 	if err != nil {
 		fmt.Println(err)
 	}
 	body, err := io.ReadAll(file)
-	baseAssumptions := make([]models.BaseAssumptionVariable, 0)
-
-	_ = json.Unmarshal(body, &baseAssumptions)
-	DB.Where("id > 0").Delete(&models.BaseAssumptionVariable{})
-	DB.CreateInBatches(baseAssumptions, 100)
-
-	//BaseMortalityBands
-	file, err = installer.Files.Open("base_mortality_bands.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	body, err = io.ReadAll(file)
-	baseMortalities := make([]models.BaseMortalityBand, 0)
-
-	_ = json.Unmarshal(body, &baseMortalities)
-	DB.Where("id > 0").Delete(&models.BaseMortalityBand{})
-	DB.CreateInBatches(baseMortalities, 100)
-
-	//MarkovStates
-	file, err = installer.Files.Open("markov_states.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	body, err = io.ReadAll(file)
-	markovStates := make([]models.MarkovState, 0)
-
-	_ = json.Unmarshal(body, &markovStates)
-	DB.Where("id > 0").Delete(&models.MarkovState{})
-	DB.CreateInBatches(markovStates, 100)
-
-	//RatingFactors
-	file, err = installer.Files.Open("rating_factors.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	body, err = io.ReadAll(file)
-	ratingFactors := make([]models.RatingFactor, 0)
-
-	_ = json.Unmarshal(body, &ratingFactors)
-	DB.Where("id > 0").Delete(&models.RatingFactor{})
-	DB.CreateInBatches(ratingFactors, 100)
-
-	// Group Pricing User Permissions
-	file, err = installer.Files.Open("gp_permissions.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	body, err = io.ReadAll(file)
 	gpPermissions := make([]models.GPPermission, 0)
 
 	_ = json.Unmarshal(body, &gpPermissions)
@@ -131,120 +72,6 @@ func BaseData(initTables bool) {
 	// Why: seedDefaultRoles only assigns perms when a role has none, so changes
 	// to gp_default_roles.json never reach existing installs without this sync.
 	syncDefaultRoleNavigation(gpDefaultRoles)
-
-	//ModelPointVariables
-	file, err = installer.Files.Open("model_point_variables.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	body, err = io.ReadAll(file)
-	mps := make([]models.ModelPointVariable, 0)
-
-	_ = json.Unmarshal(body, &mps)
-	DB.Where("id > 0").Delete(&models.ModelPointVariable{})
-	err = DB.CreateInBatches(&mps, 100).Error
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	//ConsolidateResults
-	file, err = installer.Files.Open("consolidate_results.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	body, err = io.ReadAll(file)
-	crs := make([]models.ConsolidateResult, 0)
-
-	_ = json.Unmarshal(body, &crs)
-	DB.Where("month > -1").Delete(&models.ConsolidateResult{})
-	DB.CreateInBatches(crs, 100)
-
-	//Annual ConsolidateResults
-	file, err = installer.Files.Open("annual_consolidated.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	body, err = io.ReadAll(file)
-	acrs := make([]models.AnnualConsolidatedResult, 0)
-
-	_ = json.Unmarshal(body, &acrs)
-	DB.Where("year > 0").Delete(&models.AnnualConsolidatedResult{})
-	DB.CreateInBatches(acrs, 100)
-
-	//CumulativeConsolidateResults
-	file, err = installer.Files.Open("cumulative_consolidate_results.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	body, err = io.ReadAll(file)
-	ccrs := make([]models.CumulativeConsolidatedResult, 0)
-
-	_ = json.Unmarshal(body, &ccrs)
-	DB.Where("month > -1").Delete(&models.CumulativeConsolidatedResult{})
-	DB.CreateInBatches(ccrs, 100)
-
-	//AoS Variables
-	file, err = installer.Files.Open("aos_variables.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	body, err = io.ReadAll(file)
-	aosvars := make([]models.BaseAosVariable, 0)
-
-	_ = json.Unmarshal(body, &aosvars)
-	DB.Where("id > 0").Delete(&models.BaseAosVariable{})
-	DB.CreateInBatches(aosvars, 100)
-
-	//Lic Variables
-	file, err = installer.Files.Open("lic_variables.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	body, err = io.ReadAll(file)
-	licvars := make([]models.LicBaseVariable, 0)
-
-	_ = json.Unmarshal(body, &licvars)
-	DB.Where("id > 0").Delete(&models.LicBaseVariable{})
-	DB.CreateInBatches(licvars, 100)
-
-	//Base Bel Buildup
-	file, err = installer.Files.Open("bel_buildup_variables.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	body, err = io.ReadAll(file)
-	belvars := make([]models.BelBuildupBaseVariable, 0)
-
-	_ = json.Unmarshal(body, &belvars)
-	DB.Where("id > 0").Delete(&models.BelBuildupBaseVariable{})
-	DB.CreateInBatches(belvars, 100)
-
-	//LiabilityMovementLines
-	file, err = installer.Files.Open("liability_movement_lines.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	body, err = io.ReadAll(file)
-	lmls := make([]models.LiabilityMovementLine, 0)
-
-	_ = json.Unmarshal(body, &lmls)
-	DB.Where("code > 0").Delete(&models.LiabilityMovementLine{})
-	DB.CreateInBatches(lmls, 100)
-
-	//ProductFamilies
-	file, err = installer.Files.Open("product_families.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	body, err = io.ReadAll(file)
-	pfs := make([]models.ProductFamily, 0)
-
-	_ = json.Unmarshal(body, &pfs)
-	var count int64
-	DB.Model(&models.ProductFamily{}).Count(&count)
-	if count == 0 {
-		DB.CreateInBatches(pfs, 100)
-	}
 
 	// Group Pricing Age Bands are user-managed via the rate-tables upload flow
 	// (services.UploadTable, case "Age Bands"). Do not seed from

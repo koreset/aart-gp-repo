@@ -215,7 +215,9 @@
                   color="primary"
                   variant="outlined"
                   append-icon="mdi-menu-down"
-                  :loading="isGeneratingOnRiskLetter || isGeneratingTemplatedOnRisk"
+                  :loading="
+                    isGeneratingOnRiskLetter || isGeneratingTemplatedOnRisk
+                  "
                 >
                   Export
                 </v-btn>

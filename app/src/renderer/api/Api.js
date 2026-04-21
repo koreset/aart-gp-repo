@@ -54,7 +54,10 @@ instance.interceptors.response.use(
     return response
   },
   function (error) {
-    return Promise.reject(error.response)
+    // Preserve the full axios error so callers can read either
+    // `error.response.data.error` (axios convention, used throughout the
+    // renderer) or `error.message` for transport-level failures.
+    return Promise.reject(error)
   }
 )
 

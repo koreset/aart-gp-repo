@@ -259,6 +259,19 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.GET("benefit-maps/scheme/:scheme_id/category/:category_id", controllers.GetBenefitMapsBySchemeCategory)
 			groupPricing.POST("benefit-maps", controllers.SaveBenefitMaps)
 			groupPricing.GET("benefit-definitions", controllers.GetBenefitDefinitions)
+			// Email system (Phase 2): SMTP config, templates, outbox monitor
+			groupPricing.GET("email/settings", controllers.GetEmailSettings)
+			groupPricing.PUT("email/settings", RequirePermission("email:configure"), controllers.SaveEmailSettings)
+			groupPricing.POST("email/settings/test", RequirePermission("email:configure"), controllers.SendTestEmail)
+			groupPricing.GET("email/templates", controllers.ListEmailTemplates)
+			groupPricing.POST("email/templates", RequirePermission("email:templates:manage"), controllers.CreateEmailTemplate)
+			groupPricing.GET("email/templates/:code", controllers.GetEmailTemplate)
+			groupPricing.PUT("email/templates/:code", RequirePermission("email:templates:manage"), controllers.UpdateEmailTemplate)
+			groupPricing.DELETE("email/templates/:code", RequirePermission("email:templates:manage"), controllers.DeleteEmailTemplate)
+			groupPricing.POST("email/templates/:code/preview", controllers.PreviewEmailTemplate)
+			groupPricing.GET("email/outbox", RequirePermission("email:outbox:view"), controllers.ListEmailOutbox)
+			groupPricing.GET("email/outbox/:id", RequirePermission("email:outbox:view"), controllers.GetEmailOutboxItem)
+			groupPricing.POST("email/outbox/:id/retry", RequirePermission("email:outbox:view"), controllers.RetryEmailOutbox)
 			// Bordereaux templates CRUD
 			groupPricing.POST("bordereaux/templates", controllers.CreateBordereauxTemplate)
 			groupPricing.GET("bordereaux/templates", controllers.GetBordereauxTemplates)
@@ -298,6 +311,7 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.POST("bordereaux/generated/:id/review", controllers.ReviewGeneratedBordereaux)
 			groupPricing.POST("bordereaux/generated/:id/approve", controllers.ApproveGeneratedBordereaux)
 			groupPricing.POST("bordereaux/generated/:id/return-to-draft", controllers.ReturnOutboundToDraft)
+			groupPricing.POST("bordereaux/generated/:id/regenerate", controllers.RegenerateGeneratedBordereaux)
 			// Bordereaux configuration management
 			groupPricing.GET("bordereaux/configurations", controllers.GetBordereauxConfigurations)
 			groupPricing.GET("bordereaux/configurations/:id", controllers.GetBordereauxConfiguration)
