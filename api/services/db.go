@@ -179,7 +179,7 @@ func (l *CustomGormLogger) Trace(ctx context.Context, begin time.Time, fc func()
 		"sql":        sql,
 	})
 
-	if err != nil {
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		fields.WithField("error", err.Error()).Error("Database query failed")
 	} else {
 		if elapsed > time.Millisecond*500 {

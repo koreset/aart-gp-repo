@@ -2,12 +2,47 @@
   <v-container fluid>
     <base-card :show-actions="false">
       <template #header>
-        <h3 class="mb-0">Inbound Employer Submissions</h3>
+        <div class="d-flex align-center justify-space-between">
+          <div class="d-flex align-center">
+            <v-btn
+              class="mr-3"
+              size="small"
+              variant="text"
+              prepend-icon="mdi-arrow-left"
+              @click="$router.back()"
+            >
+              Back
+            </v-btn>
+            <span class="headline">Inbound Employer Submissions</span>
+          </div>
+          <div class="d-flex align-center gap-2">
+            <v-btn
+              class="mr-2"
+              variant="outlined"
+              size="small"
+              rounded
+              prepend-icon="mdi-refresh"
+              :loading="loading"
+              @click="loadSubmissions"
+            >
+              Refresh
+            </v-btn>
+            <v-btn
+              size="small"
+              variant="outlined"
+              rounded
+              prepend-icon="mdi-plus"
+              @click="createDialog = true"
+            >
+              New Submission
+            </v-btn>
+          </div>
+        </div>
       </template>
       <template #default>
         <!-- Filter Bar -->
         <v-row class="mb-3" align="center">
-          <v-col cols="12" md="3">
+          <v-col cols="12" md="4">
             <v-select
               v-model="filters.schemeId"
               label="Scheme"
@@ -21,7 +56,7 @@
               :loading="schemesLoading"
             />
           </v-col>
-          <v-col cols="12" md="2">
+          <v-col cols="12" md="3">
             <v-select
               v-model.number="filters.month"
               label="Month"
@@ -33,7 +68,7 @@
               clearable
             />
           </v-col>
-          <v-col cols="12" md="1">
+          <v-col cols="12" md="2">
             <v-text-field
               v-model.number="filters.year"
               label="Year"
@@ -43,7 +78,7 @@
               clearable
             />
           </v-col>
-          <v-col cols="12" md="2">
+          <v-col cols="12" md="3">
             <v-select
               v-model="filters.status"
               label="Status"
@@ -52,30 +87,6 @@
               density="compact"
               clearable
             />
-          </v-col>
-          <v-col cols="12" md="4" class="d-flex justify-end">
-            <v-btn
-              variant="outlined"
-              class="mr-2 mt-n3"
-              rounded
-              size="small"
-              color="primary"
-              prepend-icon="mdi-refresh"
-              :loading="loading"
-              @click="loadSubmissions"
-            >
-              Refresh
-            </v-btn>
-            <v-btn
-              rounded
-              size="small"
-              class="mt-n3"
-              color="primary"
-              prepend-icon="mdi-plus"
-              @click="createDialog = true"
-            >
-              New Submission
-            </v-btn>
           </v-col>
         </v-row>
 

@@ -26,8 +26,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  // Clean up the event listener when the component is destroyed
-  props.params.api.removeEventListener('modelUpdated', updateStatusBar)
+  if (!props.params.api.isDestroyed?.()) {
+    props.params.api.removeEventListener('modelUpdated', updateStatusBar)
+  }
 })
 </script>
 

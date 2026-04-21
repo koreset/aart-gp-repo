@@ -27,3 +27,5 @@ main_bak.go
 *linux
 go_build_main_go
 *.log
+api/logs
+api/logs/*

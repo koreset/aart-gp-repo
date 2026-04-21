@@ -305,6 +305,9 @@ func startApplication(initTables bool, s service.Service) {
 	// Start the calculation job queue worker (bounded concurrency)
 	services.StartCalculationJobWorker()
 
+	// Start the email outbox worker (bounded concurrency)
+	services.StartEmailOutboxWorker()
+
 	// Initialize service logger
 	globals.Logger.Info("We are starting up...")
 	globals.Logger.Info(globals.AppConfig)

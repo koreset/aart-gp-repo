@@ -347,12 +347,6 @@ body {
 .ag-theme-balham .ag-header-icon {
   color: rgba(255, 255, 255, 0.7) !important;
 }
-.ag-theme-balham .ag-row {
-  height: 32px !important;
-}
-.ag-theme-balham .ag-cell {
-  line-height: 32px !important;
-}
 .ag-theme-balham .ag-row-hover {
   background-color: rgba(0, 63, 88, 0.06) !important;
 }
@@ -363,5 +357,10 @@ body {
 }
 .ag-row-warning {
   background-color: rgba(255, 152, 0, 0.08) !important;
+}
+
+.headline {
+  font-size: 1rem;
+  font-weight: 500;
 }
 </style>

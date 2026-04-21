@@ -5,28 +5,27 @@
         <base-card :show-actions="false">
           <template #header>
             <div class="d-flex align-center justify-space-between">
-              <span class="headline">Reinsurance Treaty Management</span>
-              <div class="d-flex gap-2">
+              <div class="d-flex align-center">
                 <v-btn
+                  class="mr-3"
                   size="small"
-                  rounded
-                  color="primary"
-                  prepend-icon="mdi-plus"
-                  @click="openCreateDialog"
-                >
-                  New Treaty
-                </v-btn>
-                <v-btn
-                  size="small"
-                  rounded
-                  color="white"
-                  variant="outlined"
+                  variant="text"
                   prepend-icon="mdi-arrow-left"
-                  @click="$router.push('/group-pricing/bordereaux-management')"
+                  @click="$router.back()"
                 >
                   Back
                 </v-btn>
+                <span class="headline">Reinsurance Treaty Management</span>
               </div>
+              <v-btn
+                size="small"
+                variant="outlined"
+                rounded
+                prepend-icon="mdi-plus"
+                @click="openCreateDialog"
+              >
+                New Treaty
+              </v-btn>
             </div>
           </template>
 

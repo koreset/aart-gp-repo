@@ -5,32 +5,28 @@
         <base-card :show-actions="false">
           <template #header>
             <div class="d-flex align-center justify-space-between">
-              <div>
-                <span class="headline">Bordereaux Analytics</span>
-                <p class="text-subtitle-1 text-medium-emphasis mt-2">
-                  Live metrics aggregated from generated bordereaux,
-                  confirmations, and group-scheme claims.
-                </p>
-              </div>
-              <div class="d-flex align-center gap-2">
-                <v-select
-                  v-model="selectedPeriod"
-                  :items="periodOptions"
-                  label="Period"
-                  variant="outlined"
-                  density="compact"
-                  hide-details
-                  @update:model-value="loadAnalytics"
-                />
+              <div class="d-flex align-center">
                 <v-btn
-                  color="grey"
-                  variant="outlined"
+                  class="mr-3"
+                  size="small"
+                  variant="text"
                   prepend-icon="mdi-arrow-left"
-                  @click="$router.push('/group-pricing/bordereaux-management')"
+                  @click="$router.back()"
                 >
-                  Back to Dashboard
+                  Back
                 </v-btn>
+                <span class="headline">Bordereaux Analytics</span>
               </div>
+              <v-select
+                v-model="selectedPeriod"
+                :items="periodOptions"
+                label="Period"
+                variant="outlined"
+                density="compact"
+                hide-details
+                style="max-width: 200px"
+                @update:model-value="loadAnalytics"
+              />
             </div>
           </template>
           <template #default>

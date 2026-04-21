@@ -4,31 +4,30 @@
       <v-col>
         <base-card v-if="scheme" :show-actions="false">
           <template #header>
-            <span class="headline">{{ scheme.name }}</span>
+            <div class="d-flex align-center justify-space-between">
+              <div class="d-flex align-center">
+                <v-btn
+                  class="mr-3"
+                  size="small"
+                  variant="text"
+                  prepend-icon="mdi-arrow-left"
+                  @click="goBack"
+                >
+                  Back
+                </v-btn>
+                <span class="headline">{{ scheme.name }}</span>
+              </div>
+              <v-chip
+                :color="statusColor"
+                label
+                size="small"
+                class="font-weight-bold"
+              >
+                {{ formatStatus(scheme.status) }}
+              </v-chip>
+            </div>
           </template>
           <template #default>
-            <v-row class="mb-n5">
-              <v-col>
-                <v-btn variant="plain" @click="goBack">{{ backText }}</v-btn>
-              </v-col>
-            </v-row>
-            <v-row align="center" class="mt-2 mb-4">
-              <v-col cols="12" md="8">
-                <h1 class="text-h4 font-weight-bold text-grey-darken-4">{{
-                  scheme.name
-                }}</h1>
-              </v-col>
-              <v-col cols="12" md="4" class="text-md-end">
-                <v-chip
-                  :color="statusColor"
-                  label
-                  size="large"
-                  class="font-weight-bold"
-                >
-                  {{ formatStatus(scheme.status) }}
-                </v-chip>
-              </v-col>
-            </v-row>
 
             <v-row>
               <v-col cols="12" md="3">
@@ -969,7 +968,6 @@ import formatDateString from '@/renderer/utils/helpers.js'
 import ContributionConfig from './premiums/ContributionConfig.vue'
 
 const confirmAction = ref()
-const backText = ref('< Back to listing')
 const route = useRoute()
 const router = useRouter()
 const scheme: any = ref(null)

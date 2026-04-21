@@ -1613,7 +1613,13 @@ func GenerateMemberBordereaux(ctx context.Context, req GenerateBordereauxRequest
 			Year:                        req.Year,
 			Period:                      periodStr,
 			Gender:                      r.Gender,
-			DateOfBirth:                 r.DateOfBirth,
+			DateOfBirth: func() *time.Time {
+				if r.DateOfBirth.IsZero() {
+					return nil
+				}
+				t := r.DateOfBirth
+				return &t
+			}(),
 			AnnualSalary:                r.AnnualSalary,
 			GlaMultiple:                 r.Benefits.GlaMultiple,
 			PtdMultiple:                 r.Benefits.PtdMultiple,
@@ -1658,7 +1664,12 @@ func GenerateMemberBordereaux(ctx context.Context, req GenerateBordereauxRequest
 			Year:                   req.Year,
 			Period:                 fmt.Sprintf("%s %d", monthName, req.Year),
 			Gender:                 b.Gender,
-			DateOfBirth:            b.DateOfBirth,
+			DateOfBirth: func() time.Time {
+				if b.DateOfBirth == nil {
+					return time.Time{}
+				}
+				return *b.DateOfBirth
+			}(),
 			AnnualSalary:           b.AnnualSalary,
 			GlaMultiple:            b.GlaMultiple,
 			GlaCoveredSumAssured:   b.GlaCoveredSumAssured,

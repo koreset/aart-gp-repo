@@ -2336,7 +2336,7 @@ type Bordereaux struct {
 	MemberIdNumber                string     `json:"member_id_number" csv:"member_id_number"`
 	MemberName                    string     `json:"member_name" csv:"member_name"`
 	Gender                        string     `json:"gender" csv:"gender"`
-	DateOfBirth                   time.Time  `json:"date_of_birth" csv:"date_of_birth"`
+	DateOfBirth                   *time.Time `json:"date_of_birth" csv:"date_of_birth"`
 	AgeNextBirthday               float64    `json:"age_next_birthday" csv:"age_next_birthday"`
 	EntryDate                     time.Time  `json:"entry_date" csv:"entry_date" gorm:"autoCreateTime"`
 	ExitDate                      time.Time  `json:"exit_date" csv:"exit_date" gorm:"autoCreateTime"`

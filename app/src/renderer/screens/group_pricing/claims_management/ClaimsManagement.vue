@@ -10,7 +10,9 @@
                 <v-btn
                   v-if="hasPermission('claims:lodge')"
                   size="small"
-                  color="primary"
+                  variant="outlined"
+                  class="mr-2"
+                  rounded
                   prepend-icon="mdi-file-plus"
                   @click="newClaimDialog = true"
                 >
@@ -21,6 +23,7 @@
                     <v-btn
                       size="small"
                       variant="outlined"
+                      rounded
                       v-bind="menuProps"
                       append-icon="mdi-dots-vertical"
                     >
@@ -696,10 +699,6 @@ onUnmounted(() => statusBarStore.clear())
 </script>
 
 <style scoped>
-.headline {
-  font-size: 1.5rem;
-  font-weight: 500;
-}
 
 .cursor-pointer {
   cursor: pointer;

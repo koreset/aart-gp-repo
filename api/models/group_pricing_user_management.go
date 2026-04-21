@@ -1,13 +1,14 @@
 package models
 
 type GPUser struct {
-	ID        int64  `json:"id" gorm:"primary_key"`
-	Email     string `json:"email"`
-	LicenseId string `json:"license_id"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	FullName  string `json:"full_name"`
-	RoleId    int    `json:"role_id"`
+	ID              int64  `json:"id" gorm:"primary_key"`
+	Email           string `json:"email"`
+	LicenseId       string `json:"license_id"`
+	FirstName       string `json:"first_name"`
+	LastName        string `json:"last_name"`
+	FullName        string `json:"full_name"`
+	RoleId          int    `json:"role_id"`
+	EmailSignature  string `json:"email_signature" gorm:"type:text"`
 }
 
 type GPUserRole struct {

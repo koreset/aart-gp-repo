@@ -4,22 +4,17 @@
       <v-col>
         <base-card :show-actions="false">
           <template #header>
-            <div class="d-flex align-center justify-space-between">
-              <div>
-                <span class="headline">Generate Bordereaux</span>
-                <p class="text-subtitle-1 text-medium-emphasis mt-2">
-                  Create comprehensive bordereaux for member data, premiums,
-                  claims, and benefits
-                </p>
-              </div>
+            <div class="d-flex align-center">
               <v-btn
-                color="grey"
-                variant="outlined"
+                class="mr-3"
+                size="small"
+                variant="text"
                 prepend-icon="mdi-arrow-left"
-                @click="$router.push('/group-pricing/bordereaux-management')"
+                @click="router.back()"
               >
-                Back to Dashboard
+                Back
               </v-btn>
+              <span class="headline">Generate Bordereaux</span>
             </div>
           </template>
           <template #default>
@@ -768,8 +763,8 @@
             variant="outlined"
             @click="viewSubmissionTracking"
           >
-            <v-icon class="me-2">mdi-send</v-icon>
-            Submit to Scheme
+            <v-icon class="me-2">mdi-clipboard-list-outline</v-icon>
+            Go to Submission Tracking
           </v-btn>
           <v-spacer></v-spacer>
           <v-btn color="grey" variant="outlined" @click="closeSuccessDialog">

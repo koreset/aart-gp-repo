@@ -2,7 +2,18 @@
   <v-container fluid>
     <base-card :show-actions="false">
       <template #header>
-        <h3 class="mb-0">Submission Deadline Calendar</h3>
+        <div class="d-flex align-center">
+          <v-btn
+            class="mr-3"
+            size="small"
+            variant="text"
+            prepend-icon="mdi-arrow-left"
+            @click="$router.back()"
+          >
+            Back
+          </v-btn>
+          <span class="headline">Submission Deadline Calendar</span>
+        </div>
       </template>
       <template #default>
         <!-- Filter Bar -->

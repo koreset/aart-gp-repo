@@ -5,25 +5,33 @@
         <base-card :show-actions="false">
           <template #header>
             <div class="d-flex align-center justify-space-between">
-              <div>
+              <div class="d-flex align-center">
+                <v-btn
+                  class="mr-3"
+                  size="small"
+                  variant="text"
+                  prepend-icon="mdi-arrow-left"
+                  @click="router.back()"
+                >
+                  Back
+                </v-btn>
                 <span class="headline">Template Manager</span>
-                <p class="text-subtitle-1 text-medium-emphasis mt-2">
-                  Manage bordereaux templates for different schemes and
-                  customize field mappings
-                </p>
               </div>
               <div class="d-flex align-center gap-2">
                 <v-btn
-                  color="info"
+                  class="mr-2"
                   variant="outlined"
+                  size="small"
+                  rounded
                   prepend-icon="mdi-download"
                   @click="exportTemplates"
                 >
                   Export Templates
                 </v-btn>
                 <v-btn
-                  color="primary"
-                  size="large"
+                  size="small"
+                  variant="outlined"
+                  rounded
                   prepend-icon="mdi-plus"
                   @click="createTemplate"
                 >
@@ -764,12 +772,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import ConfirmDialog from '@/renderer/components/ConfirmDialog.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { useFlashStore } from '@/renderer/store/flash'
 import { useBordereauxStore } from '@/renderer/store/bordereaux'
 
+const router = useRouter()
 const flash = useFlashStore()
 const bordereauxStore = useBordereauxStore()
 const confirmationDialog: any = ref(null)
@@ -1461,4 +1471,5 @@ onMounted(() => {
 .w-100 {
   width: 100%;
 }
+
 </style>

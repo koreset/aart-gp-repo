@@ -200,78 +200,65 @@
                 </div>
               </template>
             </v-tooltip>
-            <v-tooltip
-              location="top"
-              text="Generate On Risk letter confirming cover is active. Available after quote acceptance."
+            <v-menu
+              v-if="
+                hasPermission('quote:generate_on_risk_letter') ||
+                hasPermission('quote:generate_pdf')
+              "
+              location="bottom end"
             >
-              <template #activator="{ props: tooltipProps }">
-                <div v-bind="tooltipProps" class="d-inline-block">
-                  <v-btn
-                    v-if="hasPermission('quote:generate_on_risk_letter')"
-                    :disabled="
-                      (quote.status !== 'accepted' &&
-                        quote.status !== 'in_force' &&
-                        quote.status !== 'Accepted' &&
-                        quote.status !== 'InForce') ||
-                      isGeneratingOnRiskLetter
-                    "
-                    :loading="isGeneratingOnRiskLetter"
-                    size="small"
-                    rounded
-                    color="success"
-                    class="mr-2"
-                    @click="generateOnRiskLetterManual"
-                    >Generate On Risk Letter</v-btn
-                  >
-                </div>
+              <template #activator="{ props: menuProps }">
+                <v-btn
+                  v-bind="menuProps"
+                  size="small"
+                  rounded
+                  color="primary"
+                  variant="outlined"
+                  append-icon="mdi-menu-down"
+                  :loading="isGeneratingOnRiskLetter || isGeneratingTemplatedOnRisk"
+                >
+                  Export
+                </v-btn>
               </template>
-            </v-tooltip>
-            <v-tooltip
-              location="top"
-              text="Generate the On Risk letter from the insurer's uploaded Word template (if any)."
-            >
-              <template #activator="{ props: tooltipProps }">
-                <div v-bind="tooltipProps" class="d-inline-block">
-                  <v-btn
-                    v-if="hasPermission('quote:generate_on_risk_letter')"
-                    :disabled="
-                      (quote.status !== 'accepted' &&
-                        quote.status !== 'in_force' &&
-                        quote.status !== 'Accepted' &&
-                        quote.status !== 'InForce') ||
-                      isGeneratingTemplatedOnRisk
-                    "
-                    :loading="isGeneratingTemplatedOnRisk"
-                    size="small"
-                    rounded
-                    color="success"
-                    variant="outlined"
-                    class="mr-2"
-                    @click="generateOnRiskLetterFromBackend"
-                    >Generate On Risk Letter (Backend)</v-btn
-                  >
-                </div>
-              </template>
-            </v-tooltip>
-
-            <v-tooltip
-              location="top"
-              text="Quote must be in 'Accepted' status."
-            >
-              <template #activator="{ props: tooltipProps }">
-                <div v-bind="tooltipProps" class="d-inline-block">
-                  <v-btn
-                    v-if="hasPermission('quote:generate_pdf')"
-                    :disabled="hasEmptyQuoteTables"
-                    size="small"
-                    rounded
-                    color="primary"
-                    @click="generatePdf(quote.id)"
-                    >Generate PDF</v-btn
-                  >
-                </div>
-              </template>
-            </v-tooltip>
+              <v-list density="compact">
+                <v-list-item
+                  v-if="hasPermission('quote:generate_on_risk_letter')"
+                  :disabled="
+                    (quote.status !== 'accepted' &&
+                      quote.status !== 'in_force' &&
+                      quote.status !== 'Accepted' &&
+                      quote.status !== 'InForce') ||
+                    isGeneratingOnRiskLetter
+                  "
+                  prepend-icon="mdi-file-document-outline"
+                  title="On Risk Letter"
+                  subtitle="Available after quote acceptance."
+                  @click="generateOnRiskLetterManual"
+                />
+                <v-list-item
+                  v-if="hasPermission('quote:generate_on_risk_letter')"
+                  :disabled="
+                    (quote.status !== 'accepted' &&
+                      quote.status !== 'in_force' &&
+                      quote.status !== 'Accepted' &&
+                      quote.status !== 'InForce') ||
+                    isGeneratingTemplatedOnRisk
+                  "
+                  prepend-icon="mdi-file-document-edit-outline"
+                  title="On Risk Letter (from Template)"
+                  subtitle="Uses the insurer's uploaded Word template."
+                  @click="generateOnRiskLetterFromBackend"
+                />
+                <v-list-item
+                  v-if="hasPermission('quote:generate_pdf')"
+                  :disabled="hasEmptyQuoteTables"
+                  prepend-icon="mdi-file-pdf-box"
+                  title="Quote PDF"
+                  subtitle="Quote must be in 'Accepted' status."
+                  @click="generatePdf(quote.id)"
+                />
+              </v-list>
+            </v-menu>
           </v-col>
         </v-row>
         <v-tabs v-model="tab" color="primary" class="mb-5">

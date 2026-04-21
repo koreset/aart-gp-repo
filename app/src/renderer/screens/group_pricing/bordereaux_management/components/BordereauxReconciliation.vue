@@ -4,22 +4,17 @@
       <v-col>
         <base-card :show-actions="false">
           <template #header>
-            <div class="d-flex align-center justify-space-between">
-              <div>
-                <span class="headline">Bordereaux Reconciliation</span>
-                <p class="text-subtitle-1 text-medium-emphasis mt-2">
-                  Match submissions with scheme confirmations and resolve
-                  discrepancies
-                </p>
-              </div>
+            <div class="d-flex align-center">
               <v-btn
-                color="grey"
-                variant="outlined"
+                class="mr-3"
+                size="small"
+                variant="text"
                 prepend-icon="mdi-arrow-left"
-                @click="$router.push('/group-pricing/bordereaux-management')"
+                @click="$router.back()"
               >
-                Back to Dashboard
+                Back
               </v-btn>
+              <span class="headline">Bordereaux Reconciliation</span>
             </div>
           </template>
           <template #default>

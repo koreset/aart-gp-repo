@@ -4,20 +4,17 @@
       <v-col>
         <base-card :show-actions="false">
           <template #header>
-            <div class="d-flex align-center justify-space-between">
-              <div>
-                <span class="headline">Submission Tracking</span>
-              </div>
+            <div class="d-flex align-center">
               <v-btn
+                class="mr-3"
                 size="small"
-                rounded
-                color="white"
-                variant="outlined"
+                variant="text"
                 prepend-icon="mdi-arrow-left"
-                @click="$router.push('/group-pricing/bordereaux-management')"
+                @click="$router.back()"
               >
-                Back to Dashboard
+                Back
               </v-btn>
+              <span class="headline">Submission Tracking</span>
             </div>
           </template>
           <template #default>
