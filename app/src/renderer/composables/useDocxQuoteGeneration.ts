@@ -868,7 +868,8 @@ function buildBenefitsDefinitionsSection(
   quote: any,
   resultSummaries: any[],
   categoryEducatorBenefits: any[],
-  benefitTitles: BenefitTitles
+  benefitTitles: BenefitTitles,
+  benefitMaps?: any[]
 ) {
   const hasNonFuneral = hasAnyNonFuneralBenefits(resultSummaries)
   const children: (Paragraph | Table)[] = [
@@ -884,7 +885,11 @@ function buildBenefitsDefinitionsSection(
 
     // Common benefits key-value table
     if (hasNonFuneral) {
-      const commonRows = buildCategoryCommonBenefitRows(item, quote)
+      const commonRows = buildCategoryCommonBenefitRows(
+        item,
+        quote,
+        benefitMaps
+      )
       children.push(keyValueTable(commonRows, Math.round(cw * 0.55)))
       children.push(new Paragraph({ spacing: { before: 60 }, children: [] }))
     }
@@ -1561,7 +1566,8 @@ export function useDocxQuoteGeneration() {
             quote,
             resultSummaries,
             categoryEducatorBenefits,
-            benefitTitles
+            benefitTitles,
+            benefitMaps
           ),
           buildProvisionsSection(quote, insurer),
           buildAcceptanceFormSection(quote)

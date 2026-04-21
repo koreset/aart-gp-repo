@@ -52,7 +52,7 @@ const baseConfig = {
   },
   win: {
     icon: 'buildAssets/icons/icon.ico',
-    // certificateSubjectName: 'Actuaries and Digital Solutions (Pty) Ltd',
+    //certificateSubjectName: 'Actuaries and Digital Solutions (Pty) Ltd',
     target: [
       {
         target: 'nsis',

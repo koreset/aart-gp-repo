@@ -90,7 +90,7 @@
                     </v-col>
                     <v-col cols="6" md="4">
                       <v-list-item
-                        title="Educator Benefit"
+                        :title="glaEducatorTitle"
                         :subtitle="selectedCategoryDetails.gla_educator_benefit"
                       ></v-list-item>
                     </v-col>
@@ -190,7 +190,7 @@
                     </v-col>
                     <v-col cols="6" md="4">
                       <v-list-item
-                        title="Educator Benefit"
+                        :title="ptdEducatorTitle"
                         :subtitle="selectedCategoryDetails.ptd_educator_benefit"
                       ></v-list-item>
                     </v-col>
@@ -524,6 +524,8 @@ const ciBenefitTitle = ref('')
 const phiBenefitTitle = ref('')
 const ttdBenefitTitle = ref('')
 const familyFuneralBenefitTitle = ref('')
+const glaEducatorTitle = ref('GLA Educator')
+const ptdEducatorTitle = ref('PTD Educator')
 
 const props = defineProps({
   quote: {
@@ -575,6 +577,8 @@ GroupPricingService.getBenefitMaps().then((res: any) => {
   phiBenefitTitle.value = resolve('PHI')
   ttdBenefitTitle.value = resolve('TTD')
   familyFuneralBenefitTitle.value = resolve('GFF')
+  glaEducatorTitle.value = resolve('GLA_EDU')
+  ptdEducatorTitle.value = resolve('PTD_EDU')
 })
 
 const formatNumber = (value: any) => {

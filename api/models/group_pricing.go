@@ -581,6 +581,8 @@ type Loadings struct {
 	ContingencyLoading float64 `json:"contingency_loading"`
 	OtherLoading       float64 `json:"other_loading"`
 	Discount           float64 `json:"discount"`
+	BinderFee          float64 `json:"binder_fee"`
+	OutsourceFee       float64 `json:"outsource_fee"`
 }
 
 type Broker struct {
@@ -1138,6 +1140,57 @@ type MemberRatingResult struct {
 	ParentReinsurancePremium    float64 `json:"parent_reinsurance_premium" csv:"parent_reinsurance_premium"`
 	DependantReinsurancePremium float64 `json:"dependant_reinsurance_premium" csv:"dependant_reinsurance_premium"`
 
+	// Binder and outsource fee amounts per benefit — non-zero only when
+	// the quote's distribution channel is "binder". Each value is the
+	// slice of the corresponding office premium that represents the
+	// binder fee (or outsource fee) for that benefit.
+	GlaBinderAmount                            float64 `json:"gla_binder_amount" csv:"gla_binder_amount"`
+	GlaOutsourcedAmount                        float64 `json:"gla_outsourced_amount" csv:"gla_outsourced_amount"`
+	ExpAdjGlaBinderAmount                      float64 `json:"exp_adj_gla_binder_amount" csv:"exp_adj_gla_binder_amount"`
+	ExpAdjGlaOutsourcedAmount                  float64 `json:"exp_adj_gla_outsourced_amount" csv:"exp_adj_gla_outsourced_amount"`
+	AdditionalAccidentalGlaBinderAmount        float64 `json:"additional_accidental_gla_binder_amount" csv:"additional_accidental_gla_binder_amount"`
+	AdditionalAccidentalGlaOutsourcedAmount    float64 `json:"additional_accidental_gla_outsourced_amount" csv:"additional_accidental_gla_outsourced_amount"`
+	ExpAdjAdditionalAccidentalGlaBinderAmount  float64 `json:"exp_adj_additional_accidental_gla_binder_amount" csv:"exp_adj_additional_accidental_gla_binder_amount" gorm:"column:exp_adj_add_acc_gla_binder_amount"`
+	ExpAdjAdditionalAccidentalGlaOutsourcedAmt float64 `json:"exp_adj_additional_accidental_gla_outsourced_amount" csv:"exp_adj_additional_accidental_gla_outsourced_amount" gorm:"column:exp_adj_add_acc_gla_outsourced_amount"`
+	PtdBinderAmount                            float64 `json:"ptd_binder_amount" csv:"ptd_binder_amount"`
+	PtdOutsourcedAmount                        float64 `json:"ptd_outsourced_amount" csv:"ptd_outsourced_amount"`
+	ExpAdjPtdBinderAmount                      float64 `json:"exp_adj_ptd_binder_amount" csv:"exp_adj_ptd_binder_amount"`
+	ExpAdjPtdOutsourcedAmount                  float64 `json:"exp_adj_ptd_outsourced_amount" csv:"exp_adj_ptd_outsourced_amount"`
+	CiBinderAmount                             float64 `json:"ci_binder_amount" csv:"ci_binder_amount"`
+	CiOutsourcedAmount                         float64 `json:"ci_outsourced_amount" csv:"ci_outsourced_amount"`
+	ExpAdjCiBinderAmount                       float64 `json:"exp_adj_ci_binder_amount" csv:"exp_adj_ci_binder_amount"`
+	ExpAdjCiOutsourcedAmount                   float64 `json:"exp_adj_ci_outsourced_amount" csv:"exp_adj_ci_outsourced_amount"`
+	SpouseGlaBinderAmount                      float64 `json:"spouse_gla_binder_amount" csv:"spouse_gla_binder_amount"`
+	SpouseGlaOutsourcedAmount                  float64 `json:"spouse_gla_outsourced_amount" csv:"spouse_gla_outsourced_amount"`
+	ExpAdjSpouseGlaBinderAmount                float64 `json:"exp_adj_spouse_gla_binder_amount" csv:"exp_adj_spouse_gla_binder_amount"`
+	ExpAdjSpouseGlaOutsourcedAmount            float64 `json:"exp_adj_spouse_gla_outsourced_amount" csv:"exp_adj_spouse_gla_outsourced_amount"`
+	TtdBinderAmount                            float64 `json:"ttd_binder_amount" csv:"ttd_binder_amount"`
+	TtdOutsourcedAmount                        float64 `json:"ttd_outsourced_amount" csv:"ttd_outsourced_amount"`
+	ExpAdjTtdBinderAmount                      float64 `json:"exp_adj_ttd_binder_amount" csv:"exp_adj_ttd_binder_amount"`
+	ExpAdjTtdOutsourcedAmount                  float64 `json:"exp_adj_ttd_outsourced_amount" csv:"exp_adj_ttd_outsourced_amount"`
+	PhiBinderAmount                            float64 `json:"phi_binder_amount" csv:"phi_binder_amount"`
+	PhiOutsourcedAmount                        float64 `json:"phi_outsourced_amount" csv:"phi_outsourced_amount"`
+	ExpAdjPhiBinderAmount                      float64 `json:"exp_adj_phi_binder_amount" csv:"exp_adj_phi_binder_amount"`
+	ExpAdjPhiOutsourcedAmount                  float64 `json:"exp_adj_phi_outsourced_amount" csv:"exp_adj_phi_outsourced_amount"`
+	MainMemberFuneralBinderAmount              float64 `json:"main_member_funeral_binder_amount" csv:"main_member_funeral_binder_amount"`
+	MainMemberFuneralOutsourcedAmount          float64 `json:"main_member_funeral_outsourced_amount" csv:"main_member_funeral_outsourced_amount"`
+	SpouseFuneralBinderAmount                  float64 `json:"spouse_funeral_binder_amount" csv:"spouse_funeral_binder_amount"`
+	SpouseFuneralOutsourcedAmount              float64 `json:"spouse_funeral_outsourced_amount" csv:"spouse_funeral_outsourced_amount"`
+	ChildrenFuneralBinderAmount                float64 `json:"children_funeral_binder_amount" csv:"children_funeral_binder_amount"`
+	ChildrenFuneralOutsourcedAmount            float64 `json:"children_funeral_outsourced_amount" csv:"children_funeral_outsourced_amount"`
+	DependantsFuneralBinderAmount              float64 `json:"dependants_funeral_binder_amount" csv:"dependants_funeral_binder_amount"`
+	DependantsFuneralOutsourcedAmount          float64 `json:"dependants_funeral_outsourced_amount" csv:"dependants_funeral_outsourced_amount"`
+	TotalFuneralBinderAmount                   float64 `json:"total_funeral_binder_amount" csv:"total_funeral_binder_amount"`
+	TotalFuneralOutsourcedAmount               float64 `json:"total_funeral_outsourced_amount" csv:"total_funeral_outsourced_amount"`
+	ExpAdjTotalFuneralBinderAmount             float64 `json:"exp_adj_total_funeral_binder_amount" csv:"exp_adj_total_funeral_binder_amount"`
+	ExpAdjTotalFuneralOutsourcedAmount         float64 `json:"exp_adj_total_funeral_outsourced_amount" csv:"exp_adj_total_funeral_outsourced_amount"`
+	EducatorBinderAmount                       float64 `json:"educator_binder_amount" csv:"educator_binder_amount"`
+	EducatorOutsourcedAmount                   float64 `json:"educator_outsourced_amount" csv:"educator_outsourced_amount"`
+	ExpAdjEducatorBinderAmount                 float64 `json:"exp_adj_educator_binder_amount" csv:"exp_adj_educator_binder_amount"`
+	ExpAdjEducatorOutsourcedAmount             float64 `json:"exp_adj_educator_outsourced_amount" csv:"exp_adj_educator_outsourced_amount"`
+	TotalBinderAmount                          float64 `json:"total_binder_amount" csv:"total_binder_amount"`
+	TotalOutsourcedAmount                      float64 `json:"total_outsourced_amount" csv:"total_outsourced_amount"`
+
 	CreationDate time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy    string    `json:"created_by" csv:"created_by"`
 }
@@ -1415,6 +1468,71 @@ type MemberRatingResultSummary struct {
 	TotalTtdCededMonthlyBenefit float64 `json:"total_ttd_ceded_monthly_benefit" csv:"total_ttd_ceded_monthly_benefit"`
 	TotalPhiCededMonthlyBenefit float64 `json:"total_phi_ceded_monthly_benefit" csv:"total_phi_ceded_monthly_benefit"`
 	TotalFunCededSumAssured     float64 `json:"total_fun_ceded_sum_assured" csv:"total_fun_ceded_sum_assured"`
+
+	// Binder and outsource fee aggregates per benefit. Non-zero only when
+	// the quote's distribution channel is "binder". Each pair breaks down
+	// the corresponding office-premium aggregate (Total<Benefit>AnnualOfficePremium
+	// or ExpTotal<Benefit>AnnualOfficePremium) into its binder and outsource slices.
+	TotalGlaAnnualBinderAmount                        float64 `json:"total_gla_annual_binder_amount" csv:"total_gla_annual_binder_amount"`
+	TotalGlaAnnualOutsourcedAmount                    float64 `json:"total_gla_annual_outsourced_amount" csv:"total_gla_annual_outsourced_amount"`
+	ExpTotalGlaAnnualBinderAmount                     float64 `json:"exp_total_gla_annual_binder_amount" csv:"exp_total_gla_annual_binder_amount"`
+	ExpTotalGlaAnnualOutsourcedAmount                 float64 `json:"exp_total_gla_annual_outsourced_amount" csv:"exp_total_gla_annual_outsourced_amount"`
+	TotalAdditionalAccidentalGlaAnnualBinderAmount    float64 `json:"total_additional_accidental_gla_annual_binder_amount" csv:"total_additional_accidental_gla_annual_binder_amount" gorm:"column:total_add_acc_gla_annual_binder_amount"`
+	TotalAdditionalAccidentalGlaAnnualOutsourcedAmt   float64 `json:"total_additional_accidental_gla_annual_outsourced_amount" csv:"total_additional_accidental_gla_annual_outsourced_amount" gorm:"column:total_add_acc_gla_annual_outsourced_amount"`
+	ExpTotalAdditionalAccidentalGlaAnnualBinderAmount float64 `json:"exp_total_additional_accidental_gla_annual_binder_amount" csv:"exp_total_additional_accidental_gla_annual_binder_amount" gorm:"column:exp_total_add_acc_gla_annual_binder_amount"`
+	ExpTotalAdditionalAccidentalGlaAnnualOutsourcedAmt float64 `json:"exp_total_additional_accidental_gla_annual_outsourced_amount" csv:"exp_total_additional_accidental_gla_annual_outsourced_amount" gorm:"column:exp_total_add_acc_gla_annual_outsourced_amt"`
+	TotalPtdAnnualBinderAmount                        float64 `json:"total_ptd_annual_binder_amount" csv:"total_ptd_annual_binder_amount"`
+	TotalPtdAnnualOutsourcedAmount                    float64 `json:"total_ptd_annual_outsourced_amount" csv:"total_ptd_annual_outsourced_amount"`
+	ExpTotalPtdAnnualBinderAmount                     float64 `json:"exp_total_ptd_annual_binder_amount" csv:"exp_total_ptd_annual_binder_amount"`
+	ExpTotalPtdAnnualOutsourcedAmount                 float64 `json:"exp_total_ptd_annual_outsourced_amount" csv:"exp_total_ptd_annual_outsourced_amount"`
+	TotalCiAnnualBinderAmount                         float64 `json:"total_ci_annual_binder_amount" csv:"total_ci_annual_binder_amount"`
+	TotalCiAnnualOutsourcedAmount                     float64 `json:"total_ci_annual_outsourced_amount" csv:"total_ci_annual_outsourced_amount"`
+	ExpTotalCiAnnualBinderAmount                      float64 `json:"exp_total_ci_annual_binder_amount" csv:"exp_total_ci_annual_binder_amount"`
+	ExpTotalCiAnnualOutsourcedAmount                  float64 `json:"exp_total_ci_annual_outsourced_amount" csv:"exp_total_ci_annual_outsourced_amount"`
+	TotalSglaAnnualBinderAmount                       float64 `json:"total_sgla_annual_binder_amount" csv:"total_sgla_annual_binder_amount"`
+	TotalSglaAnnualOutsourcedAmount                   float64 `json:"total_sgla_annual_outsourced_amount" csv:"total_sgla_annual_outsourced_amount"`
+	ExpTotalSglaAnnualBinderAmount                    float64 `json:"exp_total_sgla_annual_binder_amount" csv:"exp_total_sgla_annual_binder_amount"`
+	ExpTotalSglaAnnualOutsourcedAmount                float64 `json:"exp_total_sgla_annual_outsourced_amount" csv:"exp_total_sgla_annual_outsourced_amount"`
+	TotalTtdAnnualBinderAmount                        float64 `json:"total_ttd_annual_binder_amount" csv:"total_ttd_annual_binder_amount"`
+	TotalTtdAnnualOutsourcedAmount                    float64 `json:"total_ttd_annual_outsourced_amount" csv:"total_ttd_annual_outsourced_amount"`
+	ExpTotalTtdAnnualBinderAmount                     float64 `json:"exp_total_ttd_annual_binder_amount" csv:"exp_total_ttd_annual_binder_amount"`
+	ExpTotalTtdAnnualOutsourcedAmount                 float64 `json:"exp_total_ttd_annual_outsourced_amount" csv:"exp_total_ttd_annual_outsourced_amount"`
+	TotalPhiAnnualBinderAmount                        float64 `json:"total_phi_annual_binder_amount" csv:"total_phi_annual_binder_amount"`
+	TotalPhiAnnualOutsourcedAmount                    float64 `json:"total_phi_annual_outsourced_amount" csv:"total_phi_annual_outsourced_amount"`
+	ExpTotalPhiAnnualBinderAmount                     float64 `json:"exp_total_phi_annual_binder_amount" csv:"exp_total_phi_annual_binder_amount"`
+	ExpTotalPhiAnnualOutsourcedAmount                 float64 `json:"exp_total_phi_annual_outsourced_amount" csv:"exp_total_phi_annual_outsourced_amount"`
+	TotalFunAnnualBinderAmount                        float64 `json:"total_fun_annual_binder_amount" csv:"total_fun_annual_binder_amount"`
+	TotalFunAnnualOutsourcedAmount                    float64 `json:"total_fun_annual_outsourced_amount" csv:"total_fun_annual_outsourced_amount"`
+	ExpTotalFunAnnualBinderAmount                     float64 `json:"exp_total_fun_annual_binder_amount" csv:"exp_total_fun_annual_binder_amount"`
+	ExpTotalFunAnnualOutsourcedAmount                 float64 `json:"exp_total_fun_annual_outsourced_amount" csv:"exp_total_fun_annual_outsourced_amount"`
+	TotalEducatorBinderAmount                         float64 `json:"total_educator_binder_amount" csv:"total_educator_binder_amount"`
+	TotalEducatorOutsourcedAmount                     float64 `json:"total_educator_outsourced_amount" csv:"total_educator_outsourced_amount"`
+	ExpAdjTotalEducatorBinderAmount                   float64 `json:"exp_adj_total_educator_binder_amount" csv:"exp_adj_total_educator_binder_amount"`
+	ExpAdjTotalEducatorOutsourcedAmount               float64 `json:"exp_adj_total_educator_outsourced_amount" csv:"exp_adj_total_educator_outsourced_amount"`
+	TotalAnnualBinderAmount                           float64 `json:"total_annual_binder_amount" csv:"total_annual_binder_amount"`
+	TotalAnnualOutsourcedAmount                       float64 `json:"total_annual_outsourced_amount" csv:"total_annual_outsourced_amount"`
+
+	// Per-benefit commission allocation. Commission is computed on the
+	// scheme-wide total premium via tiered CommissionStructure bands, and
+	// distributed to each (category × benefit) proportionally to that
+	// benefit's share of total premium. The sum across all benefits and all
+	// categories must equal SchemeTotalCommission (a residual fix-up on the
+	// last benefit guarantees this).
+	ExpTotalGlaAnnualCommissionAmount                      float64 `json:"exp_total_gla_annual_commission_amount" csv:"exp_total_gla_annual_commission_amount"`
+	ExpTotalAdditionalAccidentalGlaAnnualCommissionAmount  float64 `json:"exp_total_additional_accidental_gla_annual_commission_amount" csv:"exp_total_additional_accidental_gla_annual_commission_amount" gorm:"column:exp_total_add_acc_gla_annual_commission_amount"`
+	ExpTotalPtdAnnualCommissionAmount                      float64 `json:"exp_total_ptd_annual_commission_amount" csv:"exp_total_ptd_annual_commission_amount"`
+	ExpTotalCiAnnualCommissionAmount                       float64 `json:"exp_total_ci_annual_commission_amount" csv:"exp_total_ci_annual_commission_amount"`
+	ExpTotalSglaAnnualCommissionAmount                     float64 `json:"exp_total_sgla_annual_commission_amount" csv:"exp_total_sgla_annual_commission_amount"`
+	ExpTotalTtdAnnualCommissionAmount                      float64 `json:"exp_total_ttd_annual_commission_amount" csv:"exp_total_ttd_annual_commission_amount"`
+	ExpTotalPhiAnnualCommissionAmount                      float64 `json:"exp_total_phi_annual_commission_amount" csv:"exp_total_phi_annual_commission_amount"`
+	ExpTotalFunAnnualCommissionAmount                      float64 `json:"exp_total_fun_annual_commission_amount" csv:"exp_total_fun_annual_commission_amount"`
+	ExpAdjTotalEducatorCommissionAmount                    float64 `json:"exp_adj_total_educator_commission_amount" csv:"exp_adj_total_educator_commission_amount"`
+	// Scheme-level totals mirrored onto every category summary for easy
+	// access in reports. SchemeTotalCommission is the overall commission on
+	// the scheme's total premium; SchemeTotalCommissionRate is the blended
+	// rate returned by ComputeProgressiveCommission.
+	SchemeTotalCommission     float64 `json:"scheme_total_commission" csv:"scheme_total_commission"`
+	SchemeTotalCommissionRate float64 `json:"scheme_total_commission_rate" csv:"scheme_total_commission_rate"`
 
 	CreationDate time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy    string    `json:"created_by" csv:"created_by"`

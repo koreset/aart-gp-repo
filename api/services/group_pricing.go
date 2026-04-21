@@ -1041,6 +1041,14 @@ func CalculateGroupPricingQuote(quoteId string, basis string, credibility float6
 	categoryWorkerPool.StopWait()
 	GroupPricingCache.Clear()
 
+	// Scheme-wide commission pass — applied once all category workers have
+	// written their summaries. Commission runs on the aggregate total premium
+	// (scheme-level) via the tiered CommissionStructure bands, then is
+	// distributed proportionally back to each category and benefit.
+	if err := applySchemeWideCommission(intQuoteID(quoteId), groupQuote, logger); err != nil {
+		logger.WithField("error", err.Error()).Error("Failed to apply scheme-wide commission")
+	}
+
 	// Send final 100% completion event
 	sendCalculationProgress(user.UserEmail, CalculationProgress{
 		QuoteID:             quoteId,
@@ -1828,7 +1836,48 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 			mdrs.TotalEducatorOfficePremium += mr.EducatorOfficePremium
 			mdrs.ExpAdjTotalEducatorRiskPremium += mr.ExpAdjEducatorRiskPremium
 			mdrs.ExpAdjTotalEducatorOfficePremium += mr.ExpAdjEducatorOfficePremium
+			mdrs.TotalEducatorBinderAmount += mr.EducatorBinderAmount
+			mdrs.TotalEducatorOutsourcedAmount += mr.EducatorOutsourcedAmount
+			mdrs.ExpAdjTotalEducatorBinderAmount += mr.ExpAdjEducatorBinderAmount
+			mdrs.ExpAdjTotalEducatorOutsourcedAmount += mr.ExpAdjEducatorOutsourcedAmount
 		}
+
+		// Binder and outsource fee aggregates per benefit (see applyBinderOutsourceAmounts).
+		// Non-zero only when the quote's distribution channel is "binder".
+		mdrs.TotalGlaAnnualBinderAmount += mr.GlaBinderAmount
+		mdrs.TotalGlaAnnualOutsourcedAmount += mr.GlaOutsourcedAmount
+		mdrs.ExpTotalGlaAnnualBinderAmount += mr.ExpAdjGlaBinderAmount
+		mdrs.ExpTotalGlaAnnualOutsourcedAmount += mr.ExpAdjGlaOutsourcedAmount
+		mdrs.TotalAdditionalAccidentalGlaAnnualBinderAmount += mr.AdditionalAccidentalGlaBinderAmount
+		mdrs.TotalAdditionalAccidentalGlaAnnualOutsourcedAmt += mr.AdditionalAccidentalGlaOutsourcedAmount
+		mdrs.ExpTotalAdditionalAccidentalGlaAnnualBinderAmount += mr.ExpAdjAdditionalAccidentalGlaBinderAmount
+		mdrs.ExpTotalAdditionalAccidentalGlaAnnualOutsourcedAmt += mr.ExpAdjAdditionalAccidentalGlaOutsourcedAmt
+		mdrs.TotalPtdAnnualBinderAmount += mr.PtdBinderAmount
+		mdrs.TotalPtdAnnualOutsourcedAmount += mr.PtdOutsourcedAmount
+		mdrs.ExpTotalPtdAnnualBinderAmount += mr.ExpAdjPtdBinderAmount
+		mdrs.ExpTotalPtdAnnualOutsourcedAmount += mr.ExpAdjPtdOutsourcedAmount
+		mdrs.TotalCiAnnualBinderAmount += mr.CiBinderAmount
+		mdrs.TotalCiAnnualOutsourcedAmount += mr.CiOutsourcedAmount
+		mdrs.ExpTotalCiAnnualBinderAmount += mr.ExpAdjCiBinderAmount
+		mdrs.ExpTotalCiAnnualOutsourcedAmount += mr.ExpAdjCiOutsourcedAmount
+		mdrs.TotalSglaAnnualBinderAmount += mr.SpouseGlaBinderAmount
+		mdrs.TotalSglaAnnualOutsourcedAmount += mr.SpouseGlaOutsourcedAmount
+		mdrs.ExpTotalSglaAnnualBinderAmount += mr.ExpAdjSpouseGlaBinderAmount
+		mdrs.ExpTotalSglaAnnualOutsourcedAmount += mr.ExpAdjSpouseGlaOutsourcedAmount
+		mdrs.TotalTtdAnnualBinderAmount += mr.TtdBinderAmount
+		mdrs.TotalTtdAnnualOutsourcedAmount += mr.TtdOutsourcedAmount
+		mdrs.ExpTotalTtdAnnualBinderAmount += mr.ExpAdjTtdBinderAmount
+		mdrs.ExpTotalTtdAnnualOutsourcedAmount += mr.ExpAdjTtdOutsourcedAmount
+		mdrs.TotalPhiAnnualBinderAmount += mr.PhiBinderAmount
+		mdrs.TotalPhiAnnualOutsourcedAmount += mr.PhiOutsourcedAmount
+		mdrs.ExpTotalPhiAnnualBinderAmount += mr.ExpAdjPhiBinderAmount
+		mdrs.ExpTotalPhiAnnualOutsourcedAmount += mr.ExpAdjPhiOutsourcedAmount
+		mdrs.TotalFunAnnualBinderAmount += mr.TotalFuneralBinderAmount
+		mdrs.TotalFunAnnualOutsourcedAmount += mr.TotalFuneralOutsourcedAmount
+		mdrs.ExpTotalFunAnnualBinderAmount += mr.ExpAdjTotalFuneralBinderAmount
+		mdrs.ExpTotalFunAnnualOutsourcedAmount += mr.ExpAdjTotalFuneralOutsourcedAmount
+		mdrs.TotalAnnualBinderAmount += mr.TotalBinderAmount
+		mdrs.TotalAnnualOutsourcedAmount += mr.TotalOutsourcedAmount
 
 		if mdrs.MemberCount == 1 {
 			mdrs.MinGlaSumAssured = mr.GlaSumAssured
@@ -1866,7 +1915,11 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	// Compute derived summary fields after the reduce loop
 	mdrs.TotalAnnualPremium = mdrs.TotalGlaAnnualOfficePremium + mdrs.TotalPtdAnnualOfficePremium + mdrs.TotalTtdAnnualOfficePremium + mdrs.TotalPhiAnnualOfficePremium + mdrs.TotalCiAnnualOfficePremium + mdrs.TotalSglaAnnualOfficePremium
 	mdrs.ExpTotalAnnualPremiumExclFuneral = mdrs.ExpTotalGlaAnnualOfficePremium + mdrs.ExpTotalPtdAnnualOfficePremium + mdrs.ExpTotalTtdAnnualOfficePremium + mdrs.ExpTotalPhiAnnualOfficePremium + mdrs.ExpTotalCiAnnualOfficePremium + mdrs.ExpTotalSglaAnnualOfficePremium
-	mdrs.TotalCommission = (mdrs.ExpTotalAnnualPremiumExclFuneral + mdrs.ExpTotalFunAnnualOfficePremium) * premiumLoading.CommissionLoading
+	// TotalCommission is populated by applySchemeWideCommission after all
+	// categories are computed: the tiered CommissionStructure bands run on
+	// the scheme-wide total premium, and each category is allocated its
+	// proportional share.
+	mdrs.TotalCommission = 0
 	mdrs.TotalExpenses = (mdrs.ExpTotalAnnualPremiumExclFuneral + mdrs.ExpTotalFunAnnualOfficePremium) * premiumLoading.ExpenseLoading
 	mdrs.TotalExpectedClaims = mdrs.ExpTotalGlaAnnualRiskPremium + mdrs.ExpTotalPtdAnnualRiskPremium + mdrs.ExpTotalCiAnnualRiskPremium + mdrs.ExpTotalSglaAnnualRiskPremium + mdrs.ExpTotalTtdAnnualRiskPremium + mdrs.ExpTotalPhiAnnualRiskPremium + mdrs.ExpTotalFunAnnualRiskPremium
 
@@ -2228,7 +2281,11 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	memberDataPointResult.ProfitLoading = premiumLoading.ProfitLoading
 	memberDataPointResult.OtherLoading = premiumLoading.OtherLoading
 	memberDataPointResult.Discount = -(groupQuote.Loadings.Discount / 100.0)
-	memberDataPointResult.TotalLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+effectiveCommission+premiumLoading.ProfitLoading+premiumLoading.OtherLoading-(groupQuote.Loadings.Discount/100.0), premiumLoading.MinimumPremiumLoading)
+	binderFeeRate, outsourceFeeRate := binderAndOutsourceRates(&groupQuote)
+	// Commission is excluded from TotalLoading — it is computed at the scheme
+	// level on total premium via the tiered CommissionStructure bands and
+	// distributed per benefit in applySchemeWideCommission.
+	memberDataPointResult.TotalLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+premiumLoading.ProfitLoading+premiumLoading.OtherLoading-(groupQuote.Loadings.Discount/100.0)+binderFeeRate+outsourceFeeRate, premiumLoading.MinimumPremiumLoading)
 	memberDataPointResult.ExpCredibility = credibilityRate
 	memberDataPointResult.GlaWeightedExperienceCrudeRate = annualGlaExperienceWeightedRate
 	memberDataPointResult.PtdExperienceCrudeRate = annualPtdExperienceWeightedRate
@@ -2650,6 +2707,8 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	memberDataPointResult.TotalFuneralOfficeCost = memberDataPointResult.TotalFuneralRiskCost / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjTotalFuneralOfficeCost = memberDataPointResult.ExpAdjTotalFuneralRiskCost / (1.0 - memberDataPointResult.TotalLoading)
 
+	applyBinderOutsourceAmounts(memberDataPointResult, binderFeeRate, outsourceFeeRate)
+
 	if memberDataPointResult.AgeNextBirthday > groupQuote.NormalRetirementAge {
 		memberDataPointResult.ExceedsNormalRetirementAgeIndicator = 1
 	}
@@ -2830,7 +2889,9 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	memberDataPointResult.ProfitLoading = premiumLoading.ProfitLoading
 	memberDataPointResult.OtherLoading = premiumLoading.OtherLoading
 	memberDataPointResult.Discount = -(groupQuote.Loadings.Discount / 100.0)
-	memberDataPointResult.TotalLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+effectiveCommission2+premiumLoading.ProfitLoading+premiumLoading.OtherLoading-(groupQuote.Loadings.Discount/100.0), premiumLoading.MinimumPremiumLoading)
+	binderFeeRate2, outsourceFeeRate2 := binderAndOutsourceRates(&groupQuote)
+	// Commission is excluded from TotalLoading — see applySchemeWideCommission.
+	memberDataPointResult.TotalLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+premiumLoading.ProfitLoading+premiumLoading.OtherLoading-(groupQuote.Loadings.Discount/100.0)+binderFeeRate2+outsourceFeeRate2, premiumLoading.MinimumPremiumLoading)
 
 	memberDataPointResult.CalculatedFreeCoverLimit = calculatedFreeCoverLimit
 	if groupQuote.FreeCoverLimit > 0 {
@@ -3093,7 +3154,9 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.ProfitLoading = premiumLoading.ProfitLoading
 	memberDataPointResult.OtherLoading = premiumLoading.OtherLoading
 	memberDataPointResult.Discount = -(groupQuote.Loadings.Discount / 100.0)
-	memberDataPointResult.TotalLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+effectiveCommission3+premiumLoading.ProfitLoading+premiumLoading.OtherLoading-(groupQuote.Loadings.Discount/100.0), premiumLoading.MinimumPremiumLoading)
+	binderFeeRate3, outsourceFeeRate3 := binderAndOutsourceRates(&groupQuote)
+	// Commission is excluded from TotalLoading — see applySchemeWideCommission.
+	memberDataPointResult.TotalLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+premiumLoading.ProfitLoading+premiumLoading.OtherLoading-(groupQuote.Loadings.Discount/100.0)+binderFeeRate3+outsourceFeeRate3, premiumLoading.MinimumPremiumLoading)
 
 	memberDataPointResult.ExpCredibility = credibilityRate
 	memberDataPointResult.ManuallyAddedCredibility = credibility
@@ -3590,6 +3653,8 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		memberDataPointResult.ExpAdjEducatorRiskPremium = (memberDataPointResult.Grade0SumAssured*educatorRates.Grade0RiskRate + memberDataPointResult.Grade17SumAssured*educatorRates.Grade17RiskRate + memberDataPointResult.Grade812SumAssured*educatorRates.Grade812RiskRate + memberDataPointResult.TertiarySumAssured*educatorRates.TertiaryRiskRate) * (memberDataPointResult.ExpAdjLoadedGlaRate + memberDataPointResult.ExpAdjLoadedTtdRate)
 		memberDataPointResult.ExpAdjEducatorOfficePremium = memberDataPointResult.ExpAdjEducatorRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	}
+
+	applyBinderOutsourceAmounts(&memberDataPointResult, binderFeeRate3, outsourceFeeRate3)
 
 	if memberDataPointResult.AgeNextBirthday > groupQuote.NormalRetirementAge {
 		memberDataPointResult.ExceedsNormalRetirementAgeIndicator = 1
@@ -6626,6 +6691,279 @@ func GetGeneralLoading(riskRateCode string, age int, gender string) models.Gener
 	return generalLoading
 }
 
+// applySchemeWideCommission computes the total commission for the quote by
+// running the tiered CommissionStructure bands against the scheme-wide total
+// premium, then distributes that commission back to each (category × benefit)
+// in proportion to its share of total premium.
+//
+// Flow:
+//  1. Load all MemberRatingResultSummary rows for the quote.
+//  2. Sum Exp-Adj office premium across every benefit and every category to
+//     get the scheme-wide total premium.
+//  3. Call ComputeProgressiveCommission(channel, broker, total) to get the
+//     blended commission rate (also returned so reports can show it).
+//  4. overallCommission = total * rate.
+//  5. For each (category, benefit): commission = overallCommission * (benefit
+//     premium / total). Office premium on the summary is updated in-place to
+//     include its commission slice, and TotalCommission per category is set
+//     to the sum of the category's per-benefit commission slices.
+//  6. A single residual fix-up on the final (category, benefit) pair ensures
+//     the sum of all per-benefit commissions equals overallCommission
+//     exactly, cancelling any floating-point error accumulated during the
+//     proportional distribution.
+//
+// Called once per quote after all category workers have finished.
+func applySchemeWideCommission(quoteID int, groupQuote models.GroupPricingQuote, logger *logrus.Entry) error {
+	var summaries []models.MemberRatingResultSummary
+	if err := DB.Where("quote_id = ?", quoteID).Order("id ASC").Find(&summaries).Error; err != nil {
+		return fmt.Errorf("load summaries for commission: %w", err)
+	}
+	if len(summaries) == 0 {
+		return nil
+	}
+
+	// Benefit-level accessors: one entry per benefit field that the commission
+	// is sliced across. Keeping getter + setter + commission setter in one
+	// place means adding a new benefit later is a single-row change.
+	type benefitAccessor struct {
+		name       string
+		premium    func(*models.MemberRatingResultSummary) float64
+		addPremium func(*models.MemberRatingResultSummary, float64)
+		setComm    func(*models.MemberRatingResultSummary, float64)
+	}
+	accessors := []benefitAccessor{
+		{
+			name:       "gla",
+			premium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalGlaAnnualOfficePremium },
+			addPremium: func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalGlaAnnualOfficePremium += v },
+			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalGlaAnnualCommissionAmount = v },
+		},
+		{
+			name: "add_acc_gla",
+			premium: func(s *models.MemberRatingResultSummary) float64 {
+				return s.ExpTotalAdditionalAccidentalGlaAnnualOfficePremium
+			},
+			addPremium: func(s *models.MemberRatingResultSummary, v float64) {
+				s.ExpTotalAdditionalAccidentalGlaAnnualOfficePremium += v
+			},
+			setComm: func(s *models.MemberRatingResultSummary, v float64) {
+				s.ExpTotalAdditionalAccidentalGlaAnnualCommissionAmount = v
+			},
+		},
+		{
+			name:       "ptd",
+			premium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalPtdAnnualOfficePremium },
+			addPremium: func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalPtdAnnualOfficePremium += v },
+			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalPtdAnnualCommissionAmount = v },
+		},
+		{
+			name:       "ci",
+			premium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalCiAnnualOfficePremium },
+			addPremium: func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalCiAnnualOfficePremium += v },
+			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalCiAnnualCommissionAmount = v },
+		},
+		{
+			name:       "sgla",
+			premium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalSglaAnnualOfficePremium },
+			addPremium: func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalSglaAnnualOfficePremium += v },
+			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalSglaAnnualCommissionAmount = v },
+		},
+		{
+			name:       "ttd",
+			premium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalTtdAnnualOfficePremium },
+			addPremium: func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalTtdAnnualOfficePremium += v },
+			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalTtdAnnualCommissionAmount = v },
+		},
+		{
+			name:       "phi",
+			premium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalPhiAnnualOfficePremium },
+			addPremium: func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalPhiAnnualOfficePremium += v },
+			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalPhiAnnualCommissionAmount = v },
+		},
+		{
+			name:       "fun",
+			premium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalFunAnnualOfficePremium },
+			addPremium: func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalFunAnnualOfficePremium += v },
+			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalFunAnnualCommissionAmount = v },
+		},
+		{
+			name:       "educator",
+			premium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpAdjTotalEducatorOfficePremium },
+			addPremium: func(s *models.MemberRatingResultSummary, v float64) { s.ExpAdjTotalEducatorOfficePremium += v },
+			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpAdjTotalEducatorCommissionAmount = v },
+		},
+	}
+
+	// Step 2: scheme-wide total premium (pre-commission, since the per-category
+	// calc now excludes commission from the TotalLoading denominator).
+	schemeTotal := 0.0
+	for i := range summaries {
+		for _, acc := range accessors {
+			schemeTotal += acc.premium(&summaries[i])
+		}
+	}
+
+	// Step 3: blended commission rate from the tiered CommissionStructure
+	// bands keyed by (channel, broker name).
+	channel := string(groupQuote.DistributionChannel)
+	holderName := strings.TrimSpace(groupQuote.QuoteBroker.Name)
+	rate := 0.0
+	if schemeTotal > 0 {
+		r, err := ComputeProgressiveCommission(channel, holderName, schemeTotal)
+		if err != nil {
+			return fmt.Errorf("compute progressive commission: %w", err)
+		}
+		rate = r
+	}
+	overallCommission := schemeTotal * rate
+
+	// Step 5 + 6: distribute proportionally, tracking a running remainder so
+	// the last benefit on the last category absorbs any floating-point
+	// residual and the sum matches overallCommission exactly.
+	lastCatIdx := len(summaries) - 1
+	lastBenIdx := len(accessors) - 1
+	remaining := overallCommission
+	for catIdx := range summaries {
+		s := &summaries[catIdx]
+		categoryCommission := 0.0
+		for benIdx, acc := range accessors {
+			var slice float64
+			if catIdx == lastCatIdx && benIdx == lastBenIdx {
+				// Final slice takes whatever is left. When schemeTotal is 0
+				// remaining is also 0, so slice is 0 too.
+				slice = remaining
+			} else if schemeTotal > 0 {
+				benefitPremium := acc.premium(s)
+				slice = overallCommission * (benefitPremium / schemeTotal)
+				remaining -= slice
+			}
+			acc.setComm(s, slice)
+			acc.addPremium(s, slice)
+			categoryCommission += slice
+		}
+		s.TotalCommission = categoryCommission
+		s.SchemeTotalCommission = overallCommission
+		s.SchemeTotalCommissionRate = rate
+
+		// Post-distribution: refresh the roll-up totals that downstream
+		// reports read. Rate-per-1000 and proportion-of-salary fields
+		// that were derived during per-category calc are also stale now —
+		// recompute from the updated benefit totals.
+		if s.TotalGlaCappedSumAssured > 0 {
+			s.ExpGlaOfficeRatePer1000SA = s.ExpTotalGlaAnnualOfficePremium * 1000.0 / s.TotalGlaCappedSumAssured
+		}
+		if s.TotalPtdCappedSumAssured > 0 {
+			s.ExpPtdOfficeRatePer1000SA = s.ExpTotalPtdAnnualOfficePremium * 1000.0 / s.TotalPtdCappedSumAssured
+		}
+		if s.TotalCiCappedSumAssured > 0 {
+			s.ExpCiOfficeRatePer1000SA = s.ExpTotalCiAnnualOfficePremium * 1000.0 / s.TotalCiCappedSumAssured
+		}
+		if s.TotalSglaCappedSumAssured > 0 {
+			s.ExpSglaOfficeRatePer1000SA = s.ExpTotalSglaAnnualOfficePremium * 1000.0 / s.TotalSglaCappedSumAssured
+		}
+		// TTD / PHI use income bases rather than sum assured.
+		s.ExpTotalAnnualPremiumExclFuneral = s.ExpTotalGlaAnnualOfficePremium + s.ExpTotalPtdAnnualOfficePremium + s.ExpTotalTtdAnnualOfficePremium + s.ExpTotalPhiAnnualOfficePremium + s.ExpTotalCiAnnualOfficePremium + s.ExpTotalSglaAnnualOfficePremium
+		s.TotalAnnualPremium = s.ExpTotalGlaAnnualOfficePremium + s.ExpTotalAdditionalAccidentalGlaAnnualOfficePremium + s.ExpTotalPtdAnnualOfficePremium + s.ExpTotalTtdAnnualOfficePremium + s.ExpTotalPhiAnnualOfficePremium + s.ExpTotalCiAnnualOfficePremium + s.ExpTotalSglaAnnualOfficePremium + s.ExpTotalFunAnnualOfficePremium
+	}
+
+	for i := range summaries {
+		if err := DB.Save(&summaries[i]).Error; err != nil {
+			return fmt.Errorf("save summary %d: %w", summaries[i].ID, err)
+		}
+	}
+
+	if logger != nil {
+		logger.WithFields(map[string]interface{}{
+			"scheme_total_premium": schemeTotal,
+			"commission_rate":      rate,
+			"overall_commission":   overallCommission,
+			"category_count":       len(summaries),
+		}).Info("Applied scheme-wide commission")
+	}
+	return nil
+}
+
+// binderAndOutsourceRates returns the binder-fee and outsource-fee fractions
+// (e.g. 5% → 0.05) to apply on top of the regular loadings when a quote is
+// sold through the binder distribution channel. Returns zeros for any other
+// channel so non-binder quotes are unaffected.
+func binderAndOutsourceRates(quote *models.GroupPricingQuote) (float64, float64) {
+	if quote == nil || quote.DistributionChannel != models.ChannelBinder {
+		return 0, 0
+	}
+	return quote.Loadings.BinderFee / 100.0, quote.Loadings.OutsourceFee / 100.0
+}
+
+// applyBinderOutsourceAmounts decomposes each benefit's office premium into
+// its binder-fee and outsource-fee slices and writes them into the matching
+// fields on the MemberRatingResult. Totals across benefits are rolled up into
+// TotalFuneral*Amount (family funeral) and the all-benefit TotalBinderAmount /
+// TotalOutsourcedAmount. Called after all per-benefit office premiums have
+// been assigned.
+func applyBinderOutsourceAmounts(r *models.MemberRatingResult, binderRate, outsourceRate float64) {
+	r.GlaBinderAmount = r.GlaOfficePremium * binderRate
+	r.GlaOutsourcedAmount = r.GlaOfficePremium * outsourceRate
+	r.ExpAdjGlaBinderAmount = r.ExpAdjGlaOfficePremium * binderRate
+	r.ExpAdjGlaOutsourcedAmount = r.ExpAdjGlaOfficePremium * outsourceRate
+
+	r.AdditionalAccidentalGlaBinderAmount = r.AdditionalAccidentalGlaOfficePremium * binderRate
+	r.AdditionalAccidentalGlaOutsourcedAmount = r.AdditionalAccidentalGlaOfficePremium * outsourceRate
+	r.ExpAdjAdditionalAccidentalGlaBinderAmount = r.ExpAdjAdditionalAccidentalGlaOfficePremium * binderRate
+	r.ExpAdjAdditionalAccidentalGlaOutsourcedAmt = r.ExpAdjAdditionalAccidentalGlaOfficePremium * outsourceRate
+
+	r.PtdBinderAmount = r.PtdOfficePremium * binderRate
+	r.PtdOutsourcedAmount = r.PtdOfficePremium * outsourceRate
+	r.ExpAdjPtdBinderAmount = r.ExpAdjPtdOfficePremium * binderRate
+	r.ExpAdjPtdOutsourcedAmount = r.ExpAdjPtdOfficePremium * outsourceRate
+
+	r.CiBinderAmount = r.CiOfficePremium * binderRate
+	r.CiOutsourcedAmount = r.CiOfficePremium * outsourceRate
+	r.ExpAdjCiBinderAmount = r.ExpAdjCiOfficePremium * binderRate
+	r.ExpAdjCiOutsourcedAmount = r.ExpAdjCiOfficePremium * outsourceRate
+
+	r.SpouseGlaBinderAmount = r.SpouseGlaOfficePremium * binderRate
+	r.SpouseGlaOutsourcedAmount = r.SpouseGlaOfficePremium * outsourceRate
+	r.ExpAdjSpouseGlaBinderAmount = r.ExpAdjSpouseGlaOfficePremium * binderRate
+	r.ExpAdjSpouseGlaOutsourcedAmount = r.ExpAdjSpouseGlaOfficePremium * outsourceRate
+
+	r.TtdBinderAmount = r.TtdOfficePremium * binderRate
+	r.TtdOutsourcedAmount = r.TtdOfficePremium * outsourceRate
+	r.ExpAdjTtdBinderAmount = r.ExpAdjTtdOfficePremium * binderRate
+	r.ExpAdjTtdOutsourcedAmount = r.ExpAdjTtdOfficePremium * outsourceRate
+
+	r.PhiBinderAmount = r.PhiOfficePremium * binderRate
+	r.PhiOutsourcedAmount = r.PhiOfficePremium * outsourceRate
+	r.ExpAdjPhiBinderAmount = r.ExpAdjPhiOfficePremium * binderRate
+	r.ExpAdjPhiOutsourcedAmount = r.ExpAdjPhiOfficePremium * outsourceRate
+
+	r.MainMemberFuneralBinderAmount = r.MainMemberFuneralOfficePremium * binderRate
+	r.MainMemberFuneralOutsourcedAmount = r.MainMemberFuneralOfficePremium * outsourceRate
+	r.SpouseFuneralBinderAmount = r.SpouseFuneralOfficePremium * binderRate
+	r.SpouseFuneralOutsourcedAmount = r.SpouseFuneralOfficePremium * outsourceRate
+	r.ChildrenFuneralBinderAmount = r.ChildrenFuneralOfficePremium * binderRate
+	r.ChildrenFuneralOutsourcedAmount = r.ChildrenFuneralOfficePremium * outsourceRate
+	r.DependantsFuneralBinderAmount = r.DependantsFuneralOfficePremium * binderRate
+	r.DependantsFuneralOutsourcedAmount = r.DependantsFuneralOfficePremium * outsourceRate
+	r.TotalFuneralBinderAmount = r.TotalFuneralOfficeCost * binderRate
+	r.TotalFuneralOutsourcedAmount = r.TotalFuneralOfficeCost * outsourceRate
+	r.ExpAdjTotalFuneralBinderAmount = r.ExpAdjTotalFuneralOfficeCost * binderRate
+	r.ExpAdjTotalFuneralOutsourcedAmount = r.ExpAdjTotalFuneralOfficeCost * outsourceRate
+
+	r.EducatorBinderAmount = r.EducatorOfficePremium * binderRate
+	r.EducatorOutsourcedAmount = r.EducatorOfficePremium * outsourceRate
+	r.ExpAdjEducatorBinderAmount = r.ExpAdjEducatorOfficePremium * binderRate
+	r.ExpAdjEducatorOutsourcedAmount = r.ExpAdjEducatorOfficePremium * outsourceRate
+
+	r.TotalBinderAmount = r.GlaBinderAmount + r.AdditionalAccidentalGlaBinderAmount +
+		r.PtdBinderAmount + r.CiBinderAmount + r.SpouseGlaBinderAmount +
+		r.TtdBinderAmount + r.PhiBinderAmount + r.TotalFuneralBinderAmount +
+		r.EducatorBinderAmount
+	r.TotalOutsourcedAmount = r.GlaOutsourcedAmount + r.AdditionalAccidentalGlaOutsourcedAmount +
+		r.PtdOutsourcedAmount + r.CiOutsourcedAmount + r.SpouseGlaOutsourcedAmount +
+		r.TtdOutsourcedAmount + r.PhiOutsourcedAmount + r.TotalFuneralOutsourcedAmount +
+		r.EducatorOutsourcedAmount
+}
+
 func GetSchemeSizeLevel(groupPricingParameter models.GroupPricingParameters, memberCount int) int {
 	tableName := "scheme_size_levels"
 
@@ -6697,11 +7035,14 @@ func ApplyDiscountToQuote(quoteId string, discountPct float64, user models.AppUs
 	schemeSizeLevel := GetSchemeSizeLevel(groupParam, quote.MemberDataCount)
 	premiumLoading := GetPremiumLoading(groupParam, schemeSizeLevel, string(quote.DistributionChannel))
 
+	binderFeeRate, outsourceFeeRate := binderAndOutsourceRates(&quote)
+
 	for i := range results {
 		r := &results[i]
 		r.Discount = discount
+		// Commission is excluded from TotalLoading — see applySchemeWideCommission.
 		r.TotalLoading = math.Max(
-			r.ExpenseLoading+r.AdminLoading+r.CommissionLoading+r.ProfitLoading+r.OtherLoading+discount,
+			r.ExpenseLoading+r.AdminLoading+r.ProfitLoading+r.OtherLoading+discount+binderFeeRate+outsourceFeeRate,
 			premiumLoading.MinimumPremiumLoading,
 		)
 		divisor := 1.0 - r.TotalLoading
@@ -6726,6 +7067,7 @@ func ApplyDiscountToQuote(quoteId string, discountPct float64, user models.AppUs
 		r.DependantsFuneralOfficePremium = r.DependantsFuneralCost / divisor
 		r.TotalFuneralOfficeCost = r.TotalFuneralRiskCost / divisor
 		r.ExpAdjTotalFuneralOfficeCost = r.ExpAdjTotalFuneralRiskCost / divisor
+		applyBinderOutsourceAmounts(r, binderFeeRate, outsourceFeeRate)
 	}
 
 	// Delete existing results and recreate with updated values
@@ -12576,11 +12918,15 @@ func GetBenefitMapsByScheme(schemeId string) ([]models.GroupBenefitMapper, error
 				benefitAliases["GFF"] = cat.FamilyFuneralAlias
 			}
 		}
-		// EDU is always enabled if any category has educator benefit?
-		// Looking at getBaseBenefitMaps, EDU is one of them.
-		// In SchemeCategory there are fields like GlaEducatorBenefit (string)
-		if cat.GlaEducatorBenefit != "" || cat.PtdEducatorBenefit != "" {
-			enabledBenefits["EDU"] = true
+		// Educator benefits are split per attachment: GLA_EDU is enabled
+		// whenever the GLA educator is configured and PTD_EDU whenever the
+		// PTD educator is configured, so users can customise display names
+		// independently.
+		if cat.GlaEducatorBenefit != "" {
+			enabledBenefits["GLA_EDU"] = true
+		}
+		if cat.PtdEducatorBenefit != "" {
+			enabledBenefits["PTD_EDU"] = true
 		}
 	}
 
@@ -12659,8 +13005,11 @@ func GetBenefitMapsBySchemeCategory(schemeId string, categoryId string) ([]model
 			benefitAliases["GFF"] = category.FamilyFuneralAlias
 		}
 	}
-	if category.GlaEducatorBenefit != "" || category.PtdEducatorBenefit != "" {
-		enabledBenefits["EDU"] = true
+	if category.GlaEducatorBenefit != "" {
+		enabledBenefits["GLA_EDU"] = true
+	}
+	if category.PtdEducatorBenefit != "" {
+		enabledBenefits["PTD_EDU"] = true
 	}
 
 	allMaps, err := GetBenefitMaps()
@@ -12898,7 +13247,11 @@ func GetPermissionsForEmail(email string) (hasRole bool, slugs []string, err err
 }
 
 func getBaseBenefitMaps() []models.GroupBenefitMapper {
-	// Define the base list of benefits
+	// Define the base list of benefits. Educator is split into GLA_EDU and
+	// PTD_EDU because the SchemeCategory already tracks separate GLA and PTD
+	// educator benefits and users need to customise their display names
+	// independently (e.g. "School Fees Cover" under GLA, "Education
+	// Disability" under PTD).
 	baseBenefits := []models.GroupBenefitMapper{
 		{BenefitName: "Group Life Assurance", BenefitCode: "GLA", BenefitAlias: ""},
 		{BenefitName: "Additional Accidental Group Life Assurance", BenefitCode: "AAGLA", BenefitAlias: ""},
@@ -12909,7 +13262,8 @@ func getBaseBenefitMaps() []models.GroupBenefitMapper {
 		{BenefitName: "Personal Health Insurance", BenefitCode: "PHI", BenefitAlias: ""},
 		{BenefitName: "Critical Illness", BenefitCode: "CI", BenefitAlias: ""},
 		{BenefitName: "Group Family Funeral", BenefitCode: "GFF", BenefitAlias: ""},
-		{BenefitName: "Educator Risk Rates", BenefitCode: "EDU", BenefitAlias: ""},
+		{BenefitName: "GLA Educator", BenefitCode: "GLA_EDU", BenefitAlias: ""},
+		{BenefitName: "PTD Educator", BenefitCode: "PTD_EDU", BenefitAlias: ""},
 	}
 	return baseBenefits
 }
@@ -12928,7 +13282,8 @@ func EnsureBaseBenefitMapsSeeded() error {
 	// it) survives. Only renames when the new code is NOT already
 	// present.
 	codeRenames := map[string]string{
-		"AGLC": "AGLA", // "Additional Group Life Cover" -> "... Assurance"
+		"AGLC": "AGLA",    // "Additional Group Life Cover" -> "... Assurance"
+		"EDU":  "GLA_EDU", // Split "Educator Risk Rates" into "GLA Educator" + "PTD Educator"; carry any user-set alias to the GLA side and insert PTD_EDU fresh.
 	}
 	for oldCode, newCode := range codeRenames {
 		var oldCount, newCount int64

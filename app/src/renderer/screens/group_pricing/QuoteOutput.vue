@@ -1612,11 +1612,19 @@ const generatePDF = async () => {
     doc.text(`${item.scheme_category}`, leftMargin, currentY)
     currentY += 5
 
+    const glaEducatorLabel =
+      benefitMaps.value
+        .find((b: any) => b.benefit_code === 'GLA_EDU')
+        ?.benefit_alias?.trim() || 'GLA Educator'
+    const ptdEducatorLabel =
+      benefitMaps.value
+        .find((b: any) => b.benefit_code === 'PTD_EDU')
+        ?.benefit_alias?.trim() || 'PTD Educator'
     const categoryBenefitCommonData = [
       ['Terminal Illness', `${item.gla_terminal_illness_benefit}`],
       ['Free Cover Limit', quote.value.free_cover_limit],
-      ['Gla Educator', item.gla_educator_benefit],
-      ['Ptd Educator', item.ptd_educator_benefit],
+      [glaEducatorLabel, item.gla_educator_benefit],
+      [ptdEducatorLabel, item.ptd_educator_benefit],
       ['Retirement Premium Waiver', item.phi_premium_waiver || 'No'],
       [
         'Medical Aid Premium Waiver',

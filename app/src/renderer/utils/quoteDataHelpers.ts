@@ -380,21 +380,53 @@ export function buildGroupFuneralBreakdownRows(item: any): LabelValueRow[] {
 // ---------------------------------------------------------------------------
 
 /**
+ * Look up the customised display name for a benefit code (e.g. "GLA_EDU") from
+ * the benefit-map list. Falls back to the provided default when no map or
+ * matching row is present. Used to resolve split-educator names ("GLA
+ * Educator" / "PTD Educator") which are user-customisable in the Benefits
+ * Customisation screen.
+ */
+export function resolveBenefitAlias(
+  benefitMaps: any[] | undefined | null,
+  code: string,
+  fallback: string
+): string {
+  if (!benefitMaps) return fallback
+  const match = benefitMaps.find((b: any) => b?.benefit_code === code)
+  return (
+    (match?.benefit_alias && String(match.benefit_alias).trim()) ||
+    match?.benefit_name ||
+    fallback
+  )
+}
+
+/**
  * Build the common category benefits key-value rows.
  * Extracted from QuoteOutput.vue lines 1510-1520.
  */
 export function buildCategoryCommonBenefitRows(
   item: any,
-  quote: any
+  quote: any,
+  benefitMaps?: any[]
 ): LabelValueRow[] {
+  const glaEduLabel = resolveBenefitAlias(
+    benefitMaps,
+    'GLA_EDU',
+    'GLA Educator'
+  )
+  const ptdEduLabel = resolveBenefitAlias(
+    benefitMaps,
+    'PTD_EDU',
+    'PTD Educator'
+  )
   return [
     {
       label: 'Terminal Illness',
       value: `${item.gla_terminal_illness_benefit}`
     },
     { label: 'Free Cover Limit', value: `${quote.free_cover_limit}` },
-    { label: 'Gla Educator', value: `${item.gla_educator_benefit}` },
-    { label: 'Ptd Educator', value: `${item.ptd_educator_benefit}` },
+    { label: glaEduLabel, value: `${item.gla_educator_benefit}` },
+    { label: ptdEduLabel, value: `${item.ptd_educator_benefit}` },
     {
       label: 'Retirement Premium Waiver',
       value: `${item.phi_premium_waiver || 'No'}`

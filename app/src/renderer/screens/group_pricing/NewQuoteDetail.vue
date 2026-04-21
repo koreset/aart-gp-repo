@@ -372,10 +372,82 @@
               ></v-select>
             </v-col>
           </v-row>
+          <v-row>
+            <v-col cols="12">
+              <p class="text-body-2 text-medium-emphasis mb-2">
+                Binder & outsource fees
+                <span v-if="!isBinderChannel">
+                  &mdash; only editable when the quote's distribution channel is
+                  <strong>Binder</strong>.
+                </span>
+                <span v-else-if="binderFeeCapMissing" class="text-warning">
+                  &mdash; no binder fee cap configured for this broker and risk
+                  rate code. Ask the administrator to add one before running
+                  calculations.
+                </span>
+              </p>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field
+                v-model.number="quote.loadings.binder_fee"
+                type="number"
+                variant="outlined"
+                density="compact"
+                label="Binder fee (%)"
+                suffix="%"
+                :min="0"
+                :max="maxBinderFee ?? undefined"
+                :disabled="!isBinderChannel"
+                :hint="
+                  isBinderChannel && maxBinderFee !== null
+                    ? `Max: ${maxBinderFee}%`
+                    : ''
+                "
+                persistent-hint
+                :rules="[
+                  (v) => v >= 0 || 'Cannot be negative',
+                  (v) =>
+                    maxBinderFee === null ||
+                    v <= maxBinderFee ||
+                    `Max allowed is ${maxBinderFee}%`
+                ]"
+              ></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field
+                v-model.number="quote.loadings.outsource_fee"
+                type="number"
+                variant="outlined"
+                density="compact"
+                label="Outsource fee (%)"
+                suffix="%"
+                :min="0"
+                :max="maxOutsourceFee ?? undefined"
+                :disabled="!isBinderChannel"
+                :hint="
+                  isBinderChannel && maxOutsourceFee !== null
+                    ? `Max: ${maxOutsourceFee}%`
+                    : ''
+                "
+                persistent-hint
+                :rules="[
+                  (v) => v >= 0 || 'Cannot be negative',
+                  (v) =>
+                    maxOutsourceFee === null ||
+                    v <= maxOutsourceFee ||
+                    `Max allowed is ${maxOutsourceFee}%`
+                ]"
+              ></v-text-field>
+            </v-col>
+          </v-row>
         </template>
         <template #actions>
           <v-spacer></v-spacer>
-          <v-btn rounded variant="text" @click="closeBasisDialog(true)"
+          <v-btn
+            rounded
+            variant="text"
+            :disabled="binderFeeInvalid"
+            @click="closeBasisDialog(true)"
             >Ok</v-btn
           >
           <v-btn rounded variant="text" @click="closeBasisDialog(false)"
@@ -618,6 +690,57 @@ const snackbar = ref(false)
 const snackbarText = ref('')
 const snackbarTimeout = ref(4000) // 4 seconds for confirmations
 
+// Binder / outsource fee input state — surfaced on the basis dialog only when
+// the quote's distribution channel is "binder". Caps come from the binder_fees
+// table keyed by (binderholder_name = broker name, risk_rate_code) and bound
+// the values the binderholder can iterate on to hit a competitive rate.
+const maxBinderFee = ref<number | null>(null)
+const maxOutsourceFee = ref<number | null>(null)
+const binderFeeCapMissing = ref(false)
+
+const isBinderChannel = computed(
+  () => quote.value?.distribution_channel === 'binder'
+)
+
+const loadBinderFeeCaps = async () => {
+  maxBinderFee.value = null
+  maxOutsourceFee.value = null
+  binderFeeCapMissing.value = false
+  if (!isBinderChannel.value) return
+  const brokerName = quote.value?.quote_broker?.name?.trim()
+  const riskRateCode = quote.value?.risk_rate_code?.trim()
+  if (!brokerName || !riskRateCode) {
+    binderFeeCapMissing.value = true
+    return
+  }
+  try {
+    const res = await GroupPricingService.getBinderFees()
+    const rows: any[] = res.data || []
+    const match = rows.find(
+      (r) =>
+        r.binderholder_name?.trim() === brokerName &&
+        r.risk_rate_code?.trim() === riskRateCode
+    )
+    if (match) {
+      // binder_fees caps are persisted as decimals (0.075 means 7.5%).
+      // The basis dialog works in whole-percent units, so convert on read.
+      maxBinderFee.value =
+        Math.round(Number(match.maximum_binder_fee) * 100 * 10000) / 10000 || 0
+      maxOutsourceFee.value =
+        Math.round(Number(match.maximum_outsource_fee) * 100 * 10000) / 10000 ||
+        0
+    } else {
+      binderFeeCapMissing.value = true
+    }
+  } catch {
+    binderFeeCapMissing.value = true
+  }
+}
+
+watch(basisDialog, (open) => {
+  if (open) loadBinderFeeCaps()
+})
+
 // Computed properties (can be simplified if child components manage their own data)
 const hasEmptyQuoteTables = computed(() => {
   if (!quote.value) return true
@@ -642,8 +765,39 @@ const statusColor = (status: string) => {
   }
 }
 
-const closeBasisDialog = (value) => {
+const binderFeeInvalid = computed(() => {
+  if (!isBinderChannel.value) return false
+  const bf = Number(quote.value?.loadings?.binder_fee ?? 0)
+  const of = Number(quote.value?.loadings?.outsource_fee ?? 0)
+  if (bf < 0 || of < 0) return true
+  if (maxBinderFee.value !== null && bf > maxBinderFee.value) return true
+  if (maxOutsourceFee.value !== null && of > maxOutsourceFee.value) return true
+  return false
+})
+
+const closeBasisDialog = async (value) => {
   if (value) {
+    if (binderFeeInvalid.value) {
+      snackbarText.value =
+        'Binder fee or outsource fee exceeds the maximum allowed for this binderholder.'
+      snackbar.value = true
+      return
+    }
+    // Persist the quote (including binder/outsource fees on loadings) so the
+    // enqueued calculation reads the latest values from the DB.
+    if (isBinderChannel.value) {
+      try {
+        await GroupPricingService.changeQuoteStatus(quote.value)
+      } catch (error) {
+        console.error(
+          'Failed to save binder/outsource fees before calc:',
+          error
+        )
+        snackbarText.value = 'Could not save the binder fees. Please try again.'
+        snackbar.value = true
+        return
+      }
+    }
     runQuoteCalculations()
   }
   basisDialog.value = false
@@ -654,6 +808,15 @@ const loadQuote = async () => {
     const res = await GroupPricingService.getQuote(props.id)
     quote.value = res.data
     broker.value = quote.value.quoteBroker
+    // Ensure loadings object exists with the new binder/outsource fields so
+    // v-model inputs don't trip on undefined when rendering the dialog.
+    if (!quote.value.loadings) quote.value.loadings = {}
+    if (quote.value.loadings.binder_fee == null) {
+      quote.value.loadings.binder_fee = 0
+    }
+    if (quote.value.loadings.outsource_fee == null) {
+      quote.value.loadings.outsource_fee = 0
+    }
 
     const res1 = await GroupPricingService.getQuoteTable(
       quote.value.id,
