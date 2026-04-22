@@ -52,12 +52,13 @@ func TestSchema_BuildContextAgreesWithSchema(t *testing.T) {
 		zt quote_docx.BenefitTitles
 		zT quote_docx.QuoteTotals
 	)
+	zNaming := defaultBenefitNaming()
 	schemaCtx := Context(fieldsToMap(quoteFields(zq, zT, false)))
 	schemaCtx["insurer"] = fieldsToMap(insurerFields(zi))
 	// One synthetic category built from the schema — has=true for every
 	// benefit so all sub-keys are exercised.
-	cat := fieldsToMap(categoryScalarFields(zs, zc))
-	for k, v := range fieldsToMap(categoryBoolFields(zs, benefitFlags{GLA: true, SGLA: true, PTD: true, CI: true, PHI: true, TTD: true, Funeral: true})) {
+	cat := fieldsToMap(categoryScalarFields(zs, zc, zNaming))
+	for k, v := range fieldsToMap(categoryBoolFields(zs, benefitFlags{GLA: true, SGLA: true, PTD: true, CI: true, PHI: true, TTD: true, Funeral: true}, zNaming)) {
 		cat[k] = v
 	}
 	cat["gla"] = fieldsToMap(glaFields(zs, zc, zq, zt))
@@ -87,7 +88,7 @@ func TestSchema_BuildContextAgreesWithSchema(t *testing.T) {
 		"categories[].has_gla",
 		"categories[].gla.total_sum_assured",
 		"categories[].gla_rate_per_1000",
-		"categories[].funeral.total_annual_premium",
+		"categories[].funeral.total_premium",
 	})
 }
 
@@ -117,13 +118,14 @@ func expectedTokenSet() []string {
 	for _, f := range insurerFields(zi) {
 		out = append(out, "{{insurer."+f.Key+"}}")
 	}
-	for _, f := range categoryScalarFields(zs, zc) {
+	zNaming := defaultBenefitNaming()
+	for _, f := range categoryScalarFields(zs, zc, zNaming) {
 		out = append(out, "{{"+f.Key+"}}")
 	}
-	for _, f := range categoryBoolFields(zs, benefitFlags{}) {
+	for _, f := range categoryBoolFields(zs, benefitFlags{}, zNaming) {
 		out = append(out, "{{#"+f.Key+"}}")
 	}
-	for _, spec := range benefitSpecsForSample() {
+	for _, spec := range benefitSpecsForSample(zNaming) {
 		for _, f := range spec.Fields() {
 			out = append(out, "{{"+spec.Prefix+"."+f.Key+"}}")
 		}

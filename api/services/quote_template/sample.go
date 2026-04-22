@@ -7,13 +7,36 @@ import (
 	"strings"
 
 	"api/models"
+	"api/services"
 	"api/services/quote_docx"
 )
+
+// sampleBenefitNaming returns the benefit naming to use for sample
+// generation: resolved from DB-sourced customisations when available,
+// falling back to defaults when the fetch fails or the DB isn't
+// initialised (e.g. unit tests). The recover guard catches the nil-DB
+// panic that services.GetBenefitMaps raises before touching gorm.
+func sampleBenefitNaming() (n benefitNaming) {
+	n = defaultBenefitNaming()
+	defer func() {
+		if r := recover(); r != nil {
+			n = defaultBenefitNaming()
+		}
+	}()
+	maps, err := services.GetBenefitMaps()
+	if err != nil {
+		return defaultBenefitNaming()
+	}
+	return resolveBenefitNaming(maps)
+}
 
 // BuildSampleTemplate produces a comprehensive .docx template that exercises
 // every token the render engine supports. Admins download this as a
 // self-documenting reference: each section explains a token category and
-// demonstrates real usage.
+// demonstrates real usage. Token keys and labels reflect the insurer's
+// current benefit-name customisations (BenefitAliasCode / BenefitAlias)
+// so the client can copy tokens straight from the sample into their
+// quote template.
 //
 // Every element here must be valid OOXML or Word will refuse to open the file.
 // Rules worth remembering:
@@ -26,7 +49,7 @@ import (
 //   - <w:body> must end with a <w:sectPr>.
 //   - <w:shd> requires w:val and w:color attributes, not just w:fill.
 func BuildSampleTemplate() ([]byte, error) {
-	body := buildSampleBodyXML()
+	body := buildSampleBodyXML(sampleBenefitNaming())
 
 	buf := &bytes.Buffer{}
 	zw := zip.NewWriter(buf)
@@ -67,8 +90,11 @@ func BuildSampleTemplate() ([]byte, error) {
 // here as a table row, so adding a new token in schema.go automatically
 // surfaces it in the next-generated sample. The narrative sections
 // (introductions, worked example, tips) remain hand-written because they
-// document *how* to use tokens, not which ones exist.
-func buildSampleBodyXML() string {
+// document *how* to use tokens, not which ones exist. The naming argument
+// controls which benefit codes/titles drive the token forms — pass the
+// resolved naming to render the sample with the insurer's customised
+// codes, or defaultBenefitNaming() for a baseline reference.
+func buildSampleBodyXML(naming benefitNaming) string {
 	// Zero fixtures — BuildSampleTemplate only needs Keys and Labels, so
 	// the Value outputs of each *Fields function are irrelevant. Per-benefit
 	// specs carry their own zero fixtures inside schema.go, so this file
@@ -93,7 +119,7 @@ func buildSampleBodyXML() string {
 	b.WriteString(heading("How Tokens Work"))
 	b.WriteString(bodyPara("There are three kinds of tokens:"))
 	b.WriteString(bulletPara("Simple value — replaced with the corresponding data field. Example: {{scheme_name}}"))
-	b.WriteString(bulletPara("Conditional block — the content between the open and close tags appears only when the condition is true. Example: {{#has_gla}}…{{/has_gla}}"))
+	b.WriteString(bulletPara("Conditional block — the content between the open and close tags appears only when the condition is true. Example: {{#has_" + naming.GLA.Code + "}}…{{/has_" + naming.GLA.Code + "}}"))
 	b.WriteString(bulletPara("Iteration block — the content is repeated once per item in a list. Example: {{#categories}}…{{/categories}}"))
 	b.WriteString(bodyPara("Inside an iteration block, the per-item fields are available without any prefix (e.g. {{name}} refers to the current category's name)."))
 
@@ -118,22 +144,22 @@ func buildSampleBodyXML() string {
 	b.WriteString(bodyPara("The categories list contains one entry per scheme category in the quote. Wrap content you want repeated inside {{#categories}}…{{/categories}}. The fields below are available for each category."))
 
 	b.WriteString(subheading("Category-level tokens"))
-	b.WriteString(keyValueTable(rowsFromFields("", categoryScalarFields(zs, zc))))
+	b.WriteString(keyValueTable(rowsFromFields("", categoryScalarFields(zs, zc, naming))))
 
 	b.WriteString(subheading("Category-level flags (true/false)"))
 	b.WriteString(bodyPara("Use these as conditional blocks to include content only when the category has that benefit. Wrap your content inside the open/close tags below:"))
-	for _, f := range categoryBoolFields(zs, zFlags) {
+	for _, f := range categoryBoolFields(zs, zFlags, naming) {
 		b.WriteString(bulletPara("{{#" + f.Key + "}}…{{/" + f.Key + "}} — " + f.Label))
 	}
 
 	b.WriteString(subheading("Example: one paragraph per category"))
-	b.WriteString(bodyPara("{{#categories}}— {{name}}: {{member_count}} lives · annual premium {{annual_premium}} · {{percent_salary}} of salary{{/categories}}"))
+	b.WriteString(bodyPara("{{#categories}}— {{name}}: {{member_count}} lives · premium {{premium}} · {{percent_salary}} of salary{{/categories}}"))
 
 	// ===== Per-benefit tokens (inside categories) =====
 	b.WriteString(heading("Benefit Tokens — Used Inside the Categories Block"))
 	b.WriteString(bodyPara("Each category exposes an object per benefit. These are populated only when the category has the corresponding benefit. Combine with the conditional flags above to show a block only when relevant."))
 
-	for _, spec := range benefitSpecsForSample() {
+	for _, spec := range benefitSpecsForSample(naming) {
 		b.WriteString(subheading(spec.Title))
 		b.WriteString(benefitTokenTable(rowsFromFields(spec.Prefix, spec.Fields())))
 	}
@@ -141,7 +167,7 @@ func buildSampleBodyXML() string {
 	// ===== Worked example =====
 	b.WriteString(heading("Worked Example — Combining Everything"))
 	b.WriteString(bodyPara("Here is a realistic block that loops over categories and shows per-benefit sections only where relevant:"))
-	b.WriteString(exampleBlock())
+	b.WriteString(exampleBlock(naming))
 
 	// ===== Footer note =====
 	b.WriteString(heading("Tips for Template Authors"))
@@ -312,13 +338,14 @@ func tcBordersThin() string {
 
 // exampleBlock produces a short worked example combining iteration,
 // conditionals, and simple tokens — rendered in a slightly accented block.
-func exampleBlock() string {
+// Benefit-specific tokens use the insurer's customised codes/titles.
+func exampleBlock(n benefitNaming) string {
 	var b strings.Builder
-	b.WriteString(bodyPara("For the scheme {{scheme_name}} (quote {{quote_number}}), we cover {{total_lives}} lives with a total annual premium of {{total_annual_premium}}."))
+	b.WriteString(bodyPara("For the scheme {{scheme_name}} (quote {{quote_number}}), we cover {{total_lives}} lives with a total premium of {{total_premium}}."))
 	b.WriteString(bodyPara("{{#categories}}"))
-	b.WriteString(bodyPara("Category: {{name}} — {{member_count}} members, annual premium {{annual_premium}}."))
-	b.WriteString(bodyPara("{{#has_gla}}• Group Life sum assured: {{gla.total_sum_assured}} · premium {{gla.annual_premium}}{{/has_gla}}"))
-	b.WriteString(bodyPara("{{#has_funeral}}• Funeral cover: {{funeral.total_annual_premium}} annually across the category{{/has_funeral}}"))
+	b.WriteString(bodyPara("Category: {{name}} — {{member_count}} members, premium {{premium}}."))
+	b.WriteString(bodyPara("{{#has_" + n.GLA.Code + "}}• " + n.GLA.Title + " sum assured: {{" + n.GLA.Code + ".total_sum_assured}} · premium {{" + n.GLA.Code + ".premium}}{{/has_" + n.GLA.Code + "}}"))
+	b.WriteString(bodyPara("{{#has_" + n.Funeral.Code + "}}• " + n.Funeral.Title + " cover: {{" + n.Funeral.Code + ".total_premium}} across the category{{/has_" + n.Funeral.Code + "}}"))
 	b.WriteString(bodyPara("{{/categories}}"))
 	b.WriteString(bodyPara("{{#has_non_funeral_benefits}}Non-funeral benefits apply to this quote as detailed above.{{/has_non_funeral_benefits}}"))
 	return b.String()

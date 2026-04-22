@@ -3,6 +3,7 @@ package quote_template
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"api/models"
 	"api/services/quote_docx"
@@ -37,6 +38,127 @@ func fieldsToMap(fs []Field) map[string]interface{} {
 		m[f.Key] = f.Value
 	}
 	return m
+}
+
+// ---------------------------------------------------------------------------
+// Benefit naming — resolves per-insurer customisations (alias title + alias
+// code) so token keys/labels use the names the client has configured. When
+// no customisation exists, canonical defaults mirror the base benefit
+// mappers in services.getBaseBenefitMaps.
+// ---------------------------------------------------------------------------
+
+// benefitName carries the resolved code + title for one benefit. Code is the
+// snake_case prefix used in token keys (e.g. "gla" or a customised "gl").
+// ShortCode is an optional abbreviated variant used in a few long-key
+// contexts (binder/outsource/commission amounts for Additional Accidental
+// GLA, whose full code would otherwise create ungainly keys). Title is the
+// human-readable name shown in labels.
+type benefitName struct {
+	Code      string
+	ShortCode string
+	Title     string
+}
+
+// Short returns ShortCode when set, else Code. Callers use this for
+// abbreviated key forms.
+func (b benefitName) Short() string {
+	if b.ShortCode != "" {
+		return b.ShortCode
+	}
+	return b.Code
+}
+
+// benefitNaming is the resolved set of code+title pairs for every benefit
+// referenced by the category-scope token schema.
+type benefitNaming struct {
+	GLA, SGLA, PTD, CI, PHI, TTD, Funeral  benefitName
+	AdditionalAccidentalGla, AdditionalGla benefitName
+	GlaEducator, PtdEducator               benefitName
+	TaxSaver, ExtendedFamily               benefitName
+}
+
+// defaultBenefitNaming returns the canonical defaults used when no DB-sourced
+// customisation is available (sample template generation in tests, etc.).
+// Defaults match the historical token prefixes so templates written against
+// an un-customised deployment continue to resolve.
+func defaultBenefitNaming() benefitNaming {
+	return benefitNaming{
+		GLA:                     benefitName{Code: "gla", Title: "Group Life Assurance"},
+		SGLA:                    benefitName{Code: "sgla", Title: "Spouse Group Life Assurance"},
+		PTD:                     benefitName{Code: "ptd", Title: "Permanent Total Disability"},
+		CI:                      benefitName{Code: "ci", Title: "Critical Illness"},
+		PHI:                     benefitName{Code: "phi", Title: "Personal Health Insurance"},
+		TTD:                     benefitName{Code: "ttd", Title: "Temporary Total Disability"},
+		Funeral:                 benefitName{Code: "fun", Title: "Group Family Funeral"},
+		AdditionalAccidentalGla: benefitName{Code: "additional_accidental_gla", ShortCode: "add_acc_gla", Title: "Additional Accidental Group Life Assurance"},
+		AdditionalGla:           benefitName{Code: "additional_gla", Title: "Additional Group Life Assurance"},
+		GlaEducator:             benefitName{Code: "gla_educator", Title: "GLA Educator"},
+		PtdEducator:             benefitName{Code: "ptd_educator", Title: "PTD Educator"},
+		TaxSaver:                benefitName{Code: "tax_saver", Title: "Tax Saver"},
+		ExtendedFamily:          benefitName{Code: "extended_family", Title: "Extended Family Funeral"},
+	}
+}
+
+// resolveBenefitNaming layers customisations from GroupBenefitMapper rows
+// onto the defaults. BenefitAliasCode overrides Code (and ShortCode) so the
+// customised code flows through every token uniformly; BenefitAlias
+// overrides Title. Tax saver and extended family have no mapper entries —
+// they always use the defaults.
+func resolveBenefitNaming(maps []models.GroupBenefitMapper) benefitNaming {
+	out := defaultBenefitNaming()
+	for _, m := range maps {
+		target := benefitTargetFor(m.BenefitCode, &out)
+		if target == nil {
+			continue
+		}
+		if code := sanitiseCode(m.BenefitAliasCode); code != "" {
+			target.Code = code
+			target.ShortCode = code
+		}
+		if alias := strings.TrimSpace(m.BenefitAlias); alias != "" {
+			target.Title = alias
+		}
+	}
+	return out
+}
+
+func benefitTargetFor(benefitCode string, n *benefitNaming) *benefitName {
+	switch benefitCode {
+	case "GLA":
+		return &n.GLA
+	case "SGLA":
+		return &n.SGLA
+	case "PTD":
+		return &n.PTD
+	case "CI":
+		return &n.CI
+	case "PHI":
+		return &n.PHI
+	case "TTD":
+		return &n.TTD
+	case "GFF":
+		return &n.Funeral
+	case "AAGLA":
+		return &n.AdditionalAccidentalGla
+	case "AGLA":
+		return &n.AdditionalGla
+	case "GLA_EDU":
+		return &n.GlaEducator
+	case "PTD_EDU":
+		return &n.PtdEducator
+	}
+	return nil
+}
+
+// sanitiseCode normalises a customised code into a valid snake_case token
+// prefix: trims whitespace, lowercases, and collapses internal whitespace
+// runs to underscores.
+func sanitiseCode(raw string) string {
+	s := strings.ToLower(strings.TrimSpace(raw))
+	if s == "" {
+		return ""
+	}
+	return strings.Join(strings.Fields(s), "_")
 }
 
 // benefitFlags captures which benefit objects are populated for a given
@@ -95,8 +217,8 @@ func quoteFields(
 		{Key: "use_global_salary_multiple", Label: "Use Global Salary Multiple", Value: quote.UseGlobalSalaryMultiple},
 		{Key: "total_lives", Label: "Total Lives Covered", Value: strconv.Itoa(totals.TotalLives)},
 		{Key: "total_sum_assured", Label: "Total Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(totals.TotalSumAssured)},
-		{Key: "total_annual_salary", Label: "Total Annual Salary", Value: quote_docx.RoundUpToTwoDecimalsAccounting(totals.TotalAnnualSalary)},
-		{Key: "total_annual_premium", Label: "Total Annual Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(totals.TotalAnnualPremium)},
+		{Key: "total_salary", Label: "Total Salary", Value: quote_docx.RoundUpToTwoDecimalsAccounting(totals.TotalAnnualSalary)},
+		{Key: "total_premium", Label: "Total Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(totals.TotalAnnualPremium)},
 		{Key: "has_non_funeral_benefits", Label: "Has Non-Funeral Benefits (flag)", Value: hasNonFuneral},
 	}
 }
@@ -128,33 +250,38 @@ func insurerFields(i models.GroupPricingInsurerDetail) []Field {
 // ---------------------------------------------------------------------------
 
 // categoryScalarFields returns the non-bool category tokens. Rendered in
-// the sample as a key/value table.
+// the sample as a key/value table. Benefit-prefixed tokens (rate_per_1000,
+// educator indicators, and all the rating/slice tokens built by the
+// sub-builders below) use the customised code/title from n where the
+// insurer has configured one; otherwise the canonical defaults apply.
 func categoryScalarFields(
 	s models.MemberRatingResultSummary,
 	cat models.SchemeCategory,
+	n benefitNaming,
 ) []Field {
+	money := quote_docx.RoundUpToTwoDecimalsAccounting
 	fs := []Field{
 		{Key: "name", Label: "Category Name", Value: s.Category},
 		{Key: "region", Label: "Region", Value: cat.Region},
 		{Key: "member_count", Label: "Member Count", Value: strconv.Itoa(int(s.MemberCount))},
-		{Key: "total_salary", Label: "Total Annual Salary", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalAnnualSalary)},
-		{Key: "total_sum_assured", Label: "Total Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalSumAssured)},
-		{Key: "annual_premium", Label: "Annual Premium (excl. funeral)", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalAnnualPremiumExclFuneral)},
+		{Key: "total_salary", Label: "Total Salary", Value: money(s.TotalAnnualSalary)},
+		{Key: "total_sum_assured", Label: "Total Sum Assured", Value: money(s.TotalSumAssured)},
+		{Key: "premium", Label: "Premium (excl. funeral)", Value: money(s.ExpTotalAnnualPremiumExclFuneral)},
 		{Key: "percent_salary", Label: "Premium as % of Salary", Value: formatPercent(s.ProportionExpTotalPremiumExclFuneralSalary)},
-		{Key: "free_cover_limit", Label: "Free Cover Limit (category override)", Value: quote_docx.RoundUpToTwoDecimalsAccounting(cat.FreeCoverLimit)},
-		{Key: "gla_rate_per_1000", Label: "GLA Rate per 1,000 SA", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpGlaOfficeRatePer1000SA)},
-		{Key: "sgla_rate_per_1000", Label: "SGLA Rate per 1,000 SA", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpSglaOfficeRatePer1000SA)},
-		{Key: "ptd_rate_per_1000", Label: "PTD Rate per 1,000 SA", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpPtdOfficeRatePer1000SA)},
-		{Key: "ci_rate_per_1000", Label: "CI Rate per 1,000 SA", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpCiOfficeRatePer1000SA)},
+		{Key: "free_cover_limit", Label: "Free Cover Limit (category override)", Value: money(cat.FreeCoverLimit)},
+		{Key: fmt.Sprintf("%s_rate_per_1000", n.GLA.Code), Label: fmt.Sprintf("%s Rate per 1,000 SA", n.GLA.Title), Value: money(s.ExpGlaOfficeRatePer1000SA)},
+		{Key: fmt.Sprintf("%s_rate_per_1000", n.SGLA.Code), Label: fmt.Sprintf("%s Rate per 1,000 SA", n.SGLA.Title), Value: money(s.ExpSglaOfficeRatePer1000SA)},
+		{Key: fmt.Sprintf("%s_rate_per_1000", n.PTD.Code), Label: fmt.Sprintf("%s Rate per 1,000 SA", n.PTD.Title), Value: money(s.ExpPtdOfficeRatePer1000SA)},
+		{Key: fmt.Sprintf("%s_rate_per_1000", n.CI.Code), Label: fmt.Sprintf("%s Rate per 1,000 SA", n.CI.Title), Value: money(s.ExpCiOfficeRatePer1000SA)},
 		{Key: "retirement_premium_waiver", Label: "Retirement Premium Waiver", Value: orDash(cat.PhiPremiumWaiver)},
 		{Key: "medical_aid_premium_waiver", Label: "Medical Aid Premium Waiver", Value: orDash(cat.PhiMedicalAidPremiumWaiver)},
-		{Key: "gla_terminal_illness_benefit", Label: "GLA Terminal Illness Benefit", Value: orDash(cat.GlaTerminalIllnessBenefit)},
-		{Key: "gla_educator_benefit", Label: "GLA Educator Benefit", Value: orDash(cat.GlaEducatorBenefit)},
-		{Key: "ptd_educator_benefit", Label: "PTD Educator Benefit", Value: orDash(cat.PtdEducatorBenefit)},
+		{Key: fmt.Sprintf("%s_terminal_illness_benefit", n.GLA.Code), Label: fmt.Sprintf("%s Terminal Illness Benefit", n.GLA.Title), Value: orDash(cat.GlaTerminalIllnessBenefit)},
+		{Key: fmt.Sprintf("%s_benefit", n.GlaEducator.Code), Label: fmt.Sprintf("%s Benefit", n.GlaEducator.Title), Value: orDash(cat.GlaEducatorBenefit)},
+		{Key: fmt.Sprintf("%s_benefit", n.PtdEducator.Code), Label: fmt.Sprintf("%s Benefit", n.PtdEducator.Title), Value: orDash(cat.PtdEducatorBenefit)},
 	}
-	fs = append(fs, categoryRatingSummaryFields(s)...)
-	fs = append(fs, categoryEducatorSummaryFields(s)...)
-	fs = append(fs, categoryConversionSliceFields(s)...)
+	fs = append(fs, categoryRatingSummaryFields(s, n)...)
+	fs = append(fs, categoryEducatorSummaryFields(s, n)...)
+	fs = append(fs, categoryConversionSliceFields(s, n)...)
 	return fs
 }
 
@@ -162,292 +289,335 @@ func categoryScalarFields(
 // tokens at category scope: per-benefit risk rates, risk premiums, office
 // premiums, proportions of salary, rate-per-1000 figures, binder/outsource
 // splits, per-benefit commission, scheme-level commission totals, and tax
-// saver slices. Keys/labels mirror the attached variable list with the
-// leading "exp_" prefix stripped.
-func categoryRatingSummaryFields(s models.MemberRatingResultSummary) []Field {
+// saver slices. Keys/labels use the customised benefit code + title from n
+// where set, falling back to defaults. The leading "exp_" prefix from the
+// underlying model fields is stripped from all token keys.
+func categoryRatingSummaryFields(s models.MemberRatingResultSummary, n benefitNaming) []Field {
 	money := quote_docx.RoundUpToTwoDecimalsAccounting
+	var fs []Field
+
+	// Core benefit rating blocks (8 fields each).
+	fs = append(fs, benefitRatingBlock(n.GLA, false,
+		s.TotalGlaCappedSumAssured, s.ExpTotalGlaRiskRate, s.ExpTotalGlaAnnualRiskPremium,
+		s.ExpGlaRiskRatePer1000SA, s.ExpProportionGlaAnnualRiskPremiumSalary,
+		s.ExpTotalGlaAnnualOfficePremium, s.ExpGlaOfficeRatePer1000SA, s.ExpProportionGlaOfficePremiumSalary)...)
+	fs = append(fs, benefitRatingBlock(n.PTD, false,
+		s.TotalPtdCappedSumAssured, s.ExpTotalPtdRiskRate, s.ExpTotalPtdAnnualRiskPremium,
+		s.ExpPtdRiskRatePer1000SA, s.ExpProportionPtdAnnualRiskPremiumSalary,
+		s.ExpTotalPtdAnnualOfficePremium, s.ExpPtdOfficeRatePer1000SA, s.ExpProportionPtdOfficePremiumSalary)...)
+	fs = append(fs, benefitRatingBlock(n.CI, false,
+		s.TotalCiCappedSumAssured, s.ExpTotalCiRiskRate, s.ExpTotalCiAnnualRiskPremium,
+		s.ExpCiRiskRatePer1000SA, s.ExpProportionCiAnnualRiskPremiumSalary,
+		s.ExpTotalCiAnnualOfficePremium, s.ExpCiOfficeRatePer1000SA, s.ExpProportionCiOfficePremiumSalary)...)
+	fs = append(fs, benefitRatingBlock(n.SGLA, false,
+		s.TotalSglaCappedSumAssured, s.ExpTotalSglaRiskRate, s.ExpTotalSglaAnnualRiskPremium,
+		s.ExpSglaRiskRatePer1000SA, s.ExpProportionSglaAnnualRiskPremiumSalary,
+		s.ExpTotalSglaAnnualOfficePremium, s.ExpSglaOfficeRatePer1000SA, s.ExpProportionSglaOfficePremiumSalary)...)
+	fs = append(fs, benefitRatingBlock(n.TTD, true,
+		s.TotalTtdCappedIncome, s.ExpTotalTtdRiskRate, s.ExpTotalTtdAnnualRiskPremium,
+		s.ExpTtdRiskRatePer1000SA, s.ExpProportionTtdAnnualRiskPremiumSalary,
+		s.ExpTotalTtdAnnualOfficePremium, s.ExpTtdOfficeRatePer1000SA, s.ExpProportionTtdOfficePremiumSalary)...)
+	fs = append(fs, benefitRatingBlock(n.PHI, true,
+		s.TotalPhiCappedIncome, s.ExpTotalPhiRiskRate, s.ExpTotalPhiAnnualRiskPremium,
+		s.ExpPhiRiskRatePer1000SA, s.ExpProportionPhiAnnualRiskPremiumSalary,
+		s.ExpTotalPhiAnnualOfficePremium, s.ExpPhiOfficeRatePer1000SA, s.ExpProportionPhiOfficePremiumSalary)...)
+
+	// Funeral + aggregate. "monthly" stays on the monthly-premium-per-member
+	// key to disambiguate it from the (default) annual sibling, but the
+	// "annual" qualifier is dropped everywhere else.
+	fs = append(fs,
+		Field{Key: fmt.Sprintf("total_%s_risk_premium", n.Funeral.Code), Label: fmt.Sprintf("%s — Total Risk Premium", n.Funeral.Title), Value: money(s.ExpTotalFunAnnualRiskPremium)},
+		Field{Key: fmt.Sprintf("proportion_%s_risk_premium_salary", n.Funeral.Code), Label: fmt.Sprintf("%s — Risk Premium as %% of Salary", n.Funeral.Title), Value: formatPercent(s.ExpProportionFunAnnualRiskPremiumSalary)},
+		Field{Key: fmt.Sprintf("total_%s_office_premium", n.Funeral.Code), Label: fmt.Sprintf("%s — Total Office Premium", n.Funeral.Title), Value: money(s.ExpTotalFunAnnualOfficePremium)},
+		Field{Key: fmt.Sprintf("proportion_%s_office_premium_salary", n.Funeral.Code), Label: fmt.Sprintf("%s — Office Premium as %% of Salary", n.Funeral.Title), Value: formatPercent(s.ExpProportionFunOfficePremiumSalary)},
+		Field{Key: fmt.Sprintf("total_%s_premium_per_member", n.Funeral.Code), Label: fmt.Sprintf("%s — Premium per Member", n.Funeral.Title), Value: money(s.ExpTotalFunAnnualPremiumPerMember)},
+		Field{Key: fmt.Sprintf("total_%s_monthly_premium_per_member", n.Funeral.Code), Label: fmt.Sprintf("%s — Monthly Premium per Member", n.Funeral.Title), Value: money(s.ExpTotalFunMonthlyPremiumPerMember)},
+		Field{Key: "total_premium_excl_funeral", Label: "Total Premium (excluding Funeral)", Value: money(s.ExpTotalAnnualPremiumExclFuneral)},
+		Field{Key: "proportion_total_premium_excl_funeral_salary", Label: "Total Premium (excluding Funeral) as % of Salary", Value: formatPercent(s.ProportionExpTotalPremiumExclFuneralSalary)},
+	)
+
+	// Additional Accidental GLA — mirrors the core rating shape, but the
+	// risk-proportion key uses "prop_" (mirroring the attached list /
+	// underlying column name); the office-proportion key uses "proportion_".
+	ab := n.AdditionalAccidentalGla
+	fs = append(fs,
+		Field{Key: fmt.Sprintf("total_%s_capped_sum_assured", ab.Code), Label: fmt.Sprintf("%s — Total Capped Sum Assured", ab.Title), Value: money(s.TotalAdditionalAccidentalGlaCappedSumAssured)},
+		Field{Key: fmt.Sprintf("total_%s_risk_rate", ab.Code), Label: fmt.Sprintf("%s — Total Risk Rate", ab.Title), Value: money(s.ExpTotalAdditionalAccidentalGlaRiskRate)},
+		Field{Key: fmt.Sprintf("total_%s_risk_premium", ab.Code), Label: fmt.Sprintf("%s — Total Risk Premium", ab.Title), Value: money(s.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium)},
+		Field{Key: fmt.Sprintf("%s_risk_rate_per1000_sa", ab.Code), Label: fmt.Sprintf("%s — Risk Rate per 1,000 SA", ab.Title), Value: money(s.ExpAdditionalAccidentalGlaRiskRatePer1000SA)},
+		Field{Key: fmt.Sprintf("prop_%s_risk_premium_salary", ab.Code), Label: fmt.Sprintf("%s — Risk Premium as %% of Salary", ab.Title), Value: formatPercent(s.ExpProportionAdditionalAccidentalGlaAnnualRiskPremiumSalary)},
+		Field{Key: fmt.Sprintf("total_%s_office_premium", ab.Code), Label: fmt.Sprintf("%s — Total Office Premium", ab.Title), Value: money(s.ExpTotalAdditionalAccidentalGlaAnnualOfficePremium)},
+		Field{Key: fmt.Sprintf("%s_office_rate_per1000_sa", ab.Code), Label: fmt.Sprintf("%s — Office Rate per 1,000 SA", ab.Title), Value: money(s.ExpAdditionalAccidentalGlaOfficeRatePer1000SA)},
+		Field{Key: fmt.Sprintf("proportion_%s_office_premium_salary", ab.Code), Label: fmt.Sprintf("%s — Office Premium as %% of Salary", ab.Title), Value: formatPercent(s.ExpProportionAdditionalAccidentalGlaOfficePremiumSalary)},
+	)
+
+	// Binder & outsource amounts. Add Acc GLA uses ShortCode for these keys.
+	fs = append(fs, benefitBinderOutsourceBlock(n.GLA, s.ExpTotalGlaAnnualBinderAmount, s.ExpTotalGlaAnnualOutsourcedAmount, false)...)
+	fs = append(fs, benefitBinderOutsourceBlock(n.AdditionalAccidentalGla, s.ExpTotalAdditionalAccidentalGlaAnnualBinderAmount, s.ExpTotalAdditionalAccidentalGlaAnnualOutsourcedAmt, true)...)
+	fs = append(fs, benefitBinderOutsourceBlock(n.PTD, s.ExpTotalPtdAnnualBinderAmount, s.ExpTotalPtdAnnualOutsourcedAmount, false)...)
+	fs = append(fs, benefitBinderOutsourceBlock(n.CI, s.ExpTotalCiAnnualBinderAmount, s.ExpTotalCiAnnualOutsourcedAmount, false)...)
+	fs = append(fs, benefitBinderOutsourceBlock(n.SGLA, s.ExpTotalSglaAnnualBinderAmount, s.ExpTotalSglaAnnualOutsourcedAmount, false)...)
+	fs = append(fs, benefitBinderOutsourceBlock(n.TTD, s.ExpTotalTtdAnnualBinderAmount, s.ExpTotalTtdAnnualOutsourcedAmount, false)...)
+	fs = append(fs, benefitBinderOutsourceBlock(n.PHI, s.ExpTotalPhiAnnualBinderAmount, s.ExpTotalPhiAnnualOutsourcedAmount, false)...)
+	fs = append(fs, benefitBinderOutsourceBlock(n.Funeral, s.ExpTotalFunAnnualBinderAmount, s.ExpTotalFunAnnualOutsourcedAmount, false)...)
+
+	// Commission amounts (per benefit + scheme totals).
+	fs = append(fs,
+		benefitCommissionField(n.GLA, s.ExpTotalGlaAnnualCommissionAmount, false),
+		benefitCommissionField(n.AdditionalAccidentalGla, s.ExpTotalAdditionalAccidentalGlaAnnualCommissionAmount, true),
+		benefitCommissionField(n.PTD, s.ExpTotalPtdAnnualCommissionAmount, false),
+		benefitCommissionField(n.CI, s.ExpTotalCiAnnualCommissionAmount, false),
+		benefitCommissionField(n.SGLA, s.ExpTotalSglaAnnualCommissionAmount, false),
+		benefitCommissionField(n.TTD, s.ExpTotalTtdAnnualCommissionAmount, false),
+		benefitCommissionField(n.PHI, s.ExpTotalPhiAnnualCommissionAmount, false),
+		benefitCommissionField(n.Funeral, s.ExpTotalFunAnnualCommissionAmount, false),
+		Field{Key: "scheme_total_commission", Label: "Scheme Total Commission", Value: money(s.SchemeTotalCommission)},
+		Field{Key: "scheme_total_commission_rate", Label: "Scheme Total Commission Rate", Value: formatPercent(s.SchemeTotalCommissionRate)},
+	)
+
+	// Tax saver (slice of GLA office premium — no SA / rate-per-1000).
+	tb := n.TaxSaver
+	fs = append(fs,
+		Field{Key: fmt.Sprintf("total_%s_risk_premium", tb.Code), Label: fmt.Sprintf("%s — Total Risk Premium", tb.Title), Value: money(s.ExpTotalTaxSaverAnnualRiskPremium)},
+		Field{Key: fmt.Sprintf("total_%s_office_premium", tb.Code), Label: fmt.Sprintf("%s — Total Office Premium", tb.Title), Value: money(s.ExpTotalTaxSaverAnnualOfficePremium)},
+	)
+
+	return fs
+}
+
+// benefitRatingBlock returns the 8-field rating block for one benefit:
+// capped sum assured (or income), risk rate, risk premium, risk-rate per
+// 1,000 SA, risk-proportion-of-salary, office premium, office-rate per
+// 1,000 SA, office-proportion-of-salary.
+func benefitRatingBlock(b benefitName, incomeBased bool,
+	cappedAmount, riskRate, riskPrem, riskRatePer1000, propRiskSalary,
+	officePrem, officeRatePer1000, propOfficeSalary float64,
+) []Field {
+	money := quote_docx.RoundUpToTwoDecimalsAccounting
+	cappedKey := "capped_sum_assured"
+	cappedLabel := "Total Capped Sum Assured"
+	if incomeBased {
+		cappedKey = "capped_income"
+		cappedLabel = "Total Capped Income"
+	}
 	return []Field{
-		// GLA
-		{Key: "total_gla_capped_sum_assured", Label: "total_gla_capped_sum_assured", Value: money(s.TotalGlaCappedSumAssured)},
-		{Key: "total_gla_risk_rate", Label: "total_gla_risk_rate", Value: money(s.ExpTotalGlaRiskRate)},
-		{Key: "total_gla_annual_risk_premium", Label: "total_gla_annual_risk_premium", Value: money(s.ExpTotalGlaAnnualRiskPremium)},
-		{Key: "gla_risk_rate_per1000_sa", Label: "gla_risk_rate_per1000_sa", Value: money(s.ExpGlaRiskRatePer1000SA)},
-		{Key: "proportion_gla_annual_risk_premium_salary", Label: "proportion_gla_annual_risk_premium_salary", Value: formatPercent(s.ExpProportionGlaAnnualRiskPremiumSalary)},
-		{Key: "total_gla_annual_office_premium", Label: "total_gla_annual_office_premium", Value: money(s.ExpTotalGlaAnnualOfficePremium)},
-		{Key: "gla_office_rate_per1000_sa", Label: "gla_office_rate_per1000_sa", Value: money(s.ExpGlaOfficeRatePer1000SA)},
-		{Key: "proportion_gla_office_premium_salary", Label: "proportion_gla_office_premium_salary", Value: formatPercent(s.ExpProportionGlaOfficePremiumSalary)},
+		{Key: fmt.Sprintf("total_%s_%s", b.Code, cappedKey), Label: fmt.Sprintf("%s — %s", b.Title, cappedLabel), Value: money(cappedAmount)},
+		{Key: fmt.Sprintf("total_%s_risk_rate", b.Code), Label: fmt.Sprintf("%s — Total Risk Rate", b.Title), Value: money(riskRate)},
+		{Key: fmt.Sprintf("total_%s_risk_premium", b.Code), Label: fmt.Sprintf("%s — Total Risk Premium", b.Title), Value: money(riskPrem)},
+		{Key: fmt.Sprintf("%s_risk_rate_per1000_sa", b.Code), Label: fmt.Sprintf("%s — Risk Rate per 1,000 SA", b.Title), Value: money(riskRatePer1000)},
+		{Key: fmt.Sprintf("proportion_%s_risk_premium_salary", b.Code), Label: fmt.Sprintf("%s — Risk Premium as %% of Salary", b.Title), Value: formatPercent(propRiskSalary)},
+		{Key: fmt.Sprintf("total_%s_office_premium", b.Code), Label: fmt.Sprintf("%s — Total Office Premium", b.Title), Value: money(officePrem)},
+		{Key: fmt.Sprintf("%s_office_rate_per1000_sa", b.Code), Label: fmt.Sprintf("%s — Office Rate per 1,000 SA", b.Title), Value: money(officeRatePer1000)},
+		{Key: fmt.Sprintf("proportion_%s_office_premium_salary", b.Code), Label: fmt.Sprintf("%s — Office Premium as %% of Salary", b.Title), Value: formatPercent(propOfficeSalary)},
+	}
+}
 
-		// PTD
-		{Key: "total_ptd_capped_sum_assured", Label: "total_ptd_capped_sum_assured", Value: money(s.TotalPtdCappedSumAssured)},
-		{Key: "total_ptd_risk_rate", Label: "total_ptd_risk_rate", Value: money(s.ExpTotalPtdRiskRate)},
-		{Key: "total_ptd_annual_risk_premium", Label: "total_ptd_annual_risk_premium", Value: money(s.ExpTotalPtdAnnualRiskPremium)},
-		{Key: "ptd_risk_rate_per1000_sa", Label: "ptd_risk_rate_per1000_sa", Value: money(s.ExpPtdRiskRatePer1000SA)},
-		{Key: "proportion_ptd_annual_risk_premium_salary", Label: "proportion_ptd_annual_risk_premium_salary", Value: formatPercent(s.ExpProportionPtdAnnualRiskPremiumSalary)},
-		{Key: "total_ptd_annual_office_premium", Label: "total_ptd_annual_office_premium", Value: money(s.ExpTotalPtdAnnualOfficePremium)},
-		{Key: "ptd_office_rate_per1000_sa", Label: "ptd_office_rate_per1000_sa", Value: money(s.ExpPtdOfficeRatePer1000SA)},
-		{Key: "proportion_ptd_office_premium_salary", Label: "proportion_ptd_office_premium_salary", Value: formatPercent(s.ExpProportionPtdOfficePremiumSalary)},
+// benefitBinderOutsourceBlock returns the binder + outsourced token pair
+// for one benefit. When useShort is true, b.Short() is used for the key
+// prefix (Add Acc GLA uses the abbreviated form to keep keys tractable).
+// The outsourced token's suffix is "_amt" for Add Acc GLA (matches the
+// historical attached-list naming) and "_amount" elsewhere.
+func benefitBinderOutsourceBlock(b benefitName, binder, outsourced float64, useShort bool) []Field {
+	money := quote_docx.RoundUpToTwoDecimalsAccounting
+	code := b.Code
+	outsourcedSuffix := "outsourced_amount"
+	if useShort {
+		code = b.Short()
+		// The "_amt" suffix is a quirk of the default Add Acc GLA naming
+		// (ShortCode differs from Code). When a customisation is applied
+		// the resolver sets ShortCode == Code, so the consistent
+		// "_amount" suffix is used.
+		if b.ShortCode != "" && b.ShortCode != b.Code {
+			outsourcedSuffix = "outsourced_amt"
+		}
+	}
+	return []Field{
+		{Key: fmt.Sprintf("total_%s_binder_amount", code), Label: fmt.Sprintf("%s — Total Binder Amount", b.Title), Value: money(binder)},
+		{Key: fmt.Sprintf("total_%s_%s", code, outsourcedSuffix), Label: fmt.Sprintf("%s — Total Outsourced Amount", b.Title), Value: money(outsourced)},
+	}
+}
 
-		// CI
-		{Key: "total_ci_capped_sum_assured", Label: "total_ci_capped_sum_assured", Value: money(s.TotalCiCappedSumAssured)},
-		{Key: "total_ci_risk_rate", Label: "total_ci_risk_rate", Value: money(s.ExpTotalCiRiskRate)},
-		{Key: "total_ci_annual_risk_premium", Label: "total_ci_annual_risk_premium", Value: money(s.ExpTotalCiAnnualRiskPremium)},
-		{Key: "ci_risk_rate_per1000_sa", Label: "ci_risk_rate_per1000_sa", Value: money(s.ExpCiRiskRatePer1000SA)},
-		{Key: "proportion_ci_annual_risk_premium_salary", Label: "proportion_ci_annual_risk_premium_salary", Value: formatPercent(s.ExpProportionCiAnnualRiskPremiumSalary)},
-		{Key: "total_ci_annual_office_premium", Label: "total_ci_annual_office_premium", Value: money(s.ExpTotalCiAnnualOfficePremium)},
-		{Key: "ci_office_rate_per1000_sa", Label: "ci_office_rate_per1000_sa", Value: money(s.ExpCiOfficeRatePer1000SA)},
-		{Key: "proportion_ci_office_premium_salary", Label: "proportion_ci_office_premium_salary", Value: formatPercent(s.ExpProportionCiOfficePremiumSalary)},
-
-		// SGLA
-		{Key: "total_sgla_capped_sum_assured", Label: "total_sgla_capped_sum_assured", Value: money(s.TotalSglaCappedSumAssured)},
-		{Key: "total_sgla_risk_rate", Label: "total_sgla_risk_rate", Value: money(s.ExpTotalSglaRiskRate)},
-		{Key: "total_sgla_annual_risk_premium", Label: "total_sgla_annual_risk_premium", Value: money(s.ExpTotalSglaAnnualRiskPremium)},
-		{Key: "sgla_risk_rate_per1000_sa", Label: "sgla_risk_rate_per1000_sa", Value: money(s.ExpSglaRiskRatePer1000SA)},
-		{Key: "proportion_sgla_annual_risk_premium_salary", Label: "proportion_sgla_annual_risk_premium_salary", Value: formatPercent(s.ExpProportionSglaAnnualRiskPremiumSalary)},
-		{Key: "total_sgla_annual_office_premium", Label: "total_sgla_annual_office_premium", Value: money(s.ExpTotalSglaAnnualOfficePremium)},
-		{Key: "sgla_office_rate_per1000_sa", Label: "sgla_office_rate_per1000_sa", Value: money(s.ExpSglaOfficeRatePer1000SA)},
-		{Key: "proportion_sgla_office_premium_salary", Label: "proportion_sgla_office_premium_salary", Value: formatPercent(s.ExpProportionSglaOfficePremiumSalary)},
-
-		// TTD (income-based)
-		{Key: "total_ttd_capped_income", Label: "total_ttd_capped_income", Value: money(s.TotalTtdCappedIncome)},
-		{Key: "total_ttd_risk_rate", Label: "total_ttd_risk_rate", Value: money(s.ExpTotalTtdRiskRate)},
-		{Key: "total_ttd_annual_risk_premium", Label: "total_ttd_annual_risk_premium", Value: money(s.ExpTotalTtdAnnualRiskPremium)},
-		{Key: "ttd_risk_rate_per1000_sa", Label: "ttd_risk_rate_per1000_sa", Value: money(s.ExpTtdRiskRatePer1000SA)},
-		{Key: "proportion_ttd_annual_risk_premium_salary", Label: "proportion_ttd_annual_risk_premium_salary", Value: formatPercent(s.ExpProportionTtdAnnualRiskPremiumSalary)},
-		{Key: "total_ttd_annual_office_premium", Label: "total_ttd_annual_office_premium", Value: money(s.ExpTotalTtdAnnualOfficePremium)},
-		{Key: "ttd_office_rate_per1000_sa", Label: "ttd_office_rate_per1000_sa", Value: money(s.ExpTtdOfficeRatePer1000SA)},
-		{Key: "proportion_ttd_office_premium_salary", Label: "proportion_ttd_office_premium_salary", Value: formatPercent(s.ExpProportionTtdOfficePremiumSalary)},
-
-		// PHI (income-based)
-		{Key: "total_phi_capped_income", Label: "total_phi_capped_income", Value: money(s.TotalPhiCappedIncome)},
-		{Key: "total_phi_risk_rate", Label: "total_phi_risk_rate", Value: money(s.ExpTotalPhiRiskRate)},
-		{Key: "total_phi_annual_risk_premium", Label: "total_phi_annual_risk_premium", Value: money(s.ExpTotalPhiAnnualRiskPremium)},
-		{Key: "phi_risk_rate_per1000_sa", Label: "phi_risk_rate_per1000_sa", Value: money(s.ExpPhiRiskRatePer1000SA)},
-		{Key: "proportion_phi_annual_risk_premium_salary", Label: "proportion_phi_annual_risk_premium_salary", Value: formatPercent(s.ExpProportionPhiAnnualRiskPremiumSalary)},
-		{Key: "total_phi_annual_office_premium", Label: "total_phi_annual_office_premium", Value: money(s.ExpTotalPhiAnnualOfficePremium)},
-		{Key: "phi_office_rate_per1000_sa", Label: "phi_office_rate_per1000_sa", Value: money(s.ExpPhiOfficeRatePer1000SA)},
-		{Key: "proportion_phi_office_premium_salary", Label: "proportion_phi_office_premium_salary", Value: formatPercent(s.ExpProportionPhiOfficePremiumSalary)},
-
-		// Funeral + aggregate
-		{Key: "total_fun_annual_risk_premium", Label: "total_fun_annual_risk_premium", Value: money(s.ExpTotalFunAnnualRiskPremium)},
-		{Key: "proportion_fun_annual_risk_premium_salary", Label: "proportion_fun_annual_risk_premium_salary", Value: formatPercent(s.ExpProportionFunAnnualRiskPremiumSalary)},
-		{Key: "total_fun_annual_office_premium", Label: "total_fun_annual_office_premium", Value: money(s.ExpTotalFunAnnualOfficePremium)},
-		{Key: "proportion_fun_office_premium_salary", Label: "proportion_fun_office_premium_salary", Value: formatPercent(s.ExpProportionFunOfficePremiumSalary)},
-		{Key: "total_fun_annual_premium_per_member", Label: "total_fun_annual_premium_per_member", Value: money(s.ExpTotalFunAnnualPremiumPerMember)},
-		{Key: "total_fun_monthly_premium_per_member", Label: "total_fun_monthly_premium_per_member", Value: money(s.ExpTotalFunMonthlyPremiumPerMember)},
-		{Key: "total_annual_premium_excl_funeral", Label: "total_annual_premium_excl_funeral", Value: money(s.ExpTotalAnnualPremiumExclFuneral)},
-		{Key: "proportion_exp_total_premium_excl_funeral_salary", Label: "proportion_exp_total_premium_excl_funeral_salary", Value: formatPercent(s.ProportionExpTotalPremiumExclFuneralSalary)},
-
-		// Additional Accidental GLA
-		{Key: "total_additional_accidental_gla_capped_sum_assured", Label: "total_additional_accidental_gla_capped_sum_assured", Value: money(s.TotalAdditionalAccidentalGlaCappedSumAssured)},
-		{Key: "total_additional_accidental_gla_risk_rate", Label: "total_additional_accidental_gla_risk_rate", Value: money(s.ExpTotalAdditionalAccidentalGlaRiskRate)},
-		{Key: "total_additional_accidental_gla_annual_risk_premium", Label: "total_additional_accidental_gla_annual_risk_premium", Value: money(s.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium)},
-		{Key: "additional_accidental_gla_risk_rate_per1000_sa", Label: "additional_accidental_gla_risk_rate_per1000_sa", Value: money(s.ExpAdditionalAccidentalGlaRiskRatePer1000SA)},
-		{Key: "prop_additional_accidental_gla_annual_risk_premium_salary", Label: "prop_additional_accidental_gla_annual_risk_premium_salary", Value: formatPercent(s.ExpProportionAdditionalAccidentalGlaAnnualRiskPremiumSalary)},
-		{Key: "total_additional_accidental_gla_annual_office_premium", Label: "total_additional_accidental_gla_annual_office_premium", Value: money(s.ExpTotalAdditionalAccidentalGlaAnnualOfficePremium)},
-		{Key: "additional_accidental_gla_office_rate_per1000_sa", Label: "additional_accidental_gla_office_rate_per1000_sa", Value: money(s.ExpAdditionalAccidentalGlaOfficeRatePer1000SA)},
-		{Key: "proportion_additional_accidental_gla_office_premium_salary", Label: "proportion_additional_accidental_gla_office_premium_salary", Value: formatPercent(s.ExpProportionAdditionalAccidentalGlaOfficePremiumSalary)},
-
-		// Binder & outsource amounts (per benefit)
-		{Key: "total_gla_annual_binder_amount", Label: "total_gla_annual_binder_amount", Value: money(s.ExpTotalGlaAnnualBinderAmount)},
-		{Key: "total_gla_annual_outsourced_amount", Label: "total_gla_annual_outsourced_amount", Value: money(s.ExpTotalGlaAnnualOutsourcedAmount)},
-		{Key: "total_add_acc_gla_annual_binder_amount", Label: "total_add_acc_gla_annual_binder_amount", Value: money(s.ExpTotalAdditionalAccidentalGlaAnnualBinderAmount)},
-		{Key: "total_add_acc_gla_annual_outsourced_amt", Label: "total_add_acc_gla_annual_outsourced_amt", Value: money(s.ExpTotalAdditionalAccidentalGlaAnnualOutsourcedAmt)},
-		{Key: "total_ptd_annual_binder_amount", Label: "total_ptd_annual_binder_amount", Value: money(s.ExpTotalPtdAnnualBinderAmount)},
-		{Key: "total_ptd_annual_outsourced_amount", Label: "total_ptd_annual_outsourced_amount", Value: money(s.ExpTotalPtdAnnualOutsourcedAmount)},
-		{Key: "total_ci_annual_binder_amount", Label: "total_ci_annual_binder_amount", Value: money(s.ExpTotalCiAnnualBinderAmount)},
-		{Key: "total_ci_annual_outsourced_amount", Label: "total_ci_annual_outsourced_amount", Value: money(s.ExpTotalCiAnnualOutsourcedAmount)},
-		{Key: "total_sgla_annual_binder_amount", Label: "total_sgla_annual_binder_amount", Value: money(s.ExpTotalSglaAnnualBinderAmount)},
-		{Key: "total_sgla_annual_outsourced_amount", Label: "total_sgla_annual_outsourced_amount", Value: money(s.ExpTotalSglaAnnualOutsourcedAmount)},
-		{Key: "total_ttd_annual_binder_amount", Label: "total_ttd_annual_binder_amount", Value: money(s.ExpTotalTtdAnnualBinderAmount)},
-		{Key: "total_ttd_annual_outsourced_amount", Label: "total_ttd_annual_outsourced_amount", Value: money(s.ExpTotalTtdAnnualOutsourcedAmount)},
-		{Key: "total_phi_annual_binder_amount", Label: "total_phi_annual_binder_amount", Value: money(s.ExpTotalPhiAnnualBinderAmount)},
-		{Key: "total_phi_annual_outsourced_amount", Label: "total_phi_annual_outsourced_amount", Value: money(s.ExpTotalPhiAnnualOutsourcedAmount)},
-		{Key: "total_fun_annual_binder_amount", Label: "total_fun_annual_binder_amount", Value: money(s.ExpTotalFunAnnualBinderAmount)},
-		{Key: "total_fun_annual_outsourced_amount", Label: "total_fun_annual_outsourced_amount", Value: money(s.ExpTotalFunAnnualOutsourcedAmount)},
-
-		// Commission amounts (per benefit + scheme totals)
-		{Key: "total_gla_annual_commission_amount", Label: "total_gla_annual_commission_amount", Value: money(s.ExpTotalGlaAnnualCommissionAmount)},
-		{Key: "total_add_acc_gla_annual_commission_amount", Label: "total_add_acc_gla_annual_commission_amount", Value: money(s.ExpTotalAdditionalAccidentalGlaAnnualCommissionAmount)},
-		{Key: "total_ptd_annual_commission_amount", Label: "total_ptd_annual_commission_amount", Value: money(s.ExpTotalPtdAnnualCommissionAmount)},
-		{Key: "total_ci_annual_commission_amount", Label: "total_ci_annual_commission_amount", Value: money(s.ExpTotalCiAnnualCommissionAmount)},
-		{Key: "total_sgla_annual_commission_amount", Label: "total_sgla_annual_commission_amount", Value: money(s.ExpTotalSglaAnnualCommissionAmount)},
-		{Key: "total_ttd_annual_commission_amount", Label: "total_ttd_annual_commission_amount", Value: money(s.ExpTotalTtdAnnualCommissionAmount)},
-		{Key: "total_phi_annual_commission_amount", Label: "total_phi_annual_commission_amount", Value: money(s.ExpTotalPhiAnnualCommissionAmount)},
-		{Key: "total_fun_annual_commission_amount", Label: "total_fun_annual_commission_amount", Value: money(s.ExpTotalFunAnnualCommissionAmount)},
-		{Key: "scheme_total_commission", Label: "scheme_total_commission", Value: money(s.SchemeTotalCommission)},
-		{Key: "scheme_total_commission_rate", Label: "scheme_total_commission_rate", Value: formatPercent(s.SchemeTotalCommissionRate)},
-
-		// Tax saver slice (of GLA office premium)
-		{Key: "total_tax_saver_annual_risk_premium", Label: "total_tax_saver_annual_risk_premium", Value: money(s.ExpTotalTaxSaverAnnualRiskPremium)},
-		{Key: "total_tax_saver_annual_office_premium", Label: "total_tax_saver_annual_office_premium", Value: money(s.ExpTotalTaxSaverAnnualOfficePremium)},
+// benefitCommissionField returns the commission-amount token for one
+// benefit. useShort chooses the abbreviated code (Add Acc GLA).
+func benefitCommissionField(b benefitName, amount float64, useShort bool) Field {
+	code := b.Code
+	if useShort {
+		code = b.Short()
+	}
+	return Field{
+		Key:   fmt.Sprintf("total_%s_commission_amount", code),
+		Label: fmt.Sprintf("%s — Total Commission Amount", b.Title),
+		Value: quote_docx.RoundUpToTwoDecimalsAccounting(amount),
 	}
 }
 
 // categoryEducatorSummaryFields exposes the GLA/PTD educator split tokens:
-// risk and office premiums, proportion-of-salary, rate-per-1000, plus binder,
-// outsource, and commission breakdowns for each educator cover.
-func categoryEducatorSummaryFields(s models.MemberRatingResultSummary) []Field {
+// risk and office premiums, proportion-of-salary, rate-per-1000, plus
+// binder, outsource, and commission breakdowns for each educator cover.
+// Token keys use the customised educator code (from n.GlaEducator /
+// n.PtdEducator) where set, falling back to the defaults "gla_educator"
+// and "ptd_educator".
+func categoryEducatorSummaryFields(s models.MemberRatingResultSummary, n benefitNaming) []Field {
+	var fs []Field
+	fs = append(fs, educatorSplitBlock(n.GlaEducator,
+		s.ExpAdjTotalGlaEducatorRiskPremium, s.ExpAdjTotalGlaEducatorOfficePremium,
+		s.ExpAdjProportionGlaEducatorRiskPremiumSalary, s.ExpAdjProportionGlaEducatorOfficePremiumSalary,
+		s.ExpGlaEducatorRiskRatePer1000SA, s.ExpGlaEducatorOfficeRatePer1000SA,
+		s.ExpAdjTotalGlaEducatorBinderAmount, s.ExpAdjTotalGlaEducatorOutsourcedAmount,
+		s.ExpAdjTotalGlaEducatorCommissionAmount)...)
+	fs = append(fs, educatorSplitBlock(n.PtdEducator,
+		s.ExpAdjTotalPtdEducatorRiskPremium, s.ExpAdjTotalPtdEducatorOfficePremium,
+		s.ExpAdjProportionPtdEducatorRiskPremiumSalary, s.ExpAdjProportionPtdEducatorOfficePremiumSalary,
+		s.ExpPtdEducatorRiskRatePer1000SA, s.ExpPtdEducatorOfficeRatePer1000SA,
+		s.ExpAdjTotalPtdEducatorBinderAmount, s.ExpAdjTotalPtdEducatorOutsourcedAmount,
+		s.ExpAdjTotalPtdEducatorCommissionAmount)...)
+	return fs
+}
+
+// educatorSplitBlock returns the 9-field educator block for one educator
+// cover (GLA or PTD). Values come from the experience-adjusted model
+// fields; the "adjusted" qualifier is omitted from keys and labels to
+// keep tokens short and time-neutral.
+func educatorSplitBlock(b benefitName,
+	riskPrem, officePrem, propRiskSalary, propOfficeSalary,
+	riskRatePer1000, officeRatePer1000,
+	binder, outsourced, commission float64,
+) []Field {
 	money := quote_docx.RoundUpToTwoDecimalsAccounting
 	return []Field{
-		// GLA educator
-		{Key: "adj_total_gla_educator_risk_premium", Label: "adj_total_gla_educator_risk_premium", Value: money(s.ExpAdjTotalGlaEducatorRiskPremium)},
-		{Key: "adj_total_gla_educator_office_premium", Label: "adj_total_gla_educator_office_premium", Value: money(s.ExpAdjTotalGlaEducatorOfficePremium)},
-		{Key: "adj_proportion_gla_educator_risk_premium_salary", Label: "adj_proportion_gla_educator_risk_premium_salary", Value: formatPercent(s.ExpAdjProportionGlaEducatorRiskPremiumSalary)},
-		{Key: "adj_proportion_gla_educator_office_premium_salary", Label: "adj_proportion_gla_educator_office_premium_salary", Value: formatPercent(s.ExpAdjProportionGlaEducatorOfficePremiumSalary)},
-		{Key: "gla_educator_risk_rate_per1000_sa", Label: "gla_educator_risk_rate_per1000_sa", Value: money(s.ExpGlaEducatorRiskRatePer1000SA)},
-		{Key: "gla_educator_office_rate_per1000_sa", Label: "gla_educator_office_rate_per1000_sa", Value: money(s.ExpGlaEducatorOfficeRatePer1000SA)},
-
-		// PTD educator
-		{Key: "adj_total_ptd_educator_risk_premium", Label: "adj_total_ptd_educator_risk_premium", Value: money(s.ExpAdjTotalPtdEducatorRiskPremium)},
-		{Key: "adj_total_ptd_educator_office_premium", Label: "adj_total_ptd_educator_office_premium", Value: money(s.ExpAdjTotalPtdEducatorOfficePremium)},
-		{Key: "adj_proportion_ptd_educator_risk_premium_salary", Label: "adj_proportion_ptd_educator_risk_premium_salary", Value: formatPercent(s.ExpAdjProportionPtdEducatorRiskPremiumSalary)},
-		{Key: "adj_proportion_ptd_educator_office_premium_salary", Label: "adj_proportion_ptd_educator_office_premium_salary", Value: formatPercent(s.ExpAdjProportionPtdEducatorOfficePremiumSalary)},
-		{Key: "ptd_educator_risk_rate_per1000_sa", Label: "ptd_educator_risk_rate_per1000_sa", Value: money(s.ExpPtdEducatorRiskRatePer1000SA)},
-		{Key: "ptd_educator_office_rate_per1000_sa", Label: "ptd_educator_office_rate_per1000_sa", Value: money(s.ExpPtdEducatorOfficeRatePer1000SA)},
-
-		// Educator binder / outsourced / commission
-		{Key: "adj_total_gla_educator_binder_amount", Label: "adj_total_gla_educator_binder_amount", Value: money(s.ExpAdjTotalGlaEducatorBinderAmount)},
-		{Key: "adj_total_gla_educator_outsourced_amount", Label: "adj_total_gla_educator_outsourced_amount", Value: money(s.ExpAdjTotalGlaEducatorOutsourcedAmount)},
-		{Key: "adj_total_ptd_educator_binder_amount", Label: "adj_total_ptd_educator_binder_amount", Value: money(s.ExpAdjTotalPtdEducatorBinderAmount)},
-		{Key: "adj_total_ptd_educator_outsourced_amount", Label: "adj_total_ptd_educator_outsourced_amount", Value: money(s.ExpAdjTotalPtdEducatorOutsourcedAmount)},
-		{Key: "adj_total_gla_educator_commission_amount", Label: "adj_total_gla_educator_commission_amount", Value: money(s.ExpAdjTotalGlaEducatorCommissionAmount)},
-		{Key: "adj_total_ptd_educator_commission_amount", Label: "adj_total_ptd_educator_commission_amount", Value: money(s.ExpAdjTotalPtdEducatorCommissionAmount)},
+		{Key: fmt.Sprintf("total_%s_risk_premium", b.Code), Label: fmt.Sprintf("%s — Total Risk Premium", b.Title), Value: money(riskPrem)},
+		{Key: fmt.Sprintf("total_%s_office_premium", b.Code), Label: fmt.Sprintf("%s — Total Office Premium", b.Title), Value: money(officePrem)},
+		{Key: fmt.Sprintf("proportion_%s_risk_premium_salary", b.Code), Label: fmt.Sprintf("%s — Risk Premium as %% of Salary", b.Title), Value: formatPercent(propRiskSalary)},
+		{Key: fmt.Sprintf("proportion_%s_office_premium_salary", b.Code), Label: fmt.Sprintf("%s — Office Premium as %% of Salary", b.Title), Value: formatPercent(propOfficeSalary)},
+		{Key: fmt.Sprintf("%s_risk_rate_per1000_sa", b.Code), Label: fmt.Sprintf("%s — Risk Rate per 1,000 SA", b.Title), Value: money(riskRatePer1000)},
+		{Key: fmt.Sprintf("%s_office_rate_per1000_sa", b.Code), Label: fmt.Sprintf("%s — Office Rate per 1,000 SA", b.Title), Value: money(officeRatePer1000)},
+		{Key: fmt.Sprintf("total_%s_binder_amount", b.Code), Label: fmt.Sprintf("%s — Total Binder Amount", b.Title), Value: money(binder)},
+		{Key: fmt.Sprintf("total_%s_outsourced_amount", b.Code), Label: fmt.Sprintf("%s — Total Outsourced Amount", b.Title), Value: money(outsourced)},
+		{Key: fmt.Sprintf("total_%s_commission_amount", b.Code), Label: fmt.Sprintf("%s — Total Commission Amount", b.Title), Value: money(commission)},
 	}
 }
 
-// categoryConversionSliceFields exposes conversion / continuity slice tokens.
-// Each slice carries six variants: annual risk premium, annual office premium,
+// categoryConversionSliceFields exposes conversion / continuity slice
+// tokens. Each slice carries six variants: risk premium, office premium,
 // proportion of salary (risk + office) and rate-per-1000 (risk + office).
-func categoryConversionSliceFields(s models.MemberRatingResultSummary) []Field {
+// Keys use the underlying benefit code (possibly customised) joined with
+// a slice suffix like "conv_on_wdr".
+func categoryConversionSliceFields(s models.MemberRatingResultSummary, n benefitNaming) []Field {
+	var fs []Field
+
+	// GLA slices
+	fs = append(fs, conversionSliceBlock(n.GLA, "conv_on_wdr", "Conversion on Withdrawal",
+		s.ExpAdjTotalGlaConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalGlaConversionOnWithdrawalAnnualOfficePremium,
+		s.ExpAdjProportionGlaConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionGlaConversionOnWithdrawalOfficePremiumSalary,
+		s.ExpGlaConversionOnWithdrawalRiskRatePer1000SA, s.ExpGlaConversionOnWithdrawalOfficeRatePer1000SA)...)
+	fs = append(fs, conversionSliceBlock(n.GLA, "conv_on_ret", "Conversion on Retirement",
+		s.ExpAdjTotalGlaConversionOnRetirementAnnualRiskPremium, s.ExpAdjTotalGlaConversionOnRetirementAnnualOfficePremium,
+		s.ExpAdjProportionGlaConversionOnRetirementRiskPremiumSalary, s.ExpAdjProportionGlaConversionOnRetirementOfficePremiumSalary,
+		s.ExpGlaConversionOnRetirementRiskRatePer1000SA, s.ExpGlaConversionOnRetirementOfficeRatePer1000SA)...)
+	fs = append(fs, conversionSliceBlock(n.GLA, "cont_dur_dis", "Continuity During Disability",
+		s.ExpAdjTotalGlaContinuityDuringDisabilityAnnualRiskPremium, s.ExpAdjTotalGlaContinuityDuringDisabilityAnnualOfficePremium,
+		s.ExpAdjProportionGlaContinuityDuringDisabilityRiskPremiumSalary, s.ExpAdjProportionGlaContinuityDuringDisabilityOfficePremiumSalary,
+		s.ExpGlaContinuityDuringDisabilityRiskRatePer1000SA, s.ExpGlaContinuityDuringDisabilityOfficeRatePer1000SA)...)
+
+	// GLA educator slices
+	fs = append(fs, conversionSliceBlock(n.GlaEducator, "conv_on_wdr", "Conversion on Withdrawal",
+		s.ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualOfficePremium,
+		s.ExpAdjProportionGlaEducatorConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionGlaEducatorConversionOnWithdrawalOfficePremiumSalary,
+		s.ExpGlaEducatorConversionOnWithdrawalRiskRatePer1000SA, s.ExpGlaEducatorConversionOnWithdrawalOfficeRatePer1000SA)...)
+	fs = append(fs, conversionSliceBlock(n.GlaEducator, "conv_on_ret", "Conversion on Retirement",
+		s.ExpAdjTotalGlaEducatorConversionOnRetirementAnnualRiskPremium, s.ExpAdjTotalGlaEducatorConversionOnRetirementAnnualOfficePremium,
+		s.ExpAdjProportionGlaEducatorConversionOnRetirementRiskPremiumSalary, s.ExpAdjProportionGlaEducatorConversionOnRetirementOfficePremiumSalary,
+		s.ExpGlaEducatorConversionOnRetirementRiskRatePer1000SA, s.ExpGlaEducatorConversionOnRetirementOfficeRatePer1000SA)...)
+	fs = append(fs, conversionSliceBlock(n.GlaEducator, "cont_dur_dis", "Continuity During Disability",
+		s.ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualRiskPremium, s.ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualOfficePremium,
+		s.ExpAdjProportionGlaEducatorContinuityDuringDisabilityRiskPremiumSalary, s.ExpAdjProportionGlaEducatorContinuityDuringDisabilityOfficePremiumSalary,
+		s.ExpGlaEducatorContinuityDuringDisabilityRiskRatePer1000SA, s.ExpGlaEducatorContinuityDuringDisabilityOfficeRatePer1000SA)...)
+
+	// PTD slices
+	fs = append(fs, conversionSliceBlock(n.PTD, "conv_on_wdr", "Conversion on Withdrawal",
+		s.ExpAdjTotalPtdConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalPtdConversionOnWithdrawalAnnualOfficePremium,
+		s.ExpAdjProportionPtdConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionPtdConversionOnWithdrawalOfficePremiumSalary,
+		s.ExpPtdConversionOnWithdrawalRiskRatePer1000SA, s.ExpPtdConversionOnWithdrawalOfficeRatePer1000SA)...)
+	fs = append(fs, conversionSliceBlock(n.PtdEducator, "conv_on_wdr", "Conversion on Withdrawal",
+		s.ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualOfficePremium,
+		s.ExpAdjProportionPtdEducatorConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionPtdEducatorConversionOnWithdrawalOfficePremiumSalary,
+		s.ExpPtdEducatorConversionOnWithdrawalRiskRatePer1000SA, s.ExpPtdEducatorConversionOnWithdrawalOfficeRatePer1000SA)...)
+	fs = append(fs, conversionSliceBlock(n.PtdEducator, "conv_on_ret", "Conversion on Retirement",
+		s.ExpAdjTotalPtdEducatorConversionOnRetirementAnnualRiskPremium, s.ExpAdjTotalPtdEducatorConversionOnRetirementAnnualOfficePremium,
+		s.ExpAdjProportionPtdEducatorConversionOnRetirementRiskPremiumSalary, s.ExpAdjProportionPtdEducatorConversionOnRetirementOfficePremiumSalary,
+		s.ExpPtdEducatorConversionOnRetirementRiskRatePer1000SA, s.ExpPtdEducatorConversionOnRetirementOfficeRatePer1000SA)...)
+
+	// PHI / CI / SGLA / Funeral conversion on withdrawal
+	fs = append(fs, conversionSliceBlock(n.PHI, "conv_on_wdr", "Conversion on Withdrawal",
+		s.ExpAdjTotalPhiConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalPhiConversionOnWithdrawalAnnualOfficePremium,
+		s.ExpAdjProportionPhiConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionPhiConversionOnWithdrawalOfficePremiumSalary,
+		s.ExpPhiConversionOnWithdrawalRiskRatePer1000SA, s.ExpPhiConversionOnWithdrawalOfficeRatePer1000SA)...)
+	fs = append(fs, conversionSliceBlock(n.CI, "conv_on_wdr", "Conversion on Withdrawal",
+		s.ExpAdjTotalCiConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalCiConversionOnWithdrawalAnnualOfficePremium,
+		s.ExpAdjProportionCiConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionCiConversionOnWithdrawalOfficePremiumSalary,
+		s.ExpCiConversionOnWithdrawalRiskRatePer1000SA, s.ExpCiConversionOnWithdrawalOfficeRatePer1000SA)...)
+	fs = append(fs, conversionSliceBlock(n.SGLA, "conv_on_wdr", "Conversion on Withdrawal",
+		s.ExpAdjTotalSglaConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalSglaConversionOnWithdrawalAnnualOfficePremium,
+		s.ExpAdjProportionSglaConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionSglaConversionOnWithdrawalOfficePremiumSalary,
+		s.ExpSglaConversionOnWithdrawalRiskRatePer1000SA, s.ExpSglaConversionOnWithdrawalOfficeRatePer1000SA)...)
+	fs = append(fs, conversionSliceBlock(n.Funeral, "conv_on_wdr", "Conversion on Withdrawal",
+		s.ExpAdjTotalFunConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalFunConversionOnWithdrawalAnnualOfficePremium,
+		s.ExpAdjProportionFunConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionFunConversionOnWithdrawalOfficePremiumSalary,
+		s.ExpFunConversionOnWithdrawalRiskRatePer1000SA, s.ExpFunConversionOnWithdrawalOfficeRatePer1000SA)...)
+
+	return fs
+}
+
+// conversionSliceBlock returns the 6-field block for one (benefit × slice)
+// pairing. sliceKey is the snake_case suffix appended to the benefit code
+// in each token key (e.g. "conv_on_wdr"); sliceLabel is the human-readable
+// descriptor used in labels (e.g. "Conversion on Withdrawal").
+func conversionSliceBlock(b benefitName, sliceKey, sliceLabel string,
+	riskPrem, officePrem, propRiskSalary, propOfficeSalary,
+	riskRatePer1000, officeRatePer1000 float64,
+) []Field {
 	money := quote_docx.RoundUpToTwoDecimalsAccounting
 	return []Field{
-		// GLA conversion on withdrawal
-		{Key: "adj_total_gla_conv_on_wdr_ann_risk_prem", Label: "adj_total_gla_conv_on_wdr_ann_risk_prem", Value: money(s.ExpAdjTotalGlaConversionOnWithdrawalAnnualRiskPremium)},
-		{Key: "adj_total_gla_conv_on_wdr_ann_office_prem", Label: "adj_total_gla_conv_on_wdr_ann_office_prem", Value: money(s.ExpAdjTotalGlaConversionOnWithdrawalAnnualOfficePremium)},
-		{Key: "adj_prop_gla_conv_on_wdr_risk_prem_salary", Label: "adj_prop_gla_conv_on_wdr_risk_prem_salary", Value: formatPercent(s.ExpAdjProportionGlaConversionOnWithdrawalRiskPremiumSalary)},
-		{Key: "adj_prop_gla_conv_on_wdr_office_prem_salary", Label: "adj_prop_gla_conv_on_wdr_office_prem_salary", Value: formatPercent(s.ExpAdjProportionGlaConversionOnWithdrawalOfficePremiumSalary)},
-		{Key: "gla_conv_on_wdr_risk_rate_per_1000_sa", Label: "gla_conv_on_wdr_risk_rate_per_1000_sa", Value: money(s.ExpGlaConversionOnWithdrawalRiskRatePer1000SA)},
-		{Key: "gla_conv_on_wdr_office_rate_per_1000_sa", Label: "gla_conv_on_wdr_office_rate_per_1000_sa", Value: money(s.ExpGlaConversionOnWithdrawalOfficeRatePer1000SA)},
-
-		// GLA conversion on retirement
-		{Key: "adj_total_gla_conv_on_ret_ann_risk_prem", Label: "adj_total_gla_conv_on_ret_ann_risk_prem", Value: money(s.ExpAdjTotalGlaConversionOnRetirementAnnualRiskPremium)},
-		{Key: "adj_total_gla_conv_on_ret_ann_office_prem", Label: "adj_total_gla_conv_on_ret_ann_office_prem", Value: money(s.ExpAdjTotalGlaConversionOnRetirementAnnualOfficePremium)},
-		{Key: "adj_prop_gla_conv_on_ret_risk_prem_salary", Label: "adj_prop_gla_conv_on_ret_risk_prem_salary", Value: formatPercent(s.ExpAdjProportionGlaConversionOnRetirementRiskPremiumSalary)},
-		{Key: "adj_prop_gla_conv_on_ret_office_prem_salary", Label: "adj_prop_gla_conv_on_ret_office_prem_salary", Value: formatPercent(s.ExpAdjProportionGlaConversionOnRetirementOfficePremiumSalary)},
-		{Key: "gla_conv_on_ret_risk_rate_per_1000_sa", Label: "gla_conv_on_ret_risk_rate_per_1000_sa", Value: money(s.ExpGlaConversionOnRetirementRiskRatePer1000SA)},
-		{Key: "gla_conv_on_ret_office_rate_per_1000_sa", Label: "gla_conv_on_ret_office_rate_per_1000_sa", Value: money(s.ExpGlaConversionOnRetirementOfficeRatePer1000SA)},
-
-		// GLA continuity during disability
-		{Key: "adj_total_gla_cont_dur_dis_ann_risk_prem", Label: "adj_total_gla_cont_dur_dis_ann_risk_prem", Value: money(s.ExpAdjTotalGlaContinuityDuringDisabilityAnnualRiskPremium)},
-		{Key: "adj_total_gla_cont_dur_dis_ann_office_prem", Label: "adj_total_gla_cont_dur_dis_ann_office_prem", Value: money(s.ExpAdjTotalGlaContinuityDuringDisabilityAnnualOfficePremium)},
-		{Key: "adj_prop_gla_cont_dur_dis_risk_prem_salary", Label: "adj_prop_gla_cont_dur_dis_risk_prem_salary", Value: formatPercent(s.ExpAdjProportionGlaContinuityDuringDisabilityRiskPremiumSalary)},
-		{Key: "adj_prop_gla_cont_dur_dis_office_prem_salary", Label: "adj_prop_gla_cont_dur_dis_office_prem_salary", Value: formatPercent(s.ExpAdjProportionGlaContinuityDuringDisabilityOfficePremiumSalary)},
-		{Key: "gla_cont_dur_dis_risk_rate_per_1000_sa", Label: "gla_cont_dur_dis_risk_rate_per_1000_sa", Value: money(s.ExpGlaContinuityDuringDisabilityRiskRatePer1000SA)},
-		{Key: "gla_cont_dur_dis_office_rate_per_1000_sa", Label: "gla_cont_dur_dis_office_rate_per_1000_sa", Value: money(s.ExpGlaContinuityDuringDisabilityOfficeRatePer1000SA)},
-
-		// GLA educator conversion on withdrawal
-		{Key: "adj_total_gla_ed_conv_on_wdr_ann_risk_prem", Label: "adj_total_gla_ed_conv_on_wdr_ann_risk_prem", Value: money(s.ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualRiskPremium)},
-		{Key: "adj_total_gla_ed_conv_on_wdr_ann_office_prem", Label: "adj_total_gla_ed_conv_on_wdr_ann_office_prem", Value: money(s.ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualOfficePremium)},
-		{Key: "adj_prop_gla_ed_conv_on_wdr_risk_prem_salary", Label: "adj_prop_gla_ed_conv_on_wdr_risk_prem_salary", Value: formatPercent(s.ExpAdjProportionGlaEducatorConversionOnWithdrawalRiskPremiumSalary)},
-		{Key: "adj_prop_gla_ed_conv_on_wdr_office_prem_salary", Label: "adj_prop_gla_ed_conv_on_wdr_office_prem_salary", Value: formatPercent(s.ExpAdjProportionGlaEducatorConversionOnWithdrawalOfficePremiumSalary)},
-		{Key: "gla_ed_conv_on_wdr_risk_rate_per_1000_sa", Label: "gla_ed_conv_on_wdr_risk_rate_per_1000_sa", Value: money(s.ExpGlaEducatorConversionOnWithdrawalRiskRatePer1000SA)},
-		{Key: "gla_ed_conv_on_wdr_office_rate_per_1000_sa", Label: "gla_ed_conv_on_wdr_office_rate_per_1000_sa", Value: money(s.ExpGlaEducatorConversionOnWithdrawalOfficeRatePer1000SA)},
-
-		// GLA educator conversion on retirement
-		{Key: "adj_total_gla_ed_conv_on_ret_ann_risk_prem", Label: "adj_total_gla_ed_conv_on_ret_ann_risk_prem", Value: money(s.ExpAdjTotalGlaEducatorConversionOnRetirementAnnualRiskPremium)},
-		{Key: "adj_total_gla_ed_conv_on_ret_ann_office_prem", Label: "adj_total_gla_ed_conv_on_ret_ann_office_prem", Value: money(s.ExpAdjTotalGlaEducatorConversionOnRetirementAnnualOfficePremium)},
-		{Key: "adj_prop_gla_ed_conv_on_ret_risk_prem_salary", Label: "adj_prop_gla_ed_conv_on_ret_risk_prem_salary", Value: formatPercent(s.ExpAdjProportionGlaEducatorConversionOnRetirementRiskPremiumSalary)},
-		{Key: "adj_prop_gla_ed_conv_on_ret_office_prem_salary", Label: "adj_prop_gla_ed_conv_on_ret_office_prem_salary", Value: formatPercent(s.ExpAdjProportionGlaEducatorConversionOnRetirementOfficePremiumSalary)},
-		{Key: "gla_ed_conv_on_ret_risk_rate_per_1000_sa", Label: "gla_ed_conv_on_ret_risk_rate_per_1000_sa", Value: money(s.ExpGlaEducatorConversionOnRetirementRiskRatePer1000SA)},
-		{Key: "gla_ed_conv_on_ret_office_rate_per_1000_sa", Label: "gla_ed_conv_on_ret_office_rate_per_1000_sa", Value: money(s.ExpGlaEducatorConversionOnRetirementOfficeRatePer1000SA)},
-
-		// GLA educator continuity during disability
-		{Key: "adj_total_gla_ed_cont_dur_dis_ann_risk_prem", Label: "adj_total_gla_ed_cont_dur_dis_ann_risk_prem", Value: money(s.ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualRiskPremium)},
-		{Key: "adj_total_gla_ed_cont_dur_dis_ann_office_prem", Label: "adj_total_gla_ed_cont_dur_dis_ann_office_prem", Value: money(s.ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualOfficePremium)},
-		{Key: "adj_prop_gla_ed_cont_dur_dis_risk_prem_salary", Label: "adj_prop_gla_ed_cont_dur_dis_risk_prem_salary", Value: formatPercent(s.ExpAdjProportionGlaEducatorContinuityDuringDisabilityRiskPremiumSalary)},
-		{Key: "adj_prop_gla_ed_cont_dur_dis_office_prem_salary", Label: "adj_prop_gla_ed_cont_dur_dis_office_prem_salary", Value: formatPercent(s.ExpAdjProportionGlaEducatorContinuityDuringDisabilityOfficePremiumSalary)},
-		{Key: "gla_ed_cont_dur_dis_risk_rate_per_1000_sa", Label: "gla_ed_cont_dur_dis_risk_rate_per_1000_sa", Value: money(s.ExpGlaEducatorContinuityDuringDisabilityRiskRatePer1000SA)},
-		{Key: "gla_ed_cont_dur_dis_office_rate_per_1000_sa", Label: "gla_ed_cont_dur_dis_office_rate_per_1000_sa", Value: money(s.ExpGlaEducatorContinuityDuringDisabilityOfficeRatePer1000SA)},
-
-		// PTD conversion on withdrawal
-		{Key: "adj_total_ptd_conv_on_wdr_ann_risk_prem", Label: "adj_total_ptd_conv_on_wdr_ann_risk_prem", Value: money(s.ExpAdjTotalPtdConversionOnWithdrawalAnnualRiskPremium)},
-		{Key: "adj_total_ptd_conv_on_wdr_ann_office_prem", Label: "adj_total_ptd_conv_on_wdr_ann_office_prem", Value: money(s.ExpAdjTotalPtdConversionOnWithdrawalAnnualOfficePremium)},
-		{Key: "adj_prop_ptd_conv_on_wdr_risk_prem_salary", Label: "adj_prop_ptd_conv_on_wdr_risk_prem_salary", Value: formatPercent(s.ExpAdjProportionPtdConversionOnWithdrawalRiskPremiumSalary)},
-		{Key: "adj_prop_ptd_conv_on_wdr_office_prem_salary", Label: "adj_prop_ptd_conv_on_wdr_office_prem_salary", Value: formatPercent(s.ExpAdjProportionPtdConversionOnWithdrawalOfficePremiumSalary)},
-		{Key: "ptd_conv_on_wdr_risk_rate_per_1000_sa", Label: "ptd_conv_on_wdr_risk_rate_per_1000_sa", Value: money(s.ExpPtdConversionOnWithdrawalRiskRatePer1000SA)},
-		{Key: "ptd_conv_on_wdr_office_rate_per_1000_sa", Label: "ptd_conv_on_wdr_office_rate_per_1000_sa", Value: money(s.ExpPtdConversionOnWithdrawalOfficeRatePer1000SA)},
-
-		// PTD educator conversion on withdrawal
-		{Key: "adj_total_ptd_ed_conv_on_wdr_ann_risk_prem", Label: "adj_total_ptd_ed_conv_on_wdr_ann_risk_prem", Value: money(s.ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualRiskPremium)},
-		{Key: "adj_total_ptd_ed_conv_on_wdr_ann_office_prem", Label: "adj_total_ptd_ed_conv_on_wdr_ann_office_prem", Value: money(s.ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualOfficePremium)},
-		{Key: "adj_prop_ptd_ed_conv_on_wdr_risk_prem_salary", Label: "adj_prop_ptd_ed_conv_on_wdr_risk_prem_salary", Value: formatPercent(s.ExpAdjProportionPtdEducatorConversionOnWithdrawalRiskPremiumSalary)},
-		{Key: "adj_prop_ptd_ed_conv_on_wdr_office_prem_salary", Label: "adj_prop_ptd_ed_conv_on_wdr_office_prem_salary", Value: formatPercent(s.ExpAdjProportionPtdEducatorConversionOnWithdrawalOfficePremiumSalary)},
-		{Key: "ptd_ed_conv_on_wdr_risk_rate_per_1000_sa", Label: "ptd_ed_conv_on_wdr_risk_rate_per_1000_sa", Value: money(s.ExpPtdEducatorConversionOnWithdrawalRiskRatePer1000SA)},
-		{Key: "ptd_ed_conv_on_wdr_office_rate_per_1000_sa", Label: "ptd_ed_conv_on_wdr_office_rate_per_1000_sa", Value: money(s.ExpPtdEducatorConversionOnWithdrawalOfficeRatePer1000SA)},
-
-		// PTD educator conversion on retirement
-		{Key: "adj_total_ptd_ed_conv_on_ret_ann_risk_prem", Label: "adj_total_ptd_ed_conv_on_ret_ann_risk_prem", Value: money(s.ExpAdjTotalPtdEducatorConversionOnRetirementAnnualRiskPremium)},
-		{Key: "adj_total_ptd_ed_conv_on_ret_ann_office_prem", Label: "adj_total_ptd_ed_conv_on_ret_ann_office_prem", Value: money(s.ExpAdjTotalPtdEducatorConversionOnRetirementAnnualOfficePremium)},
-		{Key: "adj_prop_ptd_ed_conv_on_ret_risk_prem_salary", Label: "adj_prop_ptd_ed_conv_on_ret_risk_prem_salary", Value: formatPercent(s.ExpAdjProportionPtdEducatorConversionOnRetirementRiskPremiumSalary)},
-		{Key: "adj_prop_ptd_ed_conv_on_ret_office_prem_salary", Label: "adj_prop_ptd_ed_conv_on_ret_office_prem_salary", Value: formatPercent(s.ExpAdjProportionPtdEducatorConversionOnRetirementOfficePremiumSalary)},
-		{Key: "ptd_ed_conv_on_ret_risk_rate_per_1000_sa", Label: "ptd_ed_conv_on_ret_risk_rate_per_1000_sa", Value: money(s.ExpPtdEducatorConversionOnRetirementRiskRatePer1000SA)},
-		{Key: "ptd_ed_conv_on_ret_office_rate_per_1000_sa", Label: "ptd_ed_conv_on_ret_office_rate_per_1000_sa", Value: money(s.ExpPtdEducatorConversionOnRetirementOfficeRatePer1000SA)},
-
-		// PHI conversion on withdrawal
-		{Key: "adj_total_phi_conv_on_wdr_ann_risk_prem", Label: "adj_total_phi_conv_on_wdr_ann_risk_prem", Value: money(s.ExpAdjTotalPhiConversionOnWithdrawalAnnualRiskPremium)},
-		{Key: "adj_total_phi_conv_on_wdr_ann_office_prem", Label: "adj_total_phi_conv_on_wdr_ann_office_prem", Value: money(s.ExpAdjTotalPhiConversionOnWithdrawalAnnualOfficePremium)},
-		{Key: "adj_prop_phi_conv_on_wdr_risk_prem_salary", Label: "adj_prop_phi_conv_on_wdr_risk_prem_salary", Value: formatPercent(s.ExpAdjProportionPhiConversionOnWithdrawalRiskPremiumSalary)},
-		{Key: "adj_prop_phi_conv_on_wdr_office_prem_salary", Label: "adj_prop_phi_conv_on_wdr_office_prem_salary", Value: formatPercent(s.ExpAdjProportionPhiConversionOnWithdrawalOfficePremiumSalary)},
-		{Key: "phi_conv_on_wdr_risk_rate_per_1000_sa", Label: "phi_conv_on_wdr_risk_rate_per_1000_sa", Value: money(s.ExpPhiConversionOnWithdrawalRiskRatePer1000SA)},
-		{Key: "phi_conv_on_wdr_office_rate_per_1000_sa", Label: "phi_conv_on_wdr_office_rate_per_1000_sa", Value: money(s.ExpPhiConversionOnWithdrawalOfficeRatePer1000SA)},
-
-		// CI conversion on withdrawal
-		{Key: "adj_total_ci_conv_on_wdr_ann_risk_prem", Label: "adj_total_ci_conv_on_wdr_ann_risk_prem", Value: money(s.ExpAdjTotalCiConversionOnWithdrawalAnnualRiskPremium)},
-		{Key: "adj_total_ci_conv_on_wdr_ann_office_prem", Label: "adj_total_ci_conv_on_wdr_ann_office_prem", Value: money(s.ExpAdjTotalCiConversionOnWithdrawalAnnualOfficePremium)},
-		{Key: "adj_prop_ci_conv_on_wdr_risk_prem_salary", Label: "adj_prop_ci_conv_on_wdr_risk_prem_salary", Value: formatPercent(s.ExpAdjProportionCiConversionOnWithdrawalRiskPremiumSalary)},
-		{Key: "adj_prop_ci_conv_on_wdr_office_prem_salary", Label: "adj_prop_ci_conv_on_wdr_office_prem_salary", Value: formatPercent(s.ExpAdjProportionCiConversionOnWithdrawalOfficePremiumSalary)},
-		{Key: "ci_conv_on_wdr_risk_rate_per_1000_sa", Label: "ci_conv_on_wdr_risk_rate_per_1000_sa", Value: money(s.ExpCiConversionOnWithdrawalRiskRatePer1000SA)},
-		{Key: "ci_conv_on_wdr_office_rate_per_1000_sa", Label: "ci_conv_on_wdr_office_rate_per_1000_sa", Value: money(s.ExpCiConversionOnWithdrawalOfficeRatePer1000SA)},
-
-		// SGLA conversion on withdrawal
-		{Key: "adj_total_sgla_conv_on_wdr_ann_risk_prem", Label: "adj_total_sgla_conv_on_wdr_ann_risk_prem", Value: money(s.ExpAdjTotalSglaConversionOnWithdrawalAnnualRiskPremium)},
-		{Key: "adj_total_sgla_conv_on_wdr_ann_office_prem", Label: "adj_total_sgla_conv_on_wdr_ann_office_prem", Value: money(s.ExpAdjTotalSglaConversionOnWithdrawalAnnualOfficePremium)},
-		{Key: "adj_prop_sgla_conv_on_wdr_risk_prem_salary", Label: "adj_prop_sgla_conv_on_wdr_risk_prem_salary", Value: formatPercent(s.ExpAdjProportionSglaConversionOnWithdrawalRiskPremiumSalary)},
-		{Key: "adj_prop_sgla_conv_on_wdr_office_prem_salary", Label: "adj_prop_sgla_conv_on_wdr_office_prem_salary", Value: formatPercent(s.ExpAdjProportionSglaConversionOnWithdrawalOfficePremiumSalary)},
-		{Key: "sgla_conv_on_wdr_risk_rate_per_1000_sa", Label: "sgla_conv_on_wdr_risk_rate_per_1000_sa", Value: money(s.ExpSglaConversionOnWithdrawalRiskRatePer1000SA)},
-		{Key: "sgla_conv_on_wdr_office_rate_per_1000_sa", Label: "sgla_conv_on_wdr_office_rate_per_1000_sa", Value: money(s.ExpSglaConversionOnWithdrawalOfficeRatePer1000SA)},
-
-		// Funeral conversion on withdrawal
-		{Key: "adj_total_fun_conv_on_wdr_ann_risk_prem", Label: "adj_total_fun_conv_on_wdr_ann_risk_prem", Value: money(s.ExpAdjTotalFunConversionOnWithdrawalAnnualRiskPremium)},
-		{Key: "adj_total_fun_conv_on_wdr_ann_office_prem", Label: "adj_total_fun_conv_on_wdr_ann_office_prem", Value: money(s.ExpAdjTotalFunConversionOnWithdrawalAnnualOfficePremium)},
-		{Key: "adj_prop_fun_conv_on_wdr_risk_prem_salary", Label: "adj_prop_fun_conv_on_wdr_risk_prem_salary", Value: formatPercent(s.ExpAdjProportionFunConversionOnWithdrawalRiskPremiumSalary)},
-		{Key: "adj_prop_fun_conv_on_wdr_office_prem_salary", Label: "adj_prop_fun_conv_on_wdr_office_prem_salary", Value: formatPercent(s.ExpAdjProportionFunConversionOnWithdrawalOfficePremiumSalary)},
-		{Key: "fun_conv_on_wdr_risk_rate_per_1000_sa", Label: "fun_conv_on_wdr_risk_rate_per_1000_sa", Value: money(s.ExpFunConversionOnWithdrawalRiskRatePer1000SA)},
-		{Key: "fun_conv_on_wdr_office_rate_per_1000_sa", Label: "fun_conv_on_wdr_office_rate_per_1000_sa", Value: money(s.ExpFunConversionOnWithdrawalOfficeRatePer1000SA)},
+		{Key: fmt.Sprintf("total_%s_%s_risk_prem", b.Code, sliceKey), Label: fmt.Sprintf("%s — %s (Risk Premium)", b.Title, sliceLabel), Value: money(riskPrem)},
+		{Key: fmt.Sprintf("total_%s_%s_office_prem", b.Code, sliceKey), Label: fmt.Sprintf("%s — %s (Office Premium)", b.Title, sliceLabel), Value: money(officePrem)},
+		{Key: fmt.Sprintf("prop_%s_%s_risk_prem_salary", b.Code, sliceKey), Label: fmt.Sprintf("%s — %s Risk Premium as %% of Salary", b.Title, sliceLabel), Value: formatPercent(propRiskSalary)},
+		{Key: fmt.Sprintf("prop_%s_%s_office_prem_salary", b.Code, sliceKey), Label: fmt.Sprintf("%s — %s Office Premium as %% of Salary", b.Title, sliceLabel), Value: formatPercent(propOfficeSalary)},
+		{Key: fmt.Sprintf("%s_%s_risk_rate_per_1000_sa", b.Code, sliceKey), Label: fmt.Sprintf("%s — %s Risk Rate per 1,000 SA", b.Title, sliceLabel), Value: money(riskRatePer1000)},
+		{Key: fmt.Sprintf("%s_%s_office_rate_per_1000_sa", b.Code, sliceKey), Label: fmt.Sprintf("%s — %s Office Rate per 1,000 SA", b.Title, sliceLabel), Value: money(officeRatePer1000)},
 	}
 }
 
 // categoryBoolFields returns the has_* flags. Rendered in the sample as
-// bullet points demonstrating conditional-block syntax.
+// bullet points demonstrating conditional-block syntax. Per-benefit flag
+// keys use the customised code where set (e.g. a customised GLA with
+// code "gl" becomes {{#has_gl}}); labels use the customised title.
 func categoryBoolFields(
 	s models.MemberRatingResultSummary,
 	flags benefitFlags,
+	n benefitNaming,
 ) []Field {
+	has := func(b benefitName, v bool) Field {
+		return Field{
+			Key:   fmt.Sprintf("has_%s", b.Code),
+			Label: fmt.Sprintf("Category has %s", b.Title),
+			Value: v,
+		}
+	}
 	return []Field{
 		{Key: "has_non_funeral_benefits", Label: "Category has any non-funeral benefit", Value: quote_docx.CategoryHasNonFuneralBenefits(s)},
-		{Key: "has_gla", Label: "Category has GLA", Value: flags.GLA},
-		{Key: "has_sgla", Label: "Category has SGLA", Value: flags.SGLA},
-		{Key: "has_ptd", Label: "Category has PTD", Value: flags.PTD},
-		{Key: "has_ci", Label: "Category has CI", Value: flags.CI},
-		{Key: "has_phi", Label: "Category has PHI", Value: flags.PHI},
-		{Key: "has_ttd", Label: "Category has TTD", Value: flags.TTD},
-		{Key: "has_funeral", Label: "Category has Funeral", Value: flags.Funeral},
-		{Key: "has_additional_gla", Label: "Category has Additional GLA Cover", Value: flags.AdditionalGla},
-		{Key: "has_additional_accidental_gla", Label: "Category has Additional Accidental GLA", Value: flags.AdditionalAccidentalGla},
-		{Key: "has_gla_educator", Label: "Category has GLA Educator benefit", Value: flags.GlaEducator},
-		{Key: "has_ptd_educator", Label: "Category has PTD Educator benefit", Value: flags.PtdEducator},
-		{Key: "has_extended_family", Label: "Category has Extended Family Funeral", Value: flags.ExtendedFamily},
-		{Key: "has_tax_saver", Label: "Category has Tax Saver benefit", Value: flags.TaxSaver},
+		has(n.GLA, flags.GLA),
+		has(n.SGLA, flags.SGLA),
+		has(n.PTD, flags.PTD),
+		has(n.CI, flags.CI),
+		has(n.PHI, flags.PHI),
+		has(n.TTD, flags.TTD),
+		has(n.Funeral, flags.Funeral),
+		has(n.AdditionalGla, flags.AdditionalGla),
+		has(n.AdditionalAccidentalGla, flags.AdditionalAccidentalGla),
+		has(n.GlaEducator, flags.GlaEducator),
+		has(n.PtdEducator, flags.PtdEducator),
+		has(n.ExtendedFamily, flags.ExtendedFamily),
+		has(n.TaxSaver, flags.TaxSaver),
 	}
 }
 
@@ -479,7 +649,7 @@ func glaFields(s models.MemberRatingResultSummary, cat models.SchemeCategory, q 
 		{Key: "terminal_illness_benefit", Label: "Terminal Illness Benefit", Value: orDash(cat.GlaTerminalIllnessBenefit)},
 		{Key: "educator_benefit", Label: "Educator Benefit", Value: orDash(cat.GlaEducatorBenefit)},
 		{Key: "total_sum_assured", Label: "Total Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalGlaCappedSumAssured)},
-		{Key: "annual_premium", Label: "Annual Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalGlaAnnualOfficePremium)},
+		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalGlaAnnualOfficePremium)},
 		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(s.ExpProportionGlaOfficePremiumSalary)},
 	}
 }
@@ -492,7 +662,7 @@ func sglaFields(s models.MemberRatingResultSummary, cat models.SchemeCategory, q
 		{Key: "benefit_structure", Label: "Benefit Structure", Value: "rider"},
 		{Key: "max_benefit", Label: "Maximum Benefit", Value: quote_docx.RoundUpToTwoDecimalsAccounting(cat.SglaMaxBenefit)},
 		{Key: "total_sum_assured", Label: "Total Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalSglaCappedSumAssured)},
-		{Key: "annual_premium", Label: "Annual Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalSglaAnnualOfficePremium)},
+		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalSglaAnnualOfficePremium)},
 		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(s.ExpProportionSglaOfficePremiumSalary)},
 	}
 }
@@ -508,7 +678,7 @@ func ptdFields(s models.MemberRatingResultSummary, cat models.SchemeCategory, q 
 		{Key: "risk_type", Label: "Risk Type", Value: orDash(cat.PtdRiskType)},
 		{Key: "educator_benefit", Label: "Educator Benefit", Value: orDash(cat.PtdEducatorBenefit)},
 		{Key: "total_sum_assured", Label: "Total Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalPtdCappedSumAssured)},
-		{Key: "annual_premium", Label: "Annual Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalPtdAnnualOfficePremium)},
+		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalPtdAnnualOfficePremium)},
 		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(s.ExpProportionPtdOfficePremiumSalary)},
 	}
 }
@@ -523,7 +693,7 @@ func ciFields(s models.MemberRatingResultSummary, cat models.SchemeCategory, q m
 		{Key: "benefit_definition", Label: "Benefit Definition", Value: orDash(cat.CiBenefitDefinition)},
 		{Key: "max_benefit", Label: "Maximum Benefit", Value: quote_docx.RoundUpToTwoDecimalsAccounting(cat.CiMaxBenefit)},
 		{Key: "total_sum_assured", Label: "Total Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalCiCappedSumAssured)},
-		{Key: "annual_premium", Label: "Annual Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalCiAnnualOfficePremium)},
+		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalCiAnnualOfficePremium)},
 		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(s.ExpProportionCiOfficePremiumSalary)},
 	}
 }
@@ -540,7 +710,7 @@ func phiFields(s models.MemberRatingResultSummary, cat models.SchemeCategory, t 
 		{Key: "medical_aid_premium_waiver", Label: "Medical Aid Premium Waiver", Value: orDash(cat.PhiMedicalAidPremiumWaiver)},
 		{Key: "benefit_escalation", Label: "Benefit Escalation", Value: orDash(cat.PhiBenefitEscalation)},
 		{Key: "total_sum_assured", Label: "Total Covered Income", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalPhiCappedIncome)},
-		{Key: "annual_premium", Label: "Annual Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalPhiAnnualOfficePremium)},
+		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalPhiAnnualOfficePremium)},
 		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(s.ExpProportionPhiOfficePremiumSalary)},
 	}
 }
@@ -554,7 +724,7 @@ func ttdFields(s models.MemberRatingResultSummary, cat models.SchemeCategory, t 
 		{Key: "disability_definition", Label: "Disability Definition", Value: orDash(cat.TtdDisabilityDefinition)},
 		{Key: "risk_type", Label: "Risk Type", Value: orDash(cat.TtdRiskType)},
 		{Key: "total_sum_assured", Label: "Total Covered Income", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalTtdCappedIncome)},
-		{Key: "annual_premium", Label: "Annual Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalTtdAnnualOfficePremium)},
+		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalTtdAnnualOfficePremium)},
 		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(s.ExpProportionTtdOfficePremiumSalary)},
 	}
 }
@@ -563,8 +733,8 @@ func funeralFields(s models.MemberRatingResultSummary, cat models.SchemeCategory
 	return []Field{
 		{Key: "title", Label: "Benefit Title", Value: t.FamilyFuneralBenefitTitle},
 		{Key: "monthly_premium_per_member", Label: "Monthly Premium per Member", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalFunMonthlyPremiumPerMember)},
-		{Key: "annual_premium_per_member", Label: "Annual Premium per Member", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalFunAnnualPremiumPerMember)},
-		{Key: "total_annual_premium", Label: "Total Annual Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalFunAnnualOfficePremium)},
+		{Key: "premium_per_member", Label: "Premium per Member", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalFunAnnualPremiumPerMember)},
+		{Key: "total_premium", Label: "Total Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalFunAnnualOfficePremium)},
 		{Key: "main_member_sum_assured", Label: "Main Member Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(cat.FamilyFuneralMainMemberFuneralSumAssured)},
 		{Key: "spouse_sum_assured", Label: "Spouse Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(cat.FamilyFuneralSpouseFuneralSumAssured)},
 		{Key: "child_sum_assured", Label: "Child Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(cat.FamilyFuneralChildrenFuneralSumAssured)},
@@ -592,8 +762,10 @@ type BenefitSpec struct {
 
 // benefitSpecsForSample returns one spec per benefit, ordered to match
 // the legacy sample layout. Each Fields closure passes zero-value inputs
-// because the sample only needs Keys/Labels.
-func benefitSpecsForSample() []BenefitSpec {
+// because the sample only needs Keys/Labels. The Prefix on each spec
+// uses the resolved benefit code (customised where set) so the sample
+// document shows the same nested-scope prefixes the render engine emits.
+func benefitSpecsForSample(n benefitNaming) []BenefitSpec {
 	var (
 		zs models.MemberRatingResultSummary
 		zc models.SchemeCategory
@@ -601,12 +773,12 @@ func benefitSpecsForSample() []BenefitSpec {
 		zt quote_docx.BenefitTitles
 	)
 	return []BenefitSpec{
-		{Prefix: "gla", Title: "Group Life Assurance (GLA)", Fields: func() []Field { return glaFields(zs, zc, zq, zt) }},
-		{Prefix: "sgla", Title: "Spouse Group Life (SGLA)", Fields: func() []Field { return sglaFields(zs, zc, zq, zt) }},
-		{Prefix: "ptd", Title: "Permanent Total Disability (PTD)", Fields: func() []Field { return ptdFields(zs, zc, zq, zt) }},
-		{Prefix: "ci", Title: "Critical Illness (CI)", Fields: func() []Field { return ciFields(zs, zc, zq, zt) }},
-		{Prefix: "phi", Title: "Permanent Health Insurance (PHI)", Fields: func() []Field { return phiFields(zs, zc, zt) }},
-		{Prefix: "ttd", Title: "Temporary Total Disability (TTD)", Fields: func() []Field { return ttdFields(zs, zc, zt) }},
-		{Prefix: "funeral", Title: "Group Funeral", Fields: func() []Field { return funeralFields(zs, zc, zt) }},
+		{Prefix: n.GLA.Code, Title: n.GLA.Title, Fields: func() []Field { return glaFields(zs, zc, zq, zt) }},
+		{Prefix: n.SGLA.Code, Title: n.SGLA.Title, Fields: func() []Field { return sglaFields(zs, zc, zq, zt) }},
+		{Prefix: n.PTD.Code, Title: n.PTD.Title, Fields: func() []Field { return ptdFields(zs, zc, zq, zt) }},
+		{Prefix: n.CI.Code, Title: n.CI.Title, Fields: func() []Field { return ciFields(zs, zc, zq, zt) }},
+		{Prefix: n.PHI.Code, Title: n.PHI.Title, Fields: func() []Field { return phiFields(zs, zc, zt) }},
+		{Prefix: n.TTD.Code, Title: n.TTD.Title, Fields: func() []Field { return ttdFields(zs, zc, zt) }},
+		{Prefix: n.Funeral.Code, Title: n.Funeral.Title, Fields: func() []Field { return funeralFields(zs, zc, zt) }},
 	}
 }

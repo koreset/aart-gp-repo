@@ -10,7 +10,7 @@ import (
 
 // Context is the map of template variables handed to the render engine.
 // Keys nested under "insurer" and each entry of "categories" are accessed
-// via dot syntax in templates (e.g. {{insurer.name}}, {{gla.annual_premium}}
+// via dot syntax in templates (e.g. {{insurer.name}}, {{gla.premium}}
 // inside a {{#categories}} block).
 //
 // Every key in this map is produced by a *Fields function in schema.go.
@@ -41,6 +41,7 @@ func BuildContext(quoteID string) (Context, error) {
 	}
 
 	titles := quote_docx.ResolveBenefitTitles(benefitMaps)
+	naming := resolveBenefitNaming(benefitMaps)
 	totals := quote_docx.CalculateQuoteTotals(summaries)
 	hasNonFuneral := quote_docx.HasAnyNonFuneralBenefits(summaries)
 
@@ -56,7 +57,7 @@ func BuildContext(quoteID string) (Context, error) {
 		if !ok {
 			cat = models.SchemeCategory{SchemeCategory: s.Category}
 		}
-		categories = append(categories, buildCategoryMap(s, cat, quote, titles))
+		categories = append(categories, buildCategoryMap(s, cat, quote, titles, naming))
 	}
 
 	// Fold the root-scope fields into the Context map, then layer the
@@ -75,20 +76,21 @@ func buildCategoryMap(
 	cat models.SchemeCategory,
 	quote models.GroupPricingQuote,
 	titles quote_docx.BenefitTitles,
+	naming benefitNaming,
 ) map[string]interface{} {
 	flags := deriveBenefitFlags(s, cat)
 
-	m := fieldsToMap(categoryScalarFields(s, cat))
-	for k, v := range fieldsToMap(categoryBoolFields(s, flags)) {
+	m := fieldsToMap(categoryScalarFields(s, cat, naming))
+	for k, v := range fieldsToMap(categoryBoolFields(s, flags, naming)) {
 		m[k] = v
 	}
-	m["gla"] = benefitMap(flags.GLA, glaFields(s, cat, quote, titles))
-	m["sgla"] = benefitMap(flags.SGLA, sglaFields(s, cat, quote, titles))
-	m["ptd"] = benefitMap(flags.PTD, ptdFields(s, cat, quote, titles))
-	m["ci"] = benefitMap(flags.CI, ciFields(s, cat, quote, titles))
-	m["phi"] = benefitMap(flags.PHI, phiFields(s, cat, titles))
-	m["ttd"] = benefitMap(flags.TTD, ttdFields(s, cat, titles))
-	m["funeral"] = benefitMap(flags.Funeral, funeralFields(s, cat, titles))
+	m[naming.GLA.Code] = benefitMap(flags.GLA, glaFields(s, cat, quote, titles))
+	m[naming.SGLA.Code] = benefitMap(flags.SGLA, sglaFields(s, cat, quote, titles))
+	m[naming.PTD.Code] = benefitMap(flags.PTD, ptdFields(s, cat, quote, titles))
+	m[naming.CI.Code] = benefitMap(flags.CI, ciFields(s, cat, quote, titles))
+	m[naming.PHI.Code] = benefitMap(flags.PHI, phiFields(s, cat, titles))
+	m[naming.TTD.Code] = benefitMap(flags.TTD, ttdFields(s, cat, titles))
+	m[naming.Funeral.Code] = benefitMap(flags.Funeral, funeralFields(s, cat, titles))
 	return m
 }
 
