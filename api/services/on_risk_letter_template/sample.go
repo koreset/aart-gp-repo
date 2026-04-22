@@ -7,6 +7,8 @@ import (
 	"io"
 
 	"strings"
+
+	"api/services/quote_template"
 )
 
 // BuildSampleTemplate generates a sample On Risk Letter template DOCX documenting all available tokens
@@ -19,19 +21,29 @@ func BuildSampleTemplate() ([]byte, error) {
 	// How tokens work
 	body.WriteString(howTokensWork())
 
-	// Letter-level tokens
+	// Letter-level tokens (letter metadata — unique to on-risk letters)
 	body.WriteString(sectionLetterTokens())
 
-	// Quote-level tokens
+	// Quote-level tokens (full shared surface from the quote template schema)
 	body.WriteString(sectionQuoteTokens())
 
-	// Insurer tokens
+	// On-risk letter quote-context tokens (cover end, scheme contact, broker,
+	// identifiers — sourced from the quote but not in the quote PDF token set)
+	body.WriteString(sectionQuoteContextExtended())
+
+	// Insurer tokens (driven by shared schema, incl. on_risk_letter_text)
 	body.WriteString(sectionInsurerTokens())
 
 	// Conditional flags
 	body.WriteString(sectionConditionalFlags())
 
-	// Iteration example
+	// Categories iteration (inherited from the quote template surface)
+	body.WriteString(sectionCategoriesIteration())
+
+	// Nested benefits inside the categories block
+	body.WriteString(sectionNestedBenefits())
+
+	// Iteration: flat cross-category benefit summary
 	body.WriteString(sectionIterationExample())
 
 	// Worked example
@@ -195,60 +207,118 @@ func sectionLetterTokens() string {
 	return b.String()
 }
 
-// Section: Quote-level tokens
+// Section: Quote-level tokens — the full shared surface from the quote
+// template schema. Scalar tokens only; bool flags are documented in the
+// Conditional Flags section below.
 func sectionQuoteTokens() string {
 	var b strings.Builder
 	b.WriteString(sectionHeading("Quote-Level Tokens"))
-	b.WriteString(paragraph("These tokens retrieve information from the associated quote:"))
+	b.WriteString(paragraph("These tokens resolve to fields on the associated quote. Every token a quote PDF template can reference is available here too."))
 	b.WriteString(paragraph(""))
 
-	rows := [][]string{
-		{"Token", "Description", "Example"},
-		{"{{quote_reference}}", "Quote number/name", "Q-001"},
-		{"{{quote_id}}", "Internal quote ID", "12"},
-		{"{{scheme_name}}", "Pension scheme name", "Acme Pension Scheme"},
-		{"{{scheme_contact}}", "Primary contact person for scheme", "John Doe"},
-		{"{{scheme_email}}", "Contact email for scheme", "john@acme.com"},
-		{"{{commencement_date}}", "Cover start date", "01 May 2026"},
-		{"{{cover_end_date}}", "Cover end date", "30 Apr 2027"},
-		{"{{industry}}", "Industry classification", "Manufacturing"},
-		{"{{obligation_type}}", "DC, DB, or other", "DC"},
-		{"{{currency}}", "Currency code", "ZAR"},
-		{"{{free_cover_limit}}", "Free cover limit amount", "500 000.00"},
-		{"{{normal_retirement_age}}", "NRA for scheme", "65"},
-		{"{{member_count}}", "Number of members in quote", "120"},
-		{"{{total_annual_premium}}", "Sum of all benefit premiums", "315 000.00"},
+	rows := [][]string{{"Token", "Description"}}
+	for _, f := range quote_template.QuoteFieldsForSample() {
+		if _, isBool := f.Value.(bool); isBool {
+			continue
+		}
+		rows = append(rows, []string{"{{" + f.Key + "}}", f.Label})
 	}
 	b.WriteString(keyValueTable(rows))
 
 	return b.String()
 }
 
-// Section: Insurer tokens
-func sectionInsurerTokens() string {
+// Section: Quote-context tokens unique to on-risk letters — fields sourced
+// from the quote but not exposed by the quote PDF template schema.
+func sectionQuoteContextExtended() string {
 	var b strings.Builder
-	b.WriteString(sectionHeading("Insurer Tokens"))
-	b.WriteString(paragraph("Access insurer details using the insurer object. All fields use dot notation: {{insurer.field_name}}"))
+	b.WriteString(sectionHeading("On-Risk Letter Quote Context"))
+	b.WriteString(paragraph("These tokens expose additional quote-adjacent fields that on-risk letters need — cover termination, scheme contact, distribution channel, and identifiers."))
 	b.WriteString(paragraph(""))
 
 	rows := [][]string{
 		{"Token", "Description", "Example"},
-		{"{{insurer.name}}", "Insurer company name", "XYZ Insurance Ltd"},
-		{"{{insurer.contact_person}}", "Insurer contact", "Jane Smith"},
-		{"{{insurer.email}}", "Insurer email address", "claims@xyz.com"},
-		{"{{insurer.telephone}}", "Insurer phone number", "+27 11 234 5678"},
-		{"{{insurer.address_line_1}}", "Street address line 1", "123 Main Street"},
-		{"{{insurer.address_line_2}}", "Street address line 2", "Suite 100"},
-		{"{{insurer.address_line_3}}", "Street address line 3", ""},
-		{"{{insurer.city}}", "City", "Johannesburg"},
-		{"{{insurer.province}}", "Province/state", "Gauteng"},
-		{"{{insurer.post_code}}", "Postal code", "2000"},
-		{"{{insurer.country}}", "Country", "South Africa"},
-		{"{{insurer.on_risk_letter_text}}", "Custom closing text for on-risk letters", "Tailored per insurer"},
-		{"{{insurer.introductory_text}}", "Custom introductory text", "Tailored per insurer"},
-		{"{{insurer.general_provisions_text}}", "General provisions text", "Tailored per insurer"},
+		{"{{cover_end_date}}", "Cover end date", "30 Apr 2027"},
+		{"{{scheme_contact}}", "Primary contact person for scheme", "John Doe"},
+		{"{{scheme_email}}", "Contact email for scheme", "john@acme.com"},
+		{"{{member_count}}", "Number of members in the quote", "120"},
+		{"{{quote_id}}", "Internal quote ID", "12"},
+		{"{{quote_reference}}", "Quote number / name alias", "Q-001"},
+		{"{{distribution_channel}}", "Distribution channel (e.g. broker, direct)", "broker"},
+		{"{{broker_name}}", "Broker name (when broker channel)", "Acme Brokers"},
 	}
 	b.WriteString(keyValueTable(rows))
+
+	return b.String()
+}
+
+// Section: Insurer tokens — driven by the shared quote_template schema so
+// additions (e.g. on_risk_letter_text) flow in automatically.
+func sectionInsurerTokens() string {
+	var b strings.Builder
+	b.WriteString(sectionHeading("Insurer Tokens"))
+	b.WriteString(paragraph("Access insurer details using the insurer object with dot notation: {{insurer.field_name}}"))
+	b.WriteString(paragraph(""))
+
+	rows := [][]string{{"Token", "Description"}}
+	for _, f := range quote_template.InsurerFieldsForSample() {
+		rows = append(rows, []string{"{{insurer." + f.Key + "}}", f.Label})
+	}
+	b.WriteString(keyValueTable(rows))
+
+	return b.String()
+}
+
+// Section: Categories iteration — identical surface to the quote PDF
+// template. Templates wrap content in {{#categories}}...{{/categories}};
+// the fields below are available inside the block. Benefit-prefixed
+// tokens use the insurer's configured benefit code where customised.
+func sectionCategoriesIteration() string {
+	var b strings.Builder
+	b.WriteString(sectionHeading("Categories — Iteration and Per-Category Tokens"))
+	b.WriteString(paragraph("The categories list contains one entry per scheme category in the quote. Wrap content you want repeated inside {{#categories}}...{{/categories}}. The fields below are available for each category."))
+	b.WriteString(paragraph(""))
+
+	b.WriteString(subheading("Category-level tokens"))
+	scalarRows := [][]string{{"Token", "Description"}}
+	for _, f := range quote_template.CategoryScalarFieldsForSample() {
+		scalarRows = append(scalarRows, []string{"{{" + f.Key + "}}", f.Label})
+	}
+	b.WriteString(keyValueTable(scalarRows))
+	b.WriteString(paragraph(""))
+
+	b.WriteString(subheading("Category-level flags (true/false)"))
+	b.WriteString(paragraph("Use these as conditional blocks to include content only when the category has that benefit."))
+	for _, f := range quote_template.CategoryBoolFieldsForSample() {
+		b.WriteString(bulletPara("{{#" + f.Key + "}}...{{/" + f.Key + "}} — " + f.Label))
+	}
+	b.WriteString(paragraph(""))
+
+	b.WriteString(subheading("Example: one paragraph per category"))
+	b.WriteString(paragraph("{{#categories}}— {{name}}: {{member_count}} lives · premium {{premium}} · {{percent_salary}} of salary{{/categories}}"))
+
+	return b.String()
+}
+
+// Section: Nested benefits — each category exposes an object per benefit
+// type. The sub-object is populated only when the category has that
+// benefit. Prefixes come from the resolved benefit naming so customised
+// codes (e.g. a GLA renamed to "group_life") are shown in the sample.
+func sectionNestedBenefits() string {
+	var b strings.Builder
+	b.WriteString(sectionHeading("Benefit Tokens — Inside the Categories Block"))
+	b.WriteString(paragraph("Each category exposes an object per benefit (e.g. gla, sgla, ptd, ci, phi, ttd, funeral). Access nested fields with dot notation. Combine with the conditional flags above to render a section only when relevant."))
+	b.WriteString(paragraph(""))
+
+	for _, spec := range quote_template.BenefitSpecsForSample() {
+		b.WriteString(subheading(spec.Title))
+		rows := [][]string{{"Token", "Description"}}
+		for _, f := range spec.Fields() {
+			rows = append(rows, []string{"{{" + spec.Prefix + "." + f.Key + "}}", f.Label})
+		}
+		b.WriteString(keyValueTable(rows))
+		b.WriteString(paragraph(""))
+	}
 
 	return b.String()
 }
@@ -264,6 +334,8 @@ func sectionConditionalFlags() string {
 		{"Flag", "True When", "Example Usage"},
 		{"{{#is_broker_channel}}", "Distribution channel is 'broker'", "{{#is_broker_channel}}This quote was distributed via {{broker_name}}{{/is_broker_channel}}"},
 		{"{{#has_benefits}}", "Benefit summary is not empty", "{{#has_benefits}}See benefit breakdown below{{/has_benefits}}"},
+		{"{{#has_non_funeral_benefits}}", "Any category has a non-funeral benefit", "{{#has_non_funeral_benefits}}Risk benefits are in force{{/has_non_funeral_benefits}}"},
+		{"{{#use_global_salary_multiple}}", "Scheme uses a single global salary multiple", "{{#use_global_salary_multiple}}Uniform salary multiple applies{{/use_global_salary_multiple}}"},
 	}
 	b.WriteString(keyValueTable(rows))
 

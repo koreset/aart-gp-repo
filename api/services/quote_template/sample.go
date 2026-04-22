@@ -137,6 +137,8 @@ func buildSampleBodyXML(naming benefitNaming) string {
 	b.WriteString(heading("Top-level Conditional"))
 	b.WriteString(bodyPara("The has_non_funeral_benefits flag is true when any category has a non-funeral benefit (GLA, SGLA, PTD, CI, PHI, or TTD)."))
 	b.WriteString(bodyPara("{{#has_non_funeral_benefits}}This sentence appears only when the quote has non-funeral benefits.{{/has_non_funeral_benefits}}"))
+	b.WriteString(bodyPara("The use_global_salary_multiple flag is true when the quote uses a single salary multiple across every member (rather than per-member multiples)."))
+	b.WriteString(bodyPara("{{#use_global_salary_multiple}}A uniform salary multiple applies across the scheme.{{/use_global_salary_multiple}}"))
 	b.WriteString(bodyPara("You can use the same block to hide content in the opposite case, by placing the text outside the block."))
 
 	// ===== Categories iteration =====

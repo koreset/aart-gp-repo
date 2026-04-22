@@ -191,7 +191,8 @@
           <v-btn
             v-if="item.table_type !== 'Group Pricing Parameters'"
             :disabled="
-              quote.status === 'InForce' ||
+              quote.status === 'accepted' ||
+              quote.status === 'in_force' ||
               (item.table_type === 'Member Data' && indicativeDataEnabled)
             "
             class="mr-2"
@@ -404,6 +405,7 @@ const isDeleteButtonDisabled = (item: any) => {
   return (
     !item.populated ||
     props.quote.status === 'accepted' ||
+    props.quote.status === 'in_force' ||
     props.quote.quote_type === 'Renewal' ||
     (item.table_type === 'Member Data' && indicativeDataEnabled.value)
   )
@@ -657,9 +659,11 @@ const deleteIndicativeData = async () => {
 }
 
 const openUploadDialog = (item: any) => {
-  // Prevent upload if quote is InForce
-  if (props.quote.status === 'InForce') {
-    snackbarText.value = 'Cannot upload data to InForce quotes'
+  if (
+    props.quote.status === 'accepted' ||
+    props.quote.status === 'in_force'
+  ) {
+    snackbarText.value = 'Cannot upload data to accepted or in-force quotes'
     snackbar.value = true
     return
   }

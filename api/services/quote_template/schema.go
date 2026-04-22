@@ -242,6 +242,7 @@ func insurerFields(i models.GroupPricingInsurerDetail) []Field {
 		{Key: "email", Label: "Email", Value: i.Email},
 		{Key: "introductory_text", Label: "Introductory Text", Value: i.IntroductoryText},
 		{Key: "general_provisions_text", Label: "General Provisions Text", Value: i.GeneralProvisionsText},
+		{Key: "on_risk_letter_text", Label: "On-Risk Letter Text", Value: i.OnRiskLetterText},
 	}
 }
 
@@ -758,6 +759,55 @@ type BenefitSpec struct {
 	Prefix string // "gla", "sgla", ...
 	Title  string // "Group Life Assurance (GLA)"
 	Fields func() []Field
+}
+
+// ---------------------------------------------------------------------------
+// Exported sample accessors — other packages (e.g. on_risk_letter_template)
+// use these to build their own self-documenting samples from the shared
+// schema without having to know about benefitNaming or invoke the private
+// *Fields helpers directly. Each accessor resolves the insurer's
+// customised benefit codes via sampleBenefitNaming() so the tokens shown
+// in any derived sample match the ones the render engine will emit.
+// ---------------------------------------------------------------------------
+
+// QuoteFieldsForSample returns the root-scope quote tokens with zero-value
+// fixtures.
+func QuoteFieldsForSample() []Field {
+	var (
+		zq models.GroupPricingQuote
+		zT quote_docx.QuoteTotals
+	)
+	return quoteFields(zq, zT, false)
+}
+
+// InsurerFieldsForSample returns the {{insurer.*}} tokens with zero-value
+// fixtures.
+func InsurerFieldsForSample() []Field {
+	var zi models.GroupPricingInsurerDetail
+	return insurerFields(zi)
+}
+
+// CategoryScalarFieldsForSample returns the non-bool category tokens using
+// the resolved (DB-customised or default) benefit naming.
+func CategoryScalarFieldsForSample() []Field {
+	var (
+		zs models.MemberRatingResultSummary
+		zc models.SchemeCategory
+	)
+	return categoryScalarFields(zs, zc, sampleBenefitNaming())
+}
+
+// CategoryBoolFieldsForSample returns the has_* category flags using the
+// resolved benefit naming.
+func CategoryBoolFieldsForSample() []Field {
+	var zs models.MemberRatingResultSummary
+	return categoryBoolFields(zs, benefitFlags{}, sampleBenefitNaming())
+}
+
+// BenefitSpecsForSample returns one spec per nested benefit object, each
+// prefixed by the resolved benefit code.
+func BenefitSpecsForSample() []BenefitSpec {
+	return benefitSpecsForSample(sampleBenefitNaming())
 }
 
 // benefitSpecsForSample returns one spec per benefit, ordered to match
