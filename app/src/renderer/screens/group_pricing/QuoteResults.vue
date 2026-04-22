@@ -70,6 +70,7 @@
           >
           <group-pricing-data-grid
             ref="dataGridRef"
+            :key="`results-grid-${gridRemountKey}`"
             :columnDefs="columnDefs"
             :show-close-button="true"
             :rowData="useInfiniteModel ? undefined : resultTableData"
@@ -266,6 +267,14 @@ const useInfiniteModel = ref(false)
 const dataSource: any = ref(null)
 const currentTableType = ref('')
 const dataGridRef: any = ref(null)
+// Bumped when the underlying data for the currently-viewed table changes
+// (e.g. the user re-runs calculations) so the grid remounts and drops its
+// cached blocks. AG Grid's server-side / infinite row model caches rows by
+// block index and will keep serving stale data after a re-run otherwise —
+// the user would see the pre-run numbers even though the DB has the fresh
+// ones. The currently selected table is preserved because only the inner
+// grid child is remounted, not QuoteResults itself.
+const gridRemountKey = ref(0)
 
 // Manual Credibility Dialog state
 const manualCredibilityDialog = ref(false)
@@ -301,6 +310,24 @@ watch(calcProgress, (val) => {
     awaitingManualCredibility.value = false
   }
 })
+
+// When the parent reloads the quote after a re-run the *_count fields on
+// the quote change (new member rating rows, fresh bordereaux, etc.). Bump
+// gridRemountKey so the inner AG Grid remounts and drops its cached blocks;
+// otherwise a user who was already looking at a table keeps seeing the
+// pre-run numbers served from the infinite-model cache.
+watch(
+  [
+    () => props.quote?.member_rating_result_count,
+    () => props.quote?.member_data_count,
+    () => props.quote?.claims_experience_count,
+    () => props.quote?.member_premium_schedule_count,
+    () => props.quote?.bordereaux_count
+  ],
+  () => {
+    gridRemountKey.value++
+  }
+)
 
 const manualCredibilityForm: any = ref(null)
 

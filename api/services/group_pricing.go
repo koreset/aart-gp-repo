@@ -1333,8 +1333,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 					premiumLoading.AdminLoading+
 					effectiveCommission+
 					premiumLoading.ProfitLoading+
-					premiumLoading.OtherLoading-
-					(groupQuote.Loadings.Discount/100.0),
+					premiumLoading.OtherLoading,
 				premiumLoading.MinimumPremiumLoading,
 			)
 			bandRates, efErr := CalculateExtendedFamilyAgeBandRates(
@@ -1446,8 +1445,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 					premiumLoading.AdminLoading+
 					effectiveCommissionAgla+
 					premiumLoading.ProfitLoading+
-					premiumLoading.OtherLoading-
-					(groupQuote.Loadings.Discount/100.0),
+					premiumLoading.OtherLoading,
 				premiumLoading.MinimumPremiumLoading,
 			)
 			aglaBandRates, aglaErr := CalculateAdditionalGlaCoverBandRates(
@@ -1746,7 +1744,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.TotalGlaAnnualRiskPremium += mr.GlaRiskPremium
 		mdrs.TotalGlaAnnualOfficePremium += mr.GlaOfficePremium
 		mdrs.ExpTotalGlaAnnualRiskPremium += mr.ExpAdjGlaRiskPremium
-		mdrs.ExpTotalGlaAnnualOfficePremium += mr.ExpAdjGlaOfficePremium
+		mdrs.ExpTotalGlaAnnualOfficePremium += mr.FinalGlaOfficePremium
 
 		// TaxSaver is a slice of the GLA premium (already baked into
 		// TotalGlaAnnualOfficePremium via LoadedGlaRate) — these rollups
@@ -1754,54 +1752,54 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.TotalTaxSaverAnnualRiskPremium += mr.TaxSaverRiskPremium
 		mdrs.TotalTaxSaverAnnualOfficePremium += mr.TaxSaverOfficePremium
 		mdrs.ExpTotalTaxSaverAnnualRiskPremium += mr.ExpAdjTaxSaverRiskPremium
-		mdrs.ExpTotalTaxSaverAnnualOfficePremium += mr.ExpAdjTaxSaverOfficePremium
+		mdrs.ExpTotalTaxSaverAnnualOfficePremium += mr.FinalTaxSaverOfficePremium
 
 		mdrs.TotalAdditionalAccidentalGlaRiskRate += mr.LoadedAdditionalAccidentalGlaRate
 		mdrs.ExpTotalAdditionalAccidentalGlaRiskRate += mr.ExpAdjLoadedAdditionalAccidentalGlaRate
 		mdrs.TotalAdditionalAccidentalGlaAnnualRiskPremium += mr.AdditionalAccidentalGlaRiskPremium
 		mdrs.TotalAdditionalAccidentalGlaAnnualOfficePremium += mr.AdditionalAccidentalGlaOfficePremium
 		mdrs.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium += mr.ExpAdjAdditionalAccidentalGlaRiskPremium
-		mdrs.ExpTotalAdditionalAccidentalGlaAnnualOfficePremium += mr.ExpAdjAdditionalAccidentalGlaOfficePremium
+		mdrs.ExpTotalAdditionalAccidentalGlaAnnualOfficePremium += mr.FinalAdditionalAccidentalGlaOfficePremium
 
 		mdrs.TotalPtdRiskRate += mr.LoadedPtdRate
 		mdrs.ExpTotalPtdRiskRate += mr.ExpAdjLoadedPtdRate
 		mdrs.TotalPtdAnnualRiskPremium += mr.PtdRiskPremium
 		mdrs.TotalPtdAnnualOfficePremium += mr.PtdOfficePremium
 		mdrs.ExpTotalPtdAnnualRiskPremium += mr.ExpAdjPtdRiskPremium
-		mdrs.ExpTotalPtdAnnualOfficePremium += mr.ExpAdjPtdOfficePremium
+		mdrs.ExpTotalPtdAnnualOfficePremium += mr.FinalPtdOfficePremium
 
 		mdrs.TotalTtdRiskRate += mr.LoadedTtdRate
 		mdrs.ExpTotalTtdRiskRate += mr.ExpAdjLoadedTtdRate
 		mdrs.TotalTtdAnnualRiskPremium += mr.TtdRiskPremium
 		mdrs.TotalTtdAnnualOfficePremium += mr.TtdOfficePremium
 		mdrs.ExpTotalTtdAnnualRiskPremium += mr.ExpAdjTtdRiskPremium
-		mdrs.ExpTotalTtdAnnualOfficePremium += mr.ExpAdjTtdOfficePremium
+		mdrs.ExpTotalTtdAnnualOfficePremium += mr.FinalTtdOfficePremium
 
 		mdrs.TotalPhiRiskRate += mr.LoadedPhiRate
 		mdrs.ExpTotalPhiRiskRate += mr.ExpAdjLoadedPhiRate
 		mdrs.TotalPhiAnnualRiskPremium += mr.PhiRiskPremium
 		mdrs.TotalPhiAnnualOfficePremium += mr.PhiOfficePremium
 		mdrs.ExpTotalPhiAnnualRiskPremium += mr.ExpAdjPhiRiskPremium
-		mdrs.ExpTotalPhiAnnualOfficePremium += mr.ExpAdjPhiOfficePremium
+		mdrs.ExpTotalPhiAnnualOfficePremium += mr.FinalPhiOfficePremium
 
 		mdrs.TotalCiRiskRate += mr.LoadedCiRate
 		mdrs.ExpTotalCiRiskRate += mr.ExpAdjLoadedCiRate
 		mdrs.TotalCiAnnualRiskPremium += mr.CiRiskPremium
 		mdrs.TotalCiAnnualOfficePremium += mr.CiOfficePremium
 		mdrs.ExpTotalCiAnnualRiskPremium += mr.ExpAdjCiRiskPremium
-		mdrs.ExpTotalCiAnnualOfficePremium += mr.ExpAdjCiOfficePremium
+		mdrs.ExpTotalCiAnnualOfficePremium += mr.FinalCiOfficePremium
 
 		mdrs.TotalSglaRiskRate += mr.LoadedSpouseGlaRate
 		mdrs.ExpTotalSglaRiskRate += mr.ExpAdjLoadedSpouseGlaRate
 		mdrs.TotalSglaAnnualRiskPremium += mr.SpouseGlaRiskPremium
 		mdrs.TotalSglaAnnualOfficePremium += mr.SpouseGlaOfficePremium
 		mdrs.ExpTotalSglaAnnualRiskPremium += mr.ExpAdjSpouseGlaRiskPremium
-		mdrs.ExpTotalSglaAnnualOfficePremium += mr.ExpAdjSpouseGlaOfficePremium
+		mdrs.ExpTotalSglaAnnualOfficePremium += mr.FinalSpouseGlaOfficePremium
 
 		mdrs.TotalFunAnnualRiskPremium += mr.TotalFuneralRiskCost
 		mdrs.TotalFunAnnualOfficePremium += mr.TotalFuneralOfficeCost
 		mdrs.ExpTotalFunAnnualRiskPremium += mr.ExpAdjTotalFuneralRiskCost
-		mdrs.ExpTotalFunAnnualOfficePremium += mr.ExpAdjTotalFuneralOfficeCost
+		mdrs.ExpTotalFunAnnualOfficePremium += mr.FinalTotalFuneralOfficeCost
 
 		// Reinsurance premium sums per benefit. Funeral is the roll-up of
 		// the five relationship-level reinsurance premiums.
@@ -1847,11 +1845,11 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 			mdrs.TotalGlaEducatorRiskPremium += mr.GlaEducatorRiskPremium
 			mdrs.TotalGlaEducatorOfficePremium += mr.GlaEducatorOfficePremium
 			mdrs.ExpAdjTotalGlaEducatorRiskPremium += mr.ExpAdjGlaEducatorRiskPremium
-			mdrs.ExpAdjTotalGlaEducatorOfficePremium += mr.ExpAdjGlaEducatorOfficePremium
+			mdrs.ExpAdjTotalGlaEducatorOfficePremium += mr.FinalGlaEducatorOfficePremium
 			mdrs.TotalPtdEducatorRiskPremium += mr.PtdEducatorRiskPremium
 			mdrs.TotalPtdEducatorOfficePremium += mr.PtdEducatorOfficePremium
 			mdrs.ExpAdjTotalPtdEducatorRiskPremium += mr.ExpAdjPtdEducatorRiskPremium
-			mdrs.ExpAdjTotalPtdEducatorOfficePremium += mr.ExpAdjPtdEducatorOfficePremium
+			mdrs.ExpAdjTotalPtdEducatorOfficePremium += mr.FinalPtdEducatorOfficePremium
 			mdrs.TotalGlaEducatorBinderAmount += mr.GlaEducatorBinderAmount
 			mdrs.TotalGlaEducatorOutsourcedAmount += mr.GlaEducatorOutsourcedAmount
 			mdrs.ExpAdjTotalGlaEducatorBinderAmount += mr.ExpAdjGlaEducatorBinderAmount
@@ -2715,7 +2713,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	// Commission is excluded from TotalLoading — it is computed at the scheme
 	// level on total premium via the tiered CommissionStructure bands and
 	// distributed per benefit in applySchemeWideCommission.
-	memberDataPointResult.TotalLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+premiumLoading.ProfitLoading+premiumLoading.OtherLoading-(groupQuote.Loadings.Discount/100.0)+binderFeeRate+outsourceFeeRate, premiumLoading.MinimumPremiumLoading)
+	memberDataPointResult.TotalLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+premiumLoading.ProfitLoading+premiumLoading.OtherLoading+binderFeeRate+outsourceFeeRate, premiumLoading.MinimumPremiumLoading)
 	memberDataPointResult.ExpCredibility = credibilityRate
 	memberDataPointResult.GlaWeightedExperienceCrudeRate = annualGlaExperienceWeightedRate
 	memberDataPointResult.PtdExperienceCrudeRate = annualPtdExperienceWeightedRate
@@ -2881,9 +2879,8 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		memberDataPointResult.AdditionalAccidentalGlaSumAssured = memberDataPointResult.GlaSumAssured
 		memberDataPointResult.AdditionalAccidentalGlaCappedSumAssured = memberDataPointResult.GlaCappedSumAssured
 		memberDataPointResult.AdditionalAccidentalGlaQx = GetAdditionalAccidentalGlaRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, schemeCategory)
-		memberDataPointResult.AdditionalAccidentalGlaAidsQx = memberDataPointResult.GlaAidsQx
-		memberDataPointResult.BaseAdditionalAccidentalGlaRate = memberDataPointResult.AdditionalAccidentalGlaQx*(1+memberDataPointResult.GlaIndustryLoading+memberDataPointResult.GlaRegionLoading) + memberDataPointResult.AdditionalAccidentalGlaAidsQx*(1+memberDataPointResult.GlaAidsRegionLoading)
-		memberDataPointResult.LoadedAdditionalAccidentalGlaRate = memberDataPointResult.BaseAdditionalAccidentalGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading)
+		memberDataPointResult.BaseAdditionalAccidentalGlaRate = memberDataPointResult.AdditionalAccidentalGlaQx * (1 + memberDataPointResult.GlaIndustryLoading + memberDataPointResult.GlaRegionLoading)
+		memberDataPointResult.LoadedAdditionalAccidentalGlaRate = memberDataPointResult.BaseAdditionalAccidentalGlaRate * (1 + memberDataPointResult.GlaContingencyLoading)
 		memberDataPointResult.AdditionalAccidentalGlaExperienceAdjustment = memberDataPointResult.GlaExperienceAdjustment
 		memberDataPointResult.ExpAdjLoadedAdditionalAccidentalGlaRate = memberDataPointResult.LoadedAdditionalAccidentalGlaRate * memberDataPointResult.AdditionalAccidentalGlaExperienceAdjustment
 	}
@@ -3106,29 +3103,39 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	memberDataPointResult.DependantReinsuranceBaseRate = memberDataPointResult.DependantFuneralBaseRate
 	memberDataPointResult.DependantReinsuranceRate = memberDataPointResult.DependantReinsuranceBaseRate * (1 + memberDataPointResult.ReinsFunContingencyLoading + memberDataPointResult.ReinsFunVoluntaryLoading)
 
+	discountFraction := -(groupQuote.Loadings.Discount / 100.0)
+
 	memberDataPointResult.GlaOfficePremium = memberDataPointResult.GlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjGlaOfficePremium = memberDataPointResult.ExpAdjGlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.FinalGlaOfficePremium = memberDataPointResult.ExpAdjGlaOfficePremium + memberDataPointResult.ExpAdjGlaOfficePremium*discountFraction
 
 	memberDataPointResult.TaxSaverOfficePremium = memberDataPointResult.TaxSaverRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjTaxSaverOfficePremium = memberDataPointResult.ExpAdjTaxSaverRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.FinalTaxSaverOfficePremium = memberDataPointResult.ExpAdjTaxSaverOfficePremium + memberDataPointResult.ExpAdjTaxSaverOfficePremium*discountFraction
 
 	memberDataPointResult.AdditionalAccidentalGlaOfficePremium = memberDataPointResult.AdditionalAccidentalGlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjAdditionalAccidentalGlaOfficePremium = memberDataPointResult.ExpAdjAdditionalAccidentalGlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.FinalAdditionalAccidentalGlaOfficePremium = memberDataPointResult.ExpAdjAdditionalAccidentalGlaOfficePremium + memberDataPointResult.ExpAdjAdditionalAccidentalGlaOfficePremium*discountFraction
 
 	memberDataPointResult.PtdOfficePremium = memberDataPointResult.PtdRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjPtdOfficePremium = memberDataPointResult.ExpAdjPtdRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.FinalPtdOfficePremium = memberDataPointResult.ExpAdjPtdOfficePremium + memberDataPointResult.ExpAdjPtdOfficePremium*discountFraction
 
 	memberDataPointResult.TtdOfficePremium = memberDataPointResult.TtdRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjTtdOfficePremium = memberDataPointResult.ExpAdjTtdRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.FinalTtdOfficePremium = memberDataPointResult.ExpAdjTtdOfficePremium + memberDataPointResult.ExpAdjTtdOfficePremium*discountFraction
 
 	memberDataPointResult.PhiOfficePremium = memberDataPointResult.PhiRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjPhiOfficePremium = memberDataPointResult.ExpAdjPhiRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.FinalPhiOfficePremium = memberDataPointResult.ExpAdjPhiOfficePremium + memberDataPointResult.ExpAdjPhiOfficePremium*discountFraction
 
 	memberDataPointResult.CiOfficePremium = memberDataPointResult.CiRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjCiOfficePremium = memberDataPointResult.ExpAdjCiRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.FinalCiOfficePremium = memberDataPointResult.ExpAdjCiOfficePremium + memberDataPointResult.ExpAdjCiOfficePremium*discountFraction
 
 	memberDataPointResult.SpouseGlaOfficePremium = memberDataPointResult.SpouseGlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjSpouseGlaOfficePremium = memberDataPointResult.ExpAdjSpouseGlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.FinalSpouseGlaOfficePremium = memberDataPointResult.ExpAdjSpouseGlaOfficePremium + memberDataPointResult.ExpAdjSpouseGlaOfficePremium*discountFraction
 
 	//memberDataPointResult.MarriageProportion = groupFuneralParameter.ProportionMarried
 
@@ -3156,6 +3163,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	memberDataPointResult.ExpAdjTotalFuneralRiskCost = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralCost + memberDataPointResult.SpouseFuneralCost + memberDataPointResult.ChildrenFuneralCost + memberDataPointResult.DependantsFuneralCost) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
 	memberDataPointResult.TotalFuneralOfficeCost = memberDataPointResult.TotalFuneralRiskCost / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjTotalFuneralOfficeCost = memberDataPointResult.ExpAdjTotalFuneralRiskCost / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.FinalTotalFuneralOfficeCost = memberDataPointResult.ExpAdjTotalFuneralOfficeCost + memberDataPointResult.ExpAdjTotalFuneralOfficeCost*discountFraction
 
 	// Compute all non-educator conversion / continuity slice premiums now
 	// that Loaded*Rates and TotalFuneralRiskCost are final. Educator slice
@@ -3181,17 +3189,17 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	//memberDataPointResult.FuneralExperienceAdjustedAnnualPremium = memberDataPointResult.TotalFuneralRiskCost
 	memberPremiumScheduleDatapoint.IsOriginalMember = false
 	memberPremiumScheduleDatapoint.GlaCoveredSumAssured = memberDataPointResult.GlaCappedSumAssured
-	memberPremiumScheduleDatapoint.GlaAnnualPremium = memberDataPointResult.ExpAdjGlaOfficePremium
+	memberPremiumScheduleDatapoint.GlaAnnualPremium = memberDataPointResult.FinalGlaOfficePremium
 	memberPremiumScheduleDatapoint.PtdCoveredSumAssured = memberDataPointResult.PtdCappedSumAssured
-	memberPremiumScheduleDatapoint.PtdAnnualPremium = memberDataPointResult.ExpAdjPtdOfficePremium
+	memberPremiumScheduleDatapoint.PtdAnnualPremium = memberDataPointResult.FinalPtdOfficePremium
 	memberPremiumScheduleDatapoint.CiCoveredSumAssured = memberDataPointResult.CiCappedSumAssured
-	memberPremiumScheduleDatapoint.CiAnnualPremium = memberDataPointResult.ExpAdjCiOfficePremium
+	memberPremiumScheduleDatapoint.CiAnnualPremium = memberDataPointResult.FinalCiOfficePremium
 	memberPremiumScheduleDatapoint.TtdCoveredIncome = memberDataPointResult.TtdCappedIncome
-	memberPremiumScheduleDatapoint.TtdAnnualPremium = memberDataPointResult.ExpAdjTtdOfficePremium
+	memberPremiumScheduleDatapoint.TtdAnnualPremium = memberDataPointResult.FinalTtdOfficePremium
 	memberPremiumScheduleDatapoint.PhiCoveredIncome = memberDataPointResult.PhiCappedIncome
-	memberPremiumScheduleDatapoint.PhiAnnualPremium = memberDataPointResult.ExpAdjPhiOfficePremium
+	memberPremiumScheduleDatapoint.PhiAnnualPremium = memberDataPointResult.FinalPhiOfficePremium
 	memberPremiumScheduleDatapoint.SpouseGlaCoveredSumAssured = memberDataPointResult.SpouseGlaCappedSumAssured
-	memberPremiumScheduleDatapoint.SpouseGlaAnnualPremium = memberDataPointResult.ExpAdjSpouseGlaOfficePremium
+	memberPremiumScheduleDatapoint.SpouseGlaAnnualPremium = memberDataPointResult.FinalSpouseGlaOfficePremium
 	memberPremiumScheduleDatapoint.MainMemberFuneralSumAssured = schemeCategory.FamilyFuneralMainMemberFuneralSumAssured
 	memberPremiumScheduleDatapoint.MainMemberFuneralAnnualPremium = memberDataPointResult.MainMemberFuneralOfficePremium
 	memberPremiumScheduleDatapoint.SpouseFuneralSumAssured = schemeCategory.FamilyFuneralSpouseFuneralSumAssured
@@ -3347,7 +3355,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	memberDataPointResult.Discount = -(groupQuote.Loadings.Discount / 100.0)
 	binderFeeRate2, outsourceFeeRate2 := binderAndOutsourceRates(&groupQuote)
 	// Commission is excluded from TotalLoading — see applySchemeWideCommission.
-	memberDataPointResult.TotalLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+premiumLoading.ProfitLoading+premiumLoading.OtherLoading-(groupQuote.Loadings.Discount/100.0)+binderFeeRate2+outsourceFeeRate2, premiumLoading.MinimumPremiumLoading)
+	memberDataPointResult.TotalLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+premiumLoading.ProfitLoading+premiumLoading.OtherLoading+binderFeeRate2+outsourceFeeRate2, premiumLoading.MinimumPremiumLoading)
 
 	memberDataPointResult.CalculatedFreeCoverLimit = calculatedFreeCoverLimit
 	if groupQuote.FreeCoverLimit > 0 {
@@ -3614,7 +3622,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.Discount = -(groupQuote.Loadings.Discount / 100.0)
 	binderFeeRate3, outsourceFeeRate3 := binderAndOutsourceRates(&groupQuote)
 	// Commission is excluded from TotalLoading — see applySchemeWideCommission.
-	memberDataPointResult.TotalLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+premiumLoading.ProfitLoading+premiumLoading.OtherLoading-(groupQuote.Loadings.Discount/100.0)+binderFeeRate3+outsourceFeeRate3, premiumLoading.MinimumPremiumLoading)
+	memberDataPointResult.TotalLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+premiumLoading.ProfitLoading+premiumLoading.OtherLoading+binderFeeRate3+outsourceFeeRate3, premiumLoading.MinimumPremiumLoading)
 
 	memberDataPointResult.ExpCredibility = credibilityRate
 	memberDataPointResult.ManuallyAddedCredibility = credibility
@@ -4004,6 +4012,8 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.CiRiskPremium = memberDataPointResult.LoadedCiRate * memberDataPointResult.CiCappedSumAssured
 	memberDataPointResult.SpouseGlaRiskPremium = memberDataPointResult.LoadedSpouseGlaRate * memberDataPointResult.SpouseGlaCappedSumAssured
 
+	discountFraction := -(groupQuote.Loadings.Discount / 100.0)
+
 	memberDataPointResult.GlaOfficePremium = memberDataPointResult.GlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.TaxSaverOfficePremium = memberDataPointResult.TaxSaverRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.PtdOfficePremium = memberDataPointResult.PtdRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
@@ -4119,15 +4129,23 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.ExpAdjSpouseGlaRiskPremium = memberDataPointResult.ExpAdjLoadedSpouseGlaRate * memberDataPointResult.SpouseGlaCappedSumAssured
 
 	memberDataPointResult.ExpAdjGlaOfficePremium = memberDataPointResult.ExpAdjGlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.FinalGlaOfficePremium = memberDataPointResult.ExpAdjGlaOfficePremium + memberDataPointResult.ExpAdjGlaOfficePremium*discountFraction
 	memberDataPointResult.ExpAdjTaxSaverOfficePremium = memberDataPointResult.ExpAdjTaxSaverRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.FinalTaxSaverOfficePremium = memberDataPointResult.ExpAdjTaxSaverOfficePremium + memberDataPointResult.ExpAdjTaxSaverOfficePremium*discountFraction
 	memberDataPointResult.ExpAdjPtdOfficePremium = memberDataPointResult.ExpAdjPtdRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.FinalPtdOfficePremium = memberDataPointResult.ExpAdjPtdOfficePremium + memberDataPointResult.ExpAdjPtdOfficePremium*discountFraction
 	memberDataPointResult.ExpAdjTtdOfficePremium = memberDataPointResult.ExpAdjTtdRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.FinalTtdOfficePremium = memberDataPointResult.ExpAdjTtdOfficePremium + memberDataPointResult.ExpAdjTtdOfficePremium*discountFraction
 	memberDataPointResult.ExpAdjPhiOfficePremium = memberDataPointResult.ExpAdjPhiRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.FinalPhiOfficePremium = memberDataPointResult.ExpAdjPhiOfficePremium + memberDataPointResult.ExpAdjPhiOfficePremium*discountFraction
 	memberDataPointResult.ExpAdjCiOfficePremium = memberDataPointResult.ExpAdjCiRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.FinalCiOfficePremium = memberDataPointResult.ExpAdjCiOfficePremium + memberDataPointResult.ExpAdjCiOfficePremium*discountFraction
 	memberDataPointResult.ExpAdjSpouseGlaOfficePremium = memberDataPointResult.ExpAdjSpouseGlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.FinalSpouseGlaOfficePremium = memberDataPointResult.ExpAdjSpouseGlaOfficePremium + memberDataPointResult.ExpAdjSpouseGlaOfficePremium*discountFraction
 
 	memberDataPointResult.ExpAdjTotalFuneralRiskCost = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralCost + memberDataPointResult.SpouseFuneralCost + memberDataPointResult.ChildrenFuneralCost + memberDataPointResult.DependantsFuneralCost) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
 	memberDataPointResult.ExpAdjTotalFuneralOfficeCost = memberDataPointResult.ExpAdjTotalFuneralRiskCost / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.FinalTotalFuneralOfficeCost = memberDataPointResult.ExpAdjTotalFuneralOfficeCost + memberDataPointResult.ExpAdjTotalFuneralOfficeCost*discountFraction
 
 	// Re-derive the educator loaded rates now that ExpAdjLoaded*Rate values
 	// are set so the ExpAdjLoadedGla/PtdEducatorRate fields are accurate.
@@ -4144,10 +4162,12 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		if groupQuote.SchemeCategories[i].GlaEducatorBenefit == "Yes" {
 			memberDataPointResult.ExpAdjGlaEducatorRiskPremium = riskWeightedSA * memberDataPointResult.ExpAdjLoadedGlaEducatorRate
 			memberDataPointResult.ExpAdjGlaEducatorOfficePremium = memberDataPointResult.ExpAdjGlaEducatorRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+			memberDataPointResult.FinalGlaEducatorOfficePremium = memberDataPointResult.ExpAdjGlaEducatorOfficePremium + memberDataPointResult.ExpAdjGlaEducatorOfficePremium*discountFraction
 		}
 		if groupQuote.SchemeCategories[i].PtdEducatorBenefit == "Yes" {
 			memberDataPointResult.ExpAdjPtdEducatorRiskPremium = riskWeightedSA * memberDataPointResult.ExpAdjLoadedPtdEducatorRate
 			memberDataPointResult.ExpAdjPtdEducatorOfficePremium = memberDataPointResult.ExpAdjPtdEducatorRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+			memberDataPointResult.FinalPtdEducatorOfficePremium = memberDataPointResult.ExpAdjPtdEducatorOfficePremium + memberDataPointResult.ExpAdjPtdEducatorOfficePremium*discountFraction
 		}
 		// Recompute educator slice premiums using the finalised ExpAdj
 		// educator loaded rates. This overwrites the partial values from the
@@ -4181,17 +4201,17 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberPremiumScheduleDatapoint.Category = selectedSchemeCategory
 	memberPremiumScheduleDatapoint.IsOriginalMember = true
 	memberPremiumScheduleDatapoint.GlaCoveredSumAssured = memberDataPointResult.GlaCappedSumAssured
-	memberPremiumScheduleDatapoint.GlaAnnualPremium = memberDataPointResult.ExpAdjGlaOfficePremium
+	memberPremiumScheduleDatapoint.GlaAnnualPremium = memberDataPointResult.FinalGlaOfficePremium
 	memberPremiumScheduleDatapoint.PtdCoveredSumAssured = memberDataPointResult.PtdCappedSumAssured
-	memberPremiumScheduleDatapoint.PtdAnnualPremium = memberDataPointResult.ExpAdjPtdOfficePremium
+	memberPremiumScheduleDatapoint.PtdAnnualPremium = memberDataPointResult.FinalPtdOfficePremium
 	memberPremiumScheduleDatapoint.CiCoveredSumAssured = memberDataPointResult.CiCappedSumAssured
-	memberPremiumScheduleDatapoint.CiAnnualPremium = memberDataPointResult.ExpAdjCiOfficePremium
+	memberPremiumScheduleDatapoint.CiAnnualPremium = memberDataPointResult.FinalCiOfficePremium
 	memberPremiumScheduleDatapoint.TtdCoveredIncome = memberDataPointResult.TtdCappedIncome
-	memberPremiumScheduleDatapoint.TtdAnnualPremium = memberDataPointResult.ExpAdjTtdOfficePremium
+	memberPremiumScheduleDatapoint.TtdAnnualPremium = memberDataPointResult.FinalTtdOfficePremium
 	memberPremiumScheduleDatapoint.PhiCoveredIncome = memberDataPointResult.PhiCappedIncome
-	memberPremiumScheduleDatapoint.PhiAnnualPremium = memberDataPointResult.ExpAdjPhiOfficePremium
+	memberPremiumScheduleDatapoint.PhiAnnualPremium = memberDataPointResult.FinalPhiOfficePremium
 	memberPremiumScheduleDatapoint.SpouseGlaCoveredSumAssured = memberDataPointResult.SpouseGlaCappedSumAssured
-	memberPremiumScheduleDatapoint.SpouseGlaAnnualPremium = memberDataPointResult.ExpAdjSpouseGlaOfficePremium
+	memberPremiumScheduleDatapoint.SpouseGlaAnnualPremium = memberDataPointResult.FinalSpouseGlaOfficePremium
 	memberPremiumScheduleDatapoint.MainMemberFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralMainMemberFuneralSumAssured
 	memberPremiumScheduleDatapoint.MainMemberFuneralAnnualPremium = memberDataPointResult.MainMemberFuneralOfficePremium
 	memberPremiumScheduleDatapoint.SpouseFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured
@@ -7416,38 +7436,38 @@ func binderAndOutsourceRates(quote *models.GroupPricingQuote) (float64, float64)
 func applyBinderOutsourceAmounts(r *models.MemberRatingResult, binderRate, outsourceRate float64) {
 	r.GlaBinderAmount = r.GlaOfficePremium * binderRate
 	r.GlaOutsourcedAmount = r.GlaOfficePremium * outsourceRate
-	r.ExpAdjGlaBinderAmount = r.ExpAdjGlaOfficePremium * binderRate
-	r.ExpAdjGlaOutsourcedAmount = r.ExpAdjGlaOfficePremium * outsourceRate
+	r.ExpAdjGlaBinderAmount = r.FinalGlaOfficePremium * binderRate
+	r.ExpAdjGlaOutsourcedAmount = r.FinalGlaOfficePremium * outsourceRate
 
 	r.AdditionalAccidentalGlaBinderAmount = r.AdditionalAccidentalGlaOfficePremium * binderRate
 	r.AdditionalAccidentalGlaOutsourcedAmount = r.AdditionalAccidentalGlaOfficePremium * outsourceRate
-	r.ExpAdjAdditionalAccidentalGlaBinderAmount = r.ExpAdjAdditionalAccidentalGlaOfficePremium * binderRate
-	r.ExpAdjAdditionalAccidentalGlaOutsourcedAmt = r.ExpAdjAdditionalAccidentalGlaOfficePremium * outsourceRate
+	r.ExpAdjAdditionalAccidentalGlaBinderAmount = r.FinalAdditionalAccidentalGlaOfficePremium * binderRate
+	r.ExpAdjAdditionalAccidentalGlaOutsourcedAmt = r.FinalAdditionalAccidentalGlaOfficePremium * outsourceRate
 
 	r.PtdBinderAmount = r.PtdOfficePremium * binderRate
 	r.PtdOutsourcedAmount = r.PtdOfficePremium * outsourceRate
-	r.ExpAdjPtdBinderAmount = r.ExpAdjPtdOfficePremium * binderRate
-	r.ExpAdjPtdOutsourcedAmount = r.ExpAdjPtdOfficePremium * outsourceRate
+	r.ExpAdjPtdBinderAmount = r.FinalPtdOfficePremium * binderRate
+	r.ExpAdjPtdOutsourcedAmount = r.FinalPtdOfficePremium * outsourceRate
 
 	r.CiBinderAmount = r.CiOfficePremium * binderRate
 	r.CiOutsourcedAmount = r.CiOfficePremium * outsourceRate
-	r.ExpAdjCiBinderAmount = r.ExpAdjCiOfficePremium * binderRate
-	r.ExpAdjCiOutsourcedAmount = r.ExpAdjCiOfficePremium * outsourceRate
+	r.ExpAdjCiBinderAmount = r.FinalCiOfficePremium * binderRate
+	r.ExpAdjCiOutsourcedAmount = r.FinalCiOfficePremium * outsourceRate
 
 	r.SpouseGlaBinderAmount = r.SpouseGlaOfficePremium * binderRate
 	r.SpouseGlaOutsourcedAmount = r.SpouseGlaOfficePremium * outsourceRate
-	r.ExpAdjSpouseGlaBinderAmount = r.ExpAdjSpouseGlaOfficePremium * binderRate
-	r.ExpAdjSpouseGlaOutsourcedAmount = r.ExpAdjSpouseGlaOfficePremium * outsourceRate
+	r.ExpAdjSpouseGlaBinderAmount = r.FinalSpouseGlaOfficePremium * binderRate
+	r.ExpAdjSpouseGlaOutsourcedAmount = r.FinalSpouseGlaOfficePremium * outsourceRate
 
 	r.TtdBinderAmount = r.TtdOfficePremium * binderRate
 	r.TtdOutsourcedAmount = r.TtdOfficePremium * outsourceRate
-	r.ExpAdjTtdBinderAmount = r.ExpAdjTtdOfficePremium * binderRate
-	r.ExpAdjTtdOutsourcedAmount = r.ExpAdjTtdOfficePremium * outsourceRate
+	r.ExpAdjTtdBinderAmount = r.FinalTtdOfficePremium * binderRate
+	r.ExpAdjTtdOutsourcedAmount = r.FinalTtdOfficePremium * outsourceRate
 
 	r.PhiBinderAmount = r.PhiOfficePremium * binderRate
 	r.PhiOutsourcedAmount = r.PhiOfficePremium * outsourceRate
-	r.ExpAdjPhiBinderAmount = r.ExpAdjPhiOfficePremium * binderRate
-	r.ExpAdjPhiOutsourcedAmount = r.ExpAdjPhiOfficePremium * outsourceRate
+	r.ExpAdjPhiBinderAmount = r.FinalPhiOfficePremium * binderRate
+	r.ExpAdjPhiOutsourcedAmount = r.FinalPhiOfficePremium * outsourceRate
 
 	r.MainMemberFuneralBinderAmount = r.MainMemberFuneralOfficePremium * binderRate
 	r.MainMemberFuneralOutsourcedAmount = r.MainMemberFuneralOfficePremium * outsourceRate
@@ -7459,17 +7479,17 @@ func applyBinderOutsourceAmounts(r *models.MemberRatingResult, binderRate, outso
 	r.DependantsFuneralOutsourcedAmount = r.DependantsFuneralOfficePremium * outsourceRate
 	r.TotalFuneralBinderAmount = r.TotalFuneralOfficeCost * binderRate
 	r.TotalFuneralOutsourcedAmount = r.TotalFuneralOfficeCost * outsourceRate
-	r.ExpAdjTotalFuneralBinderAmount = r.ExpAdjTotalFuneralOfficeCost * binderRate
-	r.ExpAdjTotalFuneralOutsourcedAmount = r.ExpAdjTotalFuneralOfficeCost * outsourceRate
+	r.ExpAdjTotalFuneralBinderAmount = r.FinalTotalFuneralOfficeCost * binderRate
+	r.ExpAdjTotalFuneralOutsourcedAmount = r.FinalTotalFuneralOfficeCost * outsourceRate
 
 	r.GlaEducatorBinderAmount = r.GlaEducatorOfficePremium * binderRate
 	r.GlaEducatorOutsourcedAmount = r.GlaEducatorOfficePremium * outsourceRate
-	r.ExpAdjGlaEducatorBinderAmount = r.ExpAdjGlaEducatorOfficePremium * binderRate
-	r.ExpAdjGlaEducatorOutsourcedAmount = r.ExpAdjGlaEducatorOfficePremium * outsourceRate
+	r.ExpAdjGlaEducatorBinderAmount = r.FinalGlaEducatorOfficePremium * binderRate
+	r.ExpAdjGlaEducatorOutsourcedAmount = r.FinalGlaEducatorOfficePremium * outsourceRate
 	r.PtdEducatorBinderAmount = r.PtdEducatorOfficePremium * binderRate
 	r.PtdEducatorOutsourcedAmount = r.PtdEducatorOfficePremium * outsourceRate
-	r.ExpAdjPtdEducatorBinderAmount = r.ExpAdjPtdEducatorOfficePremium * binderRate
-	r.ExpAdjPtdEducatorOutsourcedAmount = r.ExpAdjPtdEducatorOfficePremium * outsourceRate
+	r.ExpAdjPtdEducatorBinderAmount = r.FinalPtdEducatorOfficePremium * binderRate
+	r.ExpAdjPtdEducatorOutsourcedAmount = r.FinalPtdEducatorOfficePremium * outsourceRate
 
 	r.TotalBinderAmount = r.GlaBinderAmount + r.AdditionalAccidentalGlaBinderAmount +
 		r.PtdBinderAmount + r.CiBinderAmount + r.SpouseGlaBinderAmount +
@@ -7559,7 +7579,7 @@ func ApplyDiscountToQuote(quoteId string, discountPct float64, user models.AppUs
 		r.Discount = discount
 		// Commission is excluded from TotalLoading — see applySchemeWideCommission.
 		r.TotalLoading = math.Max(
-			r.ExpenseLoading+r.AdminLoading+r.ProfitLoading+r.OtherLoading+discount+binderFeeRate+outsourceFeeRate,
+			r.ExpenseLoading+r.AdminLoading+r.ProfitLoading+r.OtherLoading+binderFeeRate+outsourceFeeRate,
 			premiumLoading.MinimumPremiumLoading,
 		)
 		divisor := 1.0 - r.TotalLoading
@@ -7568,24 +7588,32 @@ func ApplyDiscountToQuote(quoteId string, discountPct float64, user models.AppUs
 		}
 		r.GlaOfficePremium = r.GlaRiskPremium / divisor
 		r.ExpAdjGlaOfficePremium = r.ExpAdjGlaRiskPremium / divisor
+		r.FinalGlaOfficePremium = r.ExpAdjGlaOfficePremium + r.ExpAdjGlaOfficePremium*discount
 		r.TaxSaverOfficePremium = r.TaxSaverRiskPremium / divisor
 		r.ExpAdjTaxSaverOfficePremium = r.ExpAdjTaxSaverRiskPremium / divisor
+		r.FinalTaxSaverOfficePremium = r.ExpAdjTaxSaverOfficePremium + r.ExpAdjTaxSaverOfficePremium*discount
 		r.PtdOfficePremium = r.PtdRiskPremium / divisor
 		r.ExpAdjPtdOfficePremium = r.ExpAdjPtdRiskPremium / divisor
+		r.FinalPtdOfficePremium = r.ExpAdjPtdOfficePremium + r.ExpAdjPtdOfficePremium*discount
 		r.TtdOfficePremium = r.TtdRiskPremium / divisor
 		r.ExpAdjTtdOfficePremium = r.ExpAdjTtdRiskPremium / divisor
+		r.FinalTtdOfficePremium = r.ExpAdjTtdOfficePremium + r.ExpAdjTtdOfficePremium*discount
 		r.PhiOfficePremium = r.PhiRiskPremium / divisor
 		r.ExpAdjPhiOfficePremium = r.ExpAdjPhiRiskPremium / divisor
+		r.FinalPhiOfficePremium = r.ExpAdjPhiOfficePremium + r.ExpAdjPhiOfficePremium*discount
 		r.CiOfficePremium = r.CiRiskPremium / divisor
 		r.ExpAdjCiOfficePremium = r.ExpAdjCiRiskPremium / divisor
+		r.FinalCiOfficePremium = r.ExpAdjCiOfficePremium + r.ExpAdjCiOfficePremium*discount
 		r.SpouseGlaOfficePremium = r.SpouseGlaRiskPremium / divisor
 		r.ExpAdjSpouseGlaOfficePremium = r.ExpAdjSpouseGlaRiskPremium / divisor
+		r.FinalSpouseGlaOfficePremium = r.ExpAdjSpouseGlaOfficePremium + r.ExpAdjSpouseGlaOfficePremium*discount
 		r.MainMemberFuneralOfficePremium = r.MainMemberFuneralCost / divisor
 		r.SpouseFuneralOfficePremium = r.SpouseFuneralCost / divisor
 		r.ChildrenFuneralOfficePremium = r.ChildrenFuneralCost / divisor
 		r.DependantsFuneralOfficePremium = r.DependantsFuneralCost / divisor
 		r.TotalFuneralOfficeCost = r.TotalFuneralRiskCost / divisor
 		r.ExpAdjTotalFuneralOfficeCost = r.ExpAdjTotalFuneralRiskCost / divisor
+		r.FinalTotalFuneralOfficeCost = r.ExpAdjTotalFuneralOfficeCost + r.ExpAdjTotalFuneralOfficeCost*discount
 		// Conversion / continuity slice office premiums — recomputed from the
 		// persisted risk legs whenever the divisor changes.
 		r.GlaConversionOnWithdrawalOfficePremium = r.GlaConversionOnWithdrawalRiskPremium / divisor
@@ -7614,6 +7642,18 @@ func ApplyDiscountToQuote(quoteId string, discountPct float64, user models.AppUs
 		r.ExpAdjSglaConversionOnWithdrawalOfficePremium = r.ExpAdjSglaConversionOnWithdrawalRiskPremium / divisor
 		r.FunConversionOnWithdrawalOfficePremium = r.FunConversionOnWithdrawalRiskPremium / divisor
 		r.ExpAdjFunConversionOnWithdrawalOfficePremium = r.ExpAdjFunConversionOnWithdrawalRiskPremium / divisor
+		// Educator office premiums are recomputed from their persisted risk
+		// legs and re-discounted to keep Final* consistent with the new rate.
+		r.GlaEducatorOfficePremium = r.GlaEducatorRiskPremium / divisor
+		r.ExpAdjGlaEducatorOfficePremium = r.ExpAdjGlaEducatorRiskPremium / divisor
+		r.FinalGlaEducatorOfficePremium = r.ExpAdjGlaEducatorOfficePremium + r.ExpAdjGlaEducatorOfficePremium*discount
+		r.PtdEducatorOfficePremium = r.PtdEducatorRiskPremium / divisor
+		r.ExpAdjPtdEducatorOfficePremium = r.ExpAdjPtdEducatorRiskPremium / divisor
+		r.FinalPtdEducatorOfficePremium = r.ExpAdjPtdEducatorOfficePremium + r.ExpAdjPtdEducatorOfficePremium*discount
+		// AdditionalAccidentalGla is a reportable slice — recompute if persisted.
+		r.AdditionalAccidentalGlaOfficePremium = r.AdditionalAccidentalGlaRiskPremium / divisor
+		r.ExpAdjAdditionalAccidentalGlaOfficePremium = r.ExpAdjAdditionalAccidentalGlaRiskPremium / divisor
+		r.FinalAdditionalAccidentalGlaOfficePremium = r.ExpAdjAdditionalAccidentalGlaOfficePremium + r.ExpAdjAdditionalAccidentalGlaOfficePremium*discount
 		applyBinderOutsourceAmounts(r, binderFeeRate, outsourceFeeRate)
 	}
 
@@ -9434,6 +9474,7 @@ func validateCommissionBandsForChannelHolderTx(tx *gorm.DB, channel, holderName 
 //  1. rows matching (channel, holderName) — use them if any exist.
 //  2. else rows matching (channel, ""), i.e. the channel default — use them.
 //  3. else return 0.
+//
 // Returns 0 for channel="direct" or when no bands are configured.
 //
 // The return value is a decimal fraction (e.g. 0.053 for 5.3%).

@@ -940,6 +940,7 @@ type MemberRatingResult struct {
 	ExpAdjGlaRiskPremium           float64 `json:"exp_adj_gla_risk_premium" csv:"exp_adj_gla_risk_premium"`
 	GlaOfficePremium               float64 `json:"gla_office_premium" csv:"gla_office_premium"`
 	ExpAdjGlaOfficePremium         float64 `json:"exp_adj_gla_office_premium" csv:"exp_adj_gla_office_premium"`
+	FinalGlaOfficePremium          float64 `json:"final_gla_office_premium" csv:"final_gla_office_premium"`
 
 	// TaxSaver is an optional rider on GLA. TaxSaverLoading is folded into
 	// LoadedGlaRate, so the TaxSaver*Premium fields below are a reportable
@@ -950,11 +951,11 @@ type MemberRatingResult struct {
 	ExpAdjTaxSaverRiskPremium   float64 `json:"exp_adj_tax_saver_risk_premium" csv:"exp_adj_tax_saver_risk_premium"`
 	TaxSaverOfficePremium       float64 `json:"tax_saver_office_premium" csv:"tax_saver_office_premium"`
 	ExpAdjTaxSaverOfficePremium float64 `json:"exp_adj_tax_saver_office_premium" csv:"exp_adj_tax_saver_office_premium"`
+	FinalTaxSaverOfficePremium  float64 `json:"final_tax_saver_office_premium" csv:"final_tax_saver_office_premium"`
 
 	AdditionalAccidentalGlaSumAssured                  float64 `json:"additional_accidental_gla_sum_assured" csv:"additional_accidental_gla_sum_assured"`
 	AdditionalAccidentalGlaCappedSumAssured            float64 `json:"additional_accidental_gla_capped_sum_assured" csv:"additional_accidental_gla_capped_sum_assured"`
 	AdditionalAccidentalGlaQx                          float64 `json:"additional_accidental_gla_qx" csv:"additional_accidental_gla_qx"`
-	AdditionalAccidentalGlaAidsQx                      float64 `json:"additional_accidental_gla_aids_qx" csv:"additional_accidental_gla_aids_qx"`
 	BaseAdditionalAccidentalGlaRate                    float64 `json:"base_additional_accidental_gla_rate" csv:"base_additional_accidental_gla_rate"`
 	LoadedAdditionalAccidentalGlaRate                  float64 `json:"loaded_additional_accidental_gla_rate" csv:"loaded_additional_accidental_gla_rate"`
 	AdditionalAccidentalGlaWeightedExperienceCrudeRate float64 `json:"additional_accidental_gla_weighted_experience_crude_rate" csv:"additional_accidental_gla_weighted_experience_crude_rate"`
@@ -965,6 +966,7 @@ type MemberRatingResult struct {
 	ExpAdjAdditionalAccidentalGlaRiskPremium           float64 `json:"exp_adj_additional_accidental_gla_risk_premium" csv:"exp_adj_additional_accidental_gla_risk_premium"`
 	AdditionalAccidentalGlaOfficePremium               float64 `json:"additional_accidental_gla_office_premium" csv:"additional_accidental_gla_office_premium"`
 	ExpAdjAdditionalAccidentalGlaOfficePremium         float64 `json:"exp_adj_additional_accidental_gla_office_premium" csv:"exp_adj_additional_accidental_gla_office_premium"`
+	FinalAdditionalAccidentalGlaOfficePremium          float64 `json:"final_additional_accidental_gla_office_premium" csv:"final_additional_accidental_gla_office_premium"`
 
 	PtdSumAssured           float64 `json:"ptd_sum_assured" csv:"ptd_sum_assured"`
 	PtdCappedSumAssured     float64 `json:"ptd_capped_sum_assured" csv:"ptd_capped_sum_assured"`
@@ -976,6 +978,7 @@ type MemberRatingResult struct {
 	ExpAdjPtdRiskPremium    float64 `json:"exp_adj_ptd_risk_premium" csv:"exp_adj_ptd_risk_premium"`
 	PtdOfficePremium        float64 `json:"ptd_office_premium" csv:"ptd_office_premium"`
 	ExpAdjPtdOfficePremium  float64 `json:"exp_adj_ptd_office_premium" csv:"exp_adj_ptd_office_premium"`
+	FinalPtdOfficePremium   float64 `json:"final_ptd_office_premium" csv:"final_ptd_office_premium"`
 
 	CiSumAssured           float64 `json:"ci_sum_assured" csv:"ci_sum_assured"`
 	CiCappedSumAssured     float64 `json:"ci_capped_sum_assured" csv:"ci_capped_sum_assured"`
@@ -987,6 +990,7 @@ type MemberRatingResult struct {
 	ExpAdjCiRiskPremium    float64 `json:"exp_adj_ci_risk_premium" csv:"exp_adj_ci_risk_premium"`
 	CiOfficePremium        float64 `json:"ci_office_premium" csv:"ci_office_premium"`
 	ExpAdjCiOfficePremium  float64 `json:"exp_adj_ci_office_premium" csv:"exp_adj_ci_office_premium"`
+	FinalCiOfficePremium   float64 `json:"final_ci_office_premium" csv:"final_ci_office_premium"`
 
 	SpouseGlaSumAssured          float64 `json:"spouse_gla_sum_assured" csv:"spouse_gla_sum_assured"`
 	SpouseGlaCappedSumAssured    float64 `json:"spouse_gla_capped_sum_assured" csv:"spouse_gla_capped_sum_assured"`
@@ -999,6 +1003,7 @@ type MemberRatingResult struct {
 	SpouseGlaRiskPremium         float64 `json:"spouse_gla_risk_premium" csv:"spouse_gla_risk_premium"`
 	SpouseGlaOfficePremium       float64 `json:"spouse_gla_office_premium" csv:"spouse_gla_office_premium"`
 	ExpAdjSpouseGlaOfficePremium float64 `json:"exp_adj_spouse_gla_office_premium" csv:"exp_adj_spouse_gla_office_premium"`
+	FinalSpouseGlaOfficePremium  float64 `json:"final_spouse_gla_office_premium" csv:"final_spouse_gla_office_premium"`
 
 	TtdIncome                  float64 `json:"ttd_income" csv:"ttd_income"`
 	TtdCappedIncome            float64 `json:"ttd_capped_income" csv:"ttd_capped_income"`
@@ -1012,6 +1017,7 @@ type MemberRatingResult struct {
 	ExpAdjTtdRiskPremium       float64 `json:"exp_adj_ttd_risk_premium" csv:"exp_adj_ttd_risk_premium"`
 	TtdOfficePremium           float64 `json:"ttd_office_premium" csv:"ttd_office_premium"`
 	ExpAdjTtdOfficePremium     float64 `json:"exp_adj_ttd_office_premium" csv:"exp_adj_ttd_office_premium"`
+	FinalTtdOfficePremium      float64 `json:"final_ttd_office_premium" csv:"final_ttd_office_premium"`
 	ExpAdjSpouseGlaRiskPremium float64 `json:"exp_adj_spouse_gla_risk_premium" csv:"exp_adj_spouse_gla_risk_premium"`
 
 	PhiIncome               float64 `json:"phi_income" csv:"phi_income"`
@@ -1029,6 +1035,7 @@ type MemberRatingResult struct {
 	ExpAdjPhiRiskPremium    float64 `json:"exp_adj_phi_risk_premium" csv:"exp_adj_phi_risk_premium"`
 	PhiOfficePremium        float64 `json:"phi_office_premium" csv:"phi_office_premium"`
 	ExpAdjPhiOfficePremium  float64 `json:"exp_adj_phi_office_premium" csv:"exp_adj_phi_office_premium"`
+	FinalPhiOfficePremium   float64 `json:"final_phi_office_premium" csv:"final_phi_office_premium"`
 
 	MemberFuneralSumAssured        float64 `json:"member_funeral_sum_assured" csv:"member_funeral_sum_assured"`
 	MainMemberFuneralBaseRate      float64 `json:"main_member_funeral_base_rate" csv:"main_member_funeral_base_rate"`
@@ -1057,15 +1064,16 @@ type MemberRatingResult struct {
 	ExpAdjTotalFuneralRiskCost   float64 `json:"exp_adj_total_funeral_risk_cost" csv:"exp_adj_total_funeral_risk_cost"`
 	TotalFuneralOfficeCost       float64 `json:"total_funeral_office_cost" csv:"total_funeral_office_cost"`
 	ExpAdjTotalFuneralOfficeCost float64 `json:"exp_adj_total_funeral_office_cost" csv:"exp_adj_total_funeral_office_cost"`
+	FinalTotalFuneralOfficeCost  float64 `json:"final_total_funeral_office_cost" csv:"final_total_funeral_office_cost"`
 
-	Grade0SumAssured            float64 `json:"grade_0_sum_assured" csv:"grade_0_sum_assured"`
-	Grade17SumAssured           float64 `json:"grade_1_7_sum_assured" csv:"grade_1_7_sum_assured"`
-	Grade812SumAssured          float64 `json:"grade_8_12_sum_assured" csv:"grade_8_12_sum_assured"`
-	TertiarySumAssured          float64 `json:"tertiary_sum_assured" csv:"tertiary_sum_assured"`
-	Grade0RiskRate              float64 `json:"grade_0_risk_rate" csv:"grade_0_risk_rate"`
-	Grade17RiskRate             float64 `json:"grade_1_7_risk_rate" csv:"grade_1_7_risk_rate"`
-	Grade812RiskRate            float64 `json:"grade_8_12_risk_rate" csv:"grade_8_12_risk_rate"`
-	TertiaryRiskRate            float64 `json:"tertiary_risk_rate" csv:"tertiary_risk_rate"`
+	Grade0SumAssured   float64 `json:"grade_0_sum_assured" csv:"grade_0_sum_assured"`
+	Grade17SumAssured  float64 `json:"grade_1_7_sum_assured" csv:"grade_1_7_sum_assured"`
+	Grade812SumAssured float64 `json:"grade_8_12_sum_assured" csv:"grade_8_12_sum_assured"`
+	TertiarySumAssured float64 `json:"tertiary_sum_assured" csv:"tertiary_sum_assured"`
+	Grade0RiskRate     float64 `json:"grade_0_risk_rate" csv:"grade_0_risk_rate"`
+	Grade17RiskRate    float64 `json:"grade_1_7_risk_rate" csv:"grade_1_7_risk_rate"`
+	Grade812RiskRate   float64 `json:"grade_8_12_risk_rate" csv:"grade_8_12_risk_rate"`
+	TertiaryRiskRate   float64 `json:"tertiary_risk_rate" csv:"tertiary_risk_rate"`
 	// Educator premium is tracked separately by its GLA and PTD components
 	// (the business does not maintain a combined total — each component
 	// stands alone against its underlying life/disability rate).
@@ -1077,10 +1085,12 @@ type MemberRatingResult struct {
 	GlaEducatorOfficePremium       float64 `json:"gla_educator_office_premium" csv:"gla_educator_office_premium"`
 	ExpAdjGlaEducatorRiskPremium   float64 `json:"exp_adj_gla_educator_risk_premium" csv:"exp_adj_gla_educator_risk_premium"`
 	ExpAdjGlaEducatorOfficePremium float64 `json:"exp_adj_gla_educator_office_premium" csv:"exp_adj_gla_educator_office_premium"`
+	FinalGlaEducatorOfficePremium  float64 `json:"final_gla_educator_office_premium" csv:"final_gla_educator_office_premium"`
 	PtdEducatorRiskPremium         float64 `json:"ptd_educator_risk_premium" csv:"ptd_educator_risk_premium"`
 	PtdEducatorOfficePremium       float64 `json:"ptd_educator_office_premium" csv:"ptd_educator_office_premium"`
 	ExpAdjPtdEducatorRiskPremium   float64 `json:"exp_adj_ptd_educator_risk_premium" csv:"exp_adj_ptd_educator_risk_premium"`
 	ExpAdjPtdEducatorOfficePremium float64 `json:"exp_adj_ptd_educator_office_premium" csv:"exp_adj_ptd_educator_office_premium"`
+	FinalPtdEducatorOfficePremium  float64 `json:"final_ptd_educator_office_premium" csv:"final_ptd_educator_office_premium"`
 
 	// Conversion / continuity slice tracking. Each *Loading is the
 	// per-member loading folded into its parent Loaded*Rate chain (from
@@ -1088,89 +1098,89 @@ type MemberRatingResult struct {
 	// reportable slice of the benefit's premium attributable to that
 	// component. Slices are NOT added to totals (they are already baked
 	// into their respective benefit's premium via the Loaded*Rate).
-	GlaConversionOnWithdrawalLoading                  float64 `json:"gla_conversion_on_withdrawal_loading" csv:"gla_conversion_on_withdrawal_loading" gorm:"column:gla_conv_on_wdr_loading"`
-	GlaConversionOnWithdrawalRiskPremium              float64 `json:"gla_conversion_on_withdrawal_risk_premium" csv:"gla_conversion_on_withdrawal_risk_premium" gorm:"column:gla_conv_on_wdr_risk_premium"`
-	ExpAdjGlaConversionOnWithdrawalRiskPremium        float64 `json:"exp_adj_gla_conversion_on_withdrawal_risk_premium" csv:"exp_adj_gla_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_gla_conv_on_wdr_risk_premium"`
-	GlaConversionOnWithdrawalOfficePremium            float64 `json:"gla_conversion_on_withdrawal_office_premium" csv:"gla_conversion_on_withdrawal_office_premium" gorm:"column:gla_conv_on_wdr_office_premium"`
-	ExpAdjGlaConversionOnWithdrawalOfficePremium      float64 `json:"exp_adj_gla_conversion_on_withdrawal_office_premium" csv:"exp_adj_gla_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_gla_conv_on_wdr_office_premium"`
+	GlaConversionOnWithdrawalLoading             float64 `json:"gla_conversion_on_withdrawal_loading" csv:"gla_conversion_on_withdrawal_loading" gorm:"column:gla_conv_on_wdr_loading"`
+	GlaConversionOnWithdrawalRiskPremium         float64 `json:"gla_conversion_on_withdrawal_risk_premium" csv:"gla_conversion_on_withdrawal_risk_premium" gorm:"column:gla_conv_on_wdr_risk_premium"`
+	ExpAdjGlaConversionOnWithdrawalRiskPremium   float64 `json:"exp_adj_gla_conversion_on_withdrawal_risk_premium" csv:"exp_adj_gla_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_gla_conv_on_wdr_risk_premium"`
+	GlaConversionOnWithdrawalOfficePremium       float64 `json:"gla_conversion_on_withdrawal_office_premium" csv:"gla_conversion_on_withdrawal_office_premium" gorm:"column:gla_conv_on_wdr_office_premium"`
+	ExpAdjGlaConversionOnWithdrawalOfficePremium float64 `json:"exp_adj_gla_conversion_on_withdrawal_office_premium" csv:"exp_adj_gla_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_gla_conv_on_wdr_office_premium"`
 
-	GlaConversionOnRetirementLoading                  float64 `json:"gla_conversion_on_retirement_loading" csv:"gla_conversion_on_retirement_loading" gorm:"column:gla_conv_on_ret_loading"`
-	GlaConversionOnRetirementRiskPremium              float64 `json:"gla_conversion_on_retirement_risk_premium" csv:"gla_conversion_on_retirement_risk_premium" gorm:"column:gla_conv_on_ret_risk_premium"`
-	ExpAdjGlaConversionOnRetirementRiskPremium        float64 `json:"exp_adj_gla_conversion_on_retirement_risk_premium" csv:"exp_adj_gla_conversion_on_retirement_risk_premium" gorm:"column:exp_adj_gla_conv_on_ret_risk_premium"`
-	GlaConversionOnRetirementOfficePremium            float64 `json:"gla_conversion_on_retirement_office_premium" csv:"gla_conversion_on_retirement_office_premium" gorm:"column:gla_conv_on_ret_office_premium"`
-	ExpAdjGlaConversionOnRetirementOfficePremium      float64 `json:"exp_adj_gla_conversion_on_retirement_office_premium" csv:"exp_adj_gla_conversion_on_retirement_office_premium" gorm:"column:exp_adj_gla_conv_on_ret_office_premium"`
+	GlaConversionOnRetirementLoading             float64 `json:"gla_conversion_on_retirement_loading" csv:"gla_conversion_on_retirement_loading" gorm:"column:gla_conv_on_ret_loading"`
+	GlaConversionOnRetirementRiskPremium         float64 `json:"gla_conversion_on_retirement_risk_premium" csv:"gla_conversion_on_retirement_risk_premium" gorm:"column:gla_conv_on_ret_risk_premium"`
+	ExpAdjGlaConversionOnRetirementRiskPremium   float64 `json:"exp_adj_gla_conversion_on_retirement_risk_premium" csv:"exp_adj_gla_conversion_on_retirement_risk_premium" gorm:"column:exp_adj_gla_conv_on_ret_risk_premium"`
+	GlaConversionOnRetirementOfficePremium       float64 `json:"gla_conversion_on_retirement_office_premium" csv:"gla_conversion_on_retirement_office_premium" gorm:"column:gla_conv_on_ret_office_premium"`
+	ExpAdjGlaConversionOnRetirementOfficePremium float64 `json:"exp_adj_gla_conversion_on_retirement_office_premium" csv:"exp_adj_gla_conversion_on_retirement_office_premium" gorm:"column:exp_adj_gla_conv_on_ret_office_premium"`
 
-	GlaContinuityDuringDisabilityLoading              float64 `json:"gla_continuity_during_disability_loading" csv:"gla_continuity_during_disability_loading" gorm:"column:gla_continuity_during_dis_loading"`
-	GlaContinuityDuringDisabilityRiskPremium          float64 `json:"gla_continuity_during_disability_risk_premium" csv:"gla_continuity_during_disability_risk_premium" gorm:"column:gla_cont_dur_dis_risk_premium"`
-	ExpAdjGlaContinuityDuringDisabilityRiskPremium    float64 `json:"exp_adj_gla_continuity_during_disability_risk_premium" csv:"exp_adj_gla_continuity_during_disability_risk_premium" gorm:"column:exp_adj_gla_cont_dur_dis_risk_premium"`
-	GlaContinuityDuringDisabilityOfficePremium        float64 `json:"gla_continuity_during_disability_office_premium" csv:"gla_continuity_during_disability_office_premium" gorm:"column:gla_cont_dur_dis_office_premium"`
-	ExpAdjGlaContinuityDuringDisabilityOfficePremium  float64 `json:"exp_adj_gla_continuity_during_disability_office_premium" csv:"exp_adj_gla_continuity_during_disability_office_premium" gorm:"column:exp_adj_gla_cont_dur_dis_office_premium"`
+	GlaContinuityDuringDisabilityLoading             float64 `json:"gla_continuity_during_disability_loading" csv:"gla_continuity_during_disability_loading" gorm:"column:gla_continuity_during_dis_loading"`
+	GlaContinuityDuringDisabilityRiskPremium         float64 `json:"gla_continuity_during_disability_risk_premium" csv:"gla_continuity_during_disability_risk_premium" gorm:"column:gla_cont_dur_dis_risk_premium"`
+	ExpAdjGlaContinuityDuringDisabilityRiskPremium   float64 `json:"exp_adj_gla_continuity_during_disability_risk_premium" csv:"exp_adj_gla_continuity_during_disability_risk_premium" gorm:"column:exp_adj_gla_cont_dur_dis_risk_premium"`
+	GlaContinuityDuringDisabilityOfficePremium       float64 `json:"gla_continuity_during_disability_office_premium" csv:"gla_continuity_during_disability_office_premium" gorm:"column:gla_cont_dur_dis_office_premium"`
+	ExpAdjGlaContinuityDuringDisabilityOfficePremium float64 `json:"exp_adj_gla_continuity_during_disability_office_premium" csv:"exp_adj_gla_continuity_during_disability_office_premium" gorm:"column:exp_adj_gla_cont_dur_dis_office_premium"`
 
-	GlaEducatorConversionOnWithdrawalLoading                  float64 `json:"gla_educator_conversion_on_withdrawal_loading" csv:"gla_educator_conversion_on_withdrawal_loading" gorm:"column:gla_ed_conv_on_wdr_loading"`
-	GlaEducatorConversionOnWithdrawalRiskPremium              float64 `json:"gla_educator_conversion_on_withdrawal_risk_premium" csv:"gla_educator_conversion_on_withdrawal_risk_premium" gorm:"column:gla_ed_conv_on_wdr_risk_premium"`
-	ExpAdjGlaEducatorConversionOnWithdrawalRiskPremium        float64 `json:"exp_adj_gla_educator_conversion_on_withdrawal_risk_premium" csv:"exp_adj_gla_educator_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_gla_ed_conv_on_wdr_risk_prem"`
-	GlaEducatorConversionOnWithdrawalOfficePremium            float64 `json:"gla_educator_conversion_on_withdrawal_office_premium" csv:"gla_educator_conversion_on_withdrawal_office_premium" gorm:"column:gla_ed_conv_on_wdr_office_premium"`
-	ExpAdjGlaEducatorConversionOnWithdrawalOfficePremium      float64 `json:"exp_adj_gla_educator_conversion_on_withdrawal_office_premium" csv:"exp_adj_gla_educator_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_gla_ed_conv_on_wdr_office_prem"`
+	GlaEducatorConversionOnWithdrawalLoading             float64 `json:"gla_educator_conversion_on_withdrawal_loading" csv:"gla_educator_conversion_on_withdrawal_loading" gorm:"column:gla_ed_conv_on_wdr_loading"`
+	GlaEducatorConversionOnWithdrawalRiskPremium         float64 `json:"gla_educator_conversion_on_withdrawal_risk_premium" csv:"gla_educator_conversion_on_withdrawal_risk_premium" gorm:"column:gla_ed_conv_on_wdr_risk_premium"`
+	ExpAdjGlaEducatorConversionOnWithdrawalRiskPremium   float64 `json:"exp_adj_gla_educator_conversion_on_withdrawal_risk_premium" csv:"exp_adj_gla_educator_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_gla_ed_conv_on_wdr_risk_prem"`
+	GlaEducatorConversionOnWithdrawalOfficePremium       float64 `json:"gla_educator_conversion_on_withdrawal_office_premium" csv:"gla_educator_conversion_on_withdrawal_office_premium" gorm:"column:gla_ed_conv_on_wdr_office_premium"`
+	ExpAdjGlaEducatorConversionOnWithdrawalOfficePremium float64 `json:"exp_adj_gla_educator_conversion_on_withdrawal_office_premium" csv:"exp_adj_gla_educator_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_gla_ed_conv_on_wdr_office_prem"`
 
-	GlaEducatorConversionOnRetirementLoading                  float64 `json:"gla_educator_conversion_on_retirement_loading" csv:"gla_educator_conversion_on_retirement_loading" gorm:"column:gla_ed_conv_on_ret_loading"`
-	GlaEducatorConversionOnRetirementRiskPremium              float64 `json:"gla_educator_conversion_on_retirement_risk_premium" csv:"gla_educator_conversion_on_retirement_risk_premium" gorm:"column:gla_ed_conv_on_ret_risk_premium"`
-	ExpAdjGlaEducatorConversionOnRetirementRiskPremium        float64 `json:"exp_adj_gla_educator_conversion_on_retirement_risk_premium" csv:"exp_adj_gla_educator_conversion_on_retirement_risk_premium" gorm:"column:exp_adj_gla_ed_conv_on_ret_risk_prem"`
-	GlaEducatorConversionOnRetirementOfficePremium            float64 `json:"gla_educator_conversion_on_retirement_office_premium" csv:"gla_educator_conversion_on_retirement_office_premium" gorm:"column:gla_ed_conv_on_ret_office_premium"`
-	ExpAdjGlaEducatorConversionOnRetirementOfficePremium      float64 `json:"exp_adj_gla_educator_conversion_on_retirement_office_premium" csv:"exp_adj_gla_educator_conversion_on_retirement_office_premium" gorm:"column:exp_adj_gla_ed_conv_on_ret_office_prem"`
+	GlaEducatorConversionOnRetirementLoading             float64 `json:"gla_educator_conversion_on_retirement_loading" csv:"gla_educator_conversion_on_retirement_loading" gorm:"column:gla_ed_conv_on_ret_loading"`
+	GlaEducatorConversionOnRetirementRiskPremium         float64 `json:"gla_educator_conversion_on_retirement_risk_premium" csv:"gla_educator_conversion_on_retirement_risk_premium" gorm:"column:gla_ed_conv_on_ret_risk_premium"`
+	ExpAdjGlaEducatorConversionOnRetirementRiskPremium   float64 `json:"exp_adj_gla_educator_conversion_on_retirement_risk_premium" csv:"exp_adj_gla_educator_conversion_on_retirement_risk_premium" gorm:"column:exp_adj_gla_ed_conv_on_ret_risk_prem"`
+	GlaEducatorConversionOnRetirementOfficePremium       float64 `json:"gla_educator_conversion_on_retirement_office_premium" csv:"gla_educator_conversion_on_retirement_office_premium" gorm:"column:gla_ed_conv_on_ret_office_premium"`
+	ExpAdjGlaEducatorConversionOnRetirementOfficePremium float64 `json:"exp_adj_gla_educator_conversion_on_retirement_office_premium" csv:"exp_adj_gla_educator_conversion_on_retirement_office_premium" gorm:"column:exp_adj_gla_ed_conv_on_ret_office_prem"`
 
-	GlaEducatorContinuityDuringDisabilityLoading                  float64 `json:"gla_educator_continuity_during_disability_loading" csv:"gla_educator_continuity_during_disability_loading" gorm:"column:gla_ed_cont_dur_dis_loading"`
-	GlaEducatorContinuityDuringDisabilityRiskPremium              float64 `json:"gla_educator_continuity_during_disability_risk_premium" csv:"gla_educator_continuity_during_disability_risk_premium" gorm:"column:gla_ed_cont_dur_dis_risk_premium"`
-	ExpAdjGlaEducatorContinuityDuringDisabilityRiskPremium        float64 `json:"exp_adj_gla_educator_continuity_during_disability_risk_premium" csv:"exp_adj_gla_educator_continuity_during_disability_risk_premium" gorm:"column:exp_adj_gla_ed_cont_dur_dis_risk_prem"`
-	GlaEducatorContinuityDuringDisabilityOfficePremium            float64 `json:"gla_educator_continuity_during_disability_office_premium" csv:"gla_educator_continuity_during_disability_office_premium" gorm:"column:gla_ed_cont_dur_dis_office_premium"`
-	ExpAdjGlaEducatorContinuityDuringDisabilityOfficePremium      float64 `json:"exp_adj_gla_educator_continuity_during_disability_office_premium" csv:"exp_adj_gla_educator_continuity_during_disability_office_premium" gorm:"column:exp_adj_gla_ed_cont_dur_dis_office_prem"`
+	GlaEducatorContinuityDuringDisabilityLoading             float64 `json:"gla_educator_continuity_during_disability_loading" csv:"gla_educator_continuity_during_disability_loading" gorm:"column:gla_ed_cont_dur_dis_loading"`
+	GlaEducatorContinuityDuringDisabilityRiskPremium         float64 `json:"gla_educator_continuity_during_disability_risk_premium" csv:"gla_educator_continuity_during_disability_risk_premium" gorm:"column:gla_ed_cont_dur_dis_risk_premium"`
+	ExpAdjGlaEducatorContinuityDuringDisabilityRiskPremium   float64 `json:"exp_adj_gla_educator_continuity_during_disability_risk_premium" csv:"exp_adj_gla_educator_continuity_during_disability_risk_premium" gorm:"column:exp_adj_gla_ed_cont_dur_dis_risk_prem"`
+	GlaEducatorContinuityDuringDisabilityOfficePremium       float64 `json:"gla_educator_continuity_during_disability_office_premium" csv:"gla_educator_continuity_during_disability_office_premium" gorm:"column:gla_ed_cont_dur_dis_office_premium"`
+	ExpAdjGlaEducatorContinuityDuringDisabilityOfficePremium float64 `json:"exp_adj_gla_educator_continuity_during_disability_office_premium" csv:"exp_adj_gla_educator_continuity_during_disability_office_premium" gorm:"column:exp_adj_gla_ed_cont_dur_dis_office_prem"`
 
-	PtdConversionOnWithdrawalLoading                  float64 `json:"ptd_conversion_on_withdrawal_loading" csv:"ptd_conversion_on_withdrawal_loading" gorm:"column:ptd_conv_on_wdr_loading"`
-	PtdConversionOnWithdrawalRiskPremium              float64 `json:"ptd_conversion_on_withdrawal_risk_premium" csv:"ptd_conversion_on_withdrawal_risk_premium" gorm:"column:ptd_conv_on_wdr_risk_premium"`
-	ExpAdjPtdConversionOnWithdrawalRiskPremium        float64 `json:"exp_adj_ptd_conversion_on_withdrawal_risk_premium" csv:"exp_adj_ptd_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_ptd_conv_on_wdr_risk_premium"`
-	PtdConversionOnWithdrawalOfficePremium            float64 `json:"ptd_conversion_on_withdrawal_office_premium" csv:"ptd_conversion_on_withdrawal_office_premium" gorm:"column:ptd_conv_on_wdr_office_premium"`
-	ExpAdjPtdConversionOnWithdrawalOfficePremium      float64 `json:"exp_adj_ptd_conversion_on_withdrawal_office_premium" csv:"exp_adj_ptd_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_ptd_conv_on_wdr_office_premium"`
+	PtdConversionOnWithdrawalLoading             float64 `json:"ptd_conversion_on_withdrawal_loading" csv:"ptd_conversion_on_withdrawal_loading" gorm:"column:ptd_conv_on_wdr_loading"`
+	PtdConversionOnWithdrawalRiskPremium         float64 `json:"ptd_conversion_on_withdrawal_risk_premium" csv:"ptd_conversion_on_withdrawal_risk_premium" gorm:"column:ptd_conv_on_wdr_risk_premium"`
+	ExpAdjPtdConversionOnWithdrawalRiskPremium   float64 `json:"exp_adj_ptd_conversion_on_withdrawal_risk_premium" csv:"exp_adj_ptd_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_ptd_conv_on_wdr_risk_premium"`
+	PtdConversionOnWithdrawalOfficePremium       float64 `json:"ptd_conversion_on_withdrawal_office_premium" csv:"ptd_conversion_on_withdrawal_office_premium" gorm:"column:ptd_conv_on_wdr_office_premium"`
+	ExpAdjPtdConversionOnWithdrawalOfficePremium float64 `json:"exp_adj_ptd_conversion_on_withdrawal_office_premium" csv:"exp_adj_ptd_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_ptd_conv_on_wdr_office_premium"`
 
-	PtdEducatorConversionOnWithdrawalLoading                  float64 `json:"ptd_educator_conversion_on_withdrawal_loading" csv:"ptd_educator_conversion_on_withdrawal_loading" gorm:"column:ptd_ed_conv_on_wdr_loading"`
-	PtdEducatorConversionOnWithdrawalRiskPremium              float64 `json:"ptd_educator_conversion_on_withdrawal_risk_premium" csv:"ptd_educator_conversion_on_withdrawal_risk_premium" gorm:"column:ptd_ed_conv_on_wdr_risk_premium"`
-	ExpAdjPtdEducatorConversionOnWithdrawalRiskPremium        float64 `json:"exp_adj_ptd_educator_conversion_on_withdrawal_risk_premium" csv:"exp_adj_ptd_educator_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_ptd_ed_conv_on_wdr_risk_prem"`
-	PtdEducatorConversionOnWithdrawalOfficePremium            float64 `json:"ptd_educator_conversion_on_withdrawal_office_premium" csv:"ptd_educator_conversion_on_withdrawal_office_premium" gorm:"column:ptd_ed_conv_on_wdr_office_premium"`
-	ExpAdjPtdEducatorConversionOnWithdrawalOfficePremium      float64 `json:"exp_adj_ptd_educator_conversion_on_withdrawal_office_premium" csv:"exp_adj_ptd_educator_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_ptd_ed_conv_on_wdr_office_prem"`
+	PtdEducatorConversionOnWithdrawalLoading             float64 `json:"ptd_educator_conversion_on_withdrawal_loading" csv:"ptd_educator_conversion_on_withdrawal_loading" gorm:"column:ptd_ed_conv_on_wdr_loading"`
+	PtdEducatorConversionOnWithdrawalRiskPremium         float64 `json:"ptd_educator_conversion_on_withdrawal_risk_premium" csv:"ptd_educator_conversion_on_withdrawal_risk_premium" gorm:"column:ptd_ed_conv_on_wdr_risk_premium"`
+	ExpAdjPtdEducatorConversionOnWithdrawalRiskPremium   float64 `json:"exp_adj_ptd_educator_conversion_on_withdrawal_risk_premium" csv:"exp_adj_ptd_educator_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_ptd_ed_conv_on_wdr_risk_prem"`
+	PtdEducatorConversionOnWithdrawalOfficePremium       float64 `json:"ptd_educator_conversion_on_withdrawal_office_premium" csv:"ptd_educator_conversion_on_withdrawal_office_premium" gorm:"column:ptd_ed_conv_on_wdr_office_premium"`
+	ExpAdjPtdEducatorConversionOnWithdrawalOfficePremium float64 `json:"exp_adj_ptd_educator_conversion_on_withdrawal_office_premium" csv:"exp_adj_ptd_educator_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_ptd_ed_conv_on_wdr_office_prem"`
 
-	PtdEducatorConversionOnRetirementLoading                  float64 `json:"ptd_educator_conversion_on_retirement_loading" csv:"ptd_educator_conversion_on_retirement_loading" gorm:"column:ptd_ed_conv_on_ret_loading"`
-	PtdEducatorConversionOnRetirementRiskPremium              float64 `json:"ptd_educator_conversion_on_retirement_risk_premium" csv:"ptd_educator_conversion_on_retirement_risk_premium" gorm:"column:ptd_ed_conv_on_ret_risk_premium"`
-	ExpAdjPtdEducatorConversionOnRetirementRiskPremium        float64 `json:"exp_adj_ptd_educator_conversion_on_retirement_risk_premium" csv:"exp_adj_ptd_educator_conversion_on_retirement_risk_premium" gorm:"column:exp_adj_ptd_ed_conv_on_ret_risk_prem"`
-	PtdEducatorConversionOnRetirementOfficePremium            float64 `json:"ptd_educator_conversion_on_retirement_office_premium" csv:"ptd_educator_conversion_on_retirement_office_premium" gorm:"column:ptd_ed_conv_on_ret_office_premium"`
-	ExpAdjPtdEducatorConversionOnRetirementOfficePremium      float64 `json:"exp_adj_ptd_educator_conversion_on_retirement_office_premium" csv:"exp_adj_ptd_educator_conversion_on_retirement_office_premium" gorm:"column:exp_adj_ptd_ed_conv_on_ret_office_prem"`
+	PtdEducatorConversionOnRetirementLoading             float64 `json:"ptd_educator_conversion_on_retirement_loading" csv:"ptd_educator_conversion_on_retirement_loading" gorm:"column:ptd_ed_conv_on_ret_loading"`
+	PtdEducatorConversionOnRetirementRiskPremium         float64 `json:"ptd_educator_conversion_on_retirement_risk_premium" csv:"ptd_educator_conversion_on_retirement_risk_premium" gorm:"column:ptd_ed_conv_on_ret_risk_premium"`
+	ExpAdjPtdEducatorConversionOnRetirementRiskPremium   float64 `json:"exp_adj_ptd_educator_conversion_on_retirement_risk_premium" csv:"exp_adj_ptd_educator_conversion_on_retirement_risk_premium" gorm:"column:exp_adj_ptd_ed_conv_on_ret_risk_prem"`
+	PtdEducatorConversionOnRetirementOfficePremium       float64 `json:"ptd_educator_conversion_on_retirement_office_premium" csv:"ptd_educator_conversion_on_retirement_office_premium" gorm:"column:ptd_ed_conv_on_ret_office_premium"`
+	ExpAdjPtdEducatorConversionOnRetirementOfficePremium float64 `json:"exp_adj_ptd_educator_conversion_on_retirement_office_premium" csv:"exp_adj_ptd_educator_conversion_on_retirement_office_premium" gorm:"column:exp_adj_ptd_ed_conv_on_ret_office_prem"`
 
-	CiConversionOnWithdrawalLoading                  float64 `json:"ci_conversion_on_withdrawal_loading" csv:"ci_conversion_on_withdrawal_loading" gorm:"column:ci_conv_on_wdr_loading"`
-	CiConversionOnWithdrawalRiskPremium              float64 `json:"ci_conversion_on_withdrawal_risk_premium" csv:"ci_conversion_on_withdrawal_risk_premium" gorm:"column:ci_conv_on_wdr_risk_premium"`
-	ExpAdjCiConversionOnWithdrawalRiskPremium        float64 `json:"exp_adj_ci_conversion_on_withdrawal_risk_premium" csv:"exp_adj_ci_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_ci_conv_on_wdr_risk_premium"`
-	CiConversionOnWithdrawalOfficePremium            float64 `json:"ci_conversion_on_withdrawal_office_premium" csv:"ci_conversion_on_withdrawal_office_premium" gorm:"column:ci_conv_on_wdr_office_premium"`
-	ExpAdjCiConversionOnWithdrawalOfficePremium      float64 `json:"exp_adj_ci_conversion_on_withdrawal_office_premium" csv:"exp_adj_ci_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_ci_conv_on_wdr_office_premium"`
+	CiConversionOnWithdrawalLoading             float64 `json:"ci_conversion_on_withdrawal_loading" csv:"ci_conversion_on_withdrawal_loading" gorm:"column:ci_conv_on_wdr_loading"`
+	CiConversionOnWithdrawalRiskPremium         float64 `json:"ci_conversion_on_withdrawal_risk_premium" csv:"ci_conversion_on_withdrawal_risk_premium" gorm:"column:ci_conv_on_wdr_risk_premium"`
+	ExpAdjCiConversionOnWithdrawalRiskPremium   float64 `json:"exp_adj_ci_conversion_on_withdrawal_risk_premium" csv:"exp_adj_ci_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_ci_conv_on_wdr_risk_premium"`
+	CiConversionOnWithdrawalOfficePremium       float64 `json:"ci_conversion_on_withdrawal_office_premium" csv:"ci_conversion_on_withdrawal_office_premium" gorm:"column:ci_conv_on_wdr_office_premium"`
+	ExpAdjCiConversionOnWithdrawalOfficePremium float64 `json:"exp_adj_ci_conversion_on_withdrawal_office_premium" csv:"exp_adj_ci_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_ci_conv_on_wdr_office_premium"`
 
-	PhiConversionOnWithdrawalLoading                  float64 `json:"phi_conversion_on_withdrawal_loading" csv:"phi_conversion_on_withdrawal_loading" gorm:"column:phi_conv_on_wdr_loading"`
-	PhiConversionOnWithdrawalRiskPremium              float64 `json:"phi_conversion_on_withdrawal_risk_premium" csv:"phi_conversion_on_withdrawal_risk_premium" gorm:"column:phi_conv_on_wdr_risk_premium"`
-	ExpAdjPhiConversionOnWithdrawalRiskPremium        float64 `json:"exp_adj_phi_conversion_on_withdrawal_risk_premium" csv:"exp_adj_phi_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_phi_conv_on_wdr_risk_premium"`
-	PhiConversionOnWithdrawalOfficePremium            float64 `json:"phi_conversion_on_withdrawal_office_premium" csv:"phi_conversion_on_withdrawal_office_premium" gorm:"column:phi_conv_on_wdr_office_premium"`
-	ExpAdjPhiConversionOnWithdrawalOfficePremium      float64 `json:"exp_adj_phi_conversion_on_withdrawal_office_premium" csv:"exp_adj_phi_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_phi_conv_on_wdr_office_premium"`
+	PhiConversionOnWithdrawalLoading             float64 `json:"phi_conversion_on_withdrawal_loading" csv:"phi_conversion_on_withdrawal_loading" gorm:"column:phi_conv_on_wdr_loading"`
+	PhiConversionOnWithdrawalRiskPremium         float64 `json:"phi_conversion_on_withdrawal_risk_premium" csv:"phi_conversion_on_withdrawal_risk_premium" gorm:"column:phi_conv_on_wdr_risk_premium"`
+	ExpAdjPhiConversionOnWithdrawalRiskPremium   float64 `json:"exp_adj_phi_conversion_on_withdrawal_risk_premium" csv:"exp_adj_phi_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_phi_conv_on_wdr_risk_premium"`
+	PhiConversionOnWithdrawalOfficePremium       float64 `json:"phi_conversion_on_withdrawal_office_premium" csv:"phi_conversion_on_withdrawal_office_premium" gorm:"column:phi_conv_on_wdr_office_premium"`
+	ExpAdjPhiConversionOnWithdrawalOfficePremium float64 `json:"exp_adj_phi_conversion_on_withdrawal_office_premium" csv:"exp_adj_phi_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_phi_conv_on_wdr_office_premium"`
 
-	SglaConversionOnWithdrawalLoading                  float64 `json:"sgla_conversion_on_withdrawal_loading" csv:"sgla_conversion_on_withdrawal_loading" gorm:"column:sgla_conv_on_wdr_loading"`
-	SglaConversionOnWithdrawalRiskPremium              float64 `json:"sgla_conversion_on_withdrawal_risk_premium" csv:"sgla_conversion_on_withdrawal_risk_premium" gorm:"column:sgla_conv_on_wdr_risk_premium"`
-	ExpAdjSglaConversionOnWithdrawalRiskPremium        float64 `json:"exp_adj_sgla_conversion_on_withdrawal_risk_premium" csv:"exp_adj_sgla_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_sgla_conv_on_wdr_risk_premium"`
-	SglaConversionOnWithdrawalOfficePremium            float64 `json:"sgla_conversion_on_withdrawal_office_premium" csv:"sgla_conversion_on_withdrawal_office_premium" gorm:"column:sgla_conv_on_wdr_office_premium"`
-	ExpAdjSglaConversionOnWithdrawalOfficePremium      float64 `json:"exp_adj_sgla_conversion_on_withdrawal_office_premium" csv:"exp_adj_sgla_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_sgla_conv_on_wdr_office_premium"`
+	SglaConversionOnWithdrawalLoading             float64 `json:"sgla_conversion_on_withdrawal_loading" csv:"sgla_conversion_on_withdrawal_loading" gorm:"column:sgla_conv_on_wdr_loading"`
+	SglaConversionOnWithdrawalRiskPremium         float64 `json:"sgla_conversion_on_withdrawal_risk_premium" csv:"sgla_conversion_on_withdrawal_risk_premium" gorm:"column:sgla_conv_on_wdr_risk_premium"`
+	ExpAdjSglaConversionOnWithdrawalRiskPremium   float64 `json:"exp_adj_sgla_conversion_on_withdrawal_risk_premium" csv:"exp_adj_sgla_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_sgla_conv_on_wdr_risk_premium"`
+	SglaConversionOnWithdrawalOfficePremium       float64 `json:"sgla_conversion_on_withdrawal_office_premium" csv:"sgla_conversion_on_withdrawal_office_premium" gorm:"column:sgla_conv_on_wdr_office_premium"`
+	ExpAdjSglaConversionOnWithdrawalOfficePremium float64 `json:"exp_adj_sgla_conversion_on_withdrawal_office_premium" csv:"exp_adj_sgla_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_sgla_conv_on_wdr_office_premium"`
 
-	FunConversionOnWithdrawalLoading                  float64 `json:"fun_conversion_on_withdrawal_loading" csv:"fun_conversion_on_withdrawal_loading" gorm:"column:fun_conv_on_wdr_loading"`
-	FunConversionOnWithdrawalRiskPremium              float64 `json:"fun_conversion_on_withdrawal_risk_premium" csv:"fun_conversion_on_withdrawal_risk_premium" gorm:"column:fun_conv_on_wdr_risk_premium"`
-	ExpAdjFunConversionOnWithdrawalRiskPremium        float64 `json:"exp_adj_fun_conversion_on_withdrawal_risk_premium" csv:"exp_adj_fun_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_fun_conv_on_wdr_risk_premium"`
-	FunConversionOnWithdrawalOfficePremium            float64 `json:"fun_conversion_on_withdrawal_office_premium" csv:"fun_conversion_on_withdrawal_office_premium" gorm:"column:fun_conv_on_wdr_office_premium"`
-	ExpAdjFunConversionOnWithdrawalOfficePremium      float64 `json:"exp_adj_fun_conversion_on_withdrawal_office_premium" csv:"exp_adj_fun_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_fun_conv_on_wdr_office_premium"`
+	FunConversionOnWithdrawalLoading             float64 `json:"fun_conversion_on_withdrawal_loading" csv:"fun_conversion_on_withdrawal_loading" gorm:"column:fun_conv_on_wdr_loading"`
+	FunConversionOnWithdrawalRiskPremium         float64 `json:"fun_conversion_on_withdrawal_risk_premium" csv:"fun_conversion_on_withdrawal_risk_premium" gorm:"column:fun_conv_on_wdr_risk_premium"`
+	ExpAdjFunConversionOnWithdrawalRiskPremium   float64 `json:"exp_adj_fun_conversion_on_withdrawal_risk_premium" csv:"exp_adj_fun_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_fun_conv_on_wdr_risk_premium"`
+	FunConversionOnWithdrawalOfficePremium       float64 `json:"fun_conversion_on_withdrawal_office_premium" csv:"fun_conversion_on_withdrawal_office_premium" gorm:"column:fun_conv_on_wdr_office_premium"`
+	ExpAdjFunConversionOnWithdrawalOfficePremium float64 `json:"exp_adj_fun_conversion_on_withdrawal_office_premium" csv:"exp_adj_fun_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_fun_conv_on_wdr_office_premium"`
 
-	TtdConversionOnWithdrawalLoading                  float64 `json:"ttd_conversion_on_withdrawal_loading" csv:"ttd_conversion_on_withdrawal_loading" gorm:"column:ttd_conv_on_wdr_loading"`
-	TtdConversionOnWithdrawalRiskPremium              float64 `json:"ttd_conversion_on_withdrawal_risk_premium" csv:"ttd_conversion_on_withdrawal_risk_premium" gorm:"column:ttd_conv_on_wdr_risk_premium"`
-	ExpAdjTtdConversionOnWithdrawalRiskPremium        float64 `json:"exp_adj_ttd_conversion_on_withdrawal_risk_premium" csv:"exp_adj_ttd_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_ttd_conv_on_wdr_risk_premium"`
-	TtdConversionOnWithdrawalOfficePremium            float64 `json:"ttd_conversion_on_withdrawal_office_premium" csv:"ttd_conversion_on_withdrawal_office_premium" gorm:"column:ttd_conv_on_wdr_office_premium"`
-	ExpAdjTtdConversionOnWithdrawalOfficePremium      float64 `json:"exp_adj_ttd_conversion_on_withdrawal_office_premium" csv:"exp_adj_ttd_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_ttd_conv_on_wdr_office_premium"`
+	TtdConversionOnWithdrawalLoading             float64 `json:"ttd_conversion_on_withdrawal_loading" csv:"ttd_conversion_on_withdrawal_loading" gorm:"column:ttd_conv_on_wdr_loading"`
+	TtdConversionOnWithdrawalRiskPremium         float64 `json:"ttd_conversion_on_withdrawal_risk_premium" csv:"ttd_conversion_on_withdrawal_risk_premium" gorm:"column:ttd_conv_on_wdr_risk_premium"`
+	ExpAdjTtdConversionOnWithdrawalRiskPremium   float64 `json:"exp_adj_ttd_conversion_on_withdrawal_risk_premium" csv:"exp_adj_ttd_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_ttd_conv_on_wdr_risk_premium"`
+	TtdConversionOnWithdrawalOfficePremium       float64 `json:"ttd_conversion_on_withdrawal_office_premium" csv:"ttd_conversion_on_withdrawal_office_premium" gorm:"column:ttd_conv_on_wdr_office_premium"`
+	ExpAdjTtdConversionOnWithdrawalOfficePremium float64 `json:"exp_adj_ttd_conversion_on_withdrawal_office_premium" csv:"exp_adj_ttd_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_ttd_conv_on_wdr_office_premium"`
 
 	ExceedsNormalRetirementAgeIndicator    int     `json:"exceeds_normal_retirement_age_indicator" csv:"exceeds_normal_retirement_age_indicator"`
 	ExceedsFreeCoverLimitIndicator         int     `json:"exceeds_free_cover_limit_indicator" csv:"exceeds_free_cover_limit_indicator"`
@@ -1253,17 +1263,17 @@ type MemberRatingResult struct {
 	DependantReinsuranceRate      float64 `json:"dependant_reinsurance_rate" csv:"dependant_reinsurance_rate"`
 
 	// Reinsurance premium per benefit (loaded reinsurance rate × ceded sum assured)
-	GlaReinsurancePremium       float64 `json:"gla_reinsurance_premium" csv:"gla_reinsurance_premium"`
-	PtdReinsurancePremium       float64 `json:"ptd_reinsurance_premium" csv:"ptd_reinsurance_premium"`
-	CiReinsurancePremium        float64 `json:"ci_reinsurance_premium" csv:"ci_reinsurance_premium"`
-	SpouseGlaReinsurancePremium float64 `json:"spouse_gla_reinsurance_premium" csv:"spouse_gla_reinsurance_premium"`
-	TtdReinsurancePremium       float64 `json:"ttd_reinsurance_premium" csv:"ttd_reinsurance_premium"`
-	PhiReinsurancePremium       float64 `json:"phi_reinsurance_premium" csv:"phi_reinsurance_premium"`
+	GlaReinsurancePremium        float64 `json:"gla_reinsurance_premium" csv:"gla_reinsurance_premium"`
+	PtdReinsurancePremium        float64 `json:"ptd_reinsurance_premium" csv:"ptd_reinsurance_premium"`
+	CiReinsurancePremium         float64 `json:"ci_reinsurance_premium" csv:"ci_reinsurance_premium"`
+	SpouseGlaReinsurancePremium  float64 `json:"spouse_gla_reinsurance_premium" csv:"spouse_gla_reinsurance_premium"`
+	TtdReinsurancePremium        float64 `json:"ttd_reinsurance_premium" csv:"ttd_reinsurance_premium"`
+	PhiReinsurancePremium        float64 `json:"phi_reinsurance_premium" csv:"phi_reinsurance_premium"`
 	MainMemberReinsurancePremium float64 `json:"main_member_reinsurance_premium" csv:"main_member_reinsurance_premium"`
-	SpouseReinsurancePremium    float64 `json:"spouse_reinsurance_premium" csv:"spouse_reinsurance_premium"`
-	ChildReinsurancePremium     float64 `json:"child_reinsurance_premium" csv:"child_reinsurance_premium"`
-	ParentReinsurancePremium    float64 `json:"parent_reinsurance_premium" csv:"parent_reinsurance_premium"`
-	DependantReinsurancePremium float64 `json:"dependant_reinsurance_premium" csv:"dependant_reinsurance_premium"`
+	SpouseReinsurancePremium     float64 `json:"spouse_reinsurance_premium" csv:"spouse_reinsurance_premium"`
+	ChildReinsurancePremium      float64 `json:"child_reinsurance_premium" csv:"child_reinsurance_premium"`
+	ParentReinsurancePremium     float64 `json:"parent_reinsurance_premium" csv:"parent_reinsurance_premium"`
+	DependantReinsurancePremium  float64 `json:"dependant_reinsurance_premium" csv:"dependant_reinsurance_premium"`
 
 	// Binder and outsource fee amounts per benefit — non-zero only when
 	// the quote's distribution channel is "binder". Each value is the
@@ -1581,200 +1591,200 @@ type MemberRatingResultSummary struct {
 	TotalFamilyFuneralSumAssured float64 `json:"total_family_funeral_sum_assured" csv:"total_family_funeral_sum_assured"`
 
 	// Slice 1: GlaConversionOnWithdrawal
-	TotalGlaConversionOnWithdrawalAnnualRiskPremium         float64 `json:"total_gla_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_gla_conv_on_wdr_annual_risk_prem"`
-	TotalGlaConversionOnWithdrawalAnnualOfficePremium       float64 `json:"total_gla_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_gla_conv_on_wdr_annual_office_prem"`
-	ExpAdjTotalGlaConversionOnWithdrawalAnnualRiskPremium   float64 `json:"exp_adj_total_gla_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_gla_conv_on_wdr_ann_risk_prem"`
-	ExpAdjTotalGlaConversionOnWithdrawalAnnualOfficePremium float64 `json:"exp_adj_total_gla_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_gla_conv_on_wdr_ann_office_prem"`
+	TotalGlaConversionOnWithdrawalAnnualRiskPremium              float64 `json:"total_gla_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_gla_conv_on_wdr_annual_risk_prem"`
+	TotalGlaConversionOnWithdrawalAnnualOfficePremium            float64 `json:"total_gla_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_gla_conv_on_wdr_annual_office_prem"`
+	ExpAdjTotalGlaConversionOnWithdrawalAnnualRiskPremium        float64 `json:"exp_adj_total_gla_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_gla_conv_on_wdr_ann_risk_prem"`
+	ExpAdjTotalGlaConversionOnWithdrawalAnnualOfficePremium      float64 `json:"exp_adj_total_gla_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_gla_conv_on_wdr_ann_office_prem"`
 	ProportionGlaConversionOnWithdrawalRiskPremiumSalary         float64 `json:"proportion_gla_conversion_on_withdrawal_risk_premium_salary" gorm:"column:prop_gla_conv_on_wdr_risk_prem_salary"`
 	ProportionGlaConversionOnWithdrawalOfficePremiumSalary       float64 `json:"proportion_gla_conversion_on_withdrawal_office_premium_salary" gorm:"column:prop_gla_conv_on_wdr_office_prem_salary"`
 	ExpAdjProportionGlaConversionOnWithdrawalRiskPremiumSalary   float64 `json:"exp_adj_proportion_gla_conversion_on_withdrawal_risk_premium_salary" gorm:"column:exp_adj_prop_gla_conv_on_wdr_risk_prem_salary"`
 	ExpAdjProportionGlaConversionOnWithdrawalOfficePremiumSalary float64 `json:"exp_adj_proportion_gla_conversion_on_withdrawal_office_premium_salary" gorm:"column:exp_adj_prop_gla_conv_on_wdr_office_prem_salary"`
-	GlaConversionOnWithdrawalRiskRatePer1000SA      float64 `json:"gla_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:gla_conv_on_wdr_risk_rate_per_1000_sa"`
-	GlaConversionOnWithdrawalOfficeRatePer1000SA    float64 `json:"gla_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:gla_conv_on_wdr_office_rate_per_1000_sa"`
-	ExpGlaConversionOnWithdrawalRiskRatePer1000SA   float64 `json:"exp_gla_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_gla_conv_on_wdr_risk_rate_per_1000_sa"`
-	ExpGlaConversionOnWithdrawalOfficeRatePer1000SA float64 `json:"exp_gla_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_gla_conv_on_wdr_office_rate_per_1000_sa"`
+	GlaConversionOnWithdrawalRiskRatePer1000SA                   float64 `json:"gla_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:gla_conv_on_wdr_risk_rate_per_1000_sa"`
+	GlaConversionOnWithdrawalOfficeRatePer1000SA                 float64 `json:"gla_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:gla_conv_on_wdr_office_rate_per_1000_sa"`
+	ExpGlaConversionOnWithdrawalRiskRatePer1000SA                float64 `json:"exp_gla_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_gla_conv_on_wdr_risk_rate_per_1000_sa"`
+	ExpGlaConversionOnWithdrawalOfficeRatePer1000SA              float64 `json:"exp_gla_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_gla_conv_on_wdr_office_rate_per_1000_sa"`
 
 	// Slice 9: GlaConversionOnRetirement
-	TotalGlaConversionOnRetirementAnnualRiskPremium         float64 `json:"total_gla_conversion_on_retirement_annual_risk_premium" gorm:"column:total_gla_conv_on_ret_annual_risk_prem"`
-	TotalGlaConversionOnRetirementAnnualOfficePremium       float64 `json:"total_gla_conversion_on_retirement_annual_office_premium" gorm:"column:total_gla_conv_on_ret_annual_office_prem"`
-	ExpAdjTotalGlaConversionOnRetirementAnnualRiskPremium   float64 `json:"exp_adj_total_gla_conversion_on_retirement_annual_risk_premium" gorm:"column:exp_adj_total_gla_conv_on_ret_ann_risk_prem"`
-	ExpAdjTotalGlaConversionOnRetirementAnnualOfficePremium float64 `json:"exp_adj_total_gla_conversion_on_retirement_annual_office_premium" gorm:"column:exp_adj_total_gla_conv_on_ret_ann_office_prem"`
+	TotalGlaConversionOnRetirementAnnualRiskPremium              float64 `json:"total_gla_conversion_on_retirement_annual_risk_premium" gorm:"column:total_gla_conv_on_ret_annual_risk_prem"`
+	TotalGlaConversionOnRetirementAnnualOfficePremium            float64 `json:"total_gla_conversion_on_retirement_annual_office_premium" gorm:"column:total_gla_conv_on_ret_annual_office_prem"`
+	ExpAdjTotalGlaConversionOnRetirementAnnualRiskPremium        float64 `json:"exp_adj_total_gla_conversion_on_retirement_annual_risk_premium" gorm:"column:exp_adj_total_gla_conv_on_ret_ann_risk_prem"`
+	ExpAdjTotalGlaConversionOnRetirementAnnualOfficePremium      float64 `json:"exp_adj_total_gla_conversion_on_retirement_annual_office_premium" gorm:"column:exp_adj_total_gla_conv_on_ret_ann_office_prem"`
 	ProportionGlaConversionOnRetirementRiskPremiumSalary         float64 `json:"proportion_gla_conversion_on_retirement_risk_premium_salary" gorm:"column:prop_gla_conv_on_ret_risk_prem_salary"`
 	ProportionGlaConversionOnRetirementOfficePremiumSalary       float64 `json:"proportion_gla_conversion_on_retirement_office_premium_salary" gorm:"column:prop_gla_conv_on_ret_office_prem_salary"`
 	ExpAdjProportionGlaConversionOnRetirementRiskPremiumSalary   float64 `json:"exp_adj_proportion_gla_conversion_on_retirement_risk_premium_salary" gorm:"column:exp_adj_prop_gla_conv_on_ret_risk_prem_salary"`
 	ExpAdjProportionGlaConversionOnRetirementOfficePremiumSalary float64 `json:"exp_adj_proportion_gla_conversion_on_retirement_office_premium_salary" gorm:"column:exp_adj_prop_gla_conv_on_ret_office_prem_salary"`
-	GlaConversionOnRetirementRiskRatePer1000SA      float64 `json:"gla_conversion_on_retirement_risk_rate_per_1000_sa" gorm:"column:gla_conv_on_ret_risk_rate_per_1000_sa"`
-	GlaConversionOnRetirementOfficeRatePer1000SA    float64 `json:"gla_conversion_on_retirement_office_rate_per_1000_sa" gorm:"column:gla_conv_on_ret_office_rate_per_1000_sa"`
-	ExpGlaConversionOnRetirementRiskRatePer1000SA   float64 `json:"exp_gla_conversion_on_retirement_risk_rate_per_1000_sa" gorm:"column:exp_gla_conv_on_ret_risk_rate_per_1000_sa"`
-	ExpGlaConversionOnRetirementOfficeRatePer1000SA float64 `json:"exp_gla_conversion_on_retirement_office_rate_per_1000_sa" gorm:"column:exp_gla_conv_on_ret_office_rate_per_1000_sa"`
+	GlaConversionOnRetirementRiskRatePer1000SA                   float64 `json:"gla_conversion_on_retirement_risk_rate_per_1000_sa" gorm:"column:gla_conv_on_ret_risk_rate_per_1000_sa"`
+	GlaConversionOnRetirementOfficeRatePer1000SA                 float64 `json:"gla_conversion_on_retirement_office_rate_per_1000_sa" gorm:"column:gla_conv_on_ret_office_rate_per_1000_sa"`
+	ExpGlaConversionOnRetirementRiskRatePer1000SA                float64 `json:"exp_gla_conversion_on_retirement_risk_rate_per_1000_sa" gorm:"column:exp_gla_conv_on_ret_risk_rate_per_1000_sa"`
+	ExpGlaConversionOnRetirementOfficeRatePer1000SA              float64 `json:"exp_gla_conversion_on_retirement_office_rate_per_1000_sa" gorm:"column:exp_gla_conv_on_ret_office_rate_per_1000_sa"`
 
 	// Slice 12: GlaContinuityDuringDisability (reuses ContinuationLoading on the member row)
-	TotalGlaContinuityDuringDisabilityAnnualRiskPremium         float64 `json:"total_gla_continuity_during_disability_annual_risk_premium" gorm:"column:total_gla_cont_dur_dis_annual_risk_prem"`
-	TotalGlaContinuityDuringDisabilityAnnualOfficePremium       float64 `json:"total_gla_continuity_during_disability_annual_office_premium" gorm:"column:total_gla_cont_dur_dis_annual_office_prem"`
-	ExpAdjTotalGlaContinuityDuringDisabilityAnnualRiskPremium   float64 `json:"exp_adj_total_gla_continuity_during_disability_annual_risk_premium" gorm:"column:exp_adj_total_gla_cont_dur_dis_ann_risk_prem"`
-	ExpAdjTotalGlaContinuityDuringDisabilityAnnualOfficePremium float64 `json:"exp_adj_total_gla_continuity_during_disability_annual_office_premium" gorm:"column:exp_adj_total_gla_cont_dur_dis_ann_office_prem"`
+	TotalGlaContinuityDuringDisabilityAnnualRiskPremium              float64 `json:"total_gla_continuity_during_disability_annual_risk_premium" gorm:"column:total_gla_cont_dur_dis_annual_risk_prem"`
+	TotalGlaContinuityDuringDisabilityAnnualOfficePremium            float64 `json:"total_gla_continuity_during_disability_annual_office_premium" gorm:"column:total_gla_cont_dur_dis_annual_office_prem"`
+	ExpAdjTotalGlaContinuityDuringDisabilityAnnualRiskPremium        float64 `json:"exp_adj_total_gla_continuity_during_disability_annual_risk_premium" gorm:"column:exp_adj_total_gla_cont_dur_dis_ann_risk_prem"`
+	ExpAdjTotalGlaContinuityDuringDisabilityAnnualOfficePremium      float64 `json:"exp_adj_total_gla_continuity_during_disability_annual_office_premium" gorm:"column:exp_adj_total_gla_cont_dur_dis_ann_office_prem"`
 	ProportionGlaContinuityDuringDisabilityRiskPremiumSalary         float64 `json:"proportion_gla_continuity_during_disability_risk_premium_salary" gorm:"column:prop_gla_cont_dur_dis_risk_prem_salary"`
 	ProportionGlaContinuityDuringDisabilityOfficePremiumSalary       float64 `json:"proportion_gla_continuity_during_disability_office_premium_salary" gorm:"column:prop_gla_cont_dur_dis_office_prem_salary"`
 	ExpAdjProportionGlaContinuityDuringDisabilityRiskPremiumSalary   float64 `json:"exp_adj_proportion_gla_continuity_during_disability_risk_premium_salary" gorm:"column:exp_adj_prop_gla_cont_dur_dis_risk_prem_salary"`
 	ExpAdjProportionGlaContinuityDuringDisabilityOfficePremiumSalary float64 `json:"exp_adj_proportion_gla_continuity_during_disability_office_premium_salary" gorm:"column:exp_adj_prop_gla_cont_dur_dis_office_prem_salary"`
-	GlaContinuityDuringDisabilityRiskRatePer1000SA      float64 `json:"gla_continuity_during_disability_risk_rate_per_1000_sa" gorm:"column:gla_cont_dur_dis_risk_rate_per_1000_sa"`
-	GlaContinuityDuringDisabilityOfficeRatePer1000SA    float64 `json:"gla_continuity_during_disability_office_rate_per_1000_sa" gorm:"column:gla_cont_dur_dis_office_rate_per_1000_sa"`
-	ExpGlaContinuityDuringDisabilityRiskRatePer1000SA   float64 `json:"exp_gla_continuity_during_disability_risk_rate_per_1000_sa" gorm:"column:exp_gla_cont_dur_dis_risk_rate_per_1000_sa"`
-	ExpGlaContinuityDuringDisabilityOfficeRatePer1000SA float64 `json:"exp_gla_continuity_during_disability_office_rate_per_1000_sa" gorm:"column:exp_gla_cont_dur_dis_office_rate_per_1000_sa"`
+	GlaContinuityDuringDisabilityRiskRatePer1000SA                   float64 `json:"gla_continuity_during_disability_risk_rate_per_1000_sa" gorm:"column:gla_cont_dur_dis_risk_rate_per_1000_sa"`
+	GlaContinuityDuringDisabilityOfficeRatePer1000SA                 float64 `json:"gla_continuity_during_disability_office_rate_per_1000_sa" gorm:"column:gla_cont_dur_dis_office_rate_per_1000_sa"`
+	ExpGlaContinuityDuringDisabilityRiskRatePer1000SA                float64 `json:"exp_gla_continuity_during_disability_risk_rate_per_1000_sa" gorm:"column:exp_gla_cont_dur_dis_risk_rate_per_1000_sa"`
+	ExpGlaContinuityDuringDisabilityOfficeRatePer1000SA              float64 `json:"exp_gla_continuity_during_disability_office_rate_per_1000_sa" gorm:"column:exp_gla_cont_dur_dis_office_rate_per_1000_sa"`
 
 	// Slice 2: GlaEducatorConversionOnWithdrawal
-	TotalGlaEducatorConversionOnWithdrawalAnnualRiskPremium         float64 `json:"total_gla_educator_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_gla_ed_conv_on_wdr_annual_risk_prem"`
-	TotalGlaEducatorConversionOnWithdrawalAnnualOfficePremium       float64 `json:"total_gla_educator_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_gla_ed_conv_on_wdr_annual_office_prem"`
-	ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualRiskPremium   float64 `json:"exp_adj_total_gla_educator_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_gla_ed_conv_on_wdr_ann_risk_prem"`
-	ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualOfficePremium float64 `json:"exp_adj_total_gla_educator_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_gla_ed_conv_on_wdr_ann_office_prem"`
+	TotalGlaEducatorConversionOnWithdrawalAnnualRiskPremium              float64 `json:"total_gla_educator_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_gla_ed_conv_on_wdr_annual_risk_prem"`
+	TotalGlaEducatorConversionOnWithdrawalAnnualOfficePremium            float64 `json:"total_gla_educator_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_gla_ed_conv_on_wdr_annual_office_prem"`
+	ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualRiskPremium        float64 `json:"exp_adj_total_gla_educator_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_gla_ed_conv_on_wdr_ann_risk_prem"`
+	ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualOfficePremium      float64 `json:"exp_adj_total_gla_educator_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_gla_ed_conv_on_wdr_ann_office_prem"`
 	ProportionGlaEducatorConversionOnWithdrawalRiskPremiumSalary         float64 `json:"proportion_gla_educator_conversion_on_withdrawal_risk_premium_salary" gorm:"column:prop_gla_ed_conv_on_wdr_risk_prem_salary"`
 	ProportionGlaEducatorConversionOnWithdrawalOfficePremiumSalary       float64 `json:"proportion_gla_educator_conversion_on_withdrawal_office_premium_salary" gorm:"column:prop_gla_ed_conv_on_wdr_office_prem_salary"`
 	ExpAdjProportionGlaEducatorConversionOnWithdrawalRiskPremiumSalary   float64 `json:"exp_adj_proportion_gla_educator_conversion_on_withdrawal_risk_premium_salary" gorm:"column:exp_adj_prop_gla_ed_conv_on_wdr_risk_prem_salary"`
 	ExpAdjProportionGlaEducatorConversionOnWithdrawalOfficePremiumSalary float64 `json:"exp_adj_proportion_gla_educator_conversion_on_withdrawal_office_premium_salary" gorm:"column:exp_adj_prop_gla_ed_conv_on_wdr_office_prem_salary"`
-	GlaEducatorConversionOnWithdrawalRiskRatePer1000SA      float64 `json:"gla_educator_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:gla_ed_conv_on_wdr_risk_rate_per_1000_sa"`
-	GlaEducatorConversionOnWithdrawalOfficeRatePer1000SA    float64 `json:"gla_educator_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:gla_ed_conv_on_wdr_office_rate_per_1000_sa"`
-	ExpGlaEducatorConversionOnWithdrawalRiskRatePer1000SA   float64 `json:"exp_gla_educator_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_gla_ed_conv_on_wdr_risk_rate_per_1000_sa"`
-	ExpGlaEducatorConversionOnWithdrawalOfficeRatePer1000SA float64 `json:"exp_gla_educator_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_gla_ed_conv_on_wdr_office_rate_per_1000_sa"`
+	GlaEducatorConversionOnWithdrawalRiskRatePer1000SA                   float64 `json:"gla_educator_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:gla_ed_conv_on_wdr_risk_rate_per_1000_sa"`
+	GlaEducatorConversionOnWithdrawalOfficeRatePer1000SA                 float64 `json:"gla_educator_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:gla_ed_conv_on_wdr_office_rate_per_1000_sa"`
+	ExpGlaEducatorConversionOnWithdrawalRiskRatePer1000SA                float64 `json:"exp_gla_educator_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_gla_ed_conv_on_wdr_risk_rate_per_1000_sa"`
+	ExpGlaEducatorConversionOnWithdrawalOfficeRatePer1000SA              float64 `json:"exp_gla_educator_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_gla_ed_conv_on_wdr_office_rate_per_1000_sa"`
 
 	// Slice 10: GlaEducatorConversionOnRetirement
-	TotalGlaEducatorConversionOnRetirementAnnualRiskPremium         float64 `json:"total_gla_educator_conversion_on_retirement_annual_risk_premium" gorm:"column:total_gla_ed_conv_on_ret_annual_risk_prem"`
-	TotalGlaEducatorConversionOnRetirementAnnualOfficePremium       float64 `json:"total_gla_educator_conversion_on_retirement_annual_office_premium" gorm:"column:total_gla_ed_conv_on_ret_annual_office_prem"`
-	ExpAdjTotalGlaEducatorConversionOnRetirementAnnualRiskPremium   float64 `json:"exp_adj_total_gla_educator_conversion_on_retirement_annual_risk_premium" gorm:"column:exp_adj_total_gla_ed_conv_on_ret_ann_risk_prem"`
-	ExpAdjTotalGlaEducatorConversionOnRetirementAnnualOfficePremium float64 `json:"exp_adj_total_gla_educator_conversion_on_retirement_annual_office_premium" gorm:"column:exp_adj_total_gla_ed_conv_on_ret_ann_office_prem"`
+	TotalGlaEducatorConversionOnRetirementAnnualRiskPremium              float64 `json:"total_gla_educator_conversion_on_retirement_annual_risk_premium" gorm:"column:total_gla_ed_conv_on_ret_annual_risk_prem"`
+	TotalGlaEducatorConversionOnRetirementAnnualOfficePremium            float64 `json:"total_gla_educator_conversion_on_retirement_annual_office_premium" gorm:"column:total_gla_ed_conv_on_ret_annual_office_prem"`
+	ExpAdjTotalGlaEducatorConversionOnRetirementAnnualRiskPremium        float64 `json:"exp_adj_total_gla_educator_conversion_on_retirement_annual_risk_premium" gorm:"column:exp_adj_total_gla_ed_conv_on_ret_ann_risk_prem"`
+	ExpAdjTotalGlaEducatorConversionOnRetirementAnnualOfficePremium      float64 `json:"exp_adj_total_gla_educator_conversion_on_retirement_annual_office_premium" gorm:"column:exp_adj_total_gla_ed_conv_on_ret_ann_office_prem"`
 	ProportionGlaEducatorConversionOnRetirementRiskPremiumSalary         float64 `json:"proportion_gla_educator_conversion_on_retirement_risk_premium_salary" gorm:"column:prop_gla_ed_conv_on_ret_risk_prem_salary"`
 	ProportionGlaEducatorConversionOnRetirementOfficePremiumSalary       float64 `json:"proportion_gla_educator_conversion_on_retirement_office_premium_salary" gorm:"column:prop_gla_ed_conv_on_ret_office_prem_salary"`
 	ExpAdjProportionGlaEducatorConversionOnRetirementRiskPremiumSalary   float64 `json:"exp_adj_proportion_gla_educator_conversion_on_retirement_risk_premium_salary" gorm:"column:exp_adj_prop_gla_ed_conv_on_ret_risk_prem_salary"`
 	ExpAdjProportionGlaEducatorConversionOnRetirementOfficePremiumSalary float64 `json:"exp_adj_proportion_gla_educator_conversion_on_retirement_office_premium_salary" gorm:"column:exp_adj_prop_gla_ed_conv_on_ret_office_prem_salary"`
-	GlaEducatorConversionOnRetirementRiskRatePer1000SA      float64 `json:"gla_educator_conversion_on_retirement_risk_rate_per_1000_sa" gorm:"column:gla_ed_conv_on_ret_risk_rate_per_1000_sa"`
-	GlaEducatorConversionOnRetirementOfficeRatePer1000SA    float64 `json:"gla_educator_conversion_on_retirement_office_rate_per_1000_sa" gorm:"column:gla_ed_conv_on_ret_office_rate_per_1000_sa"`
-	ExpGlaEducatorConversionOnRetirementRiskRatePer1000SA   float64 `json:"exp_gla_educator_conversion_on_retirement_risk_rate_per_1000_sa" gorm:"column:exp_gla_ed_conv_on_ret_risk_rate_per_1000_sa"`
-	ExpGlaEducatorConversionOnRetirementOfficeRatePer1000SA float64 `json:"exp_gla_educator_conversion_on_retirement_office_rate_per_1000_sa" gorm:"column:exp_gla_ed_conv_on_ret_office_rate_per_1000_sa"`
+	GlaEducatorConversionOnRetirementRiskRatePer1000SA                   float64 `json:"gla_educator_conversion_on_retirement_risk_rate_per_1000_sa" gorm:"column:gla_ed_conv_on_ret_risk_rate_per_1000_sa"`
+	GlaEducatorConversionOnRetirementOfficeRatePer1000SA                 float64 `json:"gla_educator_conversion_on_retirement_office_rate_per_1000_sa" gorm:"column:gla_ed_conv_on_ret_office_rate_per_1000_sa"`
+	ExpGlaEducatorConversionOnRetirementRiskRatePer1000SA                float64 `json:"exp_gla_educator_conversion_on_retirement_risk_rate_per_1000_sa" gorm:"column:exp_gla_ed_conv_on_ret_risk_rate_per_1000_sa"`
+	ExpGlaEducatorConversionOnRetirementOfficeRatePer1000SA              float64 `json:"exp_gla_educator_conversion_on_retirement_office_rate_per_1000_sa" gorm:"column:exp_gla_ed_conv_on_ret_office_rate_per_1000_sa"`
 
 	// Slice 13: GlaEducatorContinuityDuringDisability
-	TotalGlaEducatorContinuityDuringDisabilityAnnualRiskPremium         float64 `json:"total_gla_educator_continuity_during_disability_annual_risk_premium" gorm:"column:total_gla_ed_cont_dur_dis_annual_risk_prem"`
-	TotalGlaEducatorContinuityDuringDisabilityAnnualOfficePremium       float64 `json:"total_gla_educator_continuity_during_disability_annual_office_premium" gorm:"column:total_gla_ed_cont_dur_dis_annual_office_prem"`
-	ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualRiskPremium   float64 `json:"exp_adj_total_gla_educator_continuity_during_disability_annual_risk_premium" gorm:"column:exp_adj_total_gla_ed_cont_dur_dis_ann_risk_prem"`
-	ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualOfficePremium float64 `json:"exp_adj_total_gla_educator_continuity_during_disability_annual_office_premium" gorm:"column:exp_adj_total_gla_ed_cont_dur_dis_ann_office_prem"`
+	TotalGlaEducatorContinuityDuringDisabilityAnnualRiskPremium              float64 `json:"total_gla_educator_continuity_during_disability_annual_risk_premium" gorm:"column:total_gla_ed_cont_dur_dis_annual_risk_prem"`
+	TotalGlaEducatorContinuityDuringDisabilityAnnualOfficePremium            float64 `json:"total_gla_educator_continuity_during_disability_annual_office_premium" gorm:"column:total_gla_ed_cont_dur_dis_annual_office_prem"`
+	ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualRiskPremium        float64 `json:"exp_adj_total_gla_educator_continuity_during_disability_annual_risk_premium" gorm:"column:exp_adj_total_gla_ed_cont_dur_dis_ann_risk_prem"`
+	ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualOfficePremium      float64 `json:"exp_adj_total_gla_educator_continuity_during_disability_annual_office_premium" gorm:"column:exp_adj_total_gla_ed_cont_dur_dis_ann_office_prem"`
 	ProportionGlaEducatorContinuityDuringDisabilityRiskPremiumSalary         float64 `json:"proportion_gla_educator_continuity_during_disability_risk_premium_salary" gorm:"column:prop_gla_ed_cont_dur_dis_risk_prem_salary"`
 	ProportionGlaEducatorContinuityDuringDisabilityOfficePremiumSalary       float64 `json:"proportion_gla_educator_continuity_during_disability_office_premium_salary" gorm:"column:prop_gla_ed_cont_dur_dis_office_prem_salary"`
 	ExpAdjProportionGlaEducatorContinuityDuringDisabilityRiskPremiumSalary   float64 `json:"exp_adj_proportion_gla_educator_continuity_during_disability_risk_premium_salary" gorm:"column:exp_adj_prop_gla_ed_cont_dur_dis_risk_prem_salary"`
 	ExpAdjProportionGlaEducatorContinuityDuringDisabilityOfficePremiumSalary float64 `json:"exp_adj_proportion_gla_educator_continuity_during_disability_office_premium_salary" gorm:"column:exp_adj_prop_gla_ed_cont_dur_dis_office_prem_salary"`
-	GlaEducatorContinuityDuringDisabilityRiskRatePer1000SA      float64 `json:"gla_educator_continuity_during_disability_risk_rate_per_1000_sa" gorm:"column:gla_ed_cont_dur_dis_risk_rate_per_1000_sa"`
-	GlaEducatorContinuityDuringDisabilityOfficeRatePer1000SA    float64 `json:"gla_educator_continuity_during_disability_office_rate_per_1000_sa" gorm:"column:gla_ed_cont_dur_dis_office_rate_per_1000_sa"`
-	ExpGlaEducatorContinuityDuringDisabilityRiskRatePer1000SA   float64 `json:"exp_gla_educator_continuity_during_disability_risk_rate_per_1000_sa" gorm:"column:exp_gla_ed_cont_dur_dis_risk_rate_per_1000_sa"`
-	ExpGlaEducatorContinuityDuringDisabilityOfficeRatePer1000SA float64 `json:"exp_gla_educator_continuity_during_disability_office_rate_per_1000_sa" gorm:"column:exp_gla_ed_cont_dur_dis_office_rate_per_1000_sa"`
+	GlaEducatorContinuityDuringDisabilityRiskRatePer1000SA                   float64 `json:"gla_educator_continuity_during_disability_risk_rate_per_1000_sa" gorm:"column:gla_ed_cont_dur_dis_risk_rate_per_1000_sa"`
+	GlaEducatorContinuityDuringDisabilityOfficeRatePer1000SA                 float64 `json:"gla_educator_continuity_during_disability_office_rate_per_1000_sa" gorm:"column:gla_ed_cont_dur_dis_office_rate_per_1000_sa"`
+	ExpGlaEducatorContinuityDuringDisabilityRiskRatePer1000SA                float64 `json:"exp_gla_educator_continuity_during_disability_risk_rate_per_1000_sa" gorm:"column:exp_gla_ed_cont_dur_dis_risk_rate_per_1000_sa"`
+	ExpGlaEducatorContinuityDuringDisabilityOfficeRatePer1000SA              float64 `json:"exp_gla_educator_continuity_during_disability_office_rate_per_1000_sa" gorm:"column:exp_gla_ed_cont_dur_dis_office_rate_per_1000_sa"`
 
 	// Slice 4: PtdConversionOnWithdrawal
-	TotalPtdConversionOnWithdrawalAnnualRiskPremium         float64 `json:"total_ptd_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_ptd_conv_on_wdr_annual_risk_prem"`
-	TotalPtdConversionOnWithdrawalAnnualOfficePremium       float64 `json:"total_ptd_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_ptd_conv_on_wdr_annual_office_prem"`
-	ExpAdjTotalPtdConversionOnWithdrawalAnnualRiskPremium   float64 `json:"exp_adj_total_ptd_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_ptd_conv_on_wdr_ann_risk_prem"`
-	ExpAdjTotalPtdConversionOnWithdrawalAnnualOfficePremium float64 `json:"exp_adj_total_ptd_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_ptd_conv_on_wdr_ann_office_prem"`
+	TotalPtdConversionOnWithdrawalAnnualRiskPremium              float64 `json:"total_ptd_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_ptd_conv_on_wdr_annual_risk_prem"`
+	TotalPtdConversionOnWithdrawalAnnualOfficePremium            float64 `json:"total_ptd_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_ptd_conv_on_wdr_annual_office_prem"`
+	ExpAdjTotalPtdConversionOnWithdrawalAnnualRiskPremium        float64 `json:"exp_adj_total_ptd_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_ptd_conv_on_wdr_ann_risk_prem"`
+	ExpAdjTotalPtdConversionOnWithdrawalAnnualOfficePremium      float64 `json:"exp_adj_total_ptd_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_ptd_conv_on_wdr_ann_office_prem"`
 	ProportionPtdConversionOnWithdrawalRiskPremiumSalary         float64 `json:"proportion_ptd_conversion_on_withdrawal_risk_premium_salary" gorm:"column:prop_ptd_conv_on_wdr_risk_prem_salary"`
 	ProportionPtdConversionOnWithdrawalOfficePremiumSalary       float64 `json:"proportion_ptd_conversion_on_withdrawal_office_premium_salary" gorm:"column:prop_ptd_conv_on_wdr_office_prem_salary"`
 	ExpAdjProportionPtdConversionOnWithdrawalRiskPremiumSalary   float64 `json:"exp_adj_proportion_ptd_conversion_on_withdrawal_risk_premium_salary" gorm:"column:exp_adj_prop_ptd_conv_on_wdr_risk_prem_salary"`
 	ExpAdjProportionPtdConversionOnWithdrawalOfficePremiumSalary float64 `json:"exp_adj_proportion_ptd_conversion_on_withdrawal_office_premium_salary" gorm:"column:exp_adj_prop_ptd_conv_on_wdr_office_prem_salary"`
-	PtdConversionOnWithdrawalRiskRatePer1000SA      float64 `json:"ptd_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:ptd_conv_on_wdr_risk_rate_per_1000_sa"`
-	PtdConversionOnWithdrawalOfficeRatePer1000SA    float64 `json:"ptd_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:ptd_conv_on_wdr_office_rate_per_1000_sa"`
-	ExpPtdConversionOnWithdrawalRiskRatePer1000SA   float64 `json:"exp_ptd_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_ptd_conv_on_wdr_risk_rate_per_1000_sa"`
-	ExpPtdConversionOnWithdrawalOfficeRatePer1000SA float64 `json:"exp_ptd_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_ptd_conv_on_wdr_office_rate_per_1000_sa"`
+	PtdConversionOnWithdrawalRiskRatePer1000SA                   float64 `json:"ptd_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:ptd_conv_on_wdr_risk_rate_per_1000_sa"`
+	PtdConversionOnWithdrawalOfficeRatePer1000SA                 float64 `json:"ptd_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:ptd_conv_on_wdr_office_rate_per_1000_sa"`
+	ExpPtdConversionOnWithdrawalRiskRatePer1000SA                float64 `json:"exp_ptd_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_ptd_conv_on_wdr_risk_rate_per_1000_sa"`
+	ExpPtdConversionOnWithdrawalOfficeRatePer1000SA              float64 `json:"exp_ptd_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_ptd_conv_on_wdr_office_rate_per_1000_sa"`
 
 	// Slice 3: PtdEducatorConversionOnWithdrawal
-	TotalPtdEducatorConversionOnWithdrawalAnnualRiskPremium         float64 `json:"total_ptd_educator_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_ptd_ed_conv_on_wdr_annual_risk_prem"`
-	TotalPtdEducatorConversionOnWithdrawalAnnualOfficePremium       float64 `json:"total_ptd_educator_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_ptd_ed_conv_on_wdr_annual_office_prem"`
-	ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualRiskPremium   float64 `json:"exp_adj_total_ptd_educator_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_ptd_ed_conv_on_wdr_ann_risk_prem"`
-	ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualOfficePremium float64 `json:"exp_adj_total_ptd_educator_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_ptd_ed_conv_on_wdr_ann_office_prem"`
+	TotalPtdEducatorConversionOnWithdrawalAnnualRiskPremium              float64 `json:"total_ptd_educator_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_ptd_ed_conv_on_wdr_annual_risk_prem"`
+	TotalPtdEducatorConversionOnWithdrawalAnnualOfficePremium            float64 `json:"total_ptd_educator_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_ptd_ed_conv_on_wdr_annual_office_prem"`
+	ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualRiskPremium        float64 `json:"exp_adj_total_ptd_educator_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_ptd_ed_conv_on_wdr_ann_risk_prem"`
+	ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualOfficePremium      float64 `json:"exp_adj_total_ptd_educator_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_ptd_ed_conv_on_wdr_ann_office_prem"`
 	ProportionPtdEducatorConversionOnWithdrawalRiskPremiumSalary         float64 `json:"proportion_ptd_educator_conversion_on_withdrawal_risk_premium_salary" gorm:"column:prop_ptd_ed_conv_on_wdr_risk_prem_salary"`
 	ProportionPtdEducatorConversionOnWithdrawalOfficePremiumSalary       float64 `json:"proportion_ptd_educator_conversion_on_withdrawal_office_premium_salary" gorm:"column:prop_ptd_ed_conv_on_wdr_office_prem_salary"`
 	ExpAdjProportionPtdEducatorConversionOnWithdrawalRiskPremiumSalary   float64 `json:"exp_adj_proportion_ptd_educator_conversion_on_withdrawal_risk_premium_salary" gorm:"column:exp_adj_prop_ptd_ed_conv_on_wdr_risk_prem_salary"`
 	ExpAdjProportionPtdEducatorConversionOnWithdrawalOfficePremiumSalary float64 `json:"exp_adj_proportion_ptd_educator_conversion_on_withdrawal_office_premium_salary" gorm:"column:exp_adj_prop_ptd_ed_conv_on_wdr_office_prem_salary"`
-	PtdEducatorConversionOnWithdrawalRiskRatePer1000SA      float64 `json:"ptd_educator_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:ptd_ed_conv_on_wdr_risk_rate_per_1000_sa"`
-	PtdEducatorConversionOnWithdrawalOfficeRatePer1000SA    float64 `json:"ptd_educator_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:ptd_ed_conv_on_wdr_office_rate_per_1000_sa"`
-	ExpPtdEducatorConversionOnWithdrawalRiskRatePer1000SA   float64 `json:"exp_ptd_educator_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_ptd_ed_conv_on_wdr_risk_rate_per_1000_sa"`
-	ExpPtdEducatorConversionOnWithdrawalOfficeRatePer1000SA float64 `json:"exp_ptd_educator_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_ptd_ed_conv_on_wdr_office_rate_per_1000_sa"`
+	PtdEducatorConversionOnWithdrawalRiskRatePer1000SA                   float64 `json:"ptd_educator_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:ptd_ed_conv_on_wdr_risk_rate_per_1000_sa"`
+	PtdEducatorConversionOnWithdrawalOfficeRatePer1000SA                 float64 `json:"ptd_educator_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:ptd_ed_conv_on_wdr_office_rate_per_1000_sa"`
+	ExpPtdEducatorConversionOnWithdrawalRiskRatePer1000SA                float64 `json:"exp_ptd_educator_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_ptd_ed_conv_on_wdr_risk_rate_per_1000_sa"`
+	ExpPtdEducatorConversionOnWithdrawalOfficeRatePer1000SA              float64 `json:"exp_ptd_educator_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_ptd_ed_conv_on_wdr_office_rate_per_1000_sa"`
 
 	// Slice 11: PtdEducatorConversionOnRetirement
-	TotalPtdEducatorConversionOnRetirementAnnualRiskPremium         float64 `json:"total_ptd_educator_conversion_on_retirement_annual_risk_premium" gorm:"column:total_ptd_ed_conv_on_ret_annual_risk_prem"`
-	TotalPtdEducatorConversionOnRetirementAnnualOfficePremium       float64 `json:"total_ptd_educator_conversion_on_retirement_annual_office_premium" gorm:"column:total_ptd_ed_conv_on_ret_annual_office_prem"`
-	ExpAdjTotalPtdEducatorConversionOnRetirementAnnualRiskPremium   float64 `json:"exp_adj_total_ptd_educator_conversion_on_retirement_annual_risk_premium" gorm:"column:exp_adj_total_ptd_ed_conv_on_ret_ann_risk_prem"`
-	ExpAdjTotalPtdEducatorConversionOnRetirementAnnualOfficePremium float64 `json:"exp_adj_total_ptd_educator_conversion_on_retirement_annual_office_premium" gorm:"column:exp_adj_total_ptd_ed_conv_on_ret_ann_office_prem"`
+	TotalPtdEducatorConversionOnRetirementAnnualRiskPremium              float64 `json:"total_ptd_educator_conversion_on_retirement_annual_risk_premium" gorm:"column:total_ptd_ed_conv_on_ret_annual_risk_prem"`
+	TotalPtdEducatorConversionOnRetirementAnnualOfficePremium            float64 `json:"total_ptd_educator_conversion_on_retirement_annual_office_premium" gorm:"column:total_ptd_ed_conv_on_ret_annual_office_prem"`
+	ExpAdjTotalPtdEducatorConversionOnRetirementAnnualRiskPremium        float64 `json:"exp_adj_total_ptd_educator_conversion_on_retirement_annual_risk_premium" gorm:"column:exp_adj_total_ptd_ed_conv_on_ret_ann_risk_prem"`
+	ExpAdjTotalPtdEducatorConversionOnRetirementAnnualOfficePremium      float64 `json:"exp_adj_total_ptd_educator_conversion_on_retirement_annual_office_premium" gorm:"column:exp_adj_total_ptd_ed_conv_on_ret_ann_office_prem"`
 	ProportionPtdEducatorConversionOnRetirementRiskPremiumSalary         float64 `json:"proportion_ptd_educator_conversion_on_retirement_risk_premium_salary" gorm:"column:prop_ptd_ed_conv_on_ret_risk_prem_salary"`
 	ProportionPtdEducatorConversionOnRetirementOfficePremiumSalary       float64 `json:"proportion_ptd_educator_conversion_on_retirement_office_premium_salary" gorm:"column:prop_ptd_ed_conv_on_ret_office_prem_salary"`
 	ExpAdjProportionPtdEducatorConversionOnRetirementRiskPremiumSalary   float64 `json:"exp_adj_proportion_ptd_educator_conversion_on_retirement_risk_premium_salary" gorm:"column:exp_adj_prop_ptd_ed_conv_on_ret_risk_prem_salary"`
 	ExpAdjProportionPtdEducatorConversionOnRetirementOfficePremiumSalary float64 `json:"exp_adj_proportion_ptd_educator_conversion_on_retirement_office_premium_salary" gorm:"column:exp_adj_prop_ptd_ed_conv_on_ret_office_prem_salary"`
-	PtdEducatorConversionOnRetirementRiskRatePer1000SA      float64 `json:"ptd_educator_conversion_on_retirement_risk_rate_per_1000_sa" gorm:"column:ptd_ed_conv_on_ret_risk_rate_per_1000_sa"`
-	PtdEducatorConversionOnRetirementOfficeRatePer1000SA    float64 `json:"ptd_educator_conversion_on_retirement_office_rate_per_1000_sa" gorm:"column:ptd_ed_conv_on_ret_office_rate_per_1000_sa"`
-	ExpPtdEducatorConversionOnRetirementRiskRatePer1000SA   float64 `json:"exp_ptd_educator_conversion_on_retirement_risk_rate_per_1000_sa" gorm:"column:exp_ptd_ed_conv_on_ret_risk_rate_per_1000_sa"`
-	ExpPtdEducatorConversionOnRetirementOfficeRatePer1000SA float64 `json:"exp_ptd_educator_conversion_on_retirement_office_rate_per_1000_sa" gorm:"column:exp_ptd_ed_conv_on_ret_office_rate_per_1000_sa"`
+	PtdEducatorConversionOnRetirementRiskRatePer1000SA                   float64 `json:"ptd_educator_conversion_on_retirement_risk_rate_per_1000_sa" gorm:"column:ptd_ed_conv_on_ret_risk_rate_per_1000_sa"`
+	PtdEducatorConversionOnRetirementOfficeRatePer1000SA                 float64 `json:"ptd_educator_conversion_on_retirement_office_rate_per_1000_sa" gorm:"column:ptd_ed_conv_on_ret_office_rate_per_1000_sa"`
+	ExpPtdEducatorConversionOnRetirementRiskRatePer1000SA                float64 `json:"exp_ptd_educator_conversion_on_retirement_risk_rate_per_1000_sa" gorm:"column:exp_ptd_ed_conv_on_ret_risk_rate_per_1000_sa"`
+	ExpPtdEducatorConversionOnRetirementOfficeRatePer1000SA              float64 `json:"exp_ptd_educator_conversion_on_retirement_office_rate_per_1000_sa" gorm:"column:exp_ptd_ed_conv_on_ret_office_rate_per_1000_sa"`
 
 	// Slice 5: PhiConversionOnWithdrawal (denominator for rate-per-1000 = TotalPhiCappedIncome, not SA)
-	TotalPhiConversionOnWithdrawalAnnualRiskPremium         float64 `json:"total_phi_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_phi_conv_on_wdr_annual_risk_prem"`
-	TotalPhiConversionOnWithdrawalAnnualOfficePremium       float64 `json:"total_phi_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_phi_conv_on_wdr_annual_office_prem"`
-	ExpAdjTotalPhiConversionOnWithdrawalAnnualRiskPremium   float64 `json:"exp_adj_total_phi_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_phi_conv_on_wdr_ann_risk_prem"`
-	ExpAdjTotalPhiConversionOnWithdrawalAnnualOfficePremium float64 `json:"exp_adj_total_phi_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_phi_conv_on_wdr_ann_office_prem"`
+	TotalPhiConversionOnWithdrawalAnnualRiskPremium              float64 `json:"total_phi_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_phi_conv_on_wdr_annual_risk_prem"`
+	TotalPhiConversionOnWithdrawalAnnualOfficePremium            float64 `json:"total_phi_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_phi_conv_on_wdr_annual_office_prem"`
+	ExpAdjTotalPhiConversionOnWithdrawalAnnualRiskPremium        float64 `json:"exp_adj_total_phi_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_phi_conv_on_wdr_ann_risk_prem"`
+	ExpAdjTotalPhiConversionOnWithdrawalAnnualOfficePremium      float64 `json:"exp_adj_total_phi_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_phi_conv_on_wdr_ann_office_prem"`
 	ProportionPhiConversionOnWithdrawalRiskPremiumSalary         float64 `json:"proportion_phi_conversion_on_withdrawal_risk_premium_salary" gorm:"column:prop_phi_conv_on_wdr_risk_prem_salary"`
 	ProportionPhiConversionOnWithdrawalOfficePremiumSalary       float64 `json:"proportion_phi_conversion_on_withdrawal_office_premium_salary" gorm:"column:prop_phi_conv_on_wdr_office_prem_salary"`
 	ExpAdjProportionPhiConversionOnWithdrawalRiskPremiumSalary   float64 `json:"exp_adj_proportion_phi_conversion_on_withdrawal_risk_premium_salary" gorm:"column:exp_adj_prop_phi_conv_on_wdr_risk_prem_salary"`
 	ExpAdjProportionPhiConversionOnWithdrawalOfficePremiumSalary float64 `json:"exp_adj_proportion_phi_conversion_on_withdrawal_office_premium_salary" gorm:"column:exp_adj_prop_phi_conv_on_wdr_office_prem_salary"`
-	PhiConversionOnWithdrawalRiskRatePer1000SA      float64 `json:"phi_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:phi_conv_on_wdr_risk_rate_per_1000_sa"`
-	PhiConversionOnWithdrawalOfficeRatePer1000SA    float64 `json:"phi_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:phi_conv_on_wdr_office_rate_per_1000_sa"`
-	ExpPhiConversionOnWithdrawalRiskRatePer1000SA   float64 `json:"exp_phi_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_phi_conv_on_wdr_risk_rate_per_1000_sa"`
-	ExpPhiConversionOnWithdrawalOfficeRatePer1000SA float64 `json:"exp_phi_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_phi_conv_on_wdr_office_rate_per_1000_sa"`
+	PhiConversionOnWithdrawalRiskRatePer1000SA                   float64 `json:"phi_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:phi_conv_on_wdr_risk_rate_per_1000_sa"`
+	PhiConversionOnWithdrawalOfficeRatePer1000SA                 float64 `json:"phi_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:phi_conv_on_wdr_office_rate_per_1000_sa"`
+	ExpPhiConversionOnWithdrawalRiskRatePer1000SA                float64 `json:"exp_phi_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_phi_conv_on_wdr_risk_rate_per_1000_sa"`
+	ExpPhiConversionOnWithdrawalOfficeRatePer1000SA              float64 `json:"exp_phi_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_phi_conv_on_wdr_office_rate_per_1000_sa"`
 
 	// Slice: TtdConversionOnWithdrawal (denominator for rate-per-1000 = TotalTtdCappedIncome)
-	TotalTtdConversionOnWithdrawalAnnualRiskPremium         float64 `json:"total_ttd_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_ttd_conv_on_wdr_annual_risk_prem"`
-	TotalTtdConversionOnWithdrawalAnnualOfficePremium       float64 `json:"total_ttd_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_ttd_conv_on_wdr_annual_office_prem"`
-	ExpAdjTotalTtdConversionOnWithdrawalAnnualRiskPremium   float64 `json:"exp_adj_total_ttd_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_ttd_conv_on_wdr_ann_risk_prem"`
-	ExpAdjTotalTtdConversionOnWithdrawalAnnualOfficePremium float64 `json:"exp_adj_total_ttd_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_ttd_conv_on_wdr_ann_office_prem"`
+	TotalTtdConversionOnWithdrawalAnnualRiskPremium              float64 `json:"total_ttd_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_ttd_conv_on_wdr_annual_risk_prem"`
+	TotalTtdConversionOnWithdrawalAnnualOfficePremium            float64 `json:"total_ttd_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_ttd_conv_on_wdr_annual_office_prem"`
+	ExpAdjTotalTtdConversionOnWithdrawalAnnualRiskPremium        float64 `json:"exp_adj_total_ttd_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_ttd_conv_on_wdr_ann_risk_prem"`
+	ExpAdjTotalTtdConversionOnWithdrawalAnnualOfficePremium      float64 `json:"exp_adj_total_ttd_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_ttd_conv_on_wdr_ann_office_prem"`
 	ProportionTtdConversionOnWithdrawalRiskPremiumSalary         float64 `json:"proportion_ttd_conversion_on_withdrawal_risk_premium_salary" gorm:"column:prop_ttd_conv_on_wdr_risk_prem_salary"`
 	ProportionTtdConversionOnWithdrawalOfficePremiumSalary       float64 `json:"proportion_ttd_conversion_on_withdrawal_office_premium_salary" gorm:"column:prop_ttd_conv_on_wdr_office_prem_salary"`
 	ExpAdjProportionTtdConversionOnWithdrawalRiskPremiumSalary   float64 `json:"exp_adj_proportion_ttd_conversion_on_withdrawal_risk_premium_salary" gorm:"column:exp_adj_prop_ttd_conv_on_wdr_risk_prem_salary"`
 	ExpAdjProportionTtdConversionOnWithdrawalOfficePremiumSalary float64 `json:"exp_adj_proportion_ttd_conversion_on_withdrawal_office_premium_salary" gorm:"column:exp_adj_prop_ttd_conv_on_wdr_office_prem_salary"`
-	TtdConversionOnWithdrawalRiskRatePer1000SA      float64 `json:"ttd_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:ttd_conv_on_wdr_risk_rate_per_1000_sa"`
-	TtdConversionOnWithdrawalOfficeRatePer1000SA    float64 `json:"ttd_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:ttd_conv_on_wdr_office_rate_per_1000_sa"`
-	ExpTtdConversionOnWithdrawalRiskRatePer1000SA   float64 `json:"exp_ttd_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_ttd_conv_on_wdr_risk_rate_per_1000_sa"`
-	ExpTtdConversionOnWithdrawalOfficeRatePer1000SA float64 `json:"exp_ttd_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_ttd_conv_on_wdr_office_rate_per_1000_sa"`
+	TtdConversionOnWithdrawalRiskRatePer1000SA                   float64 `json:"ttd_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:ttd_conv_on_wdr_risk_rate_per_1000_sa"`
+	TtdConversionOnWithdrawalOfficeRatePer1000SA                 float64 `json:"ttd_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:ttd_conv_on_wdr_office_rate_per_1000_sa"`
+	ExpTtdConversionOnWithdrawalRiskRatePer1000SA                float64 `json:"exp_ttd_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_ttd_conv_on_wdr_risk_rate_per_1000_sa"`
+	ExpTtdConversionOnWithdrawalOfficeRatePer1000SA              float64 `json:"exp_ttd_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_ttd_conv_on_wdr_office_rate_per_1000_sa"`
 
 	// Slice 6: CiConversionOnWithdrawal
-	TotalCiConversionOnWithdrawalAnnualRiskPremium         float64 `json:"total_ci_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_ci_conv_on_wdr_annual_risk_prem"`
-	TotalCiConversionOnWithdrawalAnnualOfficePremium       float64 `json:"total_ci_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_ci_conv_on_wdr_annual_office_prem"`
-	ExpAdjTotalCiConversionOnWithdrawalAnnualRiskPremium   float64 `json:"exp_adj_total_ci_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_ci_conv_on_wdr_ann_risk_prem"`
-	ExpAdjTotalCiConversionOnWithdrawalAnnualOfficePremium float64 `json:"exp_adj_total_ci_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_ci_conv_on_wdr_ann_office_prem"`
+	TotalCiConversionOnWithdrawalAnnualRiskPremium              float64 `json:"total_ci_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_ci_conv_on_wdr_annual_risk_prem"`
+	TotalCiConversionOnWithdrawalAnnualOfficePremium            float64 `json:"total_ci_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_ci_conv_on_wdr_annual_office_prem"`
+	ExpAdjTotalCiConversionOnWithdrawalAnnualRiskPremium        float64 `json:"exp_adj_total_ci_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_ci_conv_on_wdr_ann_risk_prem"`
+	ExpAdjTotalCiConversionOnWithdrawalAnnualOfficePremium      float64 `json:"exp_adj_total_ci_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_ci_conv_on_wdr_ann_office_prem"`
 	ProportionCiConversionOnWithdrawalRiskPremiumSalary         float64 `json:"proportion_ci_conversion_on_withdrawal_risk_premium_salary" gorm:"column:prop_ci_conv_on_wdr_risk_prem_salary"`
 	ProportionCiConversionOnWithdrawalOfficePremiumSalary       float64 `json:"proportion_ci_conversion_on_withdrawal_office_premium_salary" gorm:"column:prop_ci_conv_on_wdr_office_prem_salary"`
 	ExpAdjProportionCiConversionOnWithdrawalRiskPremiumSalary   float64 `json:"exp_adj_proportion_ci_conversion_on_withdrawal_risk_premium_salary" gorm:"column:exp_adj_prop_ci_conv_on_wdr_risk_prem_salary"`
 	ExpAdjProportionCiConversionOnWithdrawalOfficePremiumSalary float64 `json:"exp_adj_proportion_ci_conversion_on_withdrawal_office_premium_salary" gorm:"column:exp_adj_prop_ci_conv_on_wdr_office_prem_salary"`
-	CiConversionOnWithdrawalRiskRatePer1000SA      float64 `json:"ci_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:ci_conv_on_wdr_risk_rate_per_1000_sa"`
-	CiConversionOnWithdrawalOfficeRatePer1000SA    float64 `json:"ci_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:ci_conv_on_wdr_office_rate_per_1000_sa"`
-	ExpCiConversionOnWithdrawalRiskRatePer1000SA   float64 `json:"exp_ci_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_ci_conv_on_wdr_risk_rate_per_1000_sa"`
-	ExpCiConversionOnWithdrawalOfficeRatePer1000SA float64 `json:"exp_ci_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_ci_conv_on_wdr_office_rate_per_1000_sa"`
+	CiConversionOnWithdrawalRiskRatePer1000SA                   float64 `json:"ci_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:ci_conv_on_wdr_risk_rate_per_1000_sa"`
+	CiConversionOnWithdrawalOfficeRatePer1000SA                 float64 `json:"ci_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:ci_conv_on_wdr_office_rate_per_1000_sa"`
+	ExpCiConversionOnWithdrawalRiskRatePer1000SA                float64 `json:"exp_ci_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_ci_conv_on_wdr_risk_rate_per_1000_sa"`
+	ExpCiConversionOnWithdrawalOfficeRatePer1000SA              float64 `json:"exp_ci_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_ci_conv_on_wdr_office_rate_per_1000_sa"`
 
 	// Slice 7: SglaConversionOnWithdrawal
-	TotalSglaConversionOnWithdrawalAnnualRiskPremium         float64 `json:"total_sgla_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_sgla_conv_on_wdr_annual_risk_prem"`
-	TotalSglaConversionOnWithdrawalAnnualOfficePremium       float64 `json:"total_sgla_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_sgla_conv_on_wdr_annual_office_prem"`
-	ExpAdjTotalSglaConversionOnWithdrawalAnnualRiskPremium   float64 `json:"exp_adj_total_sgla_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_sgla_conv_on_wdr_ann_risk_prem"`
-	ExpAdjTotalSglaConversionOnWithdrawalAnnualOfficePremium float64 `json:"exp_adj_total_sgla_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_sgla_conv_on_wdr_ann_office_prem"`
+	TotalSglaConversionOnWithdrawalAnnualRiskPremium              float64 `json:"total_sgla_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_sgla_conv_on_wdr_annual_risk_prem"`
+	TotalSglaConversionOnWithdrawalAnnualOfficePremium            float64 `json:"total_sgla_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_sgla_conv_on_wdr_annual_office_prem"`
+	ExpAdjTotalSglaConversionOnWithdrawalAnnualRiskPremium        float64 `json:"exp_adj_total_sgla_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_sgla_conv_on_wdr_ann_risk_prem"`
+	ExpAdjTotalSglaConversionOnWithdrawalAnnualOfficePremium      float64 `json:"exp_adj_total_sgla_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_sgla_conv_on_wdr_ann_office_prem"`
 	ProportionSglaConversionOnWithdrawalRiskPremiumSalary         float64 `json:"proportion_sgla_conversion_on_withdrawal_risk_premium_salary" gorm:"column:prop_sgla_conv_on_wdr_risk_prem_salary"`
 	ProportionSglaConversionOnWithdrawalOfficePremiumSalary       float64 `json:"proportion_sgla_conversion_on_withdrawal_office_premium_salary" gorm:"column:prop_sgla_conv_on_wdr_office_prem_salary"`
 	ExpAdjProportionSglaConversionOnWithdrawalRiskPremiumSalary   float64 `json:"exp_adj_proportion_sgla_conversion_on_withdrawal_risk_premium_salary" gorm:"column:exp_adj_prop_sgla_conv_on_wdr_risk_prem_salary"`
 	ExpAdjProportionSglaConversionOnWithdrawalOfficePremiumSalary float64 `json:"exp_adj_proportion_sgla_conversion_on_withdrawal_office_premium_salary" gorm:"column:exp_adj_prop_sgla_conv_on_wdr_office_prem_salary"`
-	SglaConversionOnWithdrawalRiskRatePer1000SA      float64 `json:"sgla_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:sgla_conv_on_wdr_risk_rate_per_1000_sa"`
-	SglaConversionOnWithdrawalOfficeRatePer1000SA    float64 `json:"sgla_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:sgla_conv_on_wdr_office_rate_per_1000_sa"`
-	ExpSglaConversionOnWithdrawalRiskRatePer1000SA   float64 `json:"exp_sgla_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_sgla_conv_on_wdr_risk_rate_per_1000_sa"`
-	ExpSglaConversionOnWithdrawalOfficeRatePer1000SA float64 `json:"exp_sgla_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_sgla_conv_on_wdr_office_rate_per_1000_sa"`
+	SglaConversionOnWithdrawalRiskRatePer1000SA                   float64 `json:"sgla_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:sgla_conv_on_wdr_risk_rate_per_1000_sa"`
+	SglaConversionOnWithdrawalOfficeRatePer1000SA                 float64 `json:"sgla_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:sgla_conv_on_wdr_office_rate_per_1000_sa"`
+	ExpSglaConversionOnWithdrawalRiskRatePer1000SA                float64 `json:"exp_sgla_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_sgla_conv_on_wdr_risk_rate_per_1000_sa"`
+	ExpSglaConversionOnWithdrawalOfficeRatePer1000SA              float64 `json:"exp_sgla_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_sgla_conv_on_wdr_office_rate_per_1000_sa"`
 
 	// Slice 8: FunConversionOnWithdrawal (denominator for rate-per-1000 = TotalFamilyFuneralSumAssured)
-	TotalFunConversionOnWithdrawalAnnualRiskPremium         float64 `json:"total_fun_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_fun_conv_on_wdr_annual_risk_prem"`
-	TotalFunConversionOnWithdrawalAnnualOfficePremium       float64 `json:"total_fun_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_fun_conv_on_wdr_annual_office_prem"`
-	ExpAdjTotalFunConversionOnWithdrawalAnnualRiskPremium   float64 `json:"exp_adj_total_fun_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_fun_conv_on_wdr_ann_risk_prem"`
-	ExpAdjTotalFunConversionOnWithdrawalAnnualOfficePremium float64 `json:"exp_adj_total_fun_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_fun_conv_on_wdr_ann_office_prem"`
+	TotalFunConversionOnWithdrawalAnnualRiskPremium              float64 `json:"total_fun_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_fun_conv_on_wdr_annual_risk_prem"`
+	TotalFunConversionOnWithdrawalAnnualOfficePremium            float64 `json:"total_fun_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_fun_conv_on_wdr_annual_office_prem"`
+	ExpAdjTotalFunConversionOnWithdrawalAnnualRiskPremium        float64 `json:"exp_adj_total_fun_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_fun_conv_on_wdr_ann_risk_prem"`
+	ExpAdjTotalFunConversionOnWithdrawalAnnualOfficePremium      float64 `json:"exp_adj_total_fun_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_fun_conv_on_wdr_ann_office_prem"`
 	ProportionFunConversionOnWithdrawalRiskPremiumSalary         float64 `json:"proportion_fun_conversion_on_withdrawal_risk_premium_salary" gorm:"column:prop_fun_conv_on_wdr_risk_prem_salary"`
 	ProportionFunConversionOnWithdrawalOfficePremiumSalary       float64 `json:"proportion_fun_conversion_on_withdrawal_office_premium_salary" gorm:"column:prop_fun_conv_on_wdr_office_prem_salary"`
 	ExpAdjProportionFunConversionOnWithdrawalRiskPremiumSalary   float64 `json:"exp_adj_proportion_fun_conversion_on_withdrawal_risk_premium_salary" gorm:"column:exp_adj_prop_fun_conv_on_wdr_risk_prem_salary"`
 	ExpAdjProportionFunConversionOnWithdrawalOfficePremiumSalary float64 `json:"exp_adj_proportion_fun_conversion_on_withdrawal_office_premium_salary" gorm:"column:exp_adj_prop_fun_conv_on_wdr_office_prem_salary"`
-	FunConversionOnWithdrawalRiskRatePer1000SA      float64 `json:"fun_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:fun_conv_on_wdr_risk_rate_per_1000_sa"`
-	FunConversionOnWithdrawalOfficeRatePer1000SA    float64 `json:"fun_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:fun_conv_on_wdr_office_rate_per_1000_sa"`
-	ExpFunConversionOnWithdrawalRiskRatePer1000SA   float64 `json:"exp_fun_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_fun_conv_on_wdr_risk_rate_per_1000_sa"`
-	ExpFunConversionOnWithdrawalOfficeRatePer1000SA float64 `json:"exp_fun_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_fun_conv_on_wdr_office_rate_per_1000_sa"`
+	FunConversionOnWithdrawalRiskRatePer1000SA                   float64 `json:"fun_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:fun_conv_on_wdr_risk_rate_per_1000_sa"`
+	FunConversionOnWithdrawalOfficeRatePer1000SA                 float64 `json:"fun_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:fun_conv_on_wdr_office_rate_per_1000_sa"`
+	ExpFunConversionOnWithdrawalRiskRatePer1000SA                float64 `json:"exp_fun_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_fun_conv_on_wdr_risk_rate_per_1000_sa"`
+	ExpFunConversionOnWithdrawalOfficeRatePer1000SA              float64 `json:"exp_fun_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_fun_conv_on_wdr_office_rate_per_1000_sa"`
 
 	ExceedsNormalRetirementAgeIndicator int `json:"exceeds_normal_retirement_age_indicator" csv:"exceeds_normal_retirement_age_indicator"`
 	ExceedsFreeCoverLimitIndicator      int `json:"exceeds_free_cover_limit_indicator" csv:"exceeds_free_cover_limit_indicator"`
@@ -1838,48 +1848,48 @@ type MemberRatingResultSummary struct {
 	// the quote's distribution channel is "binder". Each pair breaks down
 	// the corresponding office-premium aggregate (Total<Benefit>AnnualOfficePremium
 	// or ExpTotal<Benefit>AnnualOfficePremium) into its binder and outsource slices.
-	TotalGlaAnnualBinderAmount                        float64 `json:"total_gla_annual_binder_amount" csv:"total_gla_annual_binder_amount"`
-	TotalGlaAnnualOutsourcedAmount                    float64 `json:"total_gla_annual_outsourced_amount" csv:"total_gla_annual_outsourced_amount"`
-	ExpTotalGlaAnnualBinderAmount                     float64 `json:"exp_total_gla_annual_binder_amount" csv:"exp_total_gla_annual_binder_amount"`
-	ExpTotalGlaAnnualOutsourcedAmount                 float64 `json:"exp_total_gla_annual_outsourced_amount" csv:"exp_total_gla_annual_outsourced_amount"`
-	TotalAdditionalAccidentalGlaAnnualBinderAmount    float64 `json:"total_additional_accidental_gla_annual_binder_amount" csv:"total_additional_accidental_gla_annual_binder_amount" gorm:"column:total_add_acc_gla_annual_binder_amount"`
-	TotalAdditionalAccidentalGlaAnnualOutsourcedAmt   float64 `json:"total_additional_accidental_gla_annual_outsourced_amount" csv:"total_additional_accidental_gla_annual_outsourced_amount" gorm:"column:total_add_acc_gla_annual_outsourced_amount"`
-	ExpTotalAdditionalAccidentalGlaAnnualBinderAmount float64 `json:"exp_total_additional_accidental_gla_annual_binder_amount" csv:"exp_total_additional_accidental_gla_annual_binder_amount" gorm:"column:exp_total_add_acc_gla_annual_binder_amount"`
+	TotalGlaAnnualBinderAmount                         float64 `json:"total_gla_annual_binder_amount" csv:"total_gla_annual_binder_amount"`
+	TotalGlaAnnualOutsourcedAmount                     float64 `json:"total_gla_annual_outsourced_amount" csv:"total_gla_annual_outsourced_amount"`
+	ExpTotalGlaAnnualBinderAmount                      float64 `json:"exp_total_gla_annual_binder_amount" csv:"exp_total_gla_annual_binder_amount"`
+	ExpTotalGlaAnnualOutsourcedAmount                  float64 `json:"exp_total_gla_annual_outsourced_amount" csv:"exp_total_gla_annual_outsourced_amount"`
+	TotalAdditionalAccidentalGlaAnnualBinderAmount     float64 `json:"total_additional_accidental_gla_annual_binder_amount" csv:"total_additional_accidental_gla_annual_binder_amount" gorm:"column:total_add_acc_gla_annual_binder_amount"`
+	TotalAdditionalAccidentalGlaAnnualOutsourcedAmt    float64 `json:"total_additional_accidental_gla_annual_outsourced_amount" csv:"total_additional_accidental_gla_annual_outsourced_amount" gorm:"column:total_add_acc_gla_annual_outsourced_amount"`
+	ExpTotalAdditionalAccidentalGlaAnnualBinderAmount  float64 `json:"exp_total_additional_accidental_gla_annual_binder_amount" csv:"exp_total_additional_accidental_gla_annual_binder_amount" gorm:"column:exp_total_add_acc_gla_annual_binder_amount"`
 	ExpTotalAdditionalAccidentalGlaAnnualOutsourcedAmt float64 `json:"exp_total_additional_accidental_gla_annual_outsourced_amount" csv:"exp_total_additional_accidental_gla_annual_outsourced_amount" gorm:"column:exp_total_add_acc_gla_annual_outsourced_amt"`
-	TotalPtdAnnualBinderAmount                        float64 `json:"total_ptd_annual_binder_amount" csv:"total_ptd_annual_binder_amount"`
-	TotalPtdAnnualOutsourcedAmount                    float64 `json:"total_ptd_annual_outsourced_amount" csv:"total_ptd_annual_outsourced_amount"`
-	ExpTotalPtdAnnualBinderAmount                     float64 `json:"exp_total_ptd_annual_binder_amount" csv:"exp_total_ptd_annual_binder_amount"`
-	ExpTotalPtdAnnualOutsourcedAmount                 float64 `json:"exp_total_ptd_annual_outsourced_amount" csv:"exp_total_ptd_annual_outsourced_amount"`
-	TotalCiAnnualBinderAmount                         float64 `json:"total_ci_annual_binder_amount" csv:"total_ci_annual_binder_amount"`
-	TotalCiAnnualOutsourcedAmount                     float64 `json:"total_ci_annual_outsourced_amount" csv:"total_ci_annual_outsourced_amount"`
-	ExpTotalCiAnnualBinderAmount                      float64 `json:"exp_total_ci_annual_binder_amount" csv:"exp_total_ci_annual_binder_amount"`
-	ExpTotalCiAnnualOutsourcedAmount                  float64 `json:"exp_total_ci_annual_outsourced_amount" csv:"exp_total_ci_annual_outsourced_amount"`
-	TotalSglaAnnualBinderAmount                       float64 `json:"total_sgla_annual_binder_amount" csv:"total_sgla_annual_binder_amount"`
-	TotalSglaAnnualOutsourcedAmount                   float64 `json:"total_sgla_annual_outsourced_amount" csv:"total_sgla_annual_outsourced_amount"`
-	ExpTotalSglaAnnualBinderAmount                    float64 `json:"exp_total_sgla_annual_binder_amount" csv:"exp_total_sgla_annual_binder_amount"`
-	ExpTotalSglaAnnualOutsourcedAmount                float64 `json:"exp_total_sgla_annual_outsourced_amount" csv:"exp_total_sgla_annual_outsourced_amount"`
-	TotalTtdAnnualBinderAmount                        float64 `json:"total_ttd_annual_binder_amount" csv:"total_ttd_annual_binder_amount"`
-	TotalTtdAnnualOutsourcedAmount                    float64 `json:"total_ttd_annual_outsourced_amount" csv:"total_ttd_annual_outsourced_amount"`
-	ExpTotalTtdAnnualBinderAmount                     float64 `json:"exp_total_ttd_annual_binder_amount" csv:"exp_total_ttd_annual_binder_amount"`
-	ExpTotalTtdAnnualOutsourcedAmount                 float64 `json:"exp_total_ttd_annual_outsourced_amount" csv:"exp_total_ttd_annual_outsourced_amount"`
-	TotalPhiAnnualBinderAmount                        float64 `json:"total_phi_annual_binder_amount" csv:"total_phi_annual_binder_amount"`
-	TotalPhiAnnualOutsourcedAmount                    float64 `json:"total_phi_annual_outsourced_amount" csv:"total_phi_annual_outsourced_amount"`
-	ExpTotalPhiAnnualBinderAmount                     float64 `json:"exp_total_phi_annual_binder_amount" csv:"exp_total_phi_annual_binder_amount"`
-	ExpTotalPhiAnnualOutsourcedAmount                 float64 `json:"exp_total_phi_annual_outsourced_amount" csv:"exp_total_phi_annual_outsourced_amount"`
-	TotalFunAnnualBinderAmount                        float64 `json:"total_fun_annual_binder_amount" csv:"total_fun_annual_binder_amount"`
-	TotalFunAnnualOutsourcedAmount                    float64 `json:"total_fun_annual_outsourced_amount" csv:"total_fun_annual_outsourced_amount"`
-	ExpTotalFunAnnualBinderAmount                     float64 `json:"exp_total_fun_annual_binder_amount" csv:"exp_total_fun_annual_binder_amount"`
-	ExpTotalFunAnnualOutsourcedAmount                 float64 `json:"exp_total_fun_annual_outsourced_amount" csv:"exp_total_fun_annual_outsourced_amount"`
-	TotalGlaEducatorBinderAmount                      float64 `json:"total_gla_educator_binder_amount" csv:"total_gla_educator_binder_amount"`
-	TotalGlaEducatorOutsourcedAmount                  float64 `json:"total_gla_educator_outsourced_amount" csv:"total_gla_educator_outsourced_amount"`
-	ExpAdjTotalGlaEducatorBinderAmount                float64 `json:"exp_adj_total_gla_educator_binder_amount" csv:"exp_adj_total_gla_educator_binder_amount"`
-	ExpAdjTotalGlaEducatorOutsourcedAmount            float64 `json:"exp_adj_total_gla_educator_outsourced_amount" csv:"exp_adj_total_gla_educator_outsourced_amount"`
-	TotalPtdEducatorBinderAmount                      float64 `json:"total_ptd_educator_binder_amount" csv:"total_ptd_educator_binder_amount"`
-	TotalPtdEducatorOutsourcedAmount                  float64 `json:"total_ptd_educator_outsourced_amount" csv:"total_ptd_educator_outsourced_amount"`
-	ExpAdjTotalPtdEducatorBinderAmount                float64 `json:"exp_adj_total_ptd_educator_binder_amount" csv:"exp_adj_total_ptd_educator_binder_amount"`
-	ExpAdjTotalPtdEducatorOutsourcedAmount            float64 `json:"exp_adj_total_ptd_educator_outsourced_amount" csv:"exp_adj_total_ptd_educator_outsourced_amount"`
-	TotalAnnualBinderAmount                           float64 `json:"total_annual_binder_amount" csv:"total_annual_binder_amount"`
-	TotalAnnualOutsourcedAmount                       float64 `json:"total_annual_outsourced_amount" csv:"total_annual_outsourced_amount"`
+	TotalPtdAnnualBinderAmount                         float64 `json:"total_ptd_annual_binder_amount" csv:"total_ptd_annual_binder_amount"`
+	TotalPtdAnnualOutsourcedAmount                     float64 `json:"total_ptd_annual_outsourced_amount" csv:"total_ptd_annual_outsourced_amount"`
+	ExpTotalPtdAnnualBinderAmount                      float64 `json:"exp_total_ptd_annual_binder_amount" csv:"exp_total_ptd_annual_binder_amount"`
+	ExpTotalPtdAnnualOutsourcedAmount                  float64 `json:"exp_total_ptd_annual_outsourced_amount" csv:"exp_total_ptd_annual_outsourced_amount"`
+	TotalCiAnnualBinderAmount                          float64 `json:"total_ci_annual_binder_amount" csv:"total_ci_annual_binder_amount"`
+	TotalCiAnnualOutsourcedAmount                      float64 `json:"total_ci_annual_outsourced_amount" csv:"total_ci_annual_outsourced_amount"`
+	ExpTotalCiAnnualBinderAmount                       float64 `json:"exp_total_ci_annual_binder_amount" csv:"exp_total_ci_annual_binder_amount"`
+	ExpTotalCiAnnualOutsourcedAmount                   float64 `json:"exp_total_ci_annual_outsourced_amount" csv:"exp_total_ci_annual_outsourced_amount"`
+	TotalSglaAnnualBinderAmount                        float64 `json:"total_sgla_annual_binder_amount" csv:"total_sgla_annual_binder_amount"`
+	TotalSglaAnnualOutsourcedAmount                    float64 `json:"total_sgla_annual_outsourced_amount" csv:"total_sgla_annual_outsourced_amount"`
+	ExpTotalSglaAnnualBinderAmount                     float64 `json:"exp_total_sgla_annual_binder_amount" csv:"exp_total_sgla_annual_binder_amount"`
+	ExpTotalSglaAnnualOutsourcedAmount                 float64 `json:"exp_total_sgla_annual_outsourced_amount" csv:"exp_total_sgla_annual_outsourced_amount"`
+	TotalTtdAnnualBinderAmount                         float64 `json:"total_ttd_annual_binder_amount" csv:"total_ttd_annual_binder_amount"`
+	TotalTtdAnnualOutsourcedAmount                     float64 `json:"total_ttd_annual_outsourced_amount" csv:"total_ttd_annual_outsourced_amount"`
+	ExpTotalTtdAnnualBinderAmount                      float64 `json:"exp_total_ttd_annual_binder_amount" csv:"exp_total_ttd_annual_binder_amount"`
+	ExpTotalTtdAnnualOutsourcedAmount                  float64 `json:"exp_total_ttd_annual_outsourced_amount" csv:"exp_total_ttd_annual_outsourced_amount"`
+	TotalPhiAnnualBinderAmount                         float64 `json:"total_phi_annual_binder_amount" csv:"total_phi_annual_binder_amount"`
+	TotalPhiAnnualOutsourcedAmount                     float64 `json:"total_phi_annual_outsourced_amount" csv:"total_phi_annual_outsourced_amount"`
+	ExpTotalPhiAnnualBinderAmount                      float64 `json:"exp_total_phi_annual_binder_amount" csv:"exp_total_phi_annual_binder_amount"`
+	ExpTotalPhiAnnualOutsourcedAmount                  float64 `json:"exp_total_phi_annual_outsourced_amount" csv:"exp_total_phi_annual_outsourced_amount"`
+	TotalFunAnnualBinderAmount                         float64 `json:"total_fun_annual_binder_amount" csv:"total_fun_annual_binder_amount"`
+	TotalFunAnnualOutsourcedAmount                     float64 `json:"total_fun_annual_outsourced_amount" csv:"total_fun_annual_outsourced_amount"`
+	ExpTotalFunAnnualBinderAmount                      float64 `json:"exp_total_fun_annual_binder_amount" csv:"exp_total_fun_annual_binder_amount"`
+	ExpTotalFunAnnualOutsourcedAmount                  float64 `json:"exp_total_fun_annual_outsourced_amount" csv:"exp_total_fun_annual_outsourced_amount"`
+	TotalGlaEducatorBinderAmount                       float64 `json:"total_gla_educator_binder_amount" csv:"total_gla_educator_binder_amount"`
+	TotalGlaEducatorOutsourcedAmount                   float64 `json:"total_gla_educator_outsourced_amount" csv:"total_gla_educator_outsourced_amount"`
+	ExpAdjTotalGlaEducatorBinderAmount                 float64 `json:"exp_adj_total_gla_educator_binder_amount" csv:"exp_adj_total_gla_educator_binder_amount"`
+	ExpAdjTotalGlaEducatorOutsourcedAmount             float64 `json:"exp_adj_total_gla_educator_outsourced_amount" csv:"exp_adj_total_gla_educator_outsourced_amount"`
+	TotalPtdEducatorBinderAmount                       float64 `json:"total_ptd_educator_binder_amount" csv:"total_ptd_educator_binder_amount"`
+	TotalPtdEducatorOutsourcedAmount                   float64 `json:"total_ptd_educator_outsourced_amount" csv:"total_ptd_educator_outsourced_amount"`
+	ExpAdjTotalPtdEducatorBinderAmount                 float64 `json:"exp_adj_total_ptd_educator_binder_amount" csv:"exp_adj_total_ptd_educator_binder_amount"`
+	ExpAdjTotalPtdEducatorOutsourcedAmount             float64 `json:"exp_adj_total_ptd_educator_outsourced_amount" csv:"exp_adj_total_ptd_educator_outsourced_amount"`
+	TotalAnnualBinderAmount                            float64 `json:"total_annual_binder_amount" csv:"total_annual_binder_amount"`
+	TotalAnnualOutsourcedAmount                        float64 `json:"total_annual_outsourced_amount" csv:"total_annual_outsourced_amount"`
 
 	// Per-benefit commission allocation. Commission is computed on the
 	// scheme-wide total premium via tiered CommissionStructure bands, and
@@ -1887,16 +1897,16 @@ type MemberRatingResultSummary struct {
 	// benefit's share of total premium. The sum across all benefits and all
 	// categories must equal SchemeTotalCommission (a residual fix-up on the
 	// last benefit guarantees this).
-	ExpTotalGlaAnnualCommissionAmount                      float64 `json:"exp_total_gla_annual_commission_amount" csv:"exp_total_gla_annual_commission_amount"`
-	ExpTotalAdditionalAccidentalGlaAnnualCommissionAmount  float64 `json:"exp_total_additional_accidental_gla_annual_commission_amount" csv:"exp_total_additional_accidental_gla_annual_commission_amount" gorm:"column:exp_total_add_acc_gla_annual_commission_amount"`
-	ExpTotalPtdAnnualCommissionAmount                      float64 `json:"exp_total_ptd_annual_commission_amount" csv:"exp_total_ptd_annual_commission_amount"`
-	ExpTotalCiAnnualCommissionAmount                       float64 `json:"exp_total_ci_annual_commission_amount" csv:"exp_total_ci_annual_commission_amount"`
-	ExpTotalSglaAnnualCommissionAmount                     float64 `json:"exp_total_sgla_annual_commission_amount" csv:"exp_total_sgla_annual_commission_amount"`
-	ExpTotalTtdAnnualCommissionAmount                      float64 `json:"exp_total_ttd_annual_commission_amount" csv:"exp_total_ttd_annual_commission_amount"`
-	ExpTotalPhiAnnualCommissionAmount                      float64 `json:"exp_total_phi_annual_commission_amount" csv:"exp_total_phi_annual_commission_amount"`
-	ExpTotalFunAnnualCommissionAmount                      float64 `json:"exp_total_fun_annual_commission_amount" csv:"exp_total_fun_annual_commission_amount"`
-	ExpAdjTotalGlaEducatorCommissionAmount                 float64 `json:"exp_adj_total_gla_educator_commission_amount" csv:"exp_adj_total_gla_educator_commission_amount"`
-	ExpAdjTotalPtdEducatorCommissionAmount                 float64 `json:"exp_adj_total_ptd_educator_commission_amount" csv:"exp_adj_total_ptd_educator_commission_amount"`
+	ExpTotalGlaAnnualCommissionAmount                     float64 `json:"exp_total_gla_annual_commission_amount" csv:"exp_total_gla_annual_commission_amount"`
+	ExpTotalAdditionalAccidentalGlaAnnualCommissionAmount float64 `json:"exp_total_additional_accidental_gla_annual_commission_amount" csv:"exp_total_additional_accidental_gla_annual_commission_amount" gorm:"column:exp_total_add_acc_gla_annual_commission_amount"`
+	ExpTotalPtdAnnualCommissionAmount                     float64 `json:"exp_total_ptd_annual_commission_amount" csv:"exp_total_ptd_annual_commission_amount"`
+	ExpTotalCiAnnualCommissionAmount                      float64 `json:"exp_total_ci_annual_commission_amount" csv:"exp_total_ci_annual_commission_amount"`
+	ExpTotalSglaAnnualCommissionAmount                    float64 `json:"exp_total_sgla_annual_commission_amount" csv:"exp_total_sgla_annual_commission_amount"`
+	ExpTotalTtdAnnualCommissionAmount                     float64 `json:"exp_total_ttd_annual_commission_amount" csv:"exp_total_ttd_annual_commission_amount"`
+	ExpTotalPhiAnnualCommissionAmount                     float64 `json:"exp_total_phi_annual_commission_amount" csv:"exp_total_phi_annual_commission_amount"`
+	ExpTotalFunAnnualCommissionAmount                     float64 `json:"exp_total_fun_annual_commission_amount" csv:"exp_total_fun_annual_commission_amount"`
+	ExpAdjTotalGlaEducatorCommissionAmount                float64 `json:"exp_adj_total_gla_educator_commission_amount" csv:"exp_adj_total_gla_educator_commission_amount"`
+	ExpAdjTotalPtdEducatorCommissionAmount                float64 `json:"exp_adj_total_ptd_educator_commission_amount" csv:"exp_adj_total_ptd_educator_commission_amount"`
 	// Scheme-level totals mirrored onto every category summary for easy
 	// access in reports. SchemeTotalCommission is the overall commission on
 	// the scheme's total premium; SchemeTotalCommissionRate is the blended
@@ -2527,25 +2537,25 @@ type FuneralRate struct {
 }
 
 type GeneralLoading struct {
-	ID                            int       `json:"id" gorm:"primary_key"`
-	RiskRateCode                  string    `json:"risk_rate_code" csv:"risk_rate_code"`
-	Age                           int       `json:"age" csv:"age"`
-	Gender                        string    `json:"gender" csv:"gender"`
-	GlaContigencyLoadingRate      float64   `json:"gla_contigency_loading_rate" csv:"gla_contigency_loading_rate"`
-	PtdContigencyLoadingRate      float64   `json:"ptd_contigency_loading_rate" csv:"ptd_contigency_loading_rate"`
-	CiContigencyLoadingRate       float64   `json:"ci_contigency_loading_rate" csv:"ci_contigency_loading_rate"`
-	TtdContigencyLoadingRate      float64   `json:"ttd_contigency_loading_rate" csv:"ttd_contigency_loading_rate"`
-	PhiContigencyLoadingRate      float64   `json:"phi_contigency_loading_rate" csv:"phi_contigency_loading_rate"`
-	FunContigencyLoadingRate      float64   `json:"fun_contigency_loading_rate" csv:"fun_contigency_loading_rate"`
-	GlaVoluntaryLoadingRate       float64   `json:"gla_voluntary_loading_rate" csv:"gla_voluntary_loading_rate"`
-	PtdVoluntaryLoadingRate       float64   `json:"ptd_voluntary_loading_rate" csv:"ptd_voluntary_loading_rate"`
-	CiVoluntaryLoadingRate        float64   `json:"ci_voluntary_loading_rate" csv:"ci_voluntary_loading_rate"`
-	TtdVoluntaryLoadingRate       float64   `json:"ttd_voluntary_loading_rate" csv:"ttd_voluntary_loading_rate"`
-	PhiVoluntaryLoadingRate       float64   `json:"phi_voluntary_loading_rate" csv:"phi_voluntary_loading_rate"`
-	FunVoluntaryLoadingRate       float64   `json:"fun_voluntary_loading_rate" csv:"fun_voluntary_loading_rate"`
-	ContinuationLoadingRate       float64   `json:"continuation_loading_rate" csv:"continuation_loading_rate"`
-	TerminalIllnessLoadingRate    float64   `json:"terminal_illness_loading_rate" csv:"terminal_illness_loading_rate"`
-	TaxSaverLoadingRate           float64   `json:"tax_saver_loading_rate" csv:"tax_saver_loading_rate"`
+	ID                         int     `json:"id" gorm:"primary_key"`
+	RiskRateCode               string  `json:"risk_rate_code" csv:"risk_rate_code"`
+	Age                        int     `json:"age" csv:"age"`
+	Gender                     string  `json:"gender" csv:"gender"`
+	GlaContigencyLoadingRate   float64 `json:"gla_contigency_loading_rate" csv:"gla_contigency_loading_rate"`
+	PtdContigencyLoadingRate   float64 `json:"ptd_contigency_loading_rate" csv:"ptd_contigency_loading_rate"`
+	CiContigencyLoadingRate    float64 `json:"ci_contigency_loading_rate" csv:"ci_contigency_loading_rate"`
+	TtdContigencyLoadingRate   float64 `json:"ttd_contigency_loading_rate" csv:"ttd_contigency_loading_rate"`
+	PhiContigencyLoadingRate   float64 `json:"phi_contigency_loading_rate" csv:"phi_contigency_loading_rate"`
+	FunContigencyLoadingRate   float64 `json:"fun_contigency_loading_rate" csv:"fun_contigency_loading_rate"`
+	GlaVoluntaryLoadingRate    float64 `json:"gla_voluntary_loading_rate" csv:"gla_voluntary_loading_rate"`
+	PtdVoluntaryLoadingRate    float64 `json:"ptd_voluntary_loading_rate" csv:"ptd_voluntary_loading_rate"`
+	CiVoluntaryLoadingRate     float64 `json:"ci_voluntary_loading_rate" csv:"ci_voluntary_loading_rate"`
+	TtdVoluntaryLoadingRate    float64 `json:"ttd_voluntary_loading_rate" csv:"ttd_voluntary_loading_rate"`
+	PhiVoluntaryLoadingRate    float64 `json:"phi_voluntary_loading_rate" csv:"phi_voluntary_loading_rate"`
+	FunVoluntaryLoadingRate    float64 `json:"fun_voluntary_loading_rate" csv:"fun_voluntary_loading_rate"`
+	ContinuationLoadingRate    float64 `json:"continuation_loading_rate" csv:"continuation_loading_rate"`
+	TerminalIllnessLoadingRate float64 `json:"terminal_illness_loading_rate" csv:"terminal_illness_loading_rate"`
+	TaxSaverLoadingRate        float64 `json:"tax_saver_loading_rate" csv:"tax_saver_loading_rate"`
 
 	// Conversion / continuity slice loading rates. Each is added to its
 	// respective Loaded*Rate chain only when the corresponding SchemeCategory
@@ -2553,20 +2563,20 @@ type GeneralLoading struct {
 	// slice premium is zero. Each slice owns its own dedicated column
 	// (GlaContinuityDuringDisability has its own gla_continuity_during_dis_loading_rate
 	// column below — the legacy continuation_loading_rate is deprecated).
-	GlaConversionOnWithdrawalLoadingRate           float64 `json:"gla_conversion_on_withdrawal_loading_rate" csv:"gla_conversion_on_withdrawal_loading_rate" gorm:"column:gla_conv_on_wdr_loading_rate"`
-	GlaConversionOnRetirementLoadingRate           float64 `json:"gla_conversion_on_retirement_loading_rate" csv:"gla_conversion_on_retirement_loading_rate" gorm:"column:gla_conv_on_ret_loading_rate"`
-	GlaEducatorConversionOnWithdrawalLoadingRate   float64 `json:"gla_educator_conversion_on_withdrawal_loading_rate" csv:"gla_educator_conversion_on_withdrawal_loading_rate" gorm:"column:gla_ed_conv_on_wdr_loading_rate"`
-	GlaEducatorConversionOnRetirementLoadingRate   float64 `json:"gla_educator_conversion_on_retirement_loading_rate" csv:"gla_educator_conversion_on_retirement_loading_rate" gorm:"column:gla_ed_conv_on_ret_loading_rate"`
+	GlaConversionOnWithdrawalLoadingRate             float64 `json:"gla_conversion_on_withdrawal_loading_rate" csv:"gla_conversion_on_withdrawal_loading_rate" gorm:"column:gla_conv_on_wdr_loading_rate"`
+	GlaConversionOnRetirementLoadingRate             float64 `json:"gla_conversion_on_retirement_loading_rate" csv:"gla_conversion_on_retirement_loading_rate" gorm:"column:gla_conv_on_ret_loading_rate"`
+	GlaEducatorConversionOnWithdrawalLoadingRate     float64 `json:"gla_educator_conversion_on_withdrawal_loading_rate" csv:"gla_educator_conversion_on_withdrawal_loading_rate" gorm:"column:gla_ed_conv_on_wdr_loading_rate"`
+	GlaEducatorConversionOnRetirementLoadingRate     float64 `json:"gla_educator_conversion_on_retirement_loading_rate" csv:"gla_educator_conversion_on_retirement_loading_rate" gorm:"column:gla_ed_conv_on_ret_loading_rate"`
 	GlaEducatorContinuityDuringDisabilityLoadingRate float64 `json:"gla_educator_continuity_during_disability_loading_rate" csv:"gla_educator_continuity_during_disability_loading_rate" gorm:"column:gla_ed_cont_dur_dis_loading_rate"`
-	PtdConversionOnWithdrawalLoadingRate           float64 `json:"ptd_conversion_on_withdrawal_loading_rate" csv:"ptd_conversion_on_withdrawal_loading_rate" gorm:"column:ptd_conv_on_wdr_loading_rate"`
-	PtdEducatorConversionOnWithdrawalLoadingRate   float64 `json:"ptd_educator_conversion_on_withdrawal_loading_rate" csv:"ptd_educator_conversion_on_withdrawal_loading_rate" gorm:"column:ptd_ed_conv_on_wdr_loading_rate"`
-	PtdEducatorConversionOnRetirementLoadingRate   float64 `json:"ptd_educator_conversion_on_retirement_loading_rate" csv:"ptd_educator_conversion_on_retirement_loading_rate" gorm:"column:ptd_ed_conv_on_ret_loading_rate"`
-	CiConversionOnWithdrawalLoadingRate            float64 `json:"ci_conversion_on_withdrawal_loading_rate" csv:"ci_conversion_on_withdrawal_loading_rate" gorm:"column:ci_conv_on_wdr_loading_rate"`
-	PhiConversionOnWithdrawalLoadingRate           float64 `json:"phi_conversion_on_withdrawal_loading_rate" csv:"phi_conversion_on_withdrawal_loading_rate" gorm:"column:phi_conv_on_wdr_loading_rate"`
-	SglaConversionOnWithdrawalLoadingRate          float64 `json:"sgla_conversion_on_withdrawal_loading_rate" csv:"sgla_conversion_on_withdrawal_loading_rate" gorm:"column:sgla_conv_on_wdr_loading_rate"`
-	FunConversionOnWithdrawalLoadingRate           float64 `json:"fun_conversion_on_withdrawal_loading_rate" csv:"fun_conversion_on_withdrawal_loading_rate" gorm:"column:fun_conv_on_wdr_loading_rate"`
-	TtdConversionOnWithdrawalLoadingRate           float64 `json:"ttd_conversion_on_withdrawal_loading_rate" csv:"ttd_conversion_on_withdrawal_loading_rate" gorm:"column:ttd_conv_on_wdr_loading_rate"`
-	GlaContinuityDuringDisabilityLoadingRate       float64 `json:"gla_continuity_during_disability_loading_rate" csv:"gla_continuity_during_disability_loading_rate" gorm:"column:gla_continuity_during_dis_loading_rate"`
+	PtdConversionOnWithdrawalLoadingRate             float64 `json:"ptd_conversion_on_withdrawal_loading_rate" csv:"ptd_conversion_on_withdrawal_loading_rate" gorm:"column:ptd_conv_on_wdr_loading_rate"`
+	PtdEducatorConversionOnWithdrawalLoadingRate     float64 `json:"ptd_educator_conversion_on_withdrawal_loading_rate" csv:"ptd_educator_conversion_on_withdrawal_loading_rate" gorm:"column:ptd_ed_conv_on_wdr_loading_rate"`
+	PtdEducatorConversionOnRetirementLoadingRate     float64 `json:"ptd_educator_conversion_on_retirement_loading_rate" csv:"ptd_educator_conversion_on_retirement_loading_rate" gorm:"column:ptd_ed_conv_on_ret_loading_rate"`
+	CiConversionOnWithdrawalLoadingRate              float64 `json:"ci_conversion_on_withdrawal_loading_rate" csv:"ci_conversion_on_withdrawal_loading_rate" gorm:"column:ci_conv_on_wdr_loading_rate"`
+	PhiConversionOnWithdrawalLoadingRate             float64 `json:"phi_conversion_on_withdrawal_loading_rate" csv:"phi_conversion_on_withdrawal_loading_rate" gorm:"column:phi_conv_on_wdr_loading_rate"`
+	SglaConversionOnWithdrawalLoadingRate            float64 `json:"sgla_conversion_on_withdrawal_loading_rate" csv:"sgla_conversion_on_withdrawal_loading_rate" gorm:"column:sgla_conv_on_wdr_loading_rate"`
+	FunConversionOnWithdrawalLoadingRate             float64 `json:"fun_conversion_on_withdrawal_loading_rate" csv:"fun_conversion_on_withdrawal_loading_rate" gorm:"column:fun_conv_on_wdr_loading_rate"`
+	TtdConversionOnWithdrawalLoadingRate             float64 `json:"ttd_conversion_on_withdrawal_loading_rate" csv:"ttd_conversion_on_withdrawal_loading_rate" gorm:"column:ttd_conv_on_wdr_loading_rate"`
+	GlaContinuityDuringDisabilityLoadingRate         float64 `json:"gla_continuity_during_disability_loading_rate" csv:"gla_continuity_during_disability_loading_rate" gorm:"column:gla_continuity_during_dis_loading_rate"`
 
 	PtdAcceleratedBenefitDiscount float64   `json:"ptd_accelerated_benefit_discount" csv:"ptd_accelerated_benefit_discount"`
 	CiAcceleratedBenefitDiscount  float64   `json:"ci_accelerated_benefit_discount" csv:"ci_accelerated_benefit_discount"`
