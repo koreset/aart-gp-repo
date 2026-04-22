@@ -565,6 +565,10 @@ func categoryConversionSliceFields(s models.MemberRatingResultSummary, n benefit
 		s.ExpAdjTotalFunConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalFunConversionOnWithdrawalAnnualOfficePremium,
 		s.ExpAdjProportionFunConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionFunConversionOnWithdrawalOfficePremiumSalary,
 		s.ExpFunConversionOnWithdrawalRiskRatePer1000SA, s.ExpFunConversionOnWithdrawalOfficeRatePer1000SA)...)
+	fs = append(fs, conversionSliceBlock(n.TTD, "conv_on_wdr", "Conversion on Withdrawal",
+		s.ExpAdjTotalTtdConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalTtdConversionOnWithdrawalAnnualOfficePremium,
+		s.ExpAdjProportionTtdConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionTtdConversionOnWithdrawalOfficePremiumSalary,
+		s.ExpTtdConversionOnWithdrawalRiskRatePer1000SA, s.ExpTtdConversionOnWithdrawalOfficeRatePer1000SA)...)
 
 	return fs
 }

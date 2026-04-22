@@ -8,6 +8,7 @@
         <v-col>
           <group-pricing-data-grid
             ref="dataGridRef"
+            :key="`premium-grid-${rowDataKey}`"
             :columnDefs="columnDefs"
             :show-close-button="false"
             :rowData="rowData"
@@ -463,6 +464,13 @@ const columnDefs: any = ref([
   }
 ])
 const rowData: any = ref([])
+// Bumped every time rowData is rebuilt so the grid child remounts. Force a
+// clean AG Grid instance per rowData generation — without this, swapping
+// rowData once it's been populated (e.g. benefit titles load after the first
+// watcher fire, or a sibling tab becomes active and triggers a re-layout)
+// leaves % of Salary / Rate per 1000 SA cells blank because AG Grid can't
+// reconcile rows across the swap without a getRowId.
+const rowDataKey = ref(0)
 
 const roundUpToTwoDecimalsAccounting = (num) => {
   const roundedNum = Math.ceil(num * 100) / 100 // Round up to two decimal places
@@ -1150,6 +1158,14 @@ onMounted(() => {
   })
 })
 
+// Build rowData only once the async benefit titles (loaded in onMounted via
+// getBenefitMaps) are ready. AG Grid is configured without a getRowId, so if
+// rowData is swapped out mid-lifecycle — first with empty benefit labels,
+// then with real labels — it mis-maps cells across the two snapshots and
+// loses values on some columns (observed: % of Salary and Rate per 1000 SA
+// render as blank/"-" even though rowData has the correct strings/numbers).
+// Gating on titles collapses the two rebuilds into a single setRowData so
+// the grid sees one clean dataset.
 watch(
   [
     () => props.resultSummaries,
@@ -1161,8 +1177,20 @@ watch(
     ttdBenefitTitle
   ],
   () => {
-    if (props.resultSummaries && props.resultSummaries.length > 0) {
+    const titlesReady =
+      glaBenefitTitle.value !== '' &&
+      ptdBenefitTitle.value !== '' &&
+      ciBenefitTitle.value !== '' &&
+      sglaBenefitTitle.value !== '' &&
+      phiBenefitTitle.value !== '' &&
+      ttdBenefitTitle.value !== ''
+    if (
+      titlesReady &&
+      props.resultSummaries &&
+      props.resultSummaries.length > 0
+    ) {
       rowData.value = convertExcelDataToGridData()
+      rowDataKey.value++
     } else {
       rowData.value = []
     }

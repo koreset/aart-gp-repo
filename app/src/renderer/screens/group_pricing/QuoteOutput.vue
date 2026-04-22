@@ -165,6 +165,7 @@
                       style="height: 600px; width: 100%"
                     >
                       <AgGridVue
+                        :key="`quote-output-grid-${gridRowDataKey}`"
                         :rowData="gridRowData"
                         :columnDefs="gridColumnDefs"
                         :defaultColDef="defaultColDef"
@@ -317,6 +318,11 @@ const generateWordFromBackend = async () => {
 const showGridView = ref(false)
 const gridApi = ref(null)
 const gridRowData: any = ref([])
+// Bumped every time gridRowData is rebuilt so AgGridVue remounts. Without
+// this, AG Grid cannot reconcile rows across data swaps (benefit titles
+// resolve asynchronously from getBenefitMaps after the first watcher fire)
+// and some cells render blank even though gridRowData holds the values.
+const gridRowDataKey = ref(0)
 const gridColumnDefs = ref([
   {
     field: 'category',
@@ -575,6 +581,7 @@ watch(
   () => {
     if (resultSummaries.value.length > 0) {
       gridRowData.value = convertExcelDataToGridData()
+      gridRowDataKey.value++
     }
   },
   { deep: true }

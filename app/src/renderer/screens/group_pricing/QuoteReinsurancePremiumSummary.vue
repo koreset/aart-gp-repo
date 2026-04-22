@@ -8,6 +8,7 @@
         <v-col>
           <group-pricing-data-grid
             ref="dataGridRef"
+            :key="`reinsurance-grid-${rowDataKey}`"
             :columnDefs="columnDefs"
             :show-close-button="false"
             :rowData="rowData"
@@ -181,6 +182,13 @@ const columnDefs: any = ref([
   }
 ])
 const rowData: any = ref([])
+// Bumped every time rowData is rebuilt so the grid child remounts. AG Grid
+// without a getRowId cannot reconcile rows across data swaps (e.g. when
+// benefit titles resolve from getBenefitMaps after the first watcher fire, or
+// when this tab is activated alongside a sibling grid) — cells on some
+// columns render blank even though rowData holds the correct values. Forcing
+// a fresh grid instance per generation avoids the mis-reconciliation.
+const rowDataKey = ref(0)
 
 // Mirror the "is benefit enabled" guard from QuoteBenefitSummary so disabled
 // benefits render as zeroes instead of phantom values.
@@ -551,6 +559,7 @@ watch(
   () => {
     if (props.resultSummaries && props.resultSummaries.length > 0) {
       rowData.value = buildGridData()
+      rowDataKey.value++
     } else {
       rowData.value = []
     }
