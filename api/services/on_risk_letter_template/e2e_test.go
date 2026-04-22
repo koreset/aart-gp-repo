@@ -60,7 +60,6 @@ func TestRenderSampleWithSyntheticContext(t *testing.T) {
 		"currency":              "ZAR",
 		"free_cover_limit":      "500 000.00",
 		"normal_retirement_age": "65",
-		"continuation_option":   true,
 		"distribution_channel":  "broker",
 		"broker_name":           "Acme Brokers",
 		"is_broker_channel":     true,

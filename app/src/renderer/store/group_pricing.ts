@@ -59,6 +59,8 @@ export const useGroupPricingStore = defineStore('groupPricing', {
       phi_conversion_on_withdrawal: false,
       sgla_conversion_on_withdrawal: false,
       fun_conversion_on_withdrawal: false,
+      ttd_conversion_on_withdrawal: false,
+      gla_continuity_during_disability: false,
       additional_gla_cover_benefit: false,
       additional_gla_cover_age_band_source: 'standard',
       additional_gla_cover_age_band_type: '',

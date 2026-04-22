@@ -158,7 +158,7 @@ func howTokensWork() string {
 	b.WriteString(subheading("Conditional Blocks"))
 	b.WriteString(bulletPara("Syntax: {{#flag_name}}content{{/flag_name}}"))
 	b.WriteString(bulletPara("Usage: Blocks are rendered only if the flag is true or non-empty"))
-	b.WriteString(bulletPara("Example: {{#continuation_option}}Continuation options are available{{/continuation_option}}"))
+	b.WriteString(bulletPara("Example: {{#is_broker_channel}}Distributed via {{broker_name}}{{/is_broker_channel}}"))
 	b.WriteString(paragraph(""))
 
 	// Iteration
@@ -262,7 +262,6 @@ func sectionConditionalFlags() string {
 
 	rows := [][]string{
 		{"Flag", "True When", "Example Usage"},
-		{"{{#continuation_option}}", "Quote has continuation_option enabled", "{{#continuation_option}}Continuation options available{{/continuation_option}}"},
 		{"{{#is_broker_channel}}", "Distribution channel is 'broker'", "{{#is_broker_channel}}This quote was distributed via {{broker_name}}{{/is_broker_channel}}"},
 		{"{{#has_benefits}}", "Benefit summary is not empty", "{{#has_benefits}}See benefit breakdown below{{/has_benefits}}"},
 	}
@@ -353,7 +352,7 @@ func sectionTips() string {
 
 	b.WriteString(subheading("5. Common Patterns"))
 	b.WriteString(bulletPara("Date fields are pre-formatted ('14 Apr 2026') — no additional formatting needed."))
-	b.WriteString(bulletPara("Boolean flags like {{continuation_option}} are true/false; always use with {{#flag}}...{{/flag}} syntax."))
+	b.WriteString(bulletPara("Boolean flags like {{is_broker_channel}} are true/false; always use with {{#flag}}...{{/flag}} syntax."))
 	b.WriteString(bulletPara("Nested objects like {{insurer.name}} use dot notation; never use curly braces inside a token."))
 	b.WriteString(paragraph(""))
 

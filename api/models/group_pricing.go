@@ -90,7 +90,6 @@ type GroupPricingQuote struct {
 	MemberPremiumScheduleCount   int                       `json:"member_premium_schedule_count"`
 	BordereauxCount              int                       `json:"bordereaux_count"`
 	UseGlobalSalaryMultiple      bool                      `json:"use_global_salary_multiple"`
-	ContinuationOption           bool                      `json:"continuation_option"`
 	SelectedSchemeCategories     StringArray               `json:"selected_scheme_categories" gorm:"type:json"`
 	SchemeCategories             []SchemeCategory          `json:"scheme_categories" gorm:"foreignKey:QuoteId"`
 	Loadings                     Loadings                  `json:"loadings" gorm:"embedded;embeddedPrefix:loadings_"`
@@ -450,6 +449,8 @@ type SchemeCategory struct {
 	PhiConversionOnWithdrawal             bool `json:"phi_conversion_on_withdrawal"`
 	SglaConversionOnWithdrawal            bool `json:"sgla_conversion_on_withdrawal"`
 	FunConversionOnWithdrawal             bool `json:"fun_conversion_on_withdrawal"`
+	TtdConversionOnWithdrawal             bool `json:"ttd_conversion_on_withdrawal"`
+	GlaContinuityDuringDisability         bool `json:"gla_continuity_during_disability"`
 }
 
 type QuoteBroker struct {
@@ -1087,8 +1088,6 @@ type MemberRatingResult struct {
 	// reportable slice of the benefit's premium attributable to that
 	// component. Slices are NOT added to totals (they are already baked
 	// into their respective benefit's premium via the Loaded*Rate).
-	// GlaContinuityDuringDisability reuses the existing ContinuationLoading
-	// field above — no new Loading column for it.
 	GlaConversionOnWithdrawalLoading                  float64 `json:"gla_conversion_on_withdrawal_loading" csv:"gla_conversion_on_withdrawal_loading" gorm:"column:gla_conv_on_wdr_loading"`
 	GlaConversionOnWithdrawalRiskPremium              float64 `json:"gla_conversion_on_withdrawal_risk_premium" csv:"gla_conversion_on_withdrawal_risk_premium" gorm:"column:gla_conv_on_wdr_risk_premium"`
 	ExpAdjGlaConversionOnWithdrawalRiskPremium        float64 `json:"exp_adj_gla_conversion_on_withdrawal_risk_premium" csv:"exp_adj_gla_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_gla_conv_on_wdr_risk_premium"`
@@ -1101,7 +1100,7 @@ type MemberRatingResult struct {
 	GlaConversionOnRetirementOfficePremium            float64 `json:"gla_conversion_on_retirement_office_premium" csv:"gla_conversion_on_retirement_office_premium" gorm:"column:gla_conv_on_ret_office_premium"`
 	ExpAdjGlaConversionOnRetirementOfficePremium      float64 `json:"exp_adj_gla_conversion_on_retirement_office_premium" csv:"exp_adj_gla_conversion_on_retirement_office_premium" gorm:"column:exp_adj_gla_conv_on_ret_office_premium"`
 
-	// GlaContinuityDuringDisability: reuses ContinuationLoading (no Loading field here)
+	GlaContinuityDuringDisabilityLoading              float64 `json:"gla_continuity_during_disability_loading" csv:"gla_continuity_during_disability_loading" gorm:"column:gla_continuity_during_dis_loading"`
 	GlaContinuityDuringDisabilityRiskPremium          float64 `json:"gla_continuity_during_disability_risk_premium" csv:"gla_continuity_during_disability_risk_premium" gorm:"column:gla_cont_dur_dis_risk_premium"`
 	ExpAdjGlaContinuityDuringDisabilityRiskPremium    float64 `json:"exp_adj_gla_continuity_during_disability_risk_premium" csv:"exp_adj_gla_continuity_during_disability_risk_premium" gorm:"column:exp_adj_gla_cont_dur_dis_risk_premium"`
 	GlaContinuityDuringDisabilityOfficePremium        float64 `json:"gla_continuity_during_disability_office_premium" csv:"gla_continuity_during_disability_office_premium" gorm:"column:gla_cont_dur_dis_office_premium"`
@@ -1166,6 +1165,12 @@ type MemberRatingResult struct {
 	ExpAdjFunConversionOnWithdrawalRiskPremium        float64 `json:"exp_adj_fun_conversion_on_withdrawal_risk_premium" csv:"exp_adj_fun_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_fun_conv_on_wdr_risk_premium"`
 	FunConversionOnWithdrawalOfficePremium            float64 `json:"fun_conversion_on_withdrawal_office_premium" csv:"fun_conversion_on_withdrawal_office_premium" gorm:"column:fun_conv_on_wdr_office_premium"`
 	ExpAdjFunConversionOnWithdrawalOfficePremium      float64 `json:"exp_adj_fun_conversion_on_withdrawal_office_premium" csv:"exp_adj_fun_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_fun_conv_on_wdr_office_premium"`
+
+	TtdConversionOnWithdrawalLoading                  float64 `json:"ttd_conversion_on_withdrawal_loading" csv:"ttd_conversion_on_withdrawal_loading" gorm:"column:ttd_conv_on_wdr_loading"`
+	TtdConversionOnWithdrawalRiskPremium              float64 `json:"ttd_conversion_on_withdrawal_risk_premium" csv:"ttd_conversion_on_withdrawal_risk_premium" gorm:"column:ttd_conv_on_wdr_risk_premium"`
+	ExpAdjTtdConversionOnWithdrawalRiskPremium        float64 `json:"exp_adj_ttd_conversion_on_withdrawal_risk_premium" csv:"exp_adj_ttd_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_ttd_conv_on_wdr_risk_premium"`
+	TtdConversionOnWithdrawalOfficePremium            float64 `json:"ttd_conversion_on_withdrawal_office_premium" csv:"ttd_conversion_on_withdrawal_office_premium" gorm:"column:ttd_conv_on_wdr_office_premium"`
+	ExpAdjTtdConversionOnWithdrawalOfficePremium      float64 `json:"exp_adj_ttd_conversion_on_withdrawal_office_premium" csv:"exp_adj_ttd_conversion_on_withdrawal_office_premium" gorm:"column:exp_adj_ttd_conv_on_wdr_office_premium"`
 
 	ExceedsNormalRetirementAgeIndicator    int     `json:"exceeds_normal_retirement_age_indicator" csv:"exceeds_normal_retirement_age_indicator"`
 	ExceedsFreeCoverLimitIndicator         int     `json:"exceeds_free_cover_limit_indicator" csv:"exceeds_free_cover_limit_indicator"`
@@ -1714,6 +1719,20 @@ type MemberRatingResultSummary struct {
 	PhiConversionOnWithdrawalOfficeRatePer1000SA    float64 `json:"phi_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:phi_conv_on_wdr_office_rate_per_1000_sa"`
 	ExpPhiConversionOnWithdrawalRiskRatePer1000SA   float64 `json:"exp_phi_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_phi_conv_on_wdr_risk_rate_per_1000_sa"`
 	ExpPhiConversionOnWithdrawalOfficeRatePer1000SA float64 `json:"exp_phi_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_phi_conv_on_wdr_office_rate_per_1000_sa"`
+
+	// Slice: TtdConversionOnWithdrawal (denominator for rate-per-1000 = TotalTtdCappedIncome)
+	TotalTtdConversionOnWithdrawalAnnualRiskPremium         float64 `json:"total_ttd_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_ttd_conv_on_wdr_annual_risk_prem"`
+	TotalTtdConversionOnWithdrawalAnnualOfficePremium       float64 `json:"total_ttd_conversion_on_withdrawal_annual_office_premium" gorm:"column:total_ttd_conv_on_wdr_annual_office_prem"`
+	ExpAdjTotalTtdConversionOnWithdrawalAnnualRiskPremium   float64 `json:"exp_adj_total_ttd_conversion_on_withdrawal_annual_risk_premium" gorm:"column:exp_adj_total_ttd_conv_on_wdr_ann_risk_prem"`
+	ExpAdjTotalTtdConversionOnWithdrawalAnnualOfficePremium float64 `json:"exp_adj_total_ttd_conversion_on_withdrawal_annual_office_premium" gorm:"column:exp_adj_total_ttd_conv_on_wdr_ann_office_prem"`
+	ProportionTtdConversionOnWithdrawalRiskPremiumSalary         float64 `json:"proportion_ttd_conversion_on_withdrawal_risk_premium_salary" gorm:"column:prop_ttd_conv_on_wdr_risk_prem_salary"`
+	ProportionTtdConversionOnWithdrawalOfficePremiumSalary       float64 `json:"proportion_ttd_conversion_on_withdrawal_office_premium_salary" gorm:"column:prop_ttd_conv_on_wdr_office_prem_salary"`
+	ExpAdjProportionTtdConversionOnWithdrawalRiskPremiumSalary   float64 `json:"exp_adj_proportion_ttd_conversion_on_withdrawal_risk_premium_salary" gorm:"column:exp_adj_prop_ttd_conv_on_wdr_risk_prem_salary"`
+	ExpAdjProportionTtdConversionOnWithdrawalOfficePremiumSalary float64 `json:"exp_adj_proportion_ttd_conversion_on_withdrawal_office_premium_salary" gorm:"column:exp_adj_prop_ttd_conv_on_wdr_office_prem_salary"`
+	TtdConversionOnWithdrawalRiskRatePer1000SA      float64 `json:"ttd_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:ttd_conv_on_wdr_risk_rate_per_1000_sa"`
+	TtdConversionOnWithdrawalOfficeRatePer1000SA    float64 `json:"ttd_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:ttd_conv_on_wdr_office_rate_per_1000_sa"`
+	ExpTtdConversionOnWithdrawalRiskRatePer1000SA   float64 `json:"exp_ttd_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_ttd_conv_on_wdr_risk_rate_per_1000_sa"`
+	ExpTtdConversionOnWithdrawalOfficeRatePer1000SA float64 `json:"exp_ttd_conversion_on_withdrawal_office_rate_per_1000_sa" gorm:"column:exp_ttd_conv_on_wdr_office_rate_per_1000_sa"`
 
 	// Slice 6: CiConversionOnWithdrawal
 	TotalCiConversionOnWithdrawalAnnualRiskPremium         float64 `json:"total_ci_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_ci_conv_on_wdr_annual_risk_prem"`
@@ -2531,8 +2550,9 @@ type GeneralLoading struct {
 	// Conversion / continuity slice loading rates. Each is added to its
 	// respective Loaded*Rate chain only when the corresponding SchemeCategory
 	// flag is enabled; otherwise the member's loading stays zero and the
-	// slice premium is zero. GLA continuity-during-disability reuses the
-	// existing ContinuationLoadingRate above (no new column).
+	// slice premium is zero. Each slice owns its own dedicated column
+	// (GlaContinuityDuringDisability has its own gla_continuity_during_dis_loading_rate
+	// column below — the legacy continuation_loading_rate is deprecated).
 	GlaConversionOnWithdrawalLoadingRate           float64 `json:"gla_conversion_on_withdrawal_loading_rate" csv:"gla_conversion_on_withdrawal_loading_rate" gorm:"column:gla_conv_on_wdr_loading_rate"`
 	GlaConversionOnRetirementLoadingRate           float64 `json:"gla_conversion_on_retirement_loading_rate" csv:"gla_conversion_on_retirement_loading_rate" gorm:"column:gla_conv_on_ret_loading_rate"`
 	GlaEducatorConversionOnWithdrawalLoadingRate   float64 `json:"gla_educator_conversion_on_withdrawal_loading_rate" csv:"gla_educator_conversion_on_withdrawal_loading_rate" gorm:"column:gla_ed_conv_on_wdr_loading_rate"`
@@ -2545,6 +2565,8 @@ type GeneralLoading struct {
 	PhiConversionOnWithdrawalLoadingRate           float64 `json:"phi_conversion_on_withdrawal_loading_rate" csv:"phi_conversion_on_withdrawal_loading_rate" gorm:"column:phi_conv_on_wdr_loading_rate"`
 	SglaConversionOnWithdrawalLoadingRate          float64 `json:"sgla_conversion_on_withdrawal_loading_rate" csv:"sgla_conversion_on_withdrawal_loading_rate" gorm:"column:sgla_conv_on_wdr_loading_rate"`
 	FunConversionOnWithdrawalLoadingRate           float64 `json:"fun_conversion_on_withdrawal_loading_rate" csv:"fun_conversion_on_withdrawal_loading_rate" gorm:"column:fun_conv_on_wdr_loading_rate"`
+	TtdConversionOnWithdrawalLoadingRate           float64 `json:"ttd_conversion_on_withdrawal_loading_rate" csv:"ttd_conversion_on_withdrawal_loading_rate" gorm:"column:ttd_conv_on_wdr_loading_rate"`
+	GlaContinuityDuringDisabilityLoadingRate       float64 `json:"gla_continuity_during_disability_loading_rate" csv:"gla_continuity_during_disability_loading_rate" gorm:"column:gla_continuity_during_dis_loading_rate"`
 
 	PtdAcceleratedBenefitDiscount float64   `json:"ptd_accelerated_benefit_discount" csv:"ptd_accelerated_benefit_discount"`
 	CiAcceleratedBenefitDiscount  float64   `json:"ci_accelerated_benefit_discount" csv:"ci_accelerated_benefit_discount"`

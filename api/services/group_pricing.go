@@ -1463,11 +1463,11 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 			)
 			if aglaErr != nil {
 				logger.WithFields(map[string]interface{}{
-					"error":         aglaErr.Error(),
-					"category":      selectedSchemeCategory,
-					"benefit_type":  category.GlaBenefitType,
-					"band_count":    len(aglaBands),
-					"male_prop":     maleProp,
+					"error":        aglaErr.Error(),
+					"category":     selectedSchemeCategory,
+					"benefit_type": category.GlaBenefitType,
+					"band_count":   len(aglaBands),
+					"male_prop":    maleProp,
 				}).Warn("Failed to compute additional GLA cover band rates")
 			} else {
 				category.AdditionalGlaCoverBandRates = aglaBandRates
@@ -1911,6 +1911,10 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.TotalPhiConversionOnWithdrawalAnnualOfficePremium += mr.PhiConversionOnWithdrawalOfficePremium
 		mdrs.ExpAdjTotalPhiConversionOnWithdrawalAnnualRiskPremium += mr.ExpAdjPhiConversionOnWithdrawalRiskPremium
 		mdrs.ExpAdjTotalPhiConversionOnWithdrawalAnnualOfficePremium += mr.ExpAdjPhiConversionOnWithdrawalOfficePremium
+		mdrs.TotalTtdConversionOnWithdrawalAnnualRiskPremium += mr.TtdConversionOnWithdrawalRiskPremium
+		mdrs.TotalTtdConversionOnWithdrawalAnnualOfficePremium += mr.TtdConversionOnWithdrawalOfficePremium
+		mdrs.ExpAdjTotalTtdConversionOnWithdrawalAnnualRiskPremium += mr.ExpAdjTtdConversionOnWithdrawalRiskPremium
+		mdrs.ExpAdjTotalTtdConversionOnWithdrawalAnnualOfficePremium += mr.ExpAdjTtdConversionOnWithdrawalOfficePremium
 		mdrs.TotalCiConversionOnWithdrawalAnnualRiskPremium += mr.CiConversionOnWithdrawalRiskPremium
 		mdrs.TotalCiConversionOnWithdrawalAnnualOfficePremium += mr.CiConversionOnWithdrawalOfficePremium
 		mdrs.ExpAdjTotalCiConversionOnWithdrawalAnnualRiskPremium += mr.ExpAdjCiConversionOnWithdrawalRiskPremium
@@ -2188,6 +2192,10 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.ProportionPhiConversionOnWithdrawalOfficePremiumSalary = mdrs.TotalPhiConversionOnWithdrawalAnnualOfficePremium / denomSalary
 		mdrs.ExpAdjProportionPhiConversionOnWithdrawalRiskPremiumSalary = mdrs.ExpAdjTotalPhiConversionOnWithdrawalAnnualRiskPremium / denomSalary
 		mdrs.ExpAdjProportionPhiConversionOnWithdrawalOfficePremiumSalary = mdrs.ExpAdjTotalPhiConversionOnWithdrawalAnnualOfficePremium / denomSalary
+		mdrs.ProportionTtdConversionOnWithdrawalRiskPremiumSalary = mdrs.TotalTtdConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ProportionTtdConversionOnWithdrawalOfficePremiumSalary = mdrs.TotalTtdConversionOnWithdrawalAnnualOfficePremium / denomSalary
+		mdrs.ExpAdjProportionTtdConversionOnWithdrawalRiskPremiumSalary = mdrs.ExpAdjTotalTtdConversionOnWithdrawalAnnualRiskPremium / denomSalary
+		mdrs.ExpAdjProportionTtdConversionOnWithdrawalOfficePremiumSalary = mdrs.ExpAdjTotalTtdConversionOnWithdrawalAnnualOfficePremium / denomSalary
 		mdrs.ProportionCiConversionOnWithdrawalRiskPremiumSalary = mdrs.TotalCiConversionOnWithdrawalAnnualRiskPremium / denomSalary
 		mdrs.ProportionCiConversionOnWithdrawalOfficePremiumSalary = mdrs.TotalCiConversionOnWithdrawalAnnualOfficePremium / denomSalary
 		mdrs.ExpAdjProportionCiConversionOnWithdrawalRiskPremiumSalary = mdrs.ExpAdjTotalCiConversionOnWithdrawalAnnualRiskPremium / denomSalary
@@ -2363,6 +2371,13 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.ExpPhiConversionOnWithdrawalRiskRatePer1000SA = mdrs.ExpAdjTotalPhiConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
 		mdrs.ExpPhiConversionOnWithdrawalOfficeRatePer1000SA = mdrs.ExpAdjTotalPhiConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
 	}
+	if mdrs.TotalTtdCappedIncome > 0 {
+		d := mdrs.TotalTtdCappedIncome
+		mdrs.TtdConversionOnWithdrawalRiskRatePer1000SA = mdrs.TotalTtdConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.TtdConversionOnWithdrawalOfficeRatePer1000SA = mdrs.TotalTtdConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
+		mdrs.ExpTtdConversionOnWithdrawalRiskRatePer1000SA = mdrs.ExpAdjTotalTtdConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.ExpTtdConversionOnWithdrawalOfficeRatePer1000SA = mdrs.ExpAdjTotalTtdConversionOnWithdrawalAnnualOfficePremium * 1000.0 / d
+	}
 	if mdrs.TotalFamilyFuneralSumAssured > 0 {
 		d := mdrs.TotalFamilyFuneralSumAssured
 		mdrs.FunConversionOnWithdrawalRiskRatePer1000SA = mdrs.TotalFunConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
@@ -2461,8 +2476,6 @@ func calculateAgeNextBirthday(commencementDate, dob time.Time) int {
 // from the matching GeneralLoading row. Each slice is gated by its
 // SchemeCategory flag and the underlying base benefit flag; missing flags
 // leave the member loading at zero (no premium impact).
-// GlaContinuityDuringDisability reuses the existing ContinuationLoading
-// (resolved elsewhere) — no separate handling here.
 func resolveConvContLoadings(m *models.MemberRatingResult, sc *models.SchemeCategory, gl *models.GeneralLoading) {
 	if sc.GlaBenefit {
 		if sc.GlaConversionOnWithdrawal {
@@ -2470,6 +2483,9 @@ func resolveConvContLoadings(m *models.MemberRatingResult, sc *models.SchemeCate
 		}
 		if sc.GlaConversionOnRetirement {
 			m.GlaConversionOnRetirementLoading = gl.GlaConversionOnRetirementLoadingRate
+		}
+		if sc.GlaContinuityDuringDisability {
+			m.GlaContinuityDuringDisabilityLoading = gl.GlaContinuityDuringDisabilityLoadingRate
 		}
 		if sc.GlaEducatorBenefit == "Yes" {
 			if sc.GlaEducatorConversionOnWithdrawal {
@@ -2502,6 +2518,9 @@ func resolveConvContLoadings(m *models.MemberRatingResult, sc *models.SchemeCate
 	if sc.PhiBenefit && sc.PhiConversionOnWithdrawal {
 		m.PhiConversionOnWithdrawalLoading = gl.PhiConversionOnWithdrawalLoadingRate
 	}
+	if sc.TtdBenefit && sc.TtdConversionOnWithdrawal {
+		m.TtdConversionOnWithdrawalLoading = gl.TtdConversionOnWithdrawalLoadingRate
+	}
 	if sc.SglaBenefit && sc.SglaConversionOnWithdrawal {
 		m.SglaConversionOnWithdrawalLoading = gl.SglaConversionOnWithdrawalLoadingRate
 	}
@@ -2531,7 +2550,7 @@ func computeEducatorLoadedRates(m *models.MemberRatingResult) {
 // slice risk and office premiums. Educator slice premiums are computed inline
 // in the educator block (they need the per-member riskWeightedSA factor).
 // Must be called after every Loaded*Rate and TotalFuneralRiskCost are final.
-func computeConvContSlicePremiums(m *models.MemberRatingResult) {
+func computeConvContSlicePremiums(m *models.MemberRatingResult, groupParameter models.GroupPricingParameters) {
 	divisor := 1.0 - m.TotalLoading
 	if divisor == 0 {
 		divisor = 1.0
@@ -2549,9 +2568,9 @@ func computeConvContSlicePremiums(m *models.MemberRatingResult) {
 	m.GlaConversionOnRetirementOfficePremium = m.GlaConversionOnRetirementRiskPremium / divisor
 	m.ExpAdjGlaConversionOnRetirementOfficePremium = m.ExpAdjGlaConversionOnRetirementRiskPremium / divisor
 
-	// Slice 12: GLA continuity during disability (reuses ContinuationLoading)
-	m.GlaContinuityDuringDisabilityRiskPremium = m.LoadedGlaRate * m.ContinuationLoading * m.GlaCappedSumAssured
-	m.ExpAdjGlaContinuityDuringDisabilityRiskPremium = m.ExpAdjLoadedGlaRate * m.ContinuationLoading * m.GlaCappedSumAssured
+	// Slice 12: GLA continuity during disability
+	m.GlaContinuityDuringDisabilityRiskPremium = m.LoadedGlaRate * m.GlaContinuityDuringDisabilityLoading * m.GlaCappedSumAssured
+	m.ExpAdjGlaContinuityDuringDisabilityRiskPremium = m.ExpAdjLoadedGlaRate * m.GlaContinuityDuringDisabilityLoading * m.GlaCappedSumAssured
 	m.GlaContinuityDuringDisabilityOfficePremium = m.GlaContinuityDuringDisabilityRiskPremium / divisor
 	m.ExpAdjGlaContinuityDuringDisabilityOfficePremium = m.ExpAdjGlaContinuityDuringDisabilityRiskPremium / divisor
 
@@ -2566,6 +2585,13 @@ func computeConvContSlicePremiums(m *models.MemberRatingResult) {
 	m.ExpAdjPhiConversionOnWithdrawalRiskPremium = m.ExpAdjLoadedPhiRate * m.PhiConversionOnWithdrawalLoading * m.PhiMonthlyBenefit
 	m.PhiConversionOnWithdrawalOfficePremium = m.PhiConversionOnWithdrawalRiskPremium / divisor
 	m.ExpAdjPhiConversionOnWithdrawalOfficePremium = m.ExpAdjPhiConversionOnWithdrawalRiskPremium / divisor
+
+	// Slice: TTD conversion on withdrawal (base = TtdCappedIncome × TtdNumberMonthlyPayments, parallels parent TTD premium)
+	ttdIncomeBase := m.TtdCappedIncome * groupParameter.TtdNumberMonthlyPayments
+	m.TtdConversionOnWithdrawalRiskPremium = m.LoadedTtdRate * m.TtdConversionOnWithdrawalLoading * ttdIncomeBase
+	m.ExpAdjTtdConversionOnWithdrawalRiskPremium = m.ExpAdjLoadedTtdRate * m.TtdConversionOnWithdrawalLoading * ttdIncomeBase
+	m.TtdConversionOnWithdrawalOfficePremium = m.TtdConversionOnWithdrawalRiskPremium / divisor
+	m.ExpAdjTtdConversionOnWithdrawalOfficePremium = m.ExpAdjTtdConversionOnWithdrawalRiskPremium / divisor
 
 	// Slice 6: CI conversion on withdrawal
 	m.CiConversionOnWithdrawalRiskPremium = m.LoadedCiRate * m.CiConversionOnWithdrawalLoading * m.CiCappedSumAssured
@@ -2806,12 +2832,9 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	if schemeCategory.GlaTerminalIllnessBenefit == "Yes" {
 		memberDataPointResult.GlaTerminalIllnessLoading = gl1.TerminalIllnessLoadingRate
 	}
-	if groupQuote.ContinuationOption {
-		memberDataPointResult.ContinuationLoading = gl1.ContinuationLoadingRate
-	}
 
 	// Persist the per-member contingency loadings alongside the already-set
-	// region/industry/continuation loadings.
+	// region/industry loadings.
 	memberDataPointResult.GlaContingencyLoading = gl1.GlaContigencyLoadingRate
 	memberDataPointResult.PtdContingencyLoading = gl1.PtdContigencyLoadingRate
 	memberDataPointResult.CiContingencyLoading = gl1.CiContigencyLoadingRate
@@ -2843,7 +2866,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	// Loaded*Rate below; slice premiums computed after rates are final).
 	resolveConvContLoadings(memberDataPointResult, &schemeCategory, &gl1)
 
-	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.ContinuationLoading + memberDataPointResult.TaxSaverLoading + memberDataPointResult.GlaConversionOnWithdrawalLoading + memberDataPointResult.GlaConversionOnRetirementLoading)
+	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.GlaContinuityDuringDisabilityLoading + memberDataPointResult.TaxSaverLoading + memberDataPointResult.GlaConversionOnWithdrawalLoading + memberDataPointResult.GlaConversionOnRetirementLoading)
 
 	memberDataPointResult.ExpAdjLoadedGlaRate = memberDataPointResult.LoadedGlaRate * memberDataPointResult.GlaExperienceAdjustment
 
@@ -2860,7 +2883,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		memberDataPointResult.AdditionalAccidentalGlaQx = GetAdditionalAccidentalGlaRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, schemeCategory)
 		memberDataPointResult.AdditionalAccidentalGlaAidsQx = memberDataPointResult.GlaAidsQx
 		memberDataPointResult.BaseAdditionalAccidentalGlaRate = memberDataPointResult.AdditionalAccidentalGlaQx*(1+memberDataPointResult.GlaIndustryLoading+memberDataPointResult.GlaRegionLoading) + memberDataPointResult.AdditionalAccidentalGlaAidsQx*(1+memberDataPointResult.GlaAidsRegionLoading)
-		memberDataPointResult.LoadedAdditionalAccidentalGlaRate = memberDataPointResult.BaseAdditionalAccidentalGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.ContinuationLoading)
+		memberDataPointResult.LoadedAdditionalAccidentalGlaRate = memberDataPointResult.BaseAdditionalAccidentalGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading)
 		memberDataPointResult.AdditionalAccidentalGlaExperienceAdjustment = memberDataPointResult.GlaExperienceAdjustment
 		memberDataPointResult.ExpAdjLoadedAdditionalAccidentalGlaRate = memberDataPointResult.LoadedAdditionalAccidentalGlaRate * memberDataPointResult.AdditionalAccidentalGlaExperienceAdjustment
 	}
@@ -2879,7 +2902,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	if schemeCategory.TtdBenefit {
 		ttdRate := GetTtdRate(&originalMemberDataPointResult, groupParameter, groupQuote, schemeCategory, mpIncomeLevel)
 		memberDataPointResult.BaseTtdRate = ttdRate * (1 + memberDataPointResult.TtdIndustryLoading + memberDataPointResult.TtdRegionLoading)
-		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate * (1 + memberDataPointResult.TtdContingencyLoading + memberDataPointResult.TtdVoluntaryLoading)
+		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate * (1 + memberDataPointResult.TtdContingencyLoading + memberDataPointResult.TtdVoluntaryLoading + memberDataPointResult.TtdConversionOnWithdrawalLoading)
 		memberDataPointResult.ExpAdjLoadedTtdRate = memberDataPointResult.LoadedTtdRate * memberDataPointResult.TtdExperienceAdjustment
 	}
 
@@ -2993,9 +3016,6 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	if schemeCategory.GlaTerminalIllnessBenefit == "Yes" {
 		memberDataPointResult.ReinsGlaTerminalIllnessLoading = reinsGL.TerminalIllnessLoadingRate
 	}
-	if groupQuote.ContinuationOption {
-		memberDataPointResult.ReinsContinuationLoading = reinsGL.ContinuationLoadingRate
-	}
 
 	// GLA: BaseReinsGlaRate = ReinsGlaQx × (1 + ReinsGlaIndustryLoading + ReinsGlaRegionLoading)
 	//                        + ReinsGlaAidsQx × (1 + ReinsGlaAidsRegionLoading)
@@ -3005,7 +3025,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		memberDataPointResult.BaseReinsGlaRate = memberDataPointResult.ReinsGlaQx*(1+memberDataPointResult.ReinsGlaIndustryLoading+memberDataPointResult.ReinsGlaRegionLoading) +
 			memberDataPointResult.ReinsGlaAidsQx*(1+memberDataPointResult.ReinsGlaAidsRegionLoading)
 		memberDataPointResult.LoadedReinsGlaRate = memberDataPointResult.BaseReinsGlaRate *
-			(1 + memberDataPointResult.ReinsGlaContingencyLoading + memberDataPointResult.ReinsGlaVoluntaryLoading + memberDataPointResult.ReinsGlaTerminalIllnessLoading + memberDataPointResult.ReinsContinuationLoading)
+			(1 + memberDataPointResult.ReinsGlaContingencyLoading + memberDataPointResult.ReinsGlaVoluntaryLoading + memberDataPointResult.ReinsGlaTerminalIllnessLoading)
 	}
 
 	// PTD
@@ -3141,7 +3161,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	// that Loaded*Rates and TotalFuneralRiskCost are final. Educator slice
 	// premiums are computed inline in the educator block (they need
 	// riskWeightedSA).
-	computeConvContSlicePremiums(memberDataPointResult)
+	computeConvContSlicePremiums(memberDataPointResult, groupParameter)
 
 	applyBinderOutsourceAmounts(memberDataPointResult, binderFeeRate, outsourceFeeRate)
 
@@ -3446,12 +3466,9 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	if groupQuote.SchemeCategories[i].GlaTerminalIllnessBenefit == "Yes" {
 		memberDataPointResult.GlaTerminalIllnessLoading = gl2.TerminalIllnessLoadingRate
 	}
-	if groupQuote.ContinuationOption {
-		memberDataPointResult.ContinuationLoading = gl2.ContinuationLoadingRate
-	}
 
 	// Persist the per-member contingency loadings alongside the already-set
-	// region/industry/continuation loadings.
+	// region/industry loadings.
 	memberDataPointResult.GlaContingencyLoading = gl2.GlaContigencyLoadingRate
 	memberDataPointResult.PtdContingencyLoading = gl2.PtdContigencyLoadingRate
 	memberDataPointResult.CiContingencyLoading = gl2.CiContigencyLoadingRate
@@ -3475,7 +3492,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	}
 	resolveConvContLoadings(&memberDataPointResult, &groupQuote.SchemeCategories[i], &gl2)
 
-	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.ContinuationLoading + memberDataPointResult.TaxSaverLoading + memberDataPointResult.GlaConversionOnWithdrawalLoading + memberDataPointResult.GlaConversionOnRetirementLoading)
+	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.GlaContinuityDuringDisabilityLoading + memberDataPointResult.TaxSaverLoading + memberDataPointResult.GlaConversionOnWithdrawalLoading + memberDataPointResult.GlaConversionOnRetirementLoading)
 
 	if groupQuote.SchemeCategories[i].PtdBenefit {
 		ptdRate := GetPtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
@@ -3490,7 +3507,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	if groupQuote.SchemeCategories[i].TtdBenefit {
 		ttdRate := GetTtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
 		memberDataPointResult.BaseTtdRate = ttdRate * (1 + memberDataPointResult.TtdIndustryLoading + memberDataPointResult.TtdRegionLoading)
-		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate * (1 + memberDataPointResult.TtdContingencyLoading + memberDataPointResult.TtdVoluntaryLoading)
+		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate * (1 + memberDataPointResult.TtdContingencyLoading + memberDataPointResult.TtdVoluntaryLoading + memberDataPointResult.TtdConversionOnWithdrawalLoading)
 	}
 
 	if groupQuote.SchemeCategories[i].PhiBenefit {
@@ -3587,11 +3604,11 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.Industry = groupQuote.Industry
 	memberDataPointResult.ExpenseLoading = premiumLoading.ExpenseLoading
 	memberDataPointResult.AdminLoading = premiumLoading.AdminLoading
-	effectiveCommission3 := premiumLoading.CommissionLoading
-	if groupQuote.DistributionChannel == models.ChannelDirect {
-		effectiveCommission3 = 0
-	}
-	memberDataPointResult.CommissionLoading = effectiveCommission3
+	//effectiveCommission3 := premiumLoading.CommissionLoading
+	//if groupQuote.DistributionChannel == models.ChannelDirect {
+	//	effectiveCommission3 = 0
+	//}
+	//memberDataPointResult.CommissionLoading = effectiveCommission3
 	memberDataPointResult.ProfitLoading = premiumLoading.ProfitLoading
 	memberDataPointResult.OtherLoading = premiumLoading.OtherLoading
 	memberDataPointResult.Discount = -(groupQuote.Loadings.Discount / 100.0)
@@ -3786,12 +3803,9 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	if groupQuote.SchemeCategories[i].GlaTerminalIllnessBenefit == "Yes" {
 		memberDataPointResult.GlaTerminalIllnessLoading = gl3.TerminalIllnessLoadingRate
 	}
-	if groupQuote.ContinuationOption {
-		memberDataPointResult.ContinuationLoading = gl3.ContinuationLoadingRate
-	}
 
 	// Persist the per-member contingency loadings alongside the already-set
-	// region/industry/continuation loadings.
+	// region/industry loadings.
 	memberDataPointResult.GlaContingencyLoading = gl3.GlaContigencyLoadingRate
 	memberDataPointResult.PtdContingencyLoading = gl3.PtdContigencyLoadingRate
 	memberDataPointResult.CiContingencyLoading = gl3.CiContigencyLoadingRate
@@ -3815,7 +3829,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	}
 	resolveConvContLoadings(&memberDataPointResult, &groupQuote.SchemeCategories[i], &gl3)
 
-	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.ContinuationLoading + memberDataPointResult.TaxSaverLoading + memberDataPointResult.GlaConversionOnWithdrawalLoading + memberDataPointResult.GlaConversionOnRetirementLoading)
+	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.GlaContinuityDuringDisabilityLoading + memberDataPointResult.TaxSaverLoading + memberDataPointResult.GlaConversionOnWithdrawalLoading + memberDataPointResult.GlaConversionOnRetirementLoading)
 
 	if groupQuote.SchemeCategories[i].PtdBenefit {
 		ptdRate := GetPtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
@@ -3830,7 +3844,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	if groupQuote.SchemeCategories[i].TtdBenefit {
 		ttdRate := GetTtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
 		memberDataPointResult.BaseTtdRate = ttdRate * (1 + memberDataPointResult.TtdIndustryLoading + memberDataPointResult.TtdRegionLoading)
-		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate * (1 + memberDataPointResult.TtdContingencyLoading + memberDataPointResult.TtdVoluntaryLoading)
+		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate * (1 + memberDataPointResult.TtdContingencyLoading + memberDataPointResult.TtdVoluntaryLoading + memberDataPointResult.TtdConversionOnWithdrawalLoading)
 	}
 
 	if groupQuote.SchemeCategories[i].PhiBenefit {
@@ -3905,9 +3919,6 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	if groupQuote.SchemeCategories[i].GlaTerminalIllnessBenefit == "Yes" {
 		memberDataPointResult.ReinsGlaTerminalIllnessLoading = reinsGL.TerminalIllnessLoadingRate
 	}
-	if groupQuote.ContinuationOption {
-		memberDataPointResult.ReinsContinuationLoading = reinsGL.ContinuationLoadingRate
-	}
 
 	if groupQuote.SchemeCategories[i].GlaBenefit {
 		memberDataPointResult.ReinsGlaQx = GetReinsuranceGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote.SchemeCategories[i])
@@ -3915,7 +3926,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		memberDataPointResult.BaseReinsGlaRate = memberDataPointResult.ReinsGlaQx*(1+memberDataPointResult.ReinsGlaIndustryLoading+memberDataPointResult.ReinsGlaRegionLoading) +
 			memberDataPointResult.ReinsGlaAidsQx*(1+memberDataPointResult.ReinsGlaAidsRegionLoading)
 		memberDataPointResult.LoadedReinsGlaRate = memberDataPointResult.BaseReinsGlaRate *
-			(1 + memberDataPointResult.ReinsGlaContingencyLoading + memberDataPointResult.ReinsGlaVoluntaryLoading + memberDataPointResult.ReinsGlaTerminalIllnessLoading + memberDataPointResult.ReinsContinuationLoading)
+			(1 + memberDataPointResult.ReinsGlaContingencyLoading + memberDataPointResult.ReinsGlaVoluntaryLoading + memberDataPointResult.ReinsGlaTerminalIllnessLoading)
 	}
 
 	if groupQuote.SchemeCategories[i].PtdBenefit {
@@ -4148,7 +4159,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	// Non-educator conversion / continuity slice premiums (risk + office +
 	// ExpAdj variants). Called after all LoadedRates and TotalFuneralRiskCost
 	// are final, including ExpAdj* rates set in the Experience Rating block.
-	computeConvContSlicePremiums(&memberDataPointResult)
+	computeConvContSlicePremiums(&memberDataPointResult, groupParameter)
 
 	applyBinderOutsourceAmounts(&memberDataPointResult, binderFeeRate3, outsourceFeeRate3)
 

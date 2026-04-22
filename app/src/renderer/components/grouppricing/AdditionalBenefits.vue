@@ -147,6 +147,39 @@
                 ></v-select>
               </v-col>
               <v-col cols="4">
+                <v-checkbox
+                  v-model="glaConversionOnWithdrawal"
+                  v-bind="glaConversionOnWithdrawalAttrs"
+                  variant="outlined"
+                  density="compact"
+                  label="Conversion on Withdrawal"
+                  :disabled="!glaBenefit || !selectedSchemeType"
+                ></v-checkbox>
+              </v-col>
+              <v-col cols="4">
+                <v-checkbox
+                  v-model="glaConversionOnRetirement"
+                  v-bind="glaConversionOnRetirementAttrs"
+                  variant="outlined"
+                  density="compact"
+                  label="Conversion on Retirement"
+                  :disabled="!glaBenefit || !selectedSchemeType"
+                ></v-checkbox>
+              </v-col>
+              <v-col cols="4">
+                <v-checkbox
+                  v-model="glaContinuityDuringDisability"
+                  variant="outlined"
+                  density="compact"
+                  label="Continuity During Disability"
+                  :disabled="!glaBenefit || !selectedSchemeType"
+                ></v-checkbox>
+              </v-col>
+            </v-row>
+            <v-divider class="my-4"></v-divider>
+            <div class="text-subtitle-2 mb-2">Educator Benefit</div>
+            <v-row>
+              <v-col cols="4">
                 <v-select
                   v-model="glaEducatorBenefit"
                   v-bind="glaEducatorBenefitAttrs"
@@ -172,23 +205,32 @@
                   :disabled="!glaBenefit || !selectedSchemeType"
                 ></v-select>
               </v-col>
+            </v-row>
+            <v-row v-if="glaEducatorBenefit === 'Yes'">
               <v-col cols="4">
                 <v-checkbox
-                  v-model="glaConversionOnWithdrawal"
-                  v-bind="glaConversionOnWithdrawalAttrs"
+                  v-model="glaEducatorConversionOnWithdrawal"
                   variant="outlined"
                   density="compact"
-                  label="Conversion on Withdrawal"
+                  label="Educator: Conversion on Withdrawal"
                   :disabled="!glaBenefit || !selectedSchemeType"
                 ></v-checkbox>
               </v-col>
               <v-col cols="4">
                 <v-checkbox
-                  v-model="glaConversionOnRetirement"
-                  v-bind="glaConversionOnRetirementAttrs"
+                  v-model="glaEducatorConversionOnRetirement"
                   variant="outlined"
                   density="compact"
-                  label="Conversion on Retirement"
+                  label="Educator: Conversion on Retirement"
+                  :disabled="!glaBenefit || !selectedSchemeType"
+                ></v-checkbox>
+              </v-col>
+              <v-col cols="4">
+                <v-checkbox
+                  v-model="glaEducatorContinuityDuringDisability"
+                  variant="outlined"
+                  density="compact"
+                  label="Educator: Continuity During Disability"
                   :disabled="!glaBenefit || !selectedSchemeType"
                 ></v-checkbox>
               </v-col>
@@ -500,6 +542,20 @@
                 ></v-select>
               </v-col>
               <v-col cols="4">
+                <v-checkbox
+                  v-model="ptdConversionOnWithdrawal"
+                  v-bind="ptdConversionOnWithdrawalAttrs"
+                  variant="outlined"
+                  density="compact"
+                  label="Conversion on Withdrawal"
+                  :disabled="!ptdBenefit || !selectedSchemeType"
+                ></v-checkbox>
+              </v-col>
+            </v-row>
+            <v-divider class="my-4"></v-divider>
+            <div class="text-subtitle-2 mb-2">Educator Benefit</div>
+            <v-row>
+              <v-col cols="4">
                 <v-select
                   v-model="ptdEducatorBenefit"
                   v-bind="ptdEducatorBenefitAttrs"
@@ -525,13 +581,23 @@
                   :disabled="!ptdBenefit || !selectedSchemeType"
                 ></v-select>
               </v-col>
+            </v-row>
+            <v-row v-if="ptdEducatorBenefit === 'Yes'">
               <v-col cols="4">
                 <v-checkbox
-                  v-model="ptdConversionOnWithdrawal"
-                  v-bind="ptdConversionOnWithdrawalAttrs"
+                  v-model="ptdEducatorConversionOnWithdrawal"
                   variant="outlined"
                   density="compact"
-                  label="Conversion on Withdrawal"
+                  label="Educator: Conversion on Withdrawal"
+                  :disabled="!ptdBenefit || !selectedSchemeType"
+                ></v-checkbox>
+              </v-col>
+              <v-col cols="4">
+                <v-checkbox
+                  v-model="ptdEducatorConversionOnRetirement"
+                  variant="outlined"
+                  density="compact"
+                  label="Educator: Conversion on Retirement"
                   :disabled="!ptdBenefit || !selectedSchemeType"
                 ></v-checkbox>
               </v-col>
@@ -651,6 +717,15 @@
                       type="number"
                       :disabled="!sglaBenefit || !selectedSchemeType"
                     ></v-text-field>
+                  </v-col>
+                  <v-col cols="4">
+                    <v-checkbox
+                      v-model="sglaConversionOnWithdrawal"
+                      variant="outlined"
+                      density="compact"
+                      label="Conversion on Withdrawal"
+                      :disabled="!sglaBenefit || !selectedSchemeType"
+                    ></v-checkbox>
                   </v-col>
                 </v-row>
               </template>
@@ -841,6 +916,15 @@
                       :disabled="!phiBenefit || !selectedSchemeType"
                     ></v-select>
                   </v-col>
+                  <v-col cols="4">
+                    <v-checkbox
+                      v-model="phiConversionOnWithdrawal"
+                      variant="outlined"
+                      density="compact"
+                      label="Conversion on Withdrawal"
+                      :disabled="!phiBenefit || !selectedSchemeType"
+                    ></v-checkbox>
+                  </v-col>
                 </v-row>
               </template>
             </base-card>
@@ -975,6 +1059,15 @@
                       :items="ttdDisabilityDefinitions"
                       :disabled="!ttdBenefit || !selectedSchemeType"
                     ></v-select>
+                  </v-col>
+                  <v-col cols="4">
+                    <v-checkbox
+                      v-model="ttdConversionOnWithdrawal"
+                      variant="outlined"
+                      density="compact"
+                      label="Conversion on Withdrawal"
+                      :disabled="!ttdBenefit || !selectedSchemeType"
+                    ></v-checkbox>
                   </v-col>
                 </v-row>
               </template>
@@ -1115,6 +1208,15 @@
                       label="Maximum Number of Dependants"
                       :disabled="!familyFuneralBenefit || !selectedSchemeType"
                     ></v-text-field>
+                  </v-col>
+                  <v-col cols="4">
+                    <v-checkbox
+                      v-model="funConversionOnWithdrawal"
+                      variant="outlined"
+                      density="compact"
+                      label="Conversion on Withdrawal"
+                      :disabled="!familyFuneralBenefit || !selectedSchemeType"
+                    ></v-checkbox>
                   </v-col>
                 </v-row>
 
@@ -1520,6 +1622,14 @@ function onSchemeTypeChange(schemeType) {
     glaEducatorBenefitType.value = data.gla_educator_benefit_type || null
     glaConversionOnWithdrawal.value = data.gla_conversion_on_withdrawal || false
     glaConversionOnRetirement.value = data.gla_conversion_on_retirement || false
+    glaContinuityDuringDisability.value =
+      data.gla_continuity_during_disability || false
+    glaEducatorConversionOnWithdrawal.value =
+      data.gla_educator_conversion_on_withdrawal || false
+    glaEducatorConversionOnRetirement.value =
+      data.gla_educator_conversion_on_retirement || false
+    glaEducatorContinuityDuringDisability.value =
+      data.gla_educator_continuity_during_disability || false
     additionalAccidentalGlaBenefit.value =
       data.additional_accidental_gla_benefit || false
     additionalAccidentalGlaBenefitType.value =
@@ -1561,6 +1671,10 @@ function onSchemeTypeChange(schemeType) {
     ptdEducatorBenefit.value = data.ptd_educator_benefit || ''
     ptdEducatorBenefitType.value = data.ptd_educator_benefit_type || null
     ptdConversionOnWithdrawal.value = data.ptd_conversion_on_withdrawal || false
+    ptdEducatorConversionOnWithdrawal.value =
+      data.ptd_educator_conversion_on_withdrawal || false
+    ptdEducatorConversionOnRetirement.value =
+      data.ptd_educator_conversion_on_retirement || false
 
     // Populate CI fields
     ciBenefitStructure.value = data.ci_benefit_structure || ''
@@ -1570,6 +1684,8 @@ function onSchemeTypeChange(schemeType) {
     ciConversionOnWithdrawal.value = data.ci_conversion_on_withdrawal || false
     // Populate SGLA fields
     sglaSalaryMultiple.value = data.sgla_salary_multiple || 0
+    sglaConversionOnWithdrawal.value =
+      data.sgla_conversion_on_withdrawal || false
     // Populate PHI fields
     phiRiskType.value = data.phi_risk_type || ''
     phiIncomeReplacementPercentage.value =
@@ -1588,8 +1704,10 @@ function onSchemeTypeChange(schemeType) {
     phiNormalRetirementAge.value = data.phi_normal_retirement_age ?? null
     phiDeferredPeriod.value = data.phi_deferred_period ?? null
     phiDisabilityDefinition.value = data.phi_disability_definition || ''
+    phiConversionOnWithdrawal.value = data.phi_conversion_on_withdrawal || false
     // Populate TTD fields
     ttdRiskType.value = data.ttd_risk_type || ''
+    ttdConversionOnWithdrawal.value = data.ttd_conversion_on_withdrawal || false
     ttdIncomeReplacementPercentage.value =
       data.ttd_income_replacement_percentage || 0
     ttdUseTieredIncomeReplacementRatio.value =
@@ -1618,6 +1736,7 @@ function onSchemeTypeChange(schemeType) {
       data.family_funeral_max_number_children || 0
     familyFuneralMaxNumberAdultDependants.value =
       data.family_funeral_max_number_adult_dependants || 0
+    funConversionOnWithdrawal.value = data.fun_conversion_on_withdrawal || false
     // Extended family
     extendedFamilyBenefit.value = !!data.extended_family_benefit
     extendedFamilyAgeBandSource.value =
@@ -1666,6 +1785,10 @@ function onSchemeTypeChange(schemeType) {
     glaEducatorBenefitType.value = null
     glaConversionOnWithdrawal.value = false
     glaConversionOnRetirement.value = false
+    glaContinuityDuringDisability.value = false
+    glaEducatorConversionOnWithdrawal.value = false
+    glaEducatorConversionOnRetirement.value = false
+    glaEducatorContinuityDuringDisability.value = false
     additionalAccidentalGlaBenefit.value = false
     additionalAccidentalGlaBenefitType.value = null
     taxSaverBenefit.value = false
@@ -1691,6 +1814,8 @@ function onSchemeTypeChange(schemeType) {
     ptdEducatorBenefit.value = null
     ptdEducatorBenefitType.value = null
     ptdConversionOnWithdrawal.value = false
+    ptdEducatorConversionOnWithdrawal.value = false
+    ptdEducatorConversionOnRetirement.value = false
     // reset CI fields
     ciBenefitStructure.value = null
     ciBenefitDefinition.value = null
@@ -1698,6 +1823,7 @@ function onSchemeTypeChange(schemeType) {
     ciConversionOnWithdrawal.value = false
     // reset SGLA fields
     sglaSalaryMultiple.value = 0
+    sglaConversionOnWithdrawal.value = false
     // reset PHI fields
     phiRiskType.value = null
     phiIncomeReplacementPercentage.value = 0
@@ -1710,8 +1836,10 @@ function onSchemeTypeChange(schemeType) {
     phiNormalRetirementAge.value = 0
     phiDeferredPeriod.value = null
     phiDisabilityDefinition.value = null
+    phiConversionOnWithdrawal.value = false
     // reset TTD fields
     ttdRiskType.value = null
+    ttdConversionOnWithdrawal.value = false
     ttdIncomeReplacementPercentage.value = 0
     ttdUseTieredIncomeReplacementRatio.value = false
     ttdTieredIncomeReplacementType.value = 'standard'
@@ -1727,6 +1855,7 @@ function onSchemeTypeChange(schemeType) {
     familyFuneralParentFuneralSumAssured.value = 0
     familyFuneralMaxNumberChildren.value = 0
     familyFuneralMaxNumberAdultDependants.value = 0
+    funConversionOnWithdrawal.value = false
     // reset Extended Family
     extendedFamilyBenefit.value = false
     extendedFamilyAgeBandSource.value = 'standard'
@@ -1770,6 +1899,8 @@ function saveCurrentSchemeCategory() {
           }),
           gla_conversion_on_withdrawal: !!glaConversionOnWithdrawal.value,
           gla_conversion_on_retirement: !!glaConversionOnRetirement.value,
+          gla_continuity_during_disability:
+            !!glaContinuityDuringDisability.value,
           additional_accidental_gla_benefit:
             !!additionalAccidentalGlaBenefit.value,
           ...(additionalAccidentalGlaBenefit.value && {
@@ -1859,7 +1990,8 @@ function saveCurrentSchemeCategory() {
           ),
           ttd_waiting_period: Number(ttdWaitingPeriod.value),
           ttd_deferred_period: Number(ttdDeferredPeriod.value),
-          ttd_disability_definition: ttdDisabilityDefinition.value
+          ttd_disability_definition: ttdDisabilityDefinition.value,
+          ttd_conversion_on_withdrawal: !!ttdConversionOnWithdrawal.value
         }),
         ...(familyFuneralBenefit.value && {
           family_funeral_main_member_funeral_sum_assured: Number(
@@ -2042,6 +2174,16 @@ const validationSchema = yup.object({
   tax_saver_benefit: yup.boolean().nullable(),
   ptd_conversion_on_withdrawal: yup.boolean().nullable(),
   ci_conversion_on_withdrawal: yup.boolean().nullable(),
+  phi_conversion_on_withdrawal: yup.boolean().nullable(),
+  ttd_conversion_on_withdrawal: yup.boolean().nullable(),
+  fun_conversion_on_withdrawal: yup.boolean().nullable(),
+  sgla_conversion_on_withdrawal: yup.boolean().nullable(),
+  gla_educator_conversion_on_withdrawal: yup.boolean().nullable(),
+  gla_educator_conversion_on_retirement: yup.boolean().nullable(),
+  gla_educator_continuity_during_disability: yup.boolean().nullable(),
+  gla_continuity_during_disability: yup.boolean().nullable(),
+  ptd_educator_conversion_on_withdrawal: yup.boolean().nullable(),
+  ptd_educator_conversion_on_retirement: yup.boolean().nullable(),
   ptd_benefit: yup.boolean().nullable(),
   ci_benefit: yup.boolean().nullable(),
   sgla_benefit: yup.boolean().nullable(),
@@ -2377,6 +2519,10 @@ const { handleSubmit, defineField, errors, validate } = useForm({
       groupStore.scheme_category_template.sgla_conversion_on_withdrawal,
     fun_conversion_on_withdrawal:
       groupStore.scheme_category_template.fun_conversion_on_withdrawal,
+    ttd_conversion_on_withdrawal:
+      groupStore.scheme_category_template.ttd_conversion_on_withdrawal,
+    gla_continuity_during_disability:
+      groupStore.scheme_category_template.gla_continuity_during_disability,
 
     gla_benefit: groupStore.scheme_category_template.gla_benefit,
     ptd_benefit: groupStore.scheme_category_template.ptd_benefit,
@@ -2521,6 +2667,10 @@ const [sglaConversionOnWithdrawal] = defineField(
   'sgla_conversion_on_withdrawal'
 )
 const [funConversionOnWithdrawal] = defineField('fun_conversion_on_withdrawal')
+const [ttdConversionOnWithdrawal] = defineField('ttd_conversion_on_withdrawal')
+const [glaContinuityDuringDisability] = defineField(
+  'gla_continuity_during_disability'
+)
 const [glaBenefit] = defineField('gla_benefit')
 const [ptdBenefit] = defineField('ptd_benefit')
 const [ciBenefit] = defineField('ci_benefit')

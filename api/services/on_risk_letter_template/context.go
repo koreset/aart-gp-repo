@@ -95,7 +95,6 @@ func BuildContext(quoteID string) (quote_template.Context, error) {
 		"currency":              quote.Currency,
 		"free_cover_limit":      quote_docx.RoundUpToTwoDecimalsAccounting(quote.FreeCoverLimit),
 		"normal_retirement_age": strconv.Itoa(quote.NormalRetirementAge),
-		"continuation_option":   quote.ContinuationOption,
 		"distribution_channel":  string(quote.DistributionChannel),
 		"broker_name":           brokerName,
 		"is_broker_channel":     isBrokerChannel,
