@@ -86,8 +86,7 @@
                 <div v-bind="tooltipProps" class="d-inline-block">
                   <v-btn
                     :disabled="
-                      quote.status === 'accepted' ||
-                      quote.status === 'in_force'
+                      quote.status === 'accepted' || quote.status === 'in_force'
                     "
                     class="mr-2"
                     size="small"

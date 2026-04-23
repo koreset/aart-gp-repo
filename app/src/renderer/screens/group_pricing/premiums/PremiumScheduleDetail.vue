@@ -465,6 +465,8 @@
       </v-card>
     </v-dialog>
 
+    <confirmation-dialog ref="confirmDialog" />
+
     <v-snackbar
       v-model="snackbar"
       :color="snackbarColor"
@@ -487,6 +489,7 @@ import 'ag-grid-community/styles/ag-theme-balham.css'
 import { AgGridVue } from 'ag-grid-vue3'
 import PremiumManagementService from '@/renderer/api/PremiumManagementService'
 import BaseCard from '@/renderer/components/BaseCard.vue'
+import ConfirmationDialog from '@/renderer/components/ConfirmDialog.vue'
 import PageHeader from '@/renderer/components/PageHeader.vue'
 import { fmtDate, fmtCurrency } from '@/renderer/utils/formatters'
 import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
@@ -515,11 +518,19 @@ const selectedRemoveRowId = ref<number | null>(null)
 const voidReason = ref('')
 const cancelReason = ref('')
 const isDirty = ref(false)
+const confirmDialog = ref()
 
-onBeforeRouteLeave((_to, _from, next) => {
+onBeforeRouteLeave(async (_to, _from, next) => {
   if (!isDirty.value) return next()
-  const ok = confirm('You have unsaved edits. Leave anyway?')
-  ok ? next() : next(false)
+  try {
+    await confirmDialog.value.open(
+      'Unsaved edits',
+      'You have unsaved edits. Leave anyway?'
+    )
+    next()
+  } catch {
+    next(false)
+  }
 })
 
 const MONTH_NAMES = [

@@ -2499,20 +2499,16 @@ const { handleSubmit, defineField, errors, validate } = useForm({
     ci_conversion_on_withdrawal:
       groupStore.scheme_category_template.ci_conversion_on_withdrawal,
     gla_educator_conversion_on_withdrawal:
-      groupStore.scheme_category_template
-        .gla_educator_conversion_on_withdrawal,
+      groupStore.scheme_category_template.gla_educator_conversion_on_withdrawal,
     gla_educator_conversion_on_retirement:
-      groupStore.scheme_category_template
-        .gla_educator_conversion_on_retirement,
+      groupStore.scheme_category_template.gla_educator_conversion_on_retirement,
     gla_educator_continuity_during_disability:
       groupStore.scheme_category_template
         .gla_educator_continuity_during_disability,
     ptd_educator_conversion_on_withdrawal:
-      groupStore.scheme_category_template
-        .ptd_educator_conversion_on_withdrawal,
+      groupStore.scheme_category_template.ptd_educator_conversion_on_withdrawal,
     ptd_educator_conversion_on_retirement:
-      groupStore.scheme_category_template
-        .ptd_educator_conversion_on_retirement,
+      groupStore.scheme_category_template.ptd_educator_conversion_on_retirement,
     phi_conversion_on_withdrawal:
       groupStore.scheme_category_template.phi_conversion_on_withdrawal,
     sgla_conversion_on_withdrawal:
@@ -3042,7 +3038,6 @@ watch(glaBenefit, (newVal) => {
     taxSaverBenefit.value = false
   }
 })
-
 
 // Keep the Additional Accidental GLA selection consistent: clear it when the
 // main GLA is turned off, when only one benefit type is available, or when the

@@ -558,7 +558,6 @@ const benefitTitles = computed(() => ({
   familyFuneralBenefitTitle: familyFuneralBenefitTitle.value
 }))
 
-
 const downloadWord = () => {
   generateBenefitScheduleDocx(
     props.quote,

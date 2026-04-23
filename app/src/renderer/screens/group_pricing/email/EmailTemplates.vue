@@ -251,12 +251,14 @@
         </base-card>
       </v-col>
     </v-row>
+    <confirmation-dialog ref="confirmDialog" />
   </v-container>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import BaseCard from '@/renderer/components/BaseCard.vue'
+import ConfirmationDialog from '@/renderer/components/ConfirmDialog.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { useFlashStore } from '@/renderer/store/flash'
 
@@ -282,6 +284,7 @@ const preview = ref<{ subject: string; body: string }>({
   subject: '',
   body: ''
 })
+const confirmDialog = ref()
 
 const statuses = [
   { title: 'Draft', value: 'draft' },
@@ -359,7 +362,14 @@ const onSave = async () => {
 
 const onDelete = async () => {
   if (!selected.value || isNew.value) return
-  if (!confirm(`Delete template "${selected.value.code}"?`)) return
+  try {
+    await confirmDialog.value.open(
+      'Delete template',
+      `Delete template "${selected.value.code}"?`
+    )
+  } catch {
+    return
+  }
   try {
     await GroupPricingService.deleteEmailTemplate(selected.value.code)
     templates.value = templates.value.filter(

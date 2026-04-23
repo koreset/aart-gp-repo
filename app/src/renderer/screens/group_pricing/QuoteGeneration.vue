@@ -80,6 +80,7 @@
         </v-stepper>
       </v-col>
     </v-row>
+    <confirmation-dialog ref="confirmDialog" />
   </v-container>
 </template>
 <script setup lang="ts">
@@ -89,6 +90,7 @@ import { useGroupPricingStore } from '@/renderer/store/group_pricing'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import Generalnput from '@/renderer/components/grouppricing/Generalnput.vue'
 import AdditionalBenefits from '@/renderer/components/grouppricing/AdditionalBenefits.vue'
+import ConfirmationDialog from '@/renderer/components/ConfirmDialog.vue'
 
 const groupStore = useGroupPricingStore()
 const router = useRouter()
@@ -115,11 +117,19 @@ const areAllSchemesSaved = ref(false)
 const isGenerating = ref(false)
 const currentStep: any = ref(null)
 const isDirty = ref(true) // starts dirty; set false after successful generation
+const confirmDialog = ref()
 
-onBeforeRouteLeave((_to, _from, next) => {
+onBeforeRouteLeave(async (_to, _from, next) => {
   if (!isDirty.value) return next()
-  const ok = confirm('Your quote data will be lost if you leave. Continue?')
-  ok ? next() : next(false)
+  try {
+    await confirmDialog.value.open(
+      'Unsaved changes',
+      'Your quote data will be lost if you leave. Continue?'
+    )
+    next()
+  } catch {
+    next(false)
+  }
 })
 
 const moveNext = async () => {

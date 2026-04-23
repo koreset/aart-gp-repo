@@ -659,10 +659,7 @@ const deleteIndicativeData = async () => {
 }
 
 const openUploadDialog = (item: any) => {
-  if (
-    props.quote.status === 'accepted' ||
-    props.quote.status === 'in_force'
-  ) {
+  if (props.quote.status === 'accepted' || props.quote.status === 'in_force') {
     snackbarText.value = 'Cannot upload data to accepted or in-force quotes'
     snackbar.value = true
     return
