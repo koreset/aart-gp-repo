@@ -1374,7 +1374,7 @@ BEGIN
     ALTER TABLE member_rating_results ALTER COLUMN main_member_funeral_base_rate DECIMAL(15,5);
 END;
 
--- Add or modify column for field: MainMemberFuneralCost
+-- Add or modify column for field: MainMemberFuneralRiskPremium
 -- SQL Server: Add column if it doesn't exist
 IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'member_rating_results' AND COLUMN_NAME = 'main_member_funeral_cost')
 BEGIN
@@ -1418,7 +1418,7 @@ BEGIN
     ALTER TABLE member_rating_results ALTER COLUMN spouse_funeral_base_rate DECIMAL(15,5);
 END;
 
--- Add or modify column for field: SpouseFuneralCost
+-- Add or modify column for field: SpouseFuneralRiskPremium
 -- SQL Server: Add column if it doesn't exist
 IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'member_rating_results' AND COLUMN_NAME = 'spouse_funeral_cost')
 BEGIN
@@ -1462,7 +1462,7 @@ BEGIN
     ALTER TABLE member_rating_results ALTER COLUMN child_funeral_sum_assured DECIMAL(15,5);
 END;
 
--- Add or modify column for field: ChildrenFuneralCost
+-- Add or modify column for field: ChildFuneralRiskPremium
 -- SQL Server: Add column if it doesn't exist
 IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'member_rating_results' AND COLUMN_NAME = 'children_funeral_cost')
 BEGIN
@@ -1484,7 +1484,7 @@ BEGIN
     ALTER TABLE member_rating_results ALTER COLUMN children_funeral_office_premium DECIMAL(15,5);
 END;
 
--- Add or modify column for field: DependantFuneralBaseRate
+-- Add or modify column for field: ParentFuneralBaseRate
 -- SQL Server: Add column if it doesn't exist
 IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'member_rating_results' AND COLUMN_NAME = 'dependant_funeral_base_rate')
 BEGIN
@@ -1495,7 +1495,7 @@ BEGIN
     ALTER TABLE member_rating_results ALTER COLUMN dependant_funeral_base_rate DECIMAL(15,5);
 END;
 
--- Add or modify column for field: DependantFuneralSumAssured
+-- Add or modify column for field: ParentFuneralSumAssured
 -- SQL Server: Add column if it doesn't exist
 IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'member_rating_results' AND COLUMN_NAME = 'dependant_funeral_sum_assured')
 BEGIN
@@ -1506,7 +1506,7 @@ BEGIN
     ALTER TABLE member_rating_results ALTER COLUMN dependant_funeral_sum_assured DECIMAL(15,5);
 END;
 
--- Add or modify column for field: DependantsFuneralCost
+-- Add or modify column for field: ParentFuneralRiskPremium
 -- SQL Server: Add column if it doesn't exist
 IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'member_rating_results' AND COLUMN_NAME = 'dependants_funeral_cost')
 BEGIN
@@ -1517,7 +1517,7 @@ BEGIN
     ALTER TABLE member_rating_results ALTER COLUMN dependants_funeral_cost DECIMAL(15,5);
 END;
 
--- Add or modify column for field: DependantsFuneralOfficePremium
+-- Add or modify column for field: ParentFuneralOfficePremium
 -- SQL Server: Add column if it doesn't exist
 IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'member_rating_results' AND COLUMN_NAME = 'dependants_funeral_office_premium')
 BEGIN
@@ -1539,7 +1539,7 @@ BEGIN
     ALTER TABLE member_rating_results ALTER COLUMN parent_funeral_sum_assured DECIMAL(15,5);
 END;
 
--- Add or modify column for field: TotalFuneralRiskCost
+-- Add or modify column for field: TotalFuneralRiskPremium
 -- SQL Server: Add column if it doesn't exist
 IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'member_rating_results' AND COLUMN_NAME = 'total_funeral_risk_cost')
 BEGIN
@@ -1550,7 +1550,7 @@ BEGIN
     ALTER TABLE member_rating_results ALTER COLUMN total_funeral_risk_cost DECIMAL(15,5);
 END;
 
--- Add or modify column for field: ExpAdjTotalFuneralRiskCost
+-- Add or modify column for field: ExpAdjTotalFuneralRiskPremium
 -- SQL Server: Add column if it doesn't exist
 IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'member_rating_results' AND COLUMN_NAME = 'exp_adj_total_funeral_risk_cost')
 BEGIN
@@ -1561,7 +1561,7 @@ BEGIN
     ALTER TABLE member_rating_results ALTER COLUMN exp_adj_total_funeral_risk_cost DECIMAL(15,5);
 END;
 
--- Add or modify column for field: TotalFuneralOfficeCost
+-- Add or modify column for field: TotalFuneralOfficePremium
 -- SQL Server: Add column if it doesn't exist
 IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'member_rating_results' AND COLUMN_NAME = 'total_funeral_office_cost')
 BEGIN
@@ -1572,7 +1572,7 @@ BEGIN
     ALTER TABLE member_rating_results ALTER COLUMN total_funeral_office_cost DECIMAL(15,5);
 END;
 
--- Add or modify column for field: ExpAdjTotalFuneralOfficeCost
+-- Add or modify column for field: ExpAdjTotalFuneralOfficePremium
 -- SQL Server: Add column if it doesn't exist
 IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'member_rating_results' AND COLUMN_NAME = 'exp_adj_total_funeral_office_cost')
 BEGIN

@@ -1591,7 +1591,7 @@ PREPARE stmt FROM @s;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Add or modify column for field: MainMemberFuneralCost
+-- Add or modify column for field: MainMemberFuneralRiskPremium
 -- MySQL: Add or modify column
 SET @s = (SELECT IF(
     EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='member_rating_results' AND COLUMN_NAME='main_member_funeral_cost' AND TABLE_SCHEMA = DATABASE()),
@@ -1635,7 +1635,7 @@ PREPARE stmt FROM @s;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Add or modify column for field: SpouseFuneralCost
+-- Add or modify column for field: SpouseFuneralRiskPremium
 -- MySQL: Add or modify column
 SET @s = (SELECT IF(
     EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='member_rating_results' AND COLUMN_NAME='spouse_funeral_cost' AND TABLE_SCHEMA = DATABASE()),
@@ -1679,7 +1679,7 @@ PREPARE stmt FROM @s;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Add or modify column for field: ChildrenFuneralCost
+-- Add or modify column for field: ChildFuneralRiskPremium
 -- MySQL: Add or modify column
 SET @s = (SELECT IF(
     EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='member_rating_results' AND COLUMN_NAME='children_funeral_cost' AND TABLE_SCHEMA = DATABASE()),
@@ -1701,7 +1701,7 @@ PREPARE stmt FROM @s;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Add or modify column for field: DependantFuneralBaseRate
+-- Add or modify column for field: ParentFuneralBaseRate
 -- MySQL: Add or modify column
 SET @s = (SELECT IF(
     EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='member_rating_results' AND COLUMN_NAME='dependant_funeral_base_rate' AND TABLE_SCHEMA = DATABASE()),
@@ -1712,7 +1712,7 @@ PREPARE stmt FROM @s;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Add or modify column for field: DependantFuneralSumAssured
+-- Add or modify column for field: ParentFuneralSumAssured
 -- MySQL: Add or modify column
 SET @s = (SELECT IF(
     EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='member_rating_results' AND COLUMN_NAME='dependant_funeral_sum_assured' AND TABLE_SCHEMA = DATABASE()),
@@ -1723,7 +1723,7 @@ PREPARE stmt FROM @s;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Add or modify column for field: DependantsFuneralCost
+-- Add or modify column for field: ParentFuneralRiskPremium
 -- MySQL: Add or modify column
 SET @s = (SELECT IF(
     EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='member_rating_results' AND COLUMN_NAME='dependants_funeral_cost' AND TABLE_SCHEMA = DATABASE()),
@@ -1734,7 +1734,7 @@ PREPARE stmt FROM @s;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Add or modify column for field: DependantsFuneralOfficePremium
+-- Add or modify column for field: ParentFuneralOfficePremium
 -- MySQL: Add or modify column
 SET @s = (SELECT IF(
     EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='member_rating_results' AND COLUMN_NAME='dependants_funeral_office_premium' AND TABLE_SCHEMA = DATABASE()),
@@ -1756,7 +1756,7 @@ PREPARE stmt FROM @s;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Add or modify column for field: TotalFuneralRiskCost
+-- Add or modify column for field: TotalFuneralRiskPremium
 -- MySQL: Add or modify column
 SET @s = (SELECT IF(
     EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='member_rating_results' AND COLUMN_NAME='total_funeral_risk_cost' AND TABLE_SCHEMA = DATABASE()),
@@ -1767,7 +1767,7 @@ PREPARE stmt FROM @s;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Add or modify column for field: ExpAdjTotalFuneralRiskCost
+-- Add or modify column for field: ExpAdjTotalFuneralRiskPremium
 -- MySQL: Add or modify column
 SET @s = (SELECT IF(
     EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='member_rating_results' AND COLUMN_NAME='exp_adj_total_funeral_risk_cost' AND TABLE_SCHEMA = DATABASE()),
@@ -1778,7 +1778,7 @@ PREPARE stmt FROM @s;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Add or modify column for field: TotalFuneralOfficeCost
+-- Add or modify column for field: TotalFuneralOfficePremium
 -- MySQL: Add or modify column
 SET @s = (SELECT IF(
     EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='member_rating_results' AND COLUMN_NAME='total_funeral_office_cost' AND TABLE_SCHEMA = DATABASE()),
@@ -1789,7 +1789,7 @@ PREPARE stmt FROM @s;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Add or modify column for field: ExpAdjTotalFuneralOfficeCost
+-- Add or modify column for field: ExpAdjTotalFuneralOfficePremium
 -- MySQL: Add or modify column
 SET @s = (SELECT IF(
     EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='member_rating_results' AND COLUMN_NAME='exp_adj_total_funeral_office_cost' AND TABLE_SCHEMA = DATABASE()),

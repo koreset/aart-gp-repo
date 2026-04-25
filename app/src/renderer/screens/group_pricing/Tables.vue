@@ -728,7 +728,14 @@ const viewTable = (item: any) => {
 // is alphabetical). Unknown fields in a preferred list are skipped; remaining
 // fields are appended after the preferred ones in their original order.
 const preferredColumnOrder: Record<string, string[]> = {
-  'Age Bands': ['name', 'type', 'min_age', 'max_age']
+  'Age Bands': ['name', 'type', 'min_age', 'max_age'],
+  'Tax Retirement': [
+    'risk_rate_code',
+    'lower_bound',
+    'upper_bound',
+    'tax_rate',
+    'cumulative_tax_relief'
+  ]
 }
 
 // System fields that should never render as columns.

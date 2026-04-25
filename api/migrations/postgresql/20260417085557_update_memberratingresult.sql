@@ -1447,7 +1447,7 @@ BEGIN
     END IF;
 END $$;
 
--- Add or modify column for field: MainMemberFuneralCost
+-- Add or modify column for field: MainMemberFuneralRiskPremium
 ALTER TABLE member_rating_results ADD COLUMN IF NOT EXISTS main_member_funeral_cost NUMERIC(15,5);
 -- Update column type if it exists
 DO $$
@@ -1487,7 +1487,7 @@ BEGIN
     END IF;
 END $$;
 
--- Add or modify column for field: SpouseFuneralCost
+-- Add or modify column for field: SpouseFuneralRiskPremium
 ALTER TABLE member_rating_results ADD COLUMN IF NOT EXISTS spouse_funeral_cost NUMERIC(15,5);
 -- Update column type if it exists
 DO $$
@@ -1527,7 +1527,7 @@ BEGIN
     END IF;
 END $$;
 
--- Add or modify column for field: ChildrenFuneralCost
+-- Add or modify column for field: ChildFuneralRiskPremium
 ALTER TABLE member_rating_results ADD COLUMN IF NOT EXISTS children_funeral_cost NUMERIC(15,5);
 -- Update column type if it exists
 DO $$
@@ -1547,7 +1547,7 @@ BEGIN
     END IF;
 END $$;
 
--- Add or modify column for field: DependantFuneralBaseRate
+-- Add or modify column for field: ParentFuneralBaseRate
 ALTER TABLE member_rating_results ADD COLUMN IF NOT EXISTS dependant_funeral_base_rate NUMERIC(15,5);
 -- Update column type if it exists
 DO $$
@@ -1557,7 +1557,7 @@ BEGIN
     END IF;
 END $$;
 
--- Add or modify column for field: DependantFuneralSumAssured
+-- Add or modify column for field: ParentFuneralSumAssured
 ALTER TABLE member_rating_results ADD COLUMN IF NOT EXISTS dependant_funeral_sum_assured NUMERIC(15,5);
 -- Update column type if it exists
 DO $$
@@ -1567,7 +1567,7 @@ BEGIN
     END IF;
 END $$;
 
--- Add or modify column for field: DependantsFuneralCost
+-- Add or modify column for field: ParentFuneralRiskPremium
 ALTER TABLE member_rating_results ADD COLUMN IF NOT EXISTS dependants_funeral_cost NUMERIC(15,5);
 -- Update column type if it exists
 DO $$
@@ -1577,7 +1577,7 @@ BEGIN
     END IF;
 END $$;
 
--- Add or modify column for field: DependantsFuneralOfficePremium
+-- Add or modify column for field: ParentFuneralOfficePremium
 ALTER TABLE member_rating_results ADD COLUMN IF NOT EXISTS dependants_funeral_office_premium NUMERIC(15,5);
 -- Update column type if it exists
 DO $$
@@ -1597,7 +1597,7 @@ BEGIN
     END IF;
 END $$;
 
--- Add or modify column for field: TotalFuneralRiskCost
+-- Add or modify column for field: TotalFuneralRiskPremium
 ALTER TABLE member_rating_results ADD COLUMN IF NOT EXISTS total_funeral_risk_cost NUMERIC(15,5);
 -- Update column type if it exists
 DO $$
@@ -1607,7 +1607,7 @@ BEGIN
     END IF;
 END $$;
 
--- Add or modify column for field: ExpAdjTotalFuneralRiskCost
+-- Add or modify column for field: ExpAdjTotalFuneralRiskPremium
 ALTER TABLE member_rating_results ADD COLUMN IF NOT EXISTS exp_adj_total_funeral_risk_cost NUMERIC(15,5);
 -- Update column type if it exists
 DO $$
@@ -1617,7 +1617,7 @@ BEGIN
     END IF;
 END $$;
 
--- Add or modify column for field: TotalFuneralOfficeCost
+-- Add or modify column for field: TotalFuneralOfficePremium
 ALTER TABLE member_rating_results ADD COLUMN IF NOT EXISTS total_funeral_office_cost NUMERIC(15,5);
 -- Update column type if it exists
 DO $$
@@ -1627,7 +1627,7 @@ BEGIN
     END IF;
 END $$;
 
--- Add or modify column for field: ExpAdjTotalFuneralOfficeCost
+-- Add or modify column for field: ExpAdjTotalFuneralOfficePremium
 ALTER TABLE member_rating_results ADD COLUMN IF NOT EXISTS exp_adj_total_funeral_office_cost NUMERIC(15,5);
 -- Update column type if it exists
 DO $$

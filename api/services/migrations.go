@@ -414,6 +414,7 @@ func MigrateGroupPricingTables() error {
 		&models.PremiumLoading{},
 		&models.SchemeSizeLevel{},
 		&models.TaxTable{},
+		&models.TaxRetirementTable{},
 		&models.GroupSchemeExposure{},
 		&models.GroupPricingAgeBands{},
 		&models.GroupBusinessBenefits{},

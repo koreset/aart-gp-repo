@@ -1470,7 +1470,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 
 	mdrs.IfStatus = groupQuote.Status
 	mdrs.QuoteType = groupQuote.QuoteType
-	mdrs.TotalAnnualPremium = mdrs.ExpTotalGlaAnnualOfficePremium + mdrs.ExpTotalPtdAnnualOfficePremium + mdrs.ExpTotalTtdAnnualOfficePremium + mdrs.ExpTotalPhiAnnualOfficePremium + mdrs.ExpTotalCiAnnualOfficePremium + mdrs.ExpTotalSglaAnnualOfficePremium + mdrs.ExpTotalFunAnnualOfficePremium
+	mdrs.TotalAnnualPremiumExclFuneral = mdrs.ExpTotalGlaAnnualOfficePremium + mdrs.ExpTotalPtdAnnualOfficePremium + mdrs.ExpTotalTtdAnnualOfficePremium + mdrs.ExpTotalPhiAnnualOfficePremium + mdrs.ExpTotalCiAnnualOfficePremium + mdrs.ExpTotalSglaAnnualOfficePremium + mdrs.ExpTotalFunAnnualOfficePremium
 	mdrs.TotalSumAssured = mdrs.TotalGlaSumAssured //+ mdrs.TotalPtdSumAssured + mdrs.TotalCiSumAssured + mdrs.TotalSpouseGlaSumAssured
 	mdrs.PremiumRatesGuaranteedPeriodMonths = groupParameter.PremiumRatesGuaranteedPeriodMonths
 	mdrs.QuoteValidityPeriodMonths = groupParameter.QuoteValidityPeriodMonths
@@ -1782,23 +1782,23 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 
 	memberDataPointResult.ChildFuneralBaseRate = GetChildFuneralRate(&originalMemberDataPointResult, groupParameter, memberDataPointResult.AverageChildAgeNextBirthday)
 	memberDataPointResult.ChildFuneralSumAssured = schemeCategory.FamilyFuneralChildrenFuneralSumAssured
-	memberDataPointResult.DependantFuneralBaseRate = GetDependantMortalityRate(&originalMemberDataPointResult, groupParameter, memberDataPointResult.AverageDependantAgeNextBirthday, mpIncomeLevel)
-	memberDataPointResult.DependantFuneralSumAssured = schemeCategory.FamilyFuneralAdultDependantSumAssured
+	memberDataPointResult.ParentFuneralBaseRate = GetDependantMortalityRate(&originalMemberDataPointResult, groupParameter, memberDataPointResult.AverageDependantAgeNextBirthday, mpIncomeLevel)
+	memberDataPointResult.ParentFuneralSumAssured = schemeCategory.FamilyFuneralAdultDependantSumAssured
 
-	memberDataPointResult.MainMemberFuneralCost = memberDataPointResult.LoadedGlaRate * schemeCategory.FamilyFuneralMainMemberFuneralSumAssured
-	memberDataPointResult.SpouseFuneralCost = memberDataPointResult.LoadedSpouseGlaRate * schemeCategory.FamilyFuneralSpouseFuneralSumAssured
-	memberDataPointResult.ChildrenFuneralCost = memberDataPointResult.ChildFuneralBaseRate * schemeCategory.FamilyFuneralChildrenFuneralSumAssured * math.Min(memberDataPointResult.AverageNumberChildren, float64(schemeCategory.FamilyFuneralMaxNumberChildren))
-	memberDataPointResult.DependantsFuneralCost = memberDataPointResult.DependantFuneralBaseRate * schemeCategory.FamilyFuneralAdultDependantSumAssured * memberDataPointResult.AverageNumberDependants
+	memberDataPointResult.MainMemberFuneralRiskPremium = memberDataPointResult.LoadedGlaRate * schemeCategory.FamilyFuneralMainMemberFuneralSumAssured
+	memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.LoadedSpouseGlaRate * schemeCategory.FamilyFuneralSpouseFuneralSumAssured
+	memberDataPointResult.ChildFuneralRiskPremium = memberDataPointResult.ChildFuneralBaseRate * schemeCategory.FamilyFuneralChildrenFuneralSumAssured * math.Min(memberDataPointResult.AverageNumberChildren, float64(schemeCategory.FamilyFuneralMaxNumberChildren))
+	memberDataPointResult.ParentFuneralRiskPremium = memberDataPointResult.ParentFuneralBaseRate * schemeCategory.FamilyFuneralAdultDependantSumAssured * memberDataPointResult.AverageNumberDependants
 
-	memberDataPointResult.MainMemberFuneralOfficePremium = memberDataPointResult.MainMemberFuneralCost / (1.0 - memberDataPointResult.TotalLoading)
-	memberDataPointResult.SpouseFuneralOfficePremium = memberDataPointResult.SpouseFuneralCost / (1.0 - memberDataPointResult.TotalLoading)
-	memberDataPointResult.ChildrenFuneralOfficePremium = memberDataPointResult.ChildrenFuneralCost / (1.0 - memberDataPointResult.TotalLoading)
-	memberDataPointResult.DependantsFuneralOfficePremium = memberDataPointResult.DependantsFuneralCost / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.MainMemberFuneralOfficePremium = memberDataPointResult.MainMemberFuneralRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.SpouseFuneralOfficePremium = memberDataPointResult.SpouseFuneralRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.ChildrenFuneralOfficePremium = memberDataPointResult.ChildFuneralRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.ParentFuneralOfficePremium = memberDataPointResult.ParentFuneralRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 
-	memberDataPointResult.TotalFuneralRiskCost = memberDataPointResult.MainMemberFuneralCost + memberDataPointResult.SpouseFuneralCost + memberDataPointResult.ChildrenFuneralCost + memberDataPointResult.DependantsFuneralCost
-	memberDataPointResult.ExpAdjTotalFuneralRiskCost = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralCost + memberDataPointResult.SpouseFuneralCost + memberDataPointResult.ChildrenFuneralCost + memberDataPointResult.DependantsFuneralCost)
-	memberDataPointResult.TotalFuneralOfficeCost = memberDataPointResult.TotalFuneralRiskCost / (1.0 - memberDataPointResult.TotalLoading)
-	memberDataPointResult.ExpAdjTotalFuneralOfficeCost = memberDataPointResult.ExpAdjTotalFuneralRiskCost / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.TotalFuneralRiskPremium = memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium
+	memberDataPointResult.ExpAdjTotalFuneralRiskPremium = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium)
+	memberDataPointResult.TotalFuneralOfficePremium = memberDataPointResult.TotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.ExpAdjTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 
 	if memberDataPointResult.AgeNextBirthday > groupQuote.NormalRetirementAge {
 		memberDataPointResult.ExceedsNormalRetirementAgeIndicator = 1
@@ -1813,7 +1813,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	//memberDataPointResult.PhiExperienceAdjustedAnnualPremium = memberDataPointResult.PhiRiskPremium
 	//memberDataPointResult.CiExperienceAdjustedAnnualPremium = memberDataPointResult.CiRiskPremium
 	//memberDataPointResult.SpouseExperienceAdjustedAnnualPremium = memberDataPointResult.SpouseGlaRiskPremium
-	//memberDataPointResult.FuneralExperienceAdjustedAnnualPremium = memberDataPointResult.TotalFuneralRiskCost
+	//memberDataPointResult.FuneralExperienceAdjustedAnnualPremium = memberDataPointResult.TotalFuneralRiskPremium
 	memberPremiumScheduleDatapoint.IsOriginalMember = false
 	memberPremiumScheduleDatapoint.GlaCoveredSumAssured = memberDataPointResult.GlaCappedSumAssured
 	memberPremiumScheduleDatapoint.GlaAnnualPremium = memberDataPointResult.ExpAdjGlaOfficePremium
@@ -1833,8 +1833,8 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	memberPremiumScheduleDatapoint.SpouseFuneralAnnualPremium = memberDataPointResult.SpouseFuneralOfficePremium
 	memberPremiumScheduleDatapoint.ChildFuneralSumAssured = memberDataPointResult.ChildFuneralSumAssured
 	memberPremiumScheduleDatapoint.ChildrenFuneralAnnualPremium = memberDataPointResult.ChildrenFuneralOfficePremium
-	memberPremiumScheduleDatapoint.DependantsFuneralSumAssured = memberDataPointResult.DependantFuneralSumAssured
-	memberPremiumScheduleDatapoint.DependantsFuneralAnnualPremium = memberDataPointResult.DependantsFuneralOfficePremium
+	memberPremiumScheduleDatapoint.DependantsFuneralSumAssured = memberDataPointResult.ParentFuneralSumAssured
+	memberPremiumScheduleDatapoint.DependantsFuneralAnnualPremium = memberDataPointResult.ParentFuneralOfficePremium
 
 	memberPremiumScheduleDatapoint.TotalAnnualPremiumPayable = memberPremiumScheduleDatapoint.GlaAnnualPremium + memberPremiumScheduleDatapoint.PtdAnnualPremium + memberPremiumScheduleDatapoint.CiAnnualPremium + memberPremiumScheduleDatapoint.TtdAnnualPremium + memberPremiumScheduleDatapoint.PhiAnnualPremium + memberPremiumScheduleDatapoint.SpouseGlaAnnualPremium + memberPremiumScheduleDatapoint.MainMemberFuneralAnnualPremium + memberPremiumScheduleDatapoint.SpouseFuneralAnnualPremium + memberPremiumScheduleDatapoint.ChildrenFuneralAnnualPremium + memberPremiumScheduleDatapoint.DependantsFuneralAnnualPremium
 
@@ -1902,14 +1902,14 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	bordereauxDatapoint.ChildCededRiskPremium = bordereauxDatapoint.ChildCededSumAssured * memberDataPointResult.ChildFuneralBaseRate
 
 	bordereauxDatapoint.ParentFuneralSumAssured = schemeCategory.FamilyFuneralParentFuneralSumAssured
-	bordereauxDatapoint.ParentRiskRate = memberDataPointResult.DependantFuneralBaseRate
-	bordereauxDatapoint.ParentRetainedRiskPremium = bordereauxDatapoint.ParentRetainedSumAssured * memberDataPointResult.DependantFuneralBaseRate
-	bordereauxDatapoint.ParentCededRiskPremium = bordereauxDatapoint.ParentCededSumAssured * memberDataPointResult.DependantFuneralBaseRate
+	bordereauxDatapoint.ParentRiskRate = memberDataPointResult.ParentFuneralBaseRate
+	bordereauxDatapoint.ParentRetainedRiskPremium = bordereauxDatapoint.ParentRetainedSumAssured * memberDataPointResult.ParentFuneralBaseRate
+	bordereauxDatapoint.ParentCededRiskPremium = bordereauxDatapoint.ParentCededSumAssured * memberDataPointResult.ParentFuneralBaseRate
 
-	bordereauxDatapoint.DependantFuneralSumAssured = schemeCategory.FamilyFuneralAdultDependantSumAssured
-	bordereauxDatapoint.DependantRiskRate = memberDataPointResult.DependantFuneralBaseRate
-	bordereauxDatapoint.DependantRetainedRiskPremium = bordereauxDatapoint.DependantRetainedSumAssured * memberDataPointResult.DependantFuneralBaseRate
-	bordereauxDatapoint.DependantCededRiskPremium = bordereauxDatapoint.DependantCededSumAssured * memberDataPointResult.DependantFuneralBaseRate
+	bordereauxDatapoint.ParentFuneralSumAssured = schemeCategory.FamilyFuneralAdultDependantSumAssured
+	bordereauxDatapoint.DependantRiskRate = memberDataPointResult.ParentFuneralBaseRate
+	bordereauxDatapoint.DependantRetainedRiskPremium = bordereauxDatapoint.DependantRetainedSumAssured * memberDataPointResult.ParentFuneralBaseRate
+	bordereauxDatapoint.DependantCededRiskPremium = bordereauxDatapoint.DependantCededSumAssured * memberDataPointResult.ParentFuneralBaseRate
 
 	//UpdateRatedMemberData(mpIndex, memberDataPointResult, memberDataResults)
 }
@@ -2397,24 +2397,24 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 
 	memberDataPointResult.ChildFuneralBaseRate = GetChildFuneralRate(&memberDataPointResult, groupParameter, memberDataPointResult.AverageChildAgeNextBirthday)
 	memberDataPointResult.ChildFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralChildrenFuneralSumAssured
-	memberDataPointResult.DependantFuneralBaseRate = GetDependantMortalityRate(&memberDataPointResult, groupParameter, memberDataPointResult.AverageDependantAgeNextBirthday, mpIncomeLevel)
+	memberDataPointResult.ParentFuneralBaseRate = GetDependantMortalityRate(&memberDataPointResult, groupParameter, memberDataPointResult.AverageDependantAgeNextBirthday, mpIncomeLevel)
 	memberDataPointResult.ParentFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralParentFuneralSumAssured
-	memberDataPointResult.DependantFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured
+	memberDataPointResult.ParentFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured
 	memberDataPointResult.MemberFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralMainMemberFuneralSumAssured
 
-	memberDataPointResult.MainMemberFuneralCost = memberDataPointResult.LoadedGlaRate * groupQuote.SchemeCategories[i].FamilyFuneralMainMemberFuneralSumAssured
+	memberDataPointResult.MainMemberFuneralRiskPremium = memberDataPointResult.LoadedGlaRate * groupQuote.SchemeCategories[i].FamilyFuneralMainMemberFuneralSumAssured
 	memberDataPointResult.SpouseFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured
-	memberDataPointResult.SpouseFuneralCost = memberDataPointResult.LoadedSpouseGlaRate * groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured
-	memberDataPointResult.ChildrenFuneralCost = memberDataPointResult.ChildFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralChildrenFuneralSumAssured * math.Min(memberDataPointResult.AverageNumberChildren, float64(groupQuote.SchemeCategories[i].FamilyFuneralMaxNumberChildren))
-	memberDataPointResult.DependantsFuneralCost = memberDataPointResult.DependantFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured * memberDataPointResult.AverageNumberDependants
+	memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.LoadedSpouseGlaRate * groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured
+	memberDataPointResult.ChildFuneralRiskPremium = memberDataPointResult.ChildFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralChildrenFuneralSumAssured * math.Min(memberDataPointResult.AverageNumberChildren, float64(groupQuote.SchemeCategories[i].FamilyFuneralMaxNumberChildren))
+	memberDataPointResult.ParentFuneralRiskPremium = memberDataPointResult.ParentFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured * memberDataPointResult.AverageNumberDependants
 
-	memberDataPointResult.MainMemberFuneralOfficePremium = memberDataPointResult.MainMemberFuneralCost / (1.0 - memberDataPointResult.TotalLoading)
-	memberDataPointResult.SpouseFuneralOfficePremium = memberDataPointResult.SpouseFuneralCost / (1.0 - memberDataPointResult.TotalLoading)
-	memberDataPointResult.ChildrenFuneralOfficePremium = memberDataPointResult.ChildrenFuneralCost / (1.0 - memberDataPointResult.TotalLoading)
-	memberDataPointResult.DependantsFuneralOfficePremium = memberDataPointResult.DependantsFuneralCost / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.MainMemberFuneralOfficePremium = memberDataPointResult.MainMemberFuneralRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.SpouseFuneralOfficePremium = memberDataPointResult.SpouseFuneralRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.ChildrenFuneralOfficePremium = memberDataPointResult.ChildFuneralRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.ParentFuneralOfficePremium = memberDataPointResult.ParentFuneralRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 
-	memberDataPointResult.TotalFuneralRiskCost = memberDataPointResult.MainMemberFuneralCost + memberDataPointResult.SpouseFuneralCost + memberDataPointResult.ChildrenFuneralCost + memberDataPointResult.DependantsFuneralCost
-	memberDataPointResult.TotalFuneralOfficeCost = memberDataPointResult.TotalFuneralRiskCost / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.TotalFuneralRiskPremium = memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium
+	memberDataPointResult.TotalFuneralOfficePremium = memberDataPointResult.TotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 
 	if groupQuote.SchemeCategories[i].GlaEducatorBenefit == "Yes" || groupQuote.SchemeCategories[i].PtdEducatorBenefit == "Yes" { //groupQuote.Educator
 		educatorRates := GetEducatorRate(groupParameter, memberDataPointResult.AgeNextBirthday)
@@ -2463,8 +2463,8 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.ExpAdjCiOfficePremium = memberDataPointResult.ExpAdjCiRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 	memberDataPointResult.ExpAdjSpouseGlaOfficePremium = memberDataPointResult.ExpAdjSpouseGlaRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 
-	memberDataPointResult.ExpAdjTotalFuneralRiskCost = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralCost + memberDataPointResult.SpouseFuneralCost + memberDataPointResult.ChildrenFuneralCost + memberDataPointResult.DependantsFuneralCost)
-	memberDataPointResult.ExpAdjTotalFuneralOfficeCost = memberDataPointResult.ExpAdjTotalFuneralRiskCost / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.ExpAdjTotalFuneralRiskPremium = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium)
+	memberDataPointResult.ExpAdjTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
 
 	if groupQuote.SchemeCategories[i].GlaEducatorBenefit == "Yes" || groupQuote.SchemeCategories[i].PtdEducatorBenefit == "Yes" { //groupQuote.Educator
 		educatorRates := GetEducatorRate(groupParameter, memberDataPointResult.AgeNextBirthday)
@@ -2485,7 +2485,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	//memberDataPointResult.PhiExperienceAdjustedAnnualPremium = memberDataPointResult.PhiRiskPremium
 	//memberDataPointResult.CiExperienceAdjustedAnnualPremium = memberDataPointResult.CiRiskPremium
 	//memberDataPointResult.SpouseExperienceAdjustedAnnualPremium = memberDataPointResult.SpouseGlaRiskPremium
-	//memberDataPointResult.FuneralExperienceAdjustedAnnualPremium = memberDataPointResult.TotalFuneralRiskCost
+	//memberDataPointResult.FuneralExperienceAdjustedAnnualPremium = memberDataPointResult.TotalFuneralRiskPremium
 
 	memberPremiumScheduleDatapoint.Category = selectedSchemeCategory
 	memberPremiumScheduleDatapoint.IsOriginalMember = true
@@ -2507,8 +2507,8 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberPremiumScheduleDatapoint.SpouseFuneralAnnualPremium = memberDataPointResult.SpouseFuneralOfficePremium
 	memberPremiumScheduleDatapoint.ChildFuneralSumAssured = memberDataPointResult.ChildFuneralSumAssured
 	memberPremiumScheduleDatapoint.ChildrenFuneralAnnualPremium = memberDataPointResult.ChildrenFuneralOfficePremium
-	memberPremiumScheduleDatapoint.DependantsFuneralSumAssured = memberDataPointResult.DependantFuneralSumAssured
-	memberPremiumScheduleDatapoint.DependantsFuneralAnnualPremium = memberDataPointResult.DependantsFuneralOfficePremium
+	memberPremiumScheduleDatapoint.DependantsFuneralSumAssured = memberDataPointResult.ParentFuneralSumAssured
+	memberPremiumScheduleDatapoint.DependantsFuneralAnnualPremium = memberDataPointResult.ParentFuneralOfficePremium
 
 	memberPremiumScheduleDatapoint.TotalAnnualPremiumPayable = memberPremiumScheduleDatapoint.GlaAnnualPremium + memberPremiumScheduleDatapoint.PtdAnnualPremium + memberPremiumScheduleDatapoint.CiAnnualPremium + memberPremiumScheduleDatapoint.TtdAnnualPremium + memberPremiumScheduleDatapoint.PhiAnnualPremium + memberPremiumScheduleDatapoint.SpouseGlaAnnualPremium + memberPremiumScheduleDatapoint.MainMemberFuneralAnnualPremium + memberPremiumScheduleDatapoint.SpouseFuneralAnnualPremium + memberPremiumScheduleDatapoint.ChildrenFuneralAnnualPremium + memberPremiumScheduleDatapoint.DependantsFuneralAnnualPremium
 
@@ -2578,14 +2578,14 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	bordereauxDatapoint.ChildCededRiskPremium = bordereauxDatapoint.ChildCededSumAssured * memberDataPointResult.ChildFuneralBaseRate
 
 	bordereauxDatapoint.ParentFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralParentFuneralSumAssured
-	bordereauxDatapoint.ParentRiskRate = memberDataPointResult.DependantFuneralBaseRate
-	bordereauxDatapoint.ParentRetainedRiskPremium = bordereauxDatapoint.ParentRetainedSumAssured * memberDataPointResult.DependantFuneralBaseRate
-	bordereauxDatapoint.ParentCededRiskPremium = bordereauxDatapoint.ParentCededSumAssured * memberDataPointResult.DependantFuneralBaseRate
+	bordereauxDatapoint.ParentRiskRate = memberDataPointResult.ParentFuneralBaseRate
+	bordereauxDatapoint.ParentRetainedRiskPremium = bordereauxDatapoint.ParentRetainedSumAssured * memberDataPointResult.ParentFuneralBaseRate
+	bordereauxDatapoint.ParentCededRiskPremium = bordereauxDatapoint.ParentCededSumAssured * memberDataPointResult.ParentFuneralBaseRate
 
-	bordereauxDatapoint.DependantFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured
-	bordereauxDatapoint.DependantRiskRate = memberDataPointResult.DependantFuneralBaseRate
-	bordereauxDatapoint.DependantRetainedRiskPremium = bordereauxDatapoint.DependantRetainedSumAssured * memberDataPointResult.DependantFuneralBaseRate
-	bordereauxDatapoint.DependantCededRiskPremium = bordereauxDatapoint.DependantCededSumAssured * memberDataPointResult.DependantFuneralBaseRate
+	bordereauxDatapoint.ParentFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured
+	bordereauxDatapoint.DependantRiskRate = memberDataPointResult.ParentFuneralBaseRate
+	bordereauxDatapoint.DependantRetainedRiskPremium = bordereauxDatapoint.DependantRetainedSumAssured * memberDataPointResult.ParentFuneralBaseRate
+	bordereauxDatapoint.DependantCededRiskPremium = bordereauxDatapoint.DependantCededSumAssured * memberDataPointResult.ParentFuneralBaseRate
 
 	mutex.Lock()
 	*memberDataResults = append(*memberDataResults, memberDataPointResult)
@@ -2646,10 +2646,10 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	mdrs.ExpTotalSglaAnnualRiskPremium += memberDataPointResult.ExpAdjSpouseGlaRiskPremium
 	mdrs.ExpTotalSglaAnnualOfficePremium += memberDataPointResult.ExpAdjSpouseGlaOfficePremium
 
-	mdrs.TotalFunAnnualRiskPremium += memberDataPointResult.TotalFuneralRiskCost
-	mdrs.TotalFunAnnualOfficePremium += memberDataPointResult.TotalFuneralOfficeCost
-	mdrs.ExpTotalFunAnnualRiskPremium += memberDataPointResult.ExpAdjTotalFuneralRiskCost
-	mdrs.ExpTotalFunAnnualOfficePremium += memberDataPointResult.ExpAdjTotalFuneralOfficeCost
+	mdrs.TotalFunAnnualRiskPremium += memberDataPointResult.TotalFuneralRiskPremium
+	mdrs.TotalFunAnnualOfficePremium += memberDataPointResult.TotalFuneralOfficePremium
+	mdrs.ExpTotalFunAnnualRiskPremium += memberDataPointResult.ExpAdjTotalFuneralRiskPremium
+	mdrs.ExpTotalFunAnnualOfficePremium += memberDataPointResult.ExpAdjTotalFuneralOfficePremium
 	//mdrs.TotalGlaExperienceAdjustedAnnualPremium += memberDataPointResult.GlaExperienceAdjustedAnnualPremium
 	//mdrs.TotalPtdExperienceAdjustedAnnualPremium += memberDataPointResult.PtdExperienceAdjustedAnnualPremium
 	//mdrs.TotalPhiExperienceAdjustedAnnualPremium += memberDataPointResult.PhiExperienceAdjustedAnnualPremium
@@ -2669,7 +2669,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	mdrs.TotalTtdCappedIncome += memberDataPointResult.TtdCappedIncome
 	mdrs.TotalPhiIncome += memberDataPointResult.PhiIncome
 	mdrs.TotalPhiCappedIncome += memberDataPointResult.PhiCappedIncome
-	mdrs.TotalAnnualPremium = mdrs.TotalGlaAnnualOfficePremium + mdrs.TotalPtdAnnualOfficePremium + mdrs.TotalTtdAnnualOfficePremium + mdrs.TotalPhiAnnualOfficePremium + mdrs.TotalCiAnnualOfficePremium + mdrs.TotalSglaAnnualOfficePremium
+	mdrs.TotalAnnualPremiumExclFuneral = mdrs.TotalGlaAnnualOfficePremium + mdrs.TotalPtdAnnualOfficePremium + mdrs.TotalTtdAnnualOfficePremium + mdrs.TotalPhiAnnualOfficePremium + mdrs.TotalCiAnnualOfficePremium + mdrs.TotalSglaAnnualOfficePremium
 	mdrs.ExpTotalAnnualPremiumExclFuneral = mdrs.ExpTotalGlaAnnualOfficePremium + mdrs.ExpTotalPtdAnnualOfficePremium + mdrs.ExpTotalTtdAnnualOfficePremium + mdrs.ExpTotalPhiAnnualOfficePremium + mdrs.ExpTotalCiAnnualOfficePremium + mdrs.ExpTotalSglaAnnualOfficePremium
 	mdrs.TotalCommission = (mdrs.ExpTotalAnnualPremiumExclFuneral + mdrs.ExpTotalFunAnnualOfficePremium) * groupParameter.CommissionLoading // / 100.0
 	mdrs.TotalExpenses = (mdrs.ExpTotalAnnualPremiumExclFuneral + mdrs.ExpTotalFunAnnualOfficePremium) * groupParameter.ExpenseLoading      /// 100.0
@@ -5046,12 +5046,12 @@ func ApplyDiscountToQuote(quoteId string, discountPct float64, user models.AppUs
 		r.ExpAdjCiOfficePremium = r.ExpAdjCiRiskPremium / divisor
 		r.SpouseGlaOfficePremium = r.SpouseGlaRiskPremium / divisor
 		r.ExpAdjSpouseGlaOfficePremium = r.ExpAdjSpouseGlaRiskPremium / divisor
-		r.MainMemberFuneralOfficePremium = r.MainMemberFuneralCost / divisor
-		r.SpouseFuneralOfficePremium = r.SpouseFuneralCost / divisor
-		r.ChildrenFuneralOfficePremium = r.ChildrenFuneralCost / divisor
-		r.DependantsFuneralOfficePremium = r.DependantsFuneralCost / divisor
-		r.TotalFuneralOfficeCost = r.TotalFuneralRiskCost / divisor
-		r.ExpAdjTotalFuneralOfficeCost = r.ExpAdjTotalFuneralRiskCost / divisor
+		r.MainMemberFuneralOfficePremium = r.MainMemberFuneralRiskPremium / divisor
+		r.SpouseFuneralOfficePremium = r.SpouseFuneralRiskPremium / divisor
+		r.ChildrenFuneralOfficePremium = r.ChildFuneralRiskPremium / divisor
+		r.ParentFuneralOfficePremium = r.ParentFuneralRiskPremium / divisor
+		r.TotalFuneralOfficePremium = r.TotalFuneralRiskPremium / divisor
+		r.ExpAdjTotalFuneralOfficePremium = r.ExpAdjTotalFuneralRiskPremium / divisor
 	}
 
 	// Delete existing results and recreate with updated values
@@ -6865,7 +6865,7 @@ func GetGroupPricingDashboardData(year int) (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	newQuotesPremiumInProgress = mrrs.TotalAnnualPremium
+	newQuotesPremiumInProgress = mrrs.TotalAnnualPremiumExclFuneral
 	fmt.Println("newQuotesPremiumInProgress: ", newQuotesPremiumInProgress)
 
 	//Pending Review
@@ -6878,7 +6878,7 @@ func GetGroupPricingDashboardData(year int) (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	newQuotesPremiumPendingReview = mrrs.TotalAnnualPremium
+	newQuotesPremiumPendingReview = mrrs.TotalAnnualPremiumExclFuneral
 	fmt.Println("newQuotesPremiumInProgress: ", newQuotesPremiumPendingReview)
 
 	//Approved
@@ -6891,7 +6891,7 @@ func GetGroupPricingDashboardData(year int) (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	newQuotesPremiumApproved = mrrs.TotalAnnualPremium
+	newQuotesPremiumApproved = mrrs.TotalAnnualPremiumExclFuneral
 
 	//Accepted
 	err = DB.Table("member_rating_result_summaries").
@@ -6903,7 +6903,7 @@ func GetGroupPricingDashboardData(year int) (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	newQuotesPremiumAccepted = mrrs.TotalAnnualPremium
+	newQuotesPremiumAccepted = mrrs.TotalAnnualPremiumExclFuneral
 
 	// In Force
 	//err = DB.Table("member_rating_result_summaries").
@@ -6915,7 +6915,7 @@ func GetGroupPricingDashboardData(year int) (map[string]interface{}, error) {
 	//	return nil, err
 	//}
 	//
-	//newQuotesPremiumInForce = mrrs.TotalAnnualPremium
+	//newQuotesPremiumInForce = mrrs.TotalAnnualPremiumExclFuneral
 
 	//Renewals Quotes
 
@@ -6973,7 +6973,7 @@ func GetGroupPricingDashboardData(year int) (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	renewalQuotesPremiumInProgress = mrrs.TotalAnnualPremium
+	renewalQuotesPremiumInProgress = mrrs.TotalAnnualPremiumExclFuneral
 	fmt.Println("renewalQuotesPremiumInProgress: ", renewalQuotesPremiumInProgress)
 
 	//Pending Review
@@ -6987,7 +6987,7 @@ func GetGroupPricingDashboardData(year int) (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	renewalQuotesPremiumPendingReview = mrrs.TotalAnnualPremium
+	renewalQuotesPremiumPendingReview = mrrs.TotalAnnualPremiumExclFuneral
 	fmt.Println("renewalQuotesPremiumPendingReview: ", renewalQuotesPremiumPendingReview)
 
 	//Approved
@@ -7001,7 +7001,7 @@ func GetGroupPricingDashboardData(year int) (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	renewalQuotesPremiumApproved = mrrs.TotalAnnualPremium
+	renewalQuotesPremiumApproved = mrrs.TotalAnnualPremiumExclFuneral
 
 	//Accepted
 	//err = DB.Table("member_rating_result_summaries").Where(" year(creation_date) = ? and if_status = ? and quote_type=?", year, "Approved", "Renewal").Pluck("sum(total_annual_premium)", &renewalQuotesPremiumApproved).Error
@@ -7014,7 +7014,7 @@ func GetGroupPricingDashboardData(year int) (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	renewalQuotesPremiumAccepted = mrrs.TotalAnnualPremium
+	renewalQuotesPremiumAccepted = mrrs.TotalAnnualPremiumExclFuneral
 
 	// In Force
 	//err = DB.Table("member_rating_result_summaries").
@@ -10430,7 +10430,7 @@ func GetMemberBenefitSummaryInForce(memberID int) (MemberBenefitSummaryDTO, erro
 			gff.Spouse = ptr(schemeCategory.FamilyFuneralSpouseFuneralSumAssured)         //b.SpouseFuneralSumAssured)
 			gff.Children = ptr(schemeCategory.FamilyFuneralChildrenFuneralSumAssured)     //b.ChildFuneralSumAssured)
 			gff.Parents = ptr(schemeCategory.FamilyFuneralParentFuneralSumAssured)        //b.ParentFuneralSumAssured)
-			gff.Dependants = ptr(schemeCategory.FamilyFuneralAdultDependantSumAssured)    //b.DependantFuneralSumAssured)
+			gff.Dependants = ptr(schemeCategory.FamilyFuneralAdultDependantSumAssured)    //b.ParentFuneralSumAssured)
 			// Populate counts where available from SchemeCategory
 			if schemeCategory.FamilyFuneralMaxNumberChildren > 0 {
 				cc := schemeCategory.FamilyFuneralMaxNumberChildren
