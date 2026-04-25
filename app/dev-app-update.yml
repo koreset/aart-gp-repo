@@ -1,0 +1,3 @@
+provider: generic
+url: https://updates.aart-enterprise.com/update/group_risk/
+updaterCacheDirName: aart-group-pricing-updater

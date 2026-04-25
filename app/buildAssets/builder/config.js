@@ -1,13 +1,22 @@
 /* eslint-disable no-template-curly-in-string */
 const dotenv = require('dotenv')
 
+// Slugified base name used in every artifact filename. Must NOT contain
+// spaces — electron-builder, the publish step, and electron-updater
+// (latest-mac.yml) each sanitise spaces differently, which produced
+// 404s where the URL in latest-mac.yml didn't match the file on the
+// server. Keeping this as a single literal guarantees the on-disk
+// filename, the URL in latest-mac.yml, and the uploaded file all agree.
+// `productName` stays human-readable for the DMG window, app bundle, etc.
+const ARTIFACT_BASE = 'AART-Group-Risk'
+
 const baseConfig = {
   productName: 'AART Group Risk',
   appId: 'za.co.adsolutions.aart-gp',
   asar: true,
   extends: null,
   compression: 'maximum',
-  artifactName: '${productName}-${version}-${arch}.${ext}',
+  artifactName: ARTIFACT_BASE + '-${version}-${arch}.${ext}',
   directories: {
     output: './release/${version}'
   },
@@ -61,7 +70,7 @@ const baseConfig = {
     ]
   },
   portable: {
-    artifactName: '${productName} ${version}_${arch} Portable.${ext}'
+    artifactName: ARTIFACT_BASE + '-${version}_${arch}-Portable.${ext}'
   },
   nsis: {
     oneClick: true

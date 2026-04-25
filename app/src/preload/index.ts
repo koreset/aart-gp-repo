@@ -9,6 +9,7 @@ const mainAvailChannels: string[] = [
   'msgResizeWindow',
   'msgStoreAuthenticatedUser',
   'msgRestartApplication',
+  'msgStartDownload',
   'msgGetBaseUrl',
   'msgGetAccessToken',
   'msgGetMachineFingerprint',

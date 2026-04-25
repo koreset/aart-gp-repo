@@ -4,6 +4,16 @@ import IPCs from './IPCs'
 const { autoUpdater } = require('electron-updater')
 const log = require('electron-log')
 
+// electron-log v5 requires the main process to initialize before any
+// renderer-side logging will reach the log file. `preload: true` auto-
+// injects the IPC bridge into every BrowserWindow's preload, so calls
+// like `import log from 'electron-log'` in the renderer (e.g.
+// DefaultLayout.vue) are forwarded to main without needing per-window
+// wiring. Must run before the first BrowserWindow is created — this
+// module is loaded by src/main/index.ts before `app.on('ready')` fires,
+// so this top-level call happens early enough.
+log.initialize({ preload: true })
+
 autoUpdater.setFeedURL({
   provider: 'generic',
   url: 'https://updates.aart-enterprise.com/update/group_risk/'
@@ -12,6 +22,10 @@ autoUpdater.setFeedURL({
 autoUpdater.logger = log
 autoUpdater.logger.transports.file.level = 'debug'
 autoUpdater.forceDevUpdateConfig = true
+// Don't start downloading until the user has confirmed in the renderer.
+// The renderer sends `msgStartDownload` after the user accepts the
+// "Update Available" dialog; see IPCs.ts and DefaultLayout.vue.
+autoUpdater.autoDownload = false
 
 const exitApp = (mainWindow: BrowserWindow): void => {
   if (mainWindow && !mainWindow.isDestroyed()) {

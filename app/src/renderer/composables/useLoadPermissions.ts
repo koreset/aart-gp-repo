@@ -43,8 +43,20 @@ export async function loadUserPermissions(licenseId?: string | null) {
       '[RBAC] Role response contained no permissions — entering bootstrap mode'
     )
     store.markLoaded()
-  } catch (error) {
-    console.error('[RBAC] Error fetching user role:', error)
+  } catch (error: any) {
+    // The API returns 404 ("record not found") when the license has no
+    // role assigned yet — that's an expected state, not an error. The
+    // bootstrap "open-when-no-role" behavior handles it. Only surface
+    // unexpected failures (network, 5xx, etc.) at error severity so the
+    // console isn't full of false alarms on fresh accounts.
+    const status = error?.response?.status
+    if (status === 404) {
+      console.info(
+        '[RBAC] No role assigned for this license — entering bootstrap mode'
+      )
+    } else {
+      console.error('[RBAC] Error fetching user role:', error)
+    }
     store.markLoaded()
   }
 }

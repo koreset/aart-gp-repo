@@ -75,7 +75,10 @@ window.mainApi?.on('update_available', async () => {
     'A new version of the application is available. Do you want to update now? You will be notified when the download completes.'
   )
   if (res) {
-    window.mainApi?.send('msgRestartApplication', false)
+    // Kick off the actual download. When it finishes, electron-updater
+    // emits `update-downloaded` and the listener below prompts the user
+    // to restart (which is what triggers `quitAndInstall`).
+    window.mainApi?.send('msgStartDownload')
   }
 })
 

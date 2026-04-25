@@ -339,6 +339,18 @@ export default class IPCs {
       }
     )
 
+    // start downloading an available update.
+    // Triggered when the user confirms the "Update Available" dialog in
+    // the renderer. Once the download completes, electron-updater fires
+    // `update-downloaded` and the renderer prompts the user to restart,
+    // which sends `msgRestartApplication(true)` -> `quitAndInstall()`.
+    ipcMain.on('msgStartDownload', (event: IpcMainEvent) => {
+      event.returnValue = 'success'
+      autoUpdater.downloadUpdate().catch((err) => {
+        log.error('Failed to start update download:', err)
+      })
+    })
+
     // resize window
     ipcMain.on(
       'msgResizeWindow',
