@@ -141,11 +141,11 @@ A member with annual salary R420 000 maps to level 2. The engine then looks up
 | `medical_aid_waiver_proportion` | float | Proportion of monthly salary used to estimate medical aid premium (for PHI medical aid waiver calculation) |
 | `medical_aid_waiver_amount` | float | Fixed rand amount added to the proportional estimate for medical aid waiver |
 | `maximum_medical_aid_waiver` | float | Monthly cap on PHI medical aid waiver |
-| `minimum_profitability_loading` | float | Floor for total loading. `TotalLoading = max(sum_of_all_loadings, minimum_profitability_loading)` — see §5.2 |
+| `minimum_profitability_loading` | float | Floor for total loading. `TotalPremiumLoading = max(sum_of_all_loadings, minimum_profitability_loading)` — see §5.2 |
 | `expense_loading` | float | As a decimal (e.g., 0.08 = 8%). Stored in parameters; multiplied × 100 before display |
 | `admin_loading` | float | Separate from expense loading — covers in-scheme administration costs |
 | `commission_loading` | float | Set to 0 automatically when `distribution_channel = "direct"` |
-| `contingency_loading` | float | Stored in parameters but **currently excluded** from the TotalLoading sum — see §5.2 |
+| `contingency_loading` | float | Stored in parameters but **currently excluded** from the TotalPremiumLoading sum — see §5.2 |
 | `profit_loading` | float | Insurer profit margin loading |
 | `other_loading` | float | Miscellaneous loading |
 | `discount` | float | Enter as a positive value. The engine subtracts it from the loading sum — see §5.2 |
@@ -451,17 +451,17 @@ When `false`, per-member multiples from `GPricingMemberData.benefits` are used i
 ### 5.2 Loading Formula and Office Premium
 
 All premiums are converted from risk premiums (pure cost of claims) to office premiums (amount
-charged to the scheme) by dividing by `(1 − TotalLoading)`.
+charged to the scheme) by dividing by `(1 − TotalPremiumLoading)`.
 
-**TotalLoading formula:**
+**TotalPremiumLoading formula:**
 
 ```
-TotalLoading = max(
+TotalPremiumLoading = max(
     ExpenseLoading + AdminLoading + CommissionLoading + ProfitLoading + OtherLoading − Discount,
     MinimumProfitabilityLoading
 )
 
-OfficePremium = RiskPremium / (1 − TotalLoading)
+OfficePremium = RiskPremium / (1 − TotalPremiumLoading)
 ```
 
 **Important notes on individual loading components:**
@@ -469,13 +469,13 @@ OfficePremium = RiskPremium / (1 − TotalLoading)
 | Component | Note |
 |---|---|
 | `expense_loading` | Covers claims processing and general overhead |
-| `admin_loading` | In-scheme administration costs — distinct from `expense_loading`. Both are included in `TotalLoading` |
+| `admin_loading` | In-scheme administration costs — distinct from `expense_loading`. Both are included in `TotalPremiumLoading` |
 | `commission_loading` | Set to 0 for `distribution_channel = "direct"` regardless of the parameters value — see §4.1 |
 | `discount` | Enter as a **positive** value in `GroupPricingParameters`. The formula subtracts it, reducing the total loading. A value of 0.02 = 2% discount |
-| `contingency_loading` | Stored in `GroupPricingParameters` but **currently excluded** from the `TotalLoading` sum. It does not affect quoted premiums in the current version |
-| `minimum_profitability_loading` | Ensures `TotalLoading` never falls below this floor, regardless of the sum of individual components |
+| `contingency_loading` | Stored in `GroupPricingParameters` but **currently excluded** from the `TotalPremiumLoading` sum. It does not affect quoted premiums in the current version |
+| `minimum_profitability_loading` | Ensures `TotalPremiumLoading` never falls below this floor, regardless of the sum of individual components |
 
-**Warning:** If `TotalLoading ≥ 1.0`, the `OfficePremium` formula produces a zero or negative
+**Warning:** If `TotalPremiumLoading ≥ 1.0`, the `OfficePremium` formula produces a zero or negative
 result. The engine does not guard against this. Verify that the sum of all loadings remains below
 1.0 when configuring `GroupPricingParameters`.
 

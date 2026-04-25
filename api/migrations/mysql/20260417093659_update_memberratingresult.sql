@@ -447,7 +447,7 @@ PREPARE stmt FROM @s;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Add or modify column for field: TotalLoading
+-- Add or modify column for field: TotalPremiumLoading
 -- MySQL: Add or modify column
 SET @s = (SELECT IF(
     EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='member_rating_results' AND COLUMN_NAME='total_loading' AND TABLE_SCHEMA = DATABASE()),

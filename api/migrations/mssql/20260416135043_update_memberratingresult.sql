@@ -450,7 +450,7 @@ BEGIN
     ALTER TABLE member_rating_results ALTER COLUMN discount DECIMAL(15,5);
 END;
 
--- Add or modify column for field: TotalLoading
+-- Add or modify column for field: TotalPremiumLoading
 -- SQL Server: Add column if it doesn't exist
 IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'member_rating_results' AND COLUMN_NAME = 'total_loading')
 BEGIN

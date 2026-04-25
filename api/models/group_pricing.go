@@ -877,15 +877,6 @@ type MemberRatingResult struct {
 	AverageNumberChildren           float64   `json:"average_number_children" csv:"average_number_children"`
 	CalculatedFreeCoverLimit        float64   `json:"calculated_free_cover_limit" csv:"calculated_free_cover_limit"`
 	AppliedFreeCoverLimit           float64   `json:"applied_free_cover_limit" csv:"applied_free_cover_limit"`
-	GlaSumAssured                   float64   `json:"gla_sum_assured" csv:"gla_sum_assured"`
-	GlaCappedSumAssured             float64   `json:"gla_capped_sum_assured" csv:"gla_capped_sum_assured"`
-	ExpenseLoading                  float64   `json:"expense_loading" csv:"expense_loading"`
-	AdminLoading                    float64   `json:"admin_loading" csv:"admin_loading"`
-	CommissionLoading               float64   `json:"commission_loading" csv:"commission_loading"`
-	ProfitLoading                   float64   `json:"profit_loading" csv:"profit_loading"`
-	OtherLoading                    float64   `json:"other_loading" csv:"other_loading"`
-	Discount                        float64   `json:"discount" csv:"discount"`
-	TotalLoading                    float64   `json:"total_loading" csv:"total_loading"`
 
 	// Region loadings (resolved per member from RegionLoading table)
 	GlaRegionLoading     float64 `json:"gla_region_loading" csv:"gla_region_loading"`
@@ -920,24 +911,37 @@ type MemberRatingResult struct {
 	PhiVoluntaryLoading float64 `json:"phi_voluntary_loading" csv:"phi_voluntary_loading"`
 	FunVoluntaryLoading float64 `json:"fun_voluntary_loading" csv:"fun_voluntary_loading"`
 
-	// Continuation loading (resolved per member from GeneralLoading table)
-	ContinuationLoading float64 `json:"continuation_loading" csv:"continuation_loading"`
+	GlaTerminalIllnessLoading float64 `json:"gla_terminal_illness_loading" csv:"gla_terminal_illness_loading"`
+	TaxSaverLoading           float64 `json:"tax_saver_loading" csv:"tax_saver_loading"`
+	SpouseGlaLoading          float64 `json:"spouse_gla_loading" csv:"spouse_gla_loading"`
 
-	GlaQx                          float64 `json:"gla_qx" csv:"gla_qx"`
-	GlaAidsQx                      float64 `json:"gla_aids_qx" csv:"gla_aids_qx"`
-	BaseGlaRate                    float64 `json:"base_gla_rate" csv:"base_gla_rate"`
-	GlaTerminalIllnessLoading      float64 `json:"gla_terminal_illness_loading" csv:"gla_terminal_illness_loading"`
-	LoadedGlaRate                  float64 `json:"loaded_gla_rate" csv:"loaded_gla_rate"`
+	ExpenseLoading      float64 `json:"expense_loading" csv:"expense_loading"`
+	AdminLoading        float64 `json:"admin_loading" csv:"admin_loading"`
+	CommissionLoading   float64 `json:"commission_loading" csv:"commission_loading"`
+	ProfitLoading       float64 `json:"profit_loading" csv:"profit_loading"`
+	OtherLoading        float64 `json:"other_loading" csv:"other_loading"`
+	BinderFeeRate       float64 `json:"binder_fee_rate" csv:"binder_fee_rate"`
+	OutsourceFeeRate    float64 `json:"outsource_fee_rate" csv:"outsource_fee_rate"`
+	Discount            float64 `json:"discount" csv:"discount"`
+	TotalPremiumLoading float64 `json:"total_premium_loading" csv:"total_premium_loading"`
+
 	GlaWeightedExperienceCrudeRate float64 `json:"gla_weighted_experience_crude_rate" csv:"gla_weighted_experience_crude_rate"`
 	GlaTheoreticalRate             float64 `json:"gla_theoretical_rate" csv:"gla_theoretical_rate"`
 	PtdExperienceCrudeRate         float64 `json:"ptd_experience_crude_rate" csv:"ptd_experience_crude_rate"`
 	PtdTheoreticalRate             float64 `json:"ptd_theoretical_rate" csv:"ptd_theoretical_rate"`
 	CiExperienceCrudeRate          float64 `json:"ci_experience_crude_rate" csv:"ci_experience_crude_rate"`
 	CiTheoreticalRate              float64 `json:"ci_theoretical_rate" csv:"ci_theoretical_rate"`
-	ExpAdjLoadedGlaRate            float64 `json:"exp_adj_loaded_gla_rate" csv:"exp_adj_loaded_gla_rate"`
-	GlaExperienceAdjustment        float64 `json:"gla_experience_adjustment" csv:"gla_experience_adjustment"`
-	GlaRiskPremium                 float64 `json:"gla_risk_premium" csv:"gla_risk_premium"`
-	ExpAdjGlaRiskPremium           float64 `json:"exp_adj_gla_risk_premium" csv:"exp_adj_gla_risk_premium"`
+
+	GlaQx                   float64 `json:"gla_qx" csv:"gla_qx"`
+	GlaAidsQx               float64 `json:"gla_aids_qx" csv:"gla_aids_qx"`
+	BaseGlaRate             float64 `json:"base_gla_rate" csv:"base_gla_rate"`
+	LoadedGlaRate           float64 `json:"loaded_gla_rate" csv:"loaded_gla_rate"`
+	GlaExperienceAdjustment float64 `json:"gla_experience_adjustment" csv:"gla_experience_adjustment"`
+	ExpAdjLoadedGlaRate     float64 `json:"exp_adj_loaded_gla_rate" csv:"exp_adj_loaded_gla_rate"`
+	GlaSumAssured           float64 `json:"gla_sum_assured" csv:"gla_sum_assured"`
+	GlaCappedSumAssured     float64 `json:"gla_capped_sum_assured" csv:"gla_capped_sum_assured"`
+	GlaRiskPremium          float64 `json:"gla_risk_premium" csv:"gla_risk_premium"`
+	ExpAdjGlaRiskPremium    float64 `json:"exp_adj_gla_risk_premium" csv:"exp_adj_gla_risk_premium"`
 
 	// TaxSaver is an optional rider on GLA. TaxSaverLoading is folded into
 	// LoadedGlaRate, so the TaxSaver*Premium fields below are a reportable
@@ -950,12 +954,9 @@ type MemberRatingResult struct {
 	// scheme category has TaxSaverBenefit enabled and a retirement-tax
 	// table is configured for the quote's risk rate code.
 	TaxSaverSumAssured        float64 `json:"tax_saver_sum_assured" csv:"tax_saver_sum_assured"`
-	TaxSaverLoading           float64 `json:"tax_saver_loading" csv:"tax_saver_loading"`
 	TaxSaverRiskPremium       float64 `json:"tax_saver_risk_premium" csv:"tax_saver_risk_premium"`
 	ExpAdjTaxSaverRiskPremium float64 `json:"exp_adj_tax_saver_risk_premium" csv:"exp_adj_tax_saver_risk_premium"`
 
-	AdditionalAccidentalGlaSumAssured                  float64 `json:"additional_accidental_gla_sum_assured" csv:"additional_accidental_gla_sum_assured"`
-	AdditionalAccidentalGlaCappedSumAssured            float64 `json:"additional_accidental_gla_capped_sum_assured" csv:"additional_accidental_gla_capped_sum_assured"`
 	AdditionalAccidentalGlaQx                          float64 `json:"additional_accidental_gla_qx" csv:"additional_accidental_gla_qx"`
 	BaseAdditionalAccidentalGlaRate                    float64 `json:"base_additional_accidental_gla_rate" csv:"base_additional_accidental_gla_rate"`
 	LoadedAdditionalAccidentalGlaRate                  float64 `json:"loaded_additional_accidental_gla_rate" csv:"loaded_additional_accidental_gla_rate"`
@@ -963,71 +964,72 @@ type MemberRatingResult struct {
 	AdditionalAccidentalGlaTheoreticalRate             float64 `json:"additional_accidental_gla_theoretical_rate" csv:"additional_accidental_gla_theoretical_rate"`
 	AdditionalAccidentalGlaExperienceAdjustment        float64 `json:"additional_accidental_gla_experience_adjustment" csv:"additional_accidental_gla_experience_adjustment"`
 	ExpAdjLoadedAdditionalAccidentalGlaRate            float64 `json:"exp_adj_loaded_additional_accidental_gla_rate" csv:"exp_adj_loaded_additional_accidental_gla_rate"`
+	AdditionalAccidentalGlaSumAssured                  float64 `json:"additional_accidental_gla_sum_assured" csv:"additional_accidental_gla_sum_assured"`
+	AdditionalAccidentalGlaCappedSumAssured            float64 `json:"additional_accidental_gla_capped_sum_assured" csv:"additional_accidental_gla_capped_sum_assured"`
 	AdditionalAccidentalGlaRiskPremium                 float64 `json:"additional_accidental_gla_risk_premium" csv:"additional_accidental_gla_risk_premium"`
 	ExpAdjAdditionalAccidentalGlaRiskPremium           float64 `json:"exp_adj_additional_accidental_gla_risk_premium" csv:"exp_adj_additional_accidental_gla_risk_premium"`
 
-	PtdSumAssured           float64 `json:"ptd_sum_assured" csv:"ptd_sum_assured"`
-	PtdCappedSumAssured     float64 `json:"ptd_capped_sum_assured" csv:"ptd_capped_sum_assured"`
 	BasePtdRate             float64 `json:"base_ptd_rate" csv:"base_ptd_rate"`
 	LoadedPtdRate           float64 `json:"loaded_ptd_rate" csv:"loaded_ptd_rate"`
 	PtdExperienceAdjustment float64 `json:"ptd_experience_adjustment" csv:"ptd_experience_adjustment"`
+	PtdSumAssured           float64 `json:"ptd_sum_assured" csv:"ptd_sum_assured"`
+	PtdCappedSumAssured     float64 `json:"ptd_capped_sum_assured" csv:"ptd_capped_sum_assured"`
 	ExpAdjLoadedPtdRate     float64 `json:"exp_adj_loaded_ptd_rate" csv:"exp_adj_loaded_ptd_rate"`
 	PtdRiskPremium          float64 `json:"ptd_risk_premium" csv:"ptd_risk_premium"`
 	ExpAdjPtdRiskPremium    float64 `json:"exp_adj_ptd_risk_premium" csv:"exp_adj_ptd_risk_premium"`
 
-	CiSumAssured           float64 `json:"ci_sum_assured" csv:"ci_sum_assured"`
-	CiCappedSumAssured     float64 `json:"ci_capped_sum_assured" csv:"ci_capped_sum_assured"`
 	BaseCiRate             float64 `json:"base_ci_rate" csv:"base_ci_rate"`
 	LoadedCiRate           float64 `json:"loaded_ci_rate" csv:"loaded_ci_rate"`
 	CiExperienceAdjustment float64 `json:"ci_experience_adjustment" csv:"ci_experience_adjustment"`
 	ExpAdjLoadedCiRate     float64 `json:"exp_adj_loaded_ci_rate" csv:"exp_adj_loaded_ci_rate"`
+	CiSumAssured           float64 `json:"ci_sum_assured" csv:"ci_sum_assured"`
+	CiCappedSumAssured     float64 `json:"ci_capped_sum_assured" csv:"ci_capped_sum_assured"`
 	CiRiskPremium          float64 `json:"ci_risk_premium" csv:"ci_risk_premium"`
 	ExpAdjCiRiskPremium    float64 `json:"exp_adj_ci_risk_premium" csv:"exp_adj_ci_risk_premium"`
 
-	SpouseGlaSumAssured       float64 `json:"spouse_gla_sum_assured" csv:"spouse_gla_sum_assured"`
-	SpouseGlaCappedSumAssured float64 `json:"spouse_gla_capped_sum_assured" csv:"spouse_gla_capped_sum_assured"`
-	SpouseGlaQx               float64 `json:"spouse_gla_qx" csv:"spouse_gla_qx"`
-	SpouseGlaAidsQx           float64 `json:"spouse_gla_aids_qx" csv:"spouse_gla_aids_qx"`
-	BaseSpouseGlaRate         float64 `json:"base_spouse_gla_rate" csv:"base_spouse_gla_rate"`
-	SpouseGlaLoading          float64 `json:"spouse_gla_loading" csv:"spouse_gla_loading"`
-	LoadedSpouseGlaRate       float64 `json:"loaded_spouse_gla_rate" csv:"loaded_spouse_gla_rate"`
-	ExpAdjLoadedSpouseGlaRate float64 `json:"exp_adj_loaded_spouse_gla_rate" csv:"exp_adj_loaded_spouse_gla_rate"`
-	SpouseGlaRiskPremium      float64 `json:"spouse_gla_risk_premium" csv:"spouse_gla_risk_premium"`
+	SpouseGlaQx                float64 `json:"spouse_gla_qx" csv:"spouse_gla_qx"`
+	SpouseGlaAidsQx            float64 `json:"spouse_gla_aids_qx" csv:"spouse_gla_aids_qx"`
+	BaseSpouseGlaRate          float64 `json:"base_spouse_gla_rate" csv:"base_spouse_gla_rate"`
+	LoadedSpouseGlaRate        float64 `json:"loaded_spouse_gla_rate" csv:"loaded_spouse_gla_rate"`
+	ExpAdjLoadedSpouseGlaRate  float64 `json:"exp_adj_loaded_spouse_gla_rate" csv:"exp_adj_loaded_spouse_gla_rate"`
+	SpouseGlaSumAssured        float64 `json:"spouse_gla_sum_assured" csv:"spouse_gla_sum_assured"`
+	SpouseGlaCappedSumAssured  float64 `json:"spouse_gla_capped_sum_assured" csv:"spouse_gla_capped_sum_assured"`
+	SpouseGlaRiskPremium       float64 `json:"spouse_gla_risk_premium" csv:"spouse_gla_risk_premium"`
+	ExpAdjSpouseGlaRiskPremium float64 `json:"exp_adj_spouse_gla_risk_premium" csv:"exp_adj_spouse_gla_risk_premium"`
 
-	TtdIncome                  float64 `json:"ttd_income" csv:"ttd_income"`
-	TtdCappedIncome            float64 `json:"ttd_capped_income" csv:"ttd_capped_income"`
-	TtdNumberOfMonthlyPayments float64 `json:"ttd_number_of_monthly_payments" csv:"ttd_number_of_monthly_payments"`
-	IncomeReplacementRatio     float64 `json:"income_replacement_ratio" csv:"income_replacement_ratio"`
 	BaseTtdRate                float64 `json:"base_ttd_rate" csv:"base_ttd_rate"`
 	LoadedTtdRate              float64 `json:"loaded_ttd_rate" csv:"loaded_ttd_rate"`
 	TtdExperienceAdjustment    float64 `json:"ttd_experience_adjustment" csv:"ttd_experience_adjustment"`
 	ExpAdjLoadedTtdRate        float64 `json:"exp_adj_loaded_ttd_rate" csv:"exp_adj_loaded_ttd_rate"`
+	TtdIncome                  float64 `json:"ttd_income" csv:"ttd_income"`
+	TtdCappedIncome            float64 `json:"ttd_capped_income" csv:"ttd_capped_income"`
+	TtdNumberOfMonthlyPayments float64 `json:"ttd_number_of_monthly_payments" csv:"ttd_number_of_monthly_payments"`
+	IncomeReplacementRatio     float64 `json:"income_replacement_ratio" csv:"income_replacement_ratio"`
 	TtdRiskPremium             float64 `json:"ttd_risk_premium" csv:"ttd_risk_premium"`
 	ExpAdjTtdRiskPremium       float64 `json:"exp_adj_ttd_risk_premium" csv:"exp_adj_ttd_risk_premium"`
-	ExpAdjSpouseGlaRiskPremium float64 `json:"exp_adj_spouse_gla_risk_premium" csv:"exp_adj_spouse_gla_risk_premium"`
 
+	BasePhiRate             float64 `json:"base_phi_rate" csv:"base_phi_rate"`
+	LoadedPhiRate           float64 `json:"loaded_phi_rate" csv:"loaded_phi_rate"`
+	PhiExperienceAdjustment float64 `json:"phi_experience_adjustment" csv:"phi_experience_adjustment"`
+	ExpAdjLoadedPhiRate     float64 `json:"exp_adj_loaded_phi_rate" csv:"exp_adj_loaded_phi_rate"`
+	PhiSalaryLevel          float64 `json:"phi_salary_level" csv:"phi_salary_level"`
 	PhiIncome               float64 `json:"phi_income" csv:"phi_income"`
 	PhiCappedIncome         float64 `json:"phi_capped_income" csv:"phi_capped_income"`
 	PhiContributionWaiver   float64 `json:"phi_contribution_waiver" csv:"phi_contribution_waiver"`
 	PhiMedicalAidWaiver     float64 `json:"phi_medical_aid_waiver" csv:"phi_medical_aid_waiver"`
 	PhiMonthlyBenefit       float64 `json:"phi_monthly_benefit" csv:"phi_monthly_benefit"`
 	PhiAnnuityFactor        float64 `json:"phi_annuity_factor" csv:"phi_annuity_factor"`
-	BasePhiRate             float64 `json:"base_phi_rate" csv:"base_phi_rate"`
-	PhiSalaryLevel          float64 `json:"phi_salary_level" csv:"phi_salary_level"`
-	LoadedPhiRate           float64 `json:"loaded_phi_rate" csv:"loaded_phi_rate"`
-	PhiExperienceAdjustment float64 `json:"phi_experience_adjustment" csv:"phi_experience_adjustment"`
-	ExpAdjLoadedPhiRate     float64 `json:"exp_adj_loaded_phi_rate" csv:"exp_adj_loaded_phi_rate"`
 	PhiRiskPremium          float64 `json:"phi_risk_premium" csv:"phi_risk_premium"`
 	ExpAdjPhiRiskPremium    float64 `json:"exp_adj_phi_risk_premium" csv:"exp_adj_phi_risk_premium"`
 
-	MemberFuneralSumAssured      float64 `json:"member_funeral_sum_assured" csv:"member_funeral_sum_assured"`
 	MainMemberFuneralBaseRate    float64 `json:"main_member_funeral_base_rate" csv:"main_member_funeral_base_rate"`
+	MemberFuneralSumAssured      float64 `json:"member_funeral_sum_assured" csv:"member_funeral_sum_assured"`
 	MainMemberFuneralRiskPremium float64 `json:"main_member_funeral_risk_premium" csv:"main_member_funeral_risk_premium"`
 
 	//MarriageProportion float64 `json:"marriage_proportion" csv:"marriage_proportion"`
 
-	SpouseFuneralSumAssured  float64 `json:"spouse_funeral_sum_assured" csv:"spouse_funeral_sum_assured"`
 	SpouseFuneralBaseRate    float64 `json:"spouse_funeral_base_rate" csv:"spouse_funeral_base_rate"`
+	SpouseFuneralSumAssured  float64 `json:"spouse_funeral_sum_assured" csv:"spouse_funeral_sum_assured"`
 	SpouseFuneralRiskPremium float64 `json:"spouse_funeral_risk_premium" csv:"spouse_funeral_risk_premium"`
 
 	ChildFuneralBaseRate    float64 `json:"child_funeral_base_rate" csv:"child_funeral_base_rate"`
@@ -1036,7 +1038,7 @@ type MemberRatingResult struct {
 
 	ParentFuneralBaseRate    float64 `json:"parent_funeral_base_rate" csv:"parent_funeral_base_rate"`
 	ParentFuneralSumAssured  float64 `json:"parent_funeral_sum_assured" csv:"parent_funeral_sum_assured"`
-	ParentFuneralRiskPremium float64 `json:"dependants_funeral_cost" csv:"dependants_funeral_cost"`
+	ParentFuneralRiskPremium float64 `json:"parent_funeral_risk_premium" csv:"parent_funeral_risk_premium"`
 
 	TotalFuneralRiskPremium       float64 `json:"total_funeral_risk_premium" csv:"total_funeral_risk_premium"`
 	ExpAdjTotalFuneralRiskPremium float64 `json:"exp_adj_total_funeral_risk_premium" csv:"exp_adj_total_funeral_risk_premium"`
@@ -1293,6 +1295,8 @@ type MemberRatingResultSummary struct {
 	ExpenseLoading                          float64 `json:"expense_loading" csv:"expense_loading"`
 	CommissionLoading                       float64 `json:"commission_loading" csv:"commission_loading"`
 	ProfitLoading                           float64 `json:"profit_loading" csv:"profit_loading"`
+	BinderFeeRate                           float64 `json:"binder_fee_rate" csv:"binder_fee_rate"`
+	OutsourceFeeRate                        float64 `json:"outsource_fee_rate" csv:"outsource_fee_rate"`
 	AcceleratedBenefitDiscount              float64 `json:"accelerated_benefit_discount" csv:"accelerated_benefit_discount"`
 	MinGlaSumAssured                        float64 `json:"min_gla_sum_assured" csv:"min_gla_sum_assured"`
 	MaxGlaSumAssured                        float64 `json:"max_gla_sum_assured" csv:"max_gla_sum_assured"`

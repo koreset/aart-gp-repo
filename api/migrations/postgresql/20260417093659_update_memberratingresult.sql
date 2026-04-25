@@ -407,7 +407,7 @@ BEGIN
     END IF;
 END $$;
 
--- Add or modify column for field: TotalLoading
+-- Add or modify column for field: TotalPremiumLoading
 ALTER TABLE member_rating_results ADD COLUMN IF NOT EXISTS total_loading NUMERIC(15,5);
 -- Update column type if it exists
 DO $$

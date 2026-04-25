@@ -1961,7 +1961,17 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 
 	// Compute derived summary fields after the reduce loop
 	mdrs.TotalAnnualPremium = models.ComputeOfficePremium(mdrs.TotalGlaAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalPtdAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalTtdAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalPhiAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalCiAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalSglaAnnualRiskPremium, &mdrs)
-	mdrs.ExpTotalAnnualPremiumExclFuneral = models.ComputeOfficePremium(mdrs.ExpTotalGlaAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalPtdAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalTtdAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalPhiAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalCiAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalSglaAnnualRiskPremium, &mdrs)
+	// Sub Total (Excl. Funeral) includes the GLA TaxSaver rider, GLA Educator
+	// and PTD Educator components on top of the six core benefits.
+	mdrs.ExpTotalAnnualPremiumExclFuneral = models.ComputeOfficePremium(mdrs.ExpTotalGlaAnnualRiskPremium, &mdrs) +
+		models.ComputeOfficePremium(mdrs.ExpTotalPtdAnnualRiskPremium, &mdrs) +
+		models.ComputeOfficePremium(mdrs.ExpTotalTtdAnnualRiskPremium, &mdrs) +
+		models.ComputeOfficePremium(mdrs.ExpTotalPhiAnnualRiskPremium, &mdrs) +
+		models.ComputeOfficePremium(mdrs.ExpTotalCiAnnualRiskPremium, &mdrs) +
+		models.ComputeOfficePremium(mdrs.ExpTotalSglaAnnualRiskPremium, &mdrs) +
+		models.ComputeOfficePremium(mdrs.ExpTotalTaxSaverAnnualRiskPremium, &mdrs) +
+		models.ComputeOfficePremium(mdrs.ExpAdjTotalGlaEducatorRiskPremium, &mdrs) +
+		models.ComputeOfficePremium(mdrs.ExpAdjTotalPtdEducatorRiskPremium, &mdrs)
 	// TotalCommission is populated by applySchemeWideCommission after all
 	// categories are computed: the tiered CommissionStructure bands run on
 	// the scheme-wide total premium, and each category is allocated its
@@ -2266,6 +2276,9 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	mdrs.ExpenseLoading = premiumLoading.ExpenseLoading
 	mdrs.CommissionLoading = premiumLoading.CommissionLoading
 	mdrs.ProfitLoading = premiumLoading.ProfitLoading
+	summaryBinderRate, summaryOutsourceRate := binderAndOutsourceRates(&groupQuote)
+	mdrs.BinderFeeRate = summaryBinderRate
+	mdrs.OutsourceFeeRate = summaryOutsourceRate
 	// AcceleratedBenefitDiscount is now per (age, gender) in GeneralLoading; no single summary value applies.
 
 	//Adding credibility Data
@@ -2422,7 +2435,7 @@ func computeEducatorLoadedRates(m *models.MemberRatingResult) {
 // in the educator block (they need the per-member riskWeightedSA factor).
 // Must be called after every Loaded*Rate and TotalFuneralRiskCost are final.
 func computeConvContSlicePremiums(m *models.MemberRatingResult, groupParameter models.GroupPricingParameters) {
-	divisor := 1.0 - m.TotalLoading
+	divisor := 1.0 - m.TotalPremiumLoading
 	if divisor == 0 {
 		divisor = 1.0
 	}
@@ -2469,7 +2482,7 @@ func computeConvContSlicePremiums(m *models.MemberRatingResult, groupParameter m
 // (GLA-ed withdrawal/retirement/continuity, PTD-ed withdrawal/retirement).
 // Pass riskWeightedSA computed at the educator block call site.
 func computeEducatorSlicePremiums(m *models.MemberRatingResult, riskWeightedSA float64) {
-	divisor := 1.0 - m.TotalLoading
+	divisor := 1.0 - m.TotalPremiumLoading
 	if divisor == 0 {
 		divisor = 1.0
 	}
@@ -2506,6 +2519,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	var tempMp models.GPricingMemberData
 	var originalMemberDataPointResult models.MemberRatingResult
 	var groupFuneralParameter models.FuneralParameters
+	var binderFeeRate, outsourceFeeRate float64
 	//var bordereauxDatapoint models.Bordereaux
 
 	tempMp.MemberName = addedMemberInForce.MemberName
@@ -2554,11 +2568,17 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	memberDataPointResult.ProfitLoading = premiumLoading.ProfitLoading
 	memberDataPointResult.OtherLoading = premiumLoading.OtherLoading
 	memberDataPointResult.Discount = -(groupQuote.Loadings.Discount / 100.0)
-	binderFeeRate, outsourceFeeRate := binderAndOutsourceRates(&groupQuote)
+
+	if groupQuote.DistributionChannel == "binder" {
+		binderFeeRate, outsourceFeeRate = binderAndOutsourceRates(&groupQuote)
+		memberDataPointResult.BinderFeeRate = binderFeeRate
+		memberDataPointResult.OutsourceFeeRate = outsourceFeeRate
+	}
+
 	// Commission is excluded from TotalLoading — it is computed at the scheme
 	// level on total premium via the tiered CommissionStructure bands and
 	// distributed per benefit in applySchemeWideCommission.
-	memberDataPointResult.TotalLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+premiumLoading.ProfitLoading+premiumLoading.OtherLoading+binderFeeRate+outsourceFeeRate, premiumLoading.MinimumPremiumLoading)
+	memberDataPointResult.TotalPremiumLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+premiumLoading.ProfitLoading+premiumLoading.OtherLoading+binderFeeRate+outsourceFeeRate, premiumLoading.MinimumPremiumLoading)
 	memberDataPointResult.ExpCredibility = credibilityRate
 	memberDataPointResult.GlaWeightedExperienceCrudeRate = annualGlaExperienceWeightedRate
 	memberDataPointResult.PtdExperienceCrudeRate = annualPtdExperienceWeightedRate
@@ -2709,7 +2729,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	// Loaded*Rate below; slice premiums computed after rates are final).
 	resolveConvContLoadings(memberDataPointResult, &schemeCategory, &gl1)
 
-	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.GlaContinuityDuringDisabilityLoading + memberDataPointResult.TaxSaverLoading + memberDataPointResult.GlaConversionOnWithdrawalLoading + memberDataPointResult.GlaConversionOnRetirementLoading)
+	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.GlaContinuityDuringDisabilityLoading + memberDataPointResult.GlaConversionOnWithdrawalLoading + memberDataPointResult.GlaConversionOnRetirementLoading)
 
 	memberDataPointResult.ExpAdjLoadedGlaRate = memberDataPointResult.LoadedGlaRate * memberDataPointResult.GlaExperienceAdjustment
 
@@ -2788,10 +2808,10 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 
 	// TaxSaver slice of GlaRiskPremium. Per business spec, computed against
 	// the already-loaded rate (LoadedGlaRate × TaxSaverLoading × SumAssured),
-	// not BaseGlaRate × TaxSaverLoading × SumAssured — this intentionally
+	// loadedRate × TaxSaverSA × SumAssured
 	// over-attributes relative to a pure linear share.
-	memberDataPointResult.TaxSaverRiskPremium = memberDataPointResult.LoadedGlaRate * memberDataPointResult.TaxSaverLoading * memberDataPointResult.GlaCappedSumAssured
-	memberDataPointResult.ExpAdjTaxSaverRiskPremium = memberDataPointResult.ExpAdjLoadedGlaRate * memberDataPointResult.TaxSaverLoading * memberDataPointResult.GlaCappedSumAssured
+	memberDataPointResult.TaxSaverRiskPremium = memberDataPointResult.LoadedGlaRate * memberDataPointResult.TaxSaverSumAssured
+	memberDataPointResult.ExpAdjTaxSaverRiskPremium = memberDataPointResult.ExpAdjLoadedGlaRate * memberDataPointResult.TaxSaverSumAssured
 
 	memberDataPointResult.AdditionalAccidentalGlaRiskPremium = memberDataPointResult.LoadedAdditionalAccidentalGlaRate * memberDataPointResult.AdditionalAccidentalGlaCappedSumAssured
 	memberDataPointResult.ExpAdjAdditionalAccidentalGlaRiskPremium = memberDataPointResult.ExpAdjLoadedAdditionalAccidentalGlaRate * memberDataPointResult.AdditionalAccidentalGlaCappedSumAssured
@@ -2969,8 +2989,8 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 
 	memberDataPointResult.TotalFuneralRiskPremium = (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
 	memberDataPointResult.ExpAdjTotalFuneralRiskPremium = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
-	memberDataPointResult.TotalFuneralOfficePremium = memberDataPointResult.TotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
-	memberDataPointResult.ExpAdjTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.TotalFuneralOfficePremium = memberDataPointResult.TotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
+	memberDataPointResult.ExpAdjTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
 	memberDataPointResult.FinalTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralOfficePremium + memberDataPointResult.ExpAdjTotalFuneralOfficePremium*discountFraction
 
 	// Compute all non-educator conversion / continuity slice premiums now
@@ -3118,6 +3138,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	var mpIncomeLevel int
 	var mpAgeBand string
 	var groupFuneralParameter models.FuneralParameters
+	var binderFeeRate2, outsourceFeeRate2 float64
 
 	memberDataPointResult.IsOriginalMember = true
 	memberDataPointResult.QuoteId = groupQuote.ID
@@ -3161,9 +3182,15 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	memberDataPointResult.ProfitLoading = premiumLoading.ProfitLoading
 	memberDataPointResult.OtherLoading = premiumLoading.OtherLoading
 	memberDataPointResult.Discount = -(groupQuote.Loadings.Discount / 100.0)
-	binderFeeRate2, outsourceFeeRate2 := binderAndOutsourceRates(&groupQuote)
+
+	if groupQuote.DistributionChannel == "binder" {
+		binderFeeRate2, outsourceFeeRate2 = binderAndOutsourceRates(&groupQuote)
+		memberDataPointResult.BinderFeeRate = binderFeeRate2
+		memberDataPointResult.OutsourceFeeRate = outsourceFeeRate2
+	}
+
 	// Commission is excluded from TotalLoading — see applySchemeWideCommission.
-	memberDataPointResult.TotalLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+premiumLoading.ProfitLoading+premiumLoading.OtherLoading+binderFeeRate2+outsourceFeeRate2, premiumLoading.MinimumPremiumLoading)
+	memberDataPointResult.TotalPremiumLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+premiumLoading.ProfitLoading+premiumLoading.OtherLoading+binderFeeRate2+outsourceFeeRate2, premiumLoading.MinimumPremiumLoading)
 
 	memberDataPointResult.CalculatedFreeCoverLimit = calculatedFreeCoverLimit
 	if groupQuote.FreeCoverLimit > 0 {
@@ -3308,7 +3335,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	}
 	resolveConvContLoadings(&memberDataPointResult, &groupQuote.SchemeCategories[i], &gl2)
 
-	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.GlaContinuityDuringDisabilityLoading + memberDataPointResult.TaxSaverLoading + memberDataPointResult.GlaConversionOnWithdrawalLoading + memberDataPointResult.GlaConversionOnRetirementLoading)
+	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.GlaContinuityDuringDisabilityLoading + memberDataPointResult.GlaConversionOnWithdrawalLoading + memberDataPointResult.GlaConversionOnRetirementLoading)
 
 	if groupQuote.SchemeCategories[i].PtdBenefit {
 		ptdRate := GetPtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
@@ -3382,6 +3409,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	var mpIncomeLevel int
 	var mpAgeBand string
 	var groupFuneralParameter models.FuneralParameters
+	var binderFeeRate3, outsourceFeeRate3 float64
 
 	memberDataPointResult.IsOriginalMember = true
 	memberDataPointResult.QuoteId = groupQuote.ID
@@ -3428,9 +3456,15 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.ProfitLoading = premiumLoading.ProfitLoading
 	memberDataPointResult.OtherLoading = premiumLoading.OtherLoading
 	memberDataPointResult.Discount = -(groupQuote.Loadings.Discount / 100.0)
-	binderFeeRate3, outsourceFeeRate3 := binderAndOutsourceRates(&groupQuote)
+
+	if groupQuote.DistributionChannel == "binder" {
+		binderFeeRate3, outsourceFeeRate3 = binderAndOutsourceRates(&groupQuote)
+		memberDataPointResult.BinderFeeRate = binderFeeRate3
+		memberDataPointResult.OutsourceFeeRate = outsourceFeeRate3
+	}
+
 	// Commission is excluded from TotalLoading — see applySchemeWideCommission.
-	memberDataPointResult.TotalLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+premiumLoading.ProfitLoading+premiumLoading.OtherLoading+binderFeeRate3+outsourceFeeRate3, premiumLoading.MinimumPremiumLoading)
+	memberDataPointResult.TotalPremiumLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+premiumLoading.ProfitLoading+premiumLoading.OtherLoading+binderFeeRate3+outsourceFeeRate3, premiumLoading.MinimumPremiumLoading)
 
 	memberDataPointResult.ExpCredibility = credibilityRate
 	memberDataPointResult.ManuallyAddedCredibility = credibility
@@ -3652,7 +3686,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	}
 	resolveConvContLoadings(&memberDataPointResult, &groupQuote.SchemeCategories[i], &gl3)
 
-	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.GlaContinuityDuringDisabilityLoading + memberDataPointResult.TaxSaverLoading + memberDataPointResult.GlaConversionOnWithdrawalLoading + memberDataPointResult.GlaConversionOnRetirementLoading)
+	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.GlaContinuityDuringDisabilityLoading + memberDataPointResult.GlaConversionOnWithdrawalLoading + memberDataPointResult.GlaConversionOnRetirementLoading)
 
 	if groupQuote.SchemeCategories[i].PtdBenefit {
 		ptdRate := GetPtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel)
@@ -3819,7 +3853,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	}
 
 	memberDataPointResult.GlaRiskPremium = memberDataPointResult.LoadedGlaRate * memberDataPointResult.GlaCappedSumAssured
-	memberDataPointResult.TaxSaverRiskPremium = memberDataPointResult.LoadedGlaRate * memberDataPointResult.TaxSaverSumAssured * (1 + memberDataPointResult.TaxSaverLoading)
+	memberDataPointResult.TaxSaverRiskPremium = memberDataPointResult.LoadedGlaRate * memberDataPointResult.TaxSaverSumAssured
 	memberDataPointResult.PtdRiskPremium = memberDataPointResult.LoadedPtdRate * memberDataPointResult.PtdCappedSumAssured
 	memberDataPointResult.TtdNumberOfMonthlyPayments = groupParameter.TtdNumberMonthlyPayments
 	memberDataPointResult.TtdRiskPremium = memberDataPointResult.LoadedTtdRate * memberDataPointResult.TtdCappedIncome * groupParameter.TtdNumberMonthlyPayments
@@ -3867,7 +3901,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.ParentFuneralRiskPremium = memberDataPointResult.ParentFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured * memberDataPointResult.AverageNumberDependants
 
 	memberDataPointResult.TotalFuneralRiskPremium = (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
-	memberDataPointResult.TotalFuneralOfficePremium = memberDataPointResult.TotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.TotalFuneralOfficePremium = memberDataPointResult.TotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
 
 	// Derive LoadedGla/PtdEducatorRate now that the parent LoadedRates are
 	// set but before the educator block so educator premiums (and their
@@ -3921,7 +3955,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		memberDataPointResult.ExpAdjLoadedSpouseGlaRate = memberDataPointResult.LoadedSpouseGlaRate * memberDataPointResult.GlaExperienceAdjustment
 	}
 	memberDataPointResult.ExpAdjGlaRiskPremium = memberDataPointResult.ExpAdjLoadedGlaRate * memberDataPointResult.GlaCappedSumAssured
-	memberDataPointResult.ExpAdjTaxSaverRiskPremium = memberDataPointResult.ExpAdjLoadedGlaRate * memberDataPointResult.TaxSaverLoading * memberDataPointResult.GlaCappedSumAssured
+	memberDataPointResult.ExpAdjTaxSaverRiskPremium = memberDataPointResult.ExpAdjLoadedGlaRate * memberDataPointResult.TaxSaverSumAssured
 	memberDataPointResult.ExpAdjPtdRiskPremium = memberDataPointResult.ExpAdjLoadedPtdRate * memberDataPointResult.PtdCappedSumAssured
 	memberDataPointResult.ExpAdjTtdRiskPremium = memberDataPointResult.ExpAdjLoadedTtdRate * memberDataPointResult.TtdCappedIncome * groupParameter.TtdNumberMonthlyPayments
 	memberDataPointResult.ExpAdjPhiRiskPremium = memberDataPointResult.ExpAdjLoadedPhiRate * memberDataPointResult.PhiMonthlyBenefit
@@ -3929,7 +3963,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.ExpAdjSpouseGlaRiskPremium = memberDataPointResult.ExpAdjLoadedSpouseGlaRate * memberDataPointResult.SpouseGlaCappedSumAssured
 
 	memberDataPointResult.ExpAdjTotalFuneralRiskPremium = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
-	memberDataPointResult.ExpAdjTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalLoading)
+	memberDataPointResult.ExpAdjTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
 	memberDataPointResult.FinalTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralOfficePremium + memberDataPointResult.ExpAdjTotalFuneralOfficePremium*discountFraction
 
 	// Re-derive the educator loaded rates now that ExpAdjLoaded*Rate values
@@ -7189,7 +7223,15 @@ func applySchemeWideCommission(quoteID int, groupQuote models.GroupPricingQuote,
 		if s.TotalSglaCappedSumAssured > 0 {
 		}
 		// TTD / PHI use income bases rather than sum assured.
-		s.ExpTotalAnnualPremiumExclFuneral = models.ComputeOfficePremium(s.ExpTotalGlaAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalPtdAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalTtdAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalPhiAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalCiAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalSglaAnnualRiskPremium, s)
+		s.ExpTotalAnnualPremiumExclFuneral = models.ComputeOfficePremium(s.ExpTotalGlaAnnualRiskPremium, s) +
+			models.ComputeOfficePremium(s.ExpTotalPtdAnnualRiskPremium, s) +
+			models.ComputeOfficePremium(s.ExpTotalTtdAnnualRiskPremium, s) +
+			models.ComputeOfficePremium(s.ExpTotalPhiAnnualRiskPremium, s) +
+			models.ComputeOfficePremium(s.ExpTotalCiAnnualRiskPremium, s) +
+			models.ComputeOfficePremium(s.ExpTotalSglaAnnualRiskPremium, s) +
+			models.ComputeOfficePremium(s.ExpTotalTaxSaverAnnualRiskPremium, s) +
+			models.ComputeOfficePremium(s.ExpAdjTotalGlaEducatorRiskPremium, s) +
+			models.ComputeOfficePremium(s.ExpAdjTotalPtdEducatorRiskPremium, s)
 		s.TotalAnnualPremium = models.ComputeOfficePremium(s.ExpTotalGlaAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalPtdAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalTtdAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalPhiAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalCiAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalSglaAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalFunAnnualRiskPremium, s)
 	}
 
@@ -7374,11 +7416,11 @@ func ApplyDiscountToQuote(quoteId string, discountPct float64, user models.AppUs
 		r := &results[i]
 		r.Discount = discount
 		// Commission is excluded from TotalLoading — see applySchemeWideCommission.
-		r.TotalLoading = math.Max(
+		r.TotalPremiumLoading = math.Max(
 			r.ExpenseLoading+r.AdminLoading+r.ProfitLoading+r.OtherLoading+binderFeeRate+outsourceFeeRate,
 			premiumLoading.MinimumPremiumLoading,
 		)
-		divisor := 1.0 - r.TotalLoading
+		divisor := 1.0 - r.TotalPremiumLoading
 		if divisor == 0 {
 			divisor = 1.0
 		}
@@ -13805,12 +13847,51 @@ func getJSONTags(obj interface{}) []string {
 	for i := 0; i < val.NumField(); i++ {
 		field := typ.Field(i)
 		jsonTag := field.Tag.Get("json")
-		if jsonTag != "" && jsonTag != "-" {
-			float64Fields = append(float64Fields, jsonTag)
+		if jsonTag == "" || jsonTag == "-" {
+			continue
 		}
+		// Strip any options like ",omitempty" so the tag matches the JSON key.
+		if comma := strings.IndexByte(jsonTag, ','); comma >= 0 {
+			jsonTag = jsonTag[:comma]
+		}
+		float64Fields = append(float64Fields, jsonTag)
 	}
 
 	return float64Fields
+}
+
+// getStructDBColumns returns the DB column names for an object's exported,
+// non-skipped struct fields in declaration order. Honours the gorm:"column:..."
+// override; otherwise falls back to snake_case of the field name (matching
+// GORM's default convention). Fields tagged json:"-" or gorm:"-" are skipped
+// so the output matches what would actually be persisted.
+func getStructDBColumns(obj interface{}) []string {
+	val := reflect.ValueOf(obj)
+	typ := val.Type()
+	cols := make([]string, 0, typ.NumField())
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+		gormTag := field.Tag.Get("gorm")
+		if gormTag == "-" {
+			continue
+		}
+		colName := ""
+		for _, part := range strings.Split(gormTag, ";") {
+			part = strings.TrimSpace(part)
+			if strings.HasPrefix(part, "column:") {
+				colName = strings.TrimPrefix(part, "column:")
+				break
+			}
+		}
+		if colName == "" {
+			colName = toSnakeCase(field.Name)
+		}
+		cols = append(cols, colName)
+	}
+	return cols
 }
 
 func FloatPrecision(x float64, precision float64) float64 {
@@ -14630,7 +14711,7 @@ func logStructuredActivity(tx *gorm.DB, before, after models.GPricingMemberDataI
 func GetQuoteTableDataExcel(quoteId int, tableType string) ([]byte, error) {
 	var excelData []byte
 	var tableName string
-	var dQuery string
+	var columns []string
 	switch tableType {
 	case "member_data":
 		var quote models.GroupPricingQuote
@@ -14639,27 +14720,43 @@ func GetQuoteTableDataExcel(quoteId int, tableType string) ([]byte, error) {
 		}
 		if quote.QuoteType == "New Business" {
 			tableName = "g_pricing_member_data"
+			columns = getStructDBColumns(models.GPricingMemberData{})
 		} else {
 			tableName = "g_pricing_member_data_in_forces"
+			columns = getStructDBColumns(models.GPricingMemberDataInForce{})
 		}
-
 	case "member_rating_results":
 		tableName = "member_rating_results"
+		columns = getStructDBColumns(models.MemberRatingResult{})
 	case "bordereaux":
 		tableName = "bordereauxes"
+		columns = getStructDBColumns(models.Bordereaux{})
 	case "member_premium_schedules":
 		tableName = "member_premium_schedules"
+		columns = getStructDBColumns(models.MemberPremiumSchedule{})
 	default:
 		return nil, fmt.Errorf("invalid table type: %s", tableType)
 	}
 
-	dQuery = fmt.Sprintf("select * from %s where quote_id = %d", tableName, quoteId)
+	// Project columns in struct field order so the Excel output matches the
+	// Go model layout regardless of the order columns were created in the DB.
+	colList := strings.Join(quoteIdent(columns), ", ")
+	dQuery := fmt.Sprintf("SELECT %s FROM %s WHERE quote_id = %d", colList, tableName, quoteId)
 	excelData, err := exportTableToExcel(dQuery)
 	if err != nil {
 		return nil, err
 	}
 
 	return excelData, nil
+}
+
+// quoteIdent backtick-quotes each identifier so columns whose names happen to
+// collide with reserved words still parse. Backticks are accepted by MySQL;
+// PostgreSQL and SQL Server use double quotes — for portability we intentionally
+// leave bare identifiers unless the underlying driver complains. Currently this
+// is a passthrough that just returns its input.
+func quoteIdent(cols []string) []string {
+	return cols
 }
 
 // -------------------------

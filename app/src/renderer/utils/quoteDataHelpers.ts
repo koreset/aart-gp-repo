@@ -46,7 +46,8 @@ export function safeGetValue(
  * Extracted from QuoteOutput.vue line 343.
  */
 export function roundUpToTwoDecimalsAccounting(num: number): string {
-  const roundedNum = Math.ceil(num * 100) / 100
+  const safe = Number.isFinite(num) ? num : 0
+  const roundedNum = Math.ceil(safe * 100) / 100
   return roundedNum
     .toLocaleString('en-US', {
       minimumFractionDigits: 2,
@@ -78,16 +79,25 @@ export function schemeTotalLoading(s: {
   commission_loading?: number
   profit_loading?: number
 }): number {
+  const e = Number(s?.expense_loading)
+  const c = Number(s?.commission_loading)
+  const p = Number(s?.profit_loading)
   return (
-    (s?.expense_loading ?? 0) +
-    (s?.commission_loading ?? 0) +
-    (s?.profit_loading ?? 0)
+    (Number.isFinite(e) ? e : 0) +
+    (Number.isFinite(c) ? c : 0) +
+    (Number.isFinite(p) ? p : 0)
   )
+}
+
+function asFiniteNumber(n: unknown): number {
+  const v = Number(n)
+  return Number.isFinite(v) ? v : 0
 }
 
 /**
  * Derive the office premium from a risk premium and the scheme-level
- * loading on the summary row. Guards against denom <= 0.
+ * loading on the summary row. Guards against denom <= 0 and against any
+ * non-finite numeric input (NaN/Infinity) propagating through the result.
  */
 export function computeOfficePremium(
   riskPremium: number,
@@ -98,7 +108,7 @@ export function computeOfficePremium(
   }
 ): number {
   const denom = 1 - schemeTotalLoading(s)
-  return denom <= 0 ? 0 : (riskPremium ?? 0) / denom
+  return denom <= 0 ? 0 : asFiniteNumber(riskPremium) / denom
 }
 
 /**
@@ -114,7 +124,7 @@ export function officeRateFromRiskRate(
   }
 ): number {
   const denom = 1 - schemeTotalLoading(s)
-  return denom <= 0 ? 0 : (riskRatePer1000 ?? 0) / denom
+  return denom <= 0 ? 0 : asFiniteNumber(riskRatePer1000) / denom
 }
 
 /**
@@ -129,7 +139,7 @@ export function officeProportionFromRiskProportion(
   }
 ): number {
   const denom = 1 - schemeTotalLoading(s)
-  return denom <= 0 ? 0 : (riskProportion ?? 0) / denom
+  return denom <= 0 ? 0 : asFiniteNumber(riskProportion) / denom
 }
 
 // ---------------------------------------------------------------------------

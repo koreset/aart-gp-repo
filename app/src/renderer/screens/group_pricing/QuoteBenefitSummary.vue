@@ -285,6 +285,8 @@ const ttdBenefitTitle = ref('')
 const familyFuneralBenefitTitle = ref('')
 const additionalAccidentalGlaBenefitTitle = ref('Additional Accidental GLA')
 const additionalGlaCoverBenefitTitle = ref('Additional GLA Cover')
+const glaEducatorBenefitTitle = ref('GLA Educator')
+const ptdEducatorBenefitTitle = ref('PTD Educator')
 const benefitMaps = ref([])
 
 const props = defineProps({
@@ -751,6 +753,28 @@ const convertExcelDataToGridData = () => {
       })
     }
 
+    // GLA Educator rider (only for categories with the benefit enabled).
+    const schemeCategory = props.quote?.scheme_categories?.find(
+      (cat: any) => cat.scheme_category === category
+    )
+    if (schemeCategory?.gla_educator_benefit === 'Yes') {
+      gridData.push({
+        category,
+        benefit: glaEducatorBenefitTitle.value,
+        annualSalary: resultSummary.total_annual_salary,
+        totalSumAssured: resultSummary.total_educator_sum_assured,
+        annualPremium: computeOfficePremium(
+          resultSummary.exp_adj_total_gla_educator_risk_premium,
+          resultSummary
+        ),
+        percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_adj_proportion_gla_educator_risk_premium_salary, resultSummary) * 100)}%`,
+        ratePer1000SA: officeRateFromRiskRate(
+          resultSummary.exp_gla_educator_risk_rate_per_1000_sa,
+          resultSummary
+        )
+      })
+    }
+
     gridData.push({
       category,
       benefit: ptdBenefitTitle.value,
@@ -768,6 +792,25 @@ const convertExcelDataToGridData = () => {
         resultSummary
       )
     })
+
+    // PTD Educator rider (only for categories with the benefit enabled).
+    if (schemeCategory?.ptd_educator_benefit === 'Yes') {
+      gridData.push({
+        category,
+        benefit: ptdEducatorBenefitTitle.value,
+        annualSalary: resultSummary.total_annual_salary,
+        totalSumAssured: resultSummary.total_educator_sum_assured,
+        annualPremium: computeOfficePremium(
+          resultSummary.exp_adj_total_ptd_educator_risk_premium,
+          resultSummary
+        ),
+        percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_adj_proportion_ptd_educator_risk_premium_salary, resultSummary) * 100)}%`,
+        ratePer1000SA: officeRateFromRiskRate(
+          resultSummary.exp_ptd_educator_risk_rate_per_1000_sa,
+          resultSummary
+        )
+      })
+    }
 
     gridData.push({
       category,
@@ -841,7 +884,9 @@ const convertExcelDataToGridData = () => {
       )
     })
 
-    // Add subtotal row
+    // Add subtotal row. The backend's exp_total_annual_premium_excl_funeral
+    // already includes the GLA TaxSaver rider plus GLA Educator and PTD Educator
+    // on top of the six core benefits.
     const anyBenefitEnabled = ['GLA', 'PTD', 'CI', 'SGLA', 'PHI', 'TTD'].some(
       (benefitCode) => isBenefitEnabled(benefitCode, category)
     )
@@ -1006,6 +1051,22 @@ const convertExcelDataToGridData = () => {
               resultSummary
             ) || 0),
 
+          total_educator_sum_assured:
+            (acc.total_educator_sum_assured || 0) +
+            (resultSummary.total_educator_sum_assured || 0),
+          exp_adj_total_gla_educator_office_premium:
+            (acc.exp_adj_total_gla_educator_office_premium || 0) +
+            (computeOfficePremium(
+              resultSummary.exp_adj_total_gla_educator_risk_premium,
+              resultSummary
+            ) || 0),
+          exp_adj_total_ptd_educator_office_premium:
+            (acc.exp_adj_total_ptd_educator_office_premium || 0) +
+            (computeOfficePremium(
+              resultSummary.exp_adj_total_ptd_educator_risk_premium,
+              resultSummary
+            ) || 0),
+
           total_annual_salary:
             (acc.total_annual_salary || 0) +
             (resultSummary.total_annual_salary || 0)
@@ -1033,6 +1094,27 @@ const convertExcelDataToGridData = () => {
         : ''
     })
 
+    const anyCategoryHasGlaEducator = props.quote?.scheme_categories?.some(
+      (cat: any) => cat.gla_educator_benefit === 'Yes'
+    )
+    if (anyCategoryHasGlaEducator) {
+      gridData.push({
+        category: totalsCategory,
+        benefit: glaEducatorBenefitTitle.value,
+        annualSalary: totals.total_annual_salary,
+        totalSumAssured: totals.total_educator_sum_assured,
+        annualPremium: totals.exp_adj_total_gla_educator_office_premium,
+        percentSalary: `${roundUpToTwoDecimalsAccounting(
+          (totals.exp_adj_total_gla_educator_office_premium /
+            totals.total_annual_salary || 0) * 100
+        )}%`,
+        ratePer1000SA: totals.total_educator_sum_assured
+          ? (totals.exp_adj_total_gla_educator_office_premium * 1000) /
+            totals.total_educator_sum_assured
+          : ''
+      })
+    }
+
     gridData.push({
       category: totalsCategory,
       benefit: ptdBenefitTitle.value,
@@ -1045,6 +1127,27 @@ const convertExcelDataToGridData = () => {
           totals.total_ptd_capped_sum_assured
         : ''
     })
+
+    const anyCategoryHasPtdEducator = props.quote?.scheme_categories?.some(
+      (cat: any) => cat.ptd_educator_benefit === 'Yes'
+    )
+    if (anyCategoryHasPtdEducator) {
+      gridData.push({
+        category: totalsCategory,
+        benefit: ptdEducatorBenefitTitle.value,
+        annualSalary: totals.total_annual_salary,
+        totalSumAssured: totals.total_educator_sum_assured,
+        annualPremium: totals.exp_adj_total_ptd_educator_office_premium,
+        percentSalary: `${roundUpToTwoDecimalsAccounting(
+          (totals.exp_adj_total_ptd_educator_office_premium /
+            totals.total_annual_salary || 0) * 100
+        )}%`,
+        ratePer1000SA: totals.total_educator_sum_assured
+          ? (totals.exp_adj_total_ptd_educator_office_premium * 1000) /
+            totals.total_educator_sum_assured
+          : ''
+      })
+    }
 
     gridData.push({
       category: totalsCategory,
@@ -1244,6 +1347,24 @@ onMounted(() => {
       additionalGlaCoverBenefitTitle.value =
         additionalGlaCoverBenefit.benefit_alias ||
         additionalGlaCoverBenefit.benefit_name
+    }
+    const glaEducatorBenefit: any = benefitMaps.value.find(
+      (item: any) => item.benefit_code === 'GLA_EDU'
+    )
+    if (glaEducatorBenefit) {
+      glaEducatorBenefitTitle.value =
+        glaEducatorBenefit.benefit_alias?.trim() ||
+        glaEducatorBenefit.benefit_name ||
+        'GLA Educator'
+    }
+    const ptdEducatorBenefit: any = benefitMaps.value.find(
+      (item: any) => item.benefit_code === 'PTD_EDU'
+    )
+    if (ptdEducatorBenefit) {
+      ptdEducatorBenefitTitle.value =
+        ptdEducatorBenefit.benefit_alias?.trim() ||
+        ptdEducatorBenefit.benefit_name ||
+        'PTD Educator'
     }
   })
 })

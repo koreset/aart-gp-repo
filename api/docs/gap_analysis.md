@@ -567,7 +567,7 @@ These items represent compliance, data integrity, or security blockers.
    │   │   ├── Per-benefit: BaseRate × IndustryLoading × ExperienceAdj
    │   │   ├── Cap sum assured / income
    │   │   ├── RiskPremium = Rate × CappedSA
-   │   │   ├── OfficePremium = RiskPremium / (1 − TotalLoading)
+   │   │   ├── OfficePremium = RiskPremium / (1 − TotalPremiumLoading)
    │   │   └── Reinsurance cession (3-level quota share)
    │   └── Aggregate to MemberRatingResultSummary
    └── Save: MemberRatingResult, MemberPremiumSchedule, Bordereaux, Summary
