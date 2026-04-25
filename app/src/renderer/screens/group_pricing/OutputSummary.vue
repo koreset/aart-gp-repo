@@ -539,7 +539,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.total_gla_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.total_gla_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -548,7 +551,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_total_gla_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.exp_total_gla_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -557,7 +563,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_total_gla_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.exp_total_gla_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -574,7 +583,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.gla_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.gla_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -583,7 +595,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_gla_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.exp_gla_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -592,7 +607,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_gla_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.exp_gla_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -608,8 +626,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.proportion_gla_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.proportion_gla_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -618,8 +638,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_proportion_gla_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.exp_proportion_gla_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -628,8 +650,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_proportion_gla_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.exp_proportion_gla_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -1008,7 +1032,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.total_ptd_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.total_ptd_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1017,7 +1044,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_total_ptd_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.exp_total_ptd_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1026,7 +1056,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_total_ptd_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.exp_total_ptd_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1043,7 +1076,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.ptd_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.ptd_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1052,7 +1088,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_ptd_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.exp_ptd_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1061,7 +1100,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_ptd_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.exp_ptd_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1077,8 +1119,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.proportion_ptd_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.proportion_ptd_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -1087,8 +1131,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_proportion_ptd_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.exp_proportion_ptd_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -1097,8 +1143,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_proportion_ptd_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.exp_proportion_ptd_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -1475,7 +1523,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.total_ci_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.total_ci_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1484,7 +1535,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_total_ci_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.exp_total_ci_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1493,7 +1547,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_total_ci_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.exp_total_ci_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1510,7 +1567,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.ci_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.ci_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1519,7 +1579,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_ci_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.exp_ci_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1528,7 +1591,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_ci_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.exp_ci_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1544,8 +1610,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.proportion_ci_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.proportion_ci_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -1554,8 +1622,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_proportion_ci_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.exp_proportion_ci_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -1564,8 +1634,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_proportion_ci_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.exp_proportion_ci_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -1930,7 +2002,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.total_phi_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.total_phi_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1939,7 +2014,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_total_phi_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.exp_total_phi_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1948,7 +2026,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_total_phi_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.exp_total_phi_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1965,7 +2046,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.phi_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.phi_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1974,7 +2058,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_phi_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.exp_phi_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1983,7 +2070,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_phi_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.exp_phi_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -1999,8 +2089,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.proportion_phi_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.proportion_phi_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -2009,8 +2101,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_proportion_phi_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.exp_proportion_phi_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -2019,8 +2113,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_proportion_phi_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.exp_proportion_phi_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -2385,7 +2481,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.total_ttd_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.total_ttd_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -2394,7 +2493,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_total_ttd_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.exp_total_ttd_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -2403,7 +2505,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_total_ttd_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.exp_total_ttd_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -2420,7 +2525,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.ttd_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.ttd_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -2429,7 +2537,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_ttd_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.exp_ttd_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -2438,7 +2549,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_ttd_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.exp_ttd_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -2454,8 +2568,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.proportion_ttd_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.proportion_ttd_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -2464,8 +2580,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_proportion_ttd_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.exp_proportion_ttd_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -2474,8 +2592,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_proportion_ttd_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.exp_proportion_ttd_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -2856,7 +2976,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.total_sgla_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.total_sgla_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -2865,7 +2988,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_total_sgla_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.exp_total_sgla_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -2874,7 +3000,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_total_sgla_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.exp_total_sgla_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -2891,7 +3020,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.sgla_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.sgla_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -2900,7 +3032,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_sgla_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.exp_sgla_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -2909,7 +3044,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_sgla_office_rate_per_1000_sa
+                              officeRateFromRiskRate(
+                                resultSummary.exp_sgla_risk_rate_per_1000_sa,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -2925,8 +3063,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.proportion_sgla_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.proportion_sgla_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -2935,8 +3075,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_proportion_sgla_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.exp_proportion_sgla_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -2945,8 +3087,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_proportion_sgla_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.exp_proportion_sgla_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -3144,7 +3288,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.total_fun_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.total_fun_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -3153,7 +3300,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_total_fun_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.exp_total_fun_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -3162,7 +3312,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_total_fun_annual_office_premium
+                              computeOfficePremium(
+                                resultSummary.exp_total_fun_annual_risk_premium,
+                                resultSummary
+                              )
                             )
                           )
                         }}</p></v-col
@@ -3210,8 +3363,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.proportion_fun_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.proportion_fun_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -3220,8 +3375,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_proportion_fun_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.exp_proportion_fun_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -3230,8 +3387,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              resultSummary.exp_proportion_fun_office_premium_salary *
-                                100
+                              officeProportionFromRiskProportion(
+                                resultSummary.exp_proportion_fun_annual_risk_premium_salary,
+                                resultSummary
+                              ) * 100
                             )
                           ) + '%'
                         }}</p></v-col
@@ -3254,6 +3413,11 @@ import GroupPricingService from '@/renderer/api/GroupPricingService'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import { applyPlugin } from 'jspdf-autotable'
+import {
+  computeOfficePremium,
+  officeRateFromRiskRate,
+  officeProportionFromRiskProportion
+} from '@/renderer/utils/quoteDataHelpers'
 applyPlugin(jsPDF)
 
 const glaBenefitTitle = ref('Group Life Assurance (GLA)')
@@ -3359,10 +3523,46 @@ const SECTION_LABELS = [
 
 const getBenefitRows = (rs: any, code: string): string[][] => {
   const rows: string[][] = []
-  const th = (field: string) => fmtNum(rs[field])
-  const ex = (field: string) => fmtNum(rs[field])
-  const thP = (field: string) => fmtNum(rs[field], true)
-  const exP = (field: string) => fmtNum(rs[field], true)
+  // For office-premium / office-rate / office-proportion fields the canonical
+  // value is no longer persisted on the summary — derive on the fly from the
+  // matching risk-side field. The helpers detect the suffix and resolve it
+  // automatically so the field-name strings in the row tables stay readable.
+  const resolve = (field: string): number => {
+    if (field.includes('_office_premium')) {
+      const risk = field
+        .replace('_office_premium', '_risk_premium')
+        .replace('annual_risk_premium_salary', 'annual_risk_premium_salary')
+      // Total fields keep "annual"; proportions need different mapping.
+      return computeOfficePremium(
+        rs[risk] ?? rs[risk.replace('_risk_premium', '_annual_risk_premium')],
+        rs
+      )
+    }
+    if (field.includes('office_rate_per_1000_sa')) {
+      const risk = field.replace(
+        'office_rate_per_1000_sa',
+        'risk_rate_per_1000_sa'
+      )
+      return officeRateFromRiskRate(rs[risk] ?? 0, rs)
+    }
+    if (field.includes('office_premium_salary')) {
+      // proportion_<b>_office_premium_salary -> proportion_<b>_annual_risk_premium_salary
+      // (or for educator/conv slices: proportion_<b>_risk_premium_salary)
+      let risk = field.replace(
+        'office_premium_salary',
+        'annual_risk_premium_salary'
+      )
+      if (rs[risk] === undefined) {
+        risk = field.replace('office_premium_salary', 'risk_premium_salary')
+      }
+      return officeProportionFromRiskProportion(rs[risk] ?? 0, rs)
+    }
+    return rs[field] ?? 0
+  }
+  const th = (field: string) => fmtNum(resolve(field))
+  const ex = (field: string) => fmtNum(resolve(field))
+  const thP = (field: string) => fmtNum(resolve(field), true)
+  const exP = (field: string) => fmtNum(resolve(field), true)
   const row = (label: string, thVal: string, expVal: string) =>
     rows.push([label, thVal, expVal, expVal])
   const sec = (label: string) => rows.push([label, '', '', ''])

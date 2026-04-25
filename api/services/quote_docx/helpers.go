@@ -40,6 +40,20 @@ func RoundUpToTwoDecimalsAccounting(num float64) string {
 	return result.String()
 }
 
+// officePercentSalary derives a benefit's office premium proportion of
+// salary as a printable percent string, from the persisted
+// risk-proportion-of-salary field on the summary. Office =
+// risk / (1 - SchemeTotalLoading()), so the same factor scales the
+// proportion. Returns "0%" when the scheme loading saturates the
+// denominator.
+func officePercentSalary(item models.MemberRatingResultSummary, riskProportion float64) string {
+	denom := 1.0 - item.SchemeTotalLoading()
+	if denom <= 0 {
+		return "0%"
+	}
+	return fmt.Sprintf("%s%%", RoundUpToTwoDecimalsAccounting(riskProportion*100/denom))
+}
+
 // FormatQuoteDate formats time.Time to "02 Jan 2006" format
 func FormatQuoteDate(t time.Time) string {
 	if t.IsZero() {
@@ -155,7 +169,7 @@ func BuildGroupFuneralRows(summaries []models.MemberRatingResultSummary) []Group
 			MemberCount:        fmt.Sprintf("%.0f", item.MemberCount),
 			MonthlyPremium:     RoundUpToTwoDecimalsAccounting(item.ExpTotalFunMonthlyPremiumPerMember),
 			AnnualPremium:      RoundUpToTwoDecimalsAccounting(item.ExpTotalFunAnnualPremiumPerMember),
-			TotalAnnualPremium: RoundUpToTwoDecimalsAccounting(item.ExpTotalFunAnnualOfficePremium),
+			TotalAnnualPremium: RoundUpToTwoDecimalsAccounting(models.ComputeOfficePremium(item.ExpTotalFunAnnualRiskPremium, &item)),
 		})
 	}
 
@@ -169,7 +183,7 @@ func BuildGroupFuneralRows(summaries []models.MemberRatingResultSummary) []Group
 		totalLives += item.MemberCount
 		totalMonthly += item.ExpTotalFunMonthlyPremiumPerMember
 		totalAnnual += item.ExpTotalFunAnnualPremiumPerMember
-		totalAnnualOffice += item.ExpTotalFunAnnualOfficePremium
+		totalAnnualOffice += models.ComputeOfficePremium(item.ExpTotalFunAnnualRiskPremium, &item)
 	}
 
 	rows = append(rows, GroupFuneralRow{
@@ -189,38 +203,38 @@ func BuildPremiumBreakdownRows(item models.MemberRatingResultSummary, titles Ben
 		{
 			Benefit:         titles.GlaBenefitTitle,
 			TotalSumAssured: RoundUpToTwoDecimalsAccounting(item.TotalGlaCappedSumAssured),
-			AnnualPremium:   RoundUpToTwoDecimalsAccounting(item.ExpTotalGlaAnnualOfficePremium),
-			PercentSalary:   fmt.Sprintf("%s%%", RoundUpToTwoDecimalsAccounting(item.ExpProportionGlaOfficePremiumSalary*100)),
+			AnnualPremium:   RoundUpToTwoDecimalsAccounting(models.ComputeOfficePremium(item.ExpTotalGlaAnnualRiskPremium, &item)),
+			PercentSalary:   officePercentSalary(item, item.ExpProportionGlaAnnualRiskPremiumSalary),
 		},
 		{
 			Benefit:         titles.SglaBenefitTitle,
 			TotalSumAssured: RoundUpToTwoDecimalsAccounting(item.TotalSglaCappedSumAssured),
-			AnnualPremium:   RoundUpToTwoDecimalsAccounting(item.ExpTotalSglaAnnualOfficePremium),
-			PercentSalary:   fmt.Sprintf("%s%%", RoundUpToTwoDecimalsAccounting(item.ExpProportionSglaOfficePremiumSalary*100)),
+			AnnualPremium:   RoundUpToTwoDecimalsAccounting(models.ComputeOfficePremium(item.ExpTotalSglaAnnualRiskPremium, &item)),
+			PercentSalary:   officePercentSalary(item, item.ExpProportionSglaAnnualRiskPremiumSalary),
 		},
 		{
 			Benefit:         titles.PtdBenefitTitle,
 			TotalSumAssured: RoundUpToTwoDecimalsAccounting(item.TotalPtdCappedSumAssured),
-			AnnualPremium:   RoundUpToTwoDecimalsAccounting(item.ExpTotalPtdAnnualOfficePremium),
-			PercentSalary:   fmt.Sprintf("%s%%", RoundUpToTwoDecimalsAccounting(item.ExpProportionPtdOfficePremiumSalary*100)),
+			AnnualPremium:   RoundUpToTwoDecimalsAccounting(models.ComputeOfficePremium(item.ExpTotalPtdAnnualRiskPremium, &item)),
+			PercentSalary:   officePercentSalary(item, item.ExpProportionPtdAnnualRiskPremiumSalary),
 		},
 		{
 			Benefit:         titles.CiBenefitTitle,
 			TotalSumAssured: RoundUpToTwoDecimalsAccounting(item.TotalCiCappedSumAssured),
-			AnnualPremium:   RoundUpToTwoDecimalsAccounting(item.ExpTotalCiAnnualOfficePremium),
-			PercentSalary:   fmt.Sprintf("%s%%", RoundUpToTwoDecimalsAccounting(item.ExpProportionCiOfficePremiumSalary*100)),
+			AnnualPremium:   RoundUpToTwoDecimalsAccounting(models.ComputeOfficePremium(item.ExpTotalCiAnnualRiskPremium, &item)),
+			PercentSalary:   officePercentSalary(item, item.ExpProportionCiAnnualRiskPremiumSalary),
 		},
 		{
 			Benefit:         titles.PhiBenefitTitle,
 			TotalSumAssured: RoundUpToTwoDecimalsAccounting(item.TotalPhiCappedIncome),
-			AnnualPremium:   RoundUpToTwoDecimalsAccounting(item.ExpTotalPhiAnnualOfficePremium),
-			PercentSalary:   fmt.Sprintf("%s%%", RoundUpToTwoDecimalsAccounting(item.ExpProportionPhiOfficePremiumSalary*100)),
+			AnnualPremium:   RoundUpToTwoDecimalsAccounting(models.ComputeOfficePremium(item.ExpTotalPhiAnnualRiskPremium, &item)),
+			PercentSalary:   officePercentSalary(item, item.ExpProportionPhiAnnualRiskPremiumSalary),
 		},
 		{
 			Benefit:         titles.TtdBenefitTitle,
 			TotalSumAssured: RoundUpToTwoDecimalsAccounting(item.TotalTtdCappedIncome),
-			AnnualPremium:   RoundUpToTwoDecimalsAccounting(item.ExpTotalTtdAnnualOfficePremium),
-			PercentSalary:   fmt.Sprintf("%s%%", RoundUpToTwoDecimalsAccounting(item.ExpProportionTtdOfficePremiumSalary*100)),
+			AnnualPremium:   RoundUpToTwoDecimalsAccounting(models.ComputeOfficePremium(item.ExpTotalTtdAnnualRiskPremium, &item)),
+			PercentSalary:   officePercentSalary(item, item.ExpProportionTtdAnnualRiskPremiumSalary),
 		},
 	}
 }
@@ -238,7 +252,7 @@ func BuildGroupFuneralBreakdownRows(item models.MemberRatingResultSummary) []Lab
 		},
 		{
 			Label: "Total Annual Premium",
-			Value: RoundUpToTwoDecimalsAccounting(item.ExpTotalFunAnnualOfficePremium),
+			Value: RoundUpToTwoDecimalsAccounting(models.ComputeOfficePremium(item.ExpTotalFunAnnualRiskPremium, &item)),
 		},
 	}
 }

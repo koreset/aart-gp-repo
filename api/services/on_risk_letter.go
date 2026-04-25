@@ -134,13 +134,13 @@ func buildBenefitSummary(summaries []models.MemberRatingResultSummary) []Benefit
 	var gla, ptd, ci, sgla, ttd, phi, funeral float64
 
 	for _, s := range summaries {
-		gla += s.ExpTotalGlaAnnualOfficePremium
-		ptd += s.ExpTotalPtdAnnualOfficePremium
-		ci += s.ExpTotalCiAnnualOfficePremium
-		sgla += s.ExpTotalSglaAnnualOfficePremium
-		ttd += s.ExpTotalTtdAnnualOfficePremium
-		phi += s.ExpTotalPhiAnnualOfficePremium
-		funeral += s.ExpTotalFunAnnualOfficePremium
+		gla += models.ComputeOfficePremium(s.ExpTotalGlaAnnualRiskPremium, &s)
+		ptd += models.ComputeOfficePremium(s.ExpTotalPtdAnnualRiskPremium, &s)
+		ci += models.ComputeOfficePremium(s.ExpTotalCiAnnualRiskPremium, &s)
+		sgla += models.ComputeOfficePremium(s.ExpTotalSglaAnnualRiskPremium, &s)
+		ttd += models.ComputeOfficePremium(s.ExpTotalTtdAnnualRiskPremium, &s)
+		phi += models.ComputeOfficePremium(s.ExpTotalPhiAnnualRiskPremium, &s)
+		funeral += models.ComputeOfficePremium(s.ExpTotalFunAnnualRiskPremium, &s)
 	}
 
 	var lines []BenefitPremiumLine

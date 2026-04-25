@@ -1681,9 +1681,10 @@ func GenerateMemberBordereaux(ctx context.Context, req GenerateBordereauxRequest
 			continue
 		}
 
+		glaCappedSA := math.Max(r.AnnualSalary*r.Benefits.GlaMultiple, rate.FreeCoverLimit)
+		glaRiskPremium := glaCappedSA * rate.ExpGlaRiskRatePer1000SA / 1000
 		glaAnnualPremium := utils.FloatPrecision(
-			math.Max(r.AnnualSalary*r.Benefits.GlaMultiple, rate.FreeCoverLimit)*
-				rate.ExpGlaOfficeRatePer1000SA/1000,
+			models.ComputeOfficePremium(glaRiskPremium, &rate),
 			AccountingPrecision,
 		)
 
@@ -2609,17 +2610,17 @@ func resolvePremiumSourceField(path string, b models.GPricingMemberDataInForce, 
 	case "annual_salary":
 		return b.AnnualSalary, true
 	case "gla.annual_premium", "gla_annual_premium":
-		return utils.FloatPrecision(b.AnnualSalary*mrss.ExpProportionGlaOfficePremiumSalary/12.0, AccountingPrecision), true
+		return utils.FloatPrecision(monthlyOfficeFromRiskProportion(b.AnnualSalary, mrss.ExpProportionGlaAnnualRiskPremiumSalary, &mrss), AccountingPrecision), true
 	case "sgla.annual_premium", "sgla_annual_premium":
-		return utils.FloatPrecision(b.AnnualSalary*mrss.ExpProportionSglaOfficePremiumSalary/12.0, AccountingPrecision), true
+		return utils.FloatPrecision(monthlyOfficeFromRiskProportion(b.AnnualSalary, mrss.ExpProportionSglaAnnualRiskPremiumSalary, &mrss), AccountingPrecision), true
 	case "ptd.annual_premium", "ptd_annual_premium":
-		return utils.FloatPrecision(b.AnnualSalary*mrss.ExpProportionPtdOfficePremiumSalary/12.0, AccountingPrecision), true
+		return utils.FloatPrecision(monthlyOfficeFromRiskProportion(b.AnnualSalary, mrss.ExpProportionPtdAnnualRiskPremiumSalary, &mrss), AccountingPrecision), true
 	case "ci.annual_premium", "ci_annual_premium":
-		return utils.FloatPrecision(b.AnnualSalary*mrss.ExpProportionCiOfficePremiumSalary/12.0, AccountingPrecision), true
+		return utils.FloatPrecision(monthlyOfficeFromRiskProportion(b.AnnualSalary, mrss.ExpProportionCiAnnualRiskPremiumSalary, &mrss), AccountingPrecision), true
 	case "ttd.annual_premium", "ttd_annual_premium":
-		return utils.FloatPrecision(b.AnnualSalary*mrss.ExpProportionTtdOfficePremiumSalary/12.0, AccountingPrecision), true
+		return utils.FloatPrecision(monthlyOfficeFromRiskProportion(b.AnnualSalary, mrss.ExpProportionTtdAnnualRiskPremiumSalary, &mrss), AccountingPrecision), true
 	case "phi.annual_premium", "phi_annual_premium":
-		return utils.FloatPrecision(b.AnnualSalary*mrss.ExpProportionPhiOfficePremiumSalary/12.0, AccountingPrecision), true
+		return utils.FloatPrecision(monthlyOfficeFromRiskProportion(b.AnnualSalary, mrss.ExpProportionPhiAnnualRiskPremiumSalary, &mrss), AccountingPrecision), true
 	case "total_annual_premium_excl_funeral", "premium.total_annual_excl_funeral":
 		return utils.FloatPrecision(b.AnnualSalary*mrss.ProportionExpTotalPremiumExclFuneralSalary/12.0, AccountingPrecision), true
 	case "total_annual_funeral_premium", "total_funeral_premium":
@@ -3674,6 +3675,20 @@ func batchFetchSchemeNames(ctx context.Context, ids map[int]struct{}) (map[int]s
 		names[int(s.ID)] = s.Name // cast s.ID if it's uint
 	}
 	return names, nil
+}
+
+// monthlyOfficeFromRiskProportion derives a member's monthly office premium
+// share from the scheme-level proportion of annual risk premium to salary.
+// Office = risk / (1 - SchemeTotalLoading()), then divided by 12 for monthly.
+func monthlyOfficeFromRiskProportion(annualSalary, riskProportion float64, s *models.MemberRatingResultSummary) float64 {
+	if s == nil {
+		return 0
+	}
+	denom := 1.0 - s.SchemeTotalLoading()
+	if denom <= 0 {
+		return 0
+	}
+	return annualSalary * riskProportion / denom / 12.0
 }
 
 // monthIntToName converts a 1-based month integer to its English name.

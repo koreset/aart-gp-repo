@@ -182,13 +182,13 @@ func deriveBenefitFlags(s models.MemberRatingResultSummary, cat models.SchemeCat
 		CI:                      s.TotalCiCappedSumAssured > 0,
 		PHI:                     s.TotalPhiCappedIncome > 0,
 		TTD:                     s.TotalTtdCappedIncome > 0,
-		Funeral:                 s.TotalFunAnnualOfficePremium > 0 || cat.FamilyFuneralBenefit,
+		Funeral:                 models.ComputeOfficePremium(s.TotalFunAnnualRiskPremium, &s) > 0 || cat.FamilyFuneralBenefit,
 		AdditionalGla:           s.AdditionalGlaCoverBenefit,
 		AdditionalAccidentalGla: s.TotalAdditionalAccidentalGlaCappedSumAssured > 0,
-		GlaEducator:             s.TotalGlaEducatorOfficePremium > 0 || cat.GlaEducatorBenefit != "",
-		PtdEducator:             s.TotalPtdEducatorOfficePremium > 0 || cat.PtdEducatorBenefit != "",
+		GlaEducator:             models.ComputeOfficePremium(s.TotalGlaEducatorRiskPremium, &s) > 0 || cat.GlaEducatorBenefit != "",
+		PtdEducator:             models.ComputeOfficePremium(s.TotalPtdEducatorRiskPremium, &s) > 0 || cat.PtdEducatorBenefit != "",
 		ExtendedFamily:          s.ExtendedFamilyBenefit,
-		TaxSaver:                s.TaxSaverBenefit || s.ExpTotalTaxSaverAnnualOfficePremium > 0,
+		TaxSaver:                s.TaxSaverBenefit || models.ComputeOfficePremium(s.ExpTotalTaxSaverAnnualRiskPremium, &s) > 0,
 	}
 }
 
@@ -270,10 +270,10 @@ func categoryScalarFields(
 		{Key: "premium", Label: "Premium (excl. funeral)", Value: money(s.ExpTotalAnnualPremiumExclFuneral)},
 		{Key: "percent_salary", Label: "Premium as % of Salary", Value: formatPercent(s.ProportionExpTotalPremiumExclFuneralSalary)},
 		{Key: "free_cover_limit", Label: "Free Cover Limit (category override)", Value: money(cat.FreeCoverLimit)},
-		{Key: fmt.Sprintf("%s_rate_per_1000", n.GLA.Code), Label: fmt.Sprintf("%s Rate per 1,000 SA", n.GLA.Title), Value: money(s.ExpGlaOfficeRatePer1000SA)},
-		{Key: fmt.Sprintf("%s_rate_per_1000", n.SGLA.Code), Label: fmt.Sprintf("%s Rate per 1,000 SA", n.SGLA.Title), Value: money(s.ExpSglaOfficeRatePer1000SA)},
-		{Key: fmt.Sprintf("%s_rate_per_1000", n.PTD.Code), Label: fmt.Sprintf("%s Rate per 1,000 SA", n.PTD.Title), Value: money(s.ExpPtdOfficeRatePer1000SA)},
-		{Key: fmt.Sprintf("%s_rate_per_1000", n.CI.Code), Label: fmt.Sprintf("%s Rate per 1,000 SA", n.CI.Title), Value: money(s.ExpCiOfficeRatePer1000SA)},
+		{Key: fmt.Sprintf("%s_rate_per_1000", n.GLA.Code), Label: fmt.Sprintf("%s Rate per 1,000 SA", n.GLA.Title), Value: money(officeRateFromRiskRate(s.ExpGlaRiskRatePer1000SA, &s))},
+		{Key: fmt.Sprintf("%s_rate_per_1000", n.SGLA.Code), Label: fmt.Sprintf("%s Rate per 1,000 SA", n.SGLA.Title), Value: money(officeRateFromRiskRate(s.ExpSglaRiskRatePer1000SA, &s))},
+		{Key: fmt.Sprintf("%s_rate_per_1000", n.PTD.Code), Label: fmt.Sprintf("%s Rate per 1,000 SA", n.PTD.Title), Value: money(officeRateFromRiskRate(s.ExpPtdRiskRatePer1000SA, &s))},
+		{Key: fmt.Sprintf("%s_rate_per_1000", n.CI.Code), Label: fmt.Sprintf("%s Rate per 1,000 SA", n.CI.Title), Value: money(officeRateFromRiskRate(s.ExpCiRiskRatePer1000SA, &s))},
 		{Key: "retirement_premium_waiver", Label: "Retirement Premium Waiver", Value: orDash(cat.PhiPremiumWaiver)},
 		{Key: "medical_aid_premium_waiver", Label: "Medical Aid Premium Waiver", Value: orDash(cat.PhiMedicalAidPremiumWaiver)},
 		{Key: fmt.Sprintf("%s_terminal_illness_benefit", n.GLA.Code), Label: fmt.Sprintf("%s Terminal Illness Benefit", n.GLA.Title), Value: orDash(cat.GlaTerminalIllnessBenefit)},
@@ -301,27 +301,27 @@ func categoryRatingSummaryFields(s models.MemberRatingResultSummary, n benefitNa
 	fs = append(fs, benefitRatingBlock(n.GLA, false,
 		s.TotalGlaCappedSumAssured, s.ExpTotalGlaRiskRate, s.ExpTotalGlaAnnualRiskPremium,
 		s.ExpGlaRiskRatePer1000SA, s.ExpProportionGlaAnnualRiskPremiumSalary,
-		s.ExpTotalGlaAnnualOfficePremium, s.ExpGlaOfficeRatePer1000SA, s.ExpProportionGlaOfficePremiumSalary)...)
+		models.ComputeOfficePremium(s.ExpTotalGlaAnnualRiskPremium, &s), officeRateFromRiskRate(s.ExpGlaRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionGlaAnnualRiskPremiumSalary, &s))...)
 	fs = append(fs, benefitRatingBlock(n.PTD, false,
 		s.TotalPtdCappedSumAssured, s.ExpTotalPtdRiskRate, s.ExpTotalPtdAnnualRiskPremium,
 		s.ExpPtdRiskRatePer1000SA, s.ExpProportionPtdAnnualRiskPremiumSalary,
-		s.ExpTotalPtdAnnualOfficePremium, s.ExpPtdOfficeRatePer1000SA, s.ExpProportionPtdOfficePremiumSalary)...)
+		models.ComputeOfficePremium(s.ExpTotalPtdAnnualRiskPremium, &s), officeRateFromRiskRate(s.ExpPtdRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionPtdAnnualRiskPremiumSalary, &s))...)
 	fs = append(fs, benefitRatingBlock(n.CI, false,
 		s.TotalCiCappedSumAssured, s.ExpTotalCiRiskRate, s.ExpTotalCiAnnualRiskPremium,
 		s.ExpCiRiskRatePer1000SA, s.ExpProportionCiAnnualRiskPremiumSalary,
-		s.ExpTotalCiAnnualOfficePremium, s.ExpCiOfficeRatePer1000SA, s.ExpProportionCiOfficePremiumSalary)...)
+		models.ComputeOfficePremium(s.ExpTotalCiAnnualRiskPremium, &s), officeRateFromRiskRate(s.ExpCiRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionCiAnnualRiskPremiumSalary, &s))...)
 	fs = append(fs, benefitRatingBlock(n.SGLA, false,
 		s.TotalSglaCappedSumAssured, s.ExpTotalSglaRiskRate, s.ExpTotalSglaAnnualRiskPremium,
 		s.ExpSglaRiskRatePer1000SA, s.ExpProportionSglaAnnualRiskPremiumSalary,
-		s.ExpTotalSglaAnnualOfficePremium, s.ExpSglaOfficeRatePer1000SA, s.ExpProportionSglaOfficePremiumSalary)...)
+		models.ComputeOfficePremium(s.ExpTotalSglaAnnualRiskPremium, &s), officeRateFromRiskRate(s.ExpSglaRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionSglaAnnualRiskPremiumSalary, &s))...)
 	fs = append(fs, benefitRatingBlock(n.TTD, true,
 		s.TotalTtdCappedIncome, s.ExpTotalTtdRiskRate, s.ExpTotalTtdAnnualRiskPremium,
 		s.ExpTtdRiskRatePer1000SA, s.ExpProportionTtdAnnualRiskPremiumSalary,
-		s.ExpTotalTtdAnnualOfficePremium, s.ExpTtdOfficeRatePer1000SA, s.ExpProportionTtdOfficePremiumSalary)...)
+		models.ComputeOfficePremium(s.ExpTotalTtdAnnualRiskPremium, &s), officeRateFromRiskRate(s.ExpTtdRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionTtdAnnualRiskPremiumSalary, &s))...)
 	fs = append(fs, benefitRatingBlock(n.PHI, true,
 		s.TotalPhiCappedIncome, s.ExpTotalPhiRiskRate, s.ExpTotalPhiAnnualRiskPremium,
 		s.ExpPhiRiskRatePer1000SA, s.ExpProportionPhiAnnualRiskPremiumSalary,
-		s.ExpTotalPhiAnnualOfficePremium, s.ExpPhiOfficeRatePer1000SA, s.ExpProportionPhiOfficePremiumSalary)...)
+		models.ComputeOfficePremium(s.ExpTotalPhiAnnualRiskPremium, &s), officeRateFromRiskRate(s.ExpPhiRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionPhiAnnualRiskPremiumSalary, &s))...)
 
 	// Funeral + aggregate. "monthly" stays on the monthly-premium-per-member
 	// key to disambiguate it from the (default) annual sibling, but the
@@ -329,8 +329,8 @@ func categoryRatingSummaryFields(s models.MemberRatingResultSummary, n benefitNa
 	fs = append(fs,
 		Field{Key: fmt.Sprintf("total_%s_risk_premium", n.Funeral.Code), Label: fmt.Sprintf("%s — Total Risk Premium", n.Funeral.Title), Value: money(s.ExpTotalFunAnnualRiskPremium)},
 		Field{Key: fmt.Sprintf("proportion_%s_risk_premium_salary", n.Funeral.Code), Label: fmt.Sprintf("%s — Risk Premium as %% of Salary", n.Funeral.Title), Value: formatPercent(s.ExpProportionFunAnnualRiskPremiumSalary)},
-		Field{Key: fmt.Sprintf("total_%s_office_premium", n.Funeral.Code), Label: fmt.Sprintf("%s — Total Office Premium", n.Funeral.Title), Value: money(s.ExpTotalFunAnnualOfficePremium)},
-		Field{Key: fmt.Sprintf("proportion_%s_office_premium_salary", n.Funeral.Code), Label: fmt.Sprintf("%s — Office Premium as %% of Salary", n.Funeral.Title), Value: formatPercent(s.ExpProportionFunOfficePremiumSalary)},
+		Field{Key: fmt.Sprintf("total_%s_office_premium", n.Funeral.Code), Label: fmt.Sprintf("%s — Total Office Premium", n.Funeral.Title), Value: money(models.ComputeOfficePremium(s.ExpTotalFunAnnualRiskPremium, &s))},
+		Field{Key: fmt.Sprintf("proportion_%s_office_premium_salary", n.Funeral.Code), Label: fmt.Sprintf("%s — Office Premium as %% of Salary", n.Funeral.Title), Value: formatPercent(officeProportionFromRiskProportion(s.ExpProportionFunAnnualRiskPremiumSalary, &s))},
 		Field{Key: fmt.Sprintf("total_%s_premium_per_member", n.Funeral.Code), Label: fmt.Sprintf("%s — Premium per Member", n.Funeral.Title), Value: money(s.ExpTotalFunAnnualPremiumPerMember)},
 		Field{Key: fmt.Sprintf("total_%s_monthly_premium_per_member", n.Funeral.Code), Label: fmt.Sprintf("%s — Monthly Premium per Member", n.Funeral.Title), Value: money(s.ExpTotalFunMonthlyPremiumPerMember)},
 		Field{Key: "total_premium_excl_funeral", Label: "Total Premium (excluding Funeral)", Value: money(s.ExpTotalAnnualPremiumExclFuneral)},
@@ -347,9 +347,9 @@ func categoryRatingSummaryFields(s models.MemberRatingResultSummary, n benefitNa
 		Field{Key: fmt.Sprintf("total_%s_risk_premium", ab.Code), Label: fmt.Sprintf("%s — Total Risk Premium", ab.Title), Value: money(s.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium)},
 		Field{Key: fmt.Sprintf("%s_risk_rate_per1000_sa", ab.Code), Label: fmt.Sprintf("%s — Risk Rate per 1,000 SA", ab.Title), Value: money(s.ExpAdditionalAccidentalGlaRiskRatePer1000SA)},
 		Field{Key: fmt.Sprintf("prop_%s_risk_premium_salary", ab.Code), Label: fmt.Sprintf("%s — Risk Premium as %% of Salary", ab.Title), Value: formatPercent(s.ExpProportionAdditionalAccidentalGlaAnnualRiskPremiumSalary)},
-		Field{Key: fmt.Sprintf("total_%s_office_premium", ab.Code), Label: fmt.Sprintf("%s — Total Office Premium", ab.Title), Value: money(s.ExpTotalAdditionalAccidentalGlaAnnualOfficePremium)},
-		Field{Key: fmt.Sprintf("%s_office_rate_per1000_sa", ab.Code), Label: fmt.Sprintf("%s — Office Rate per 1,000 SA", ab.Title), Value: money(s.ExpAdditionalAccidentalGlaOfficeRatePer1000SA)},
-		Field{Key: fmt.Sprintf("proportion_%s_office_premium_salary", ab.Code), Label: fmt.Sprintf("%s — Office Premium as %% of Salary", ab.Title), Value: formatPercent(s.ExpProportionAdditionalAccidentalGlaOfficePremiumSalary)},
+		Field{Key: fmt.Sprintf("total_%s_office_premium", ab.Code), Label: fmt.Sprintf("%s — Total Office Premium", ab.Title), Value: money(models.ComputeOfficePremium(s.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium, &s))},
+		Field{Key: fmt.Sprintf("%s_office_rate_per1000_sa", ab.Code), Label: fmt.Sprintf("%s — Office Rate per 1,000 SA", ab.Title), Value: money(officeRateFromRiskRate(s.ExpAdditionalAccidentalGlaRiskRatePer1000SA, &s))},
+		Field{Key: fmt.Sprintf("proportion_%s_office_premium_salary", ab.Code), Label: fmt.Sprintf("%s — Office Premium as %% of Salary", ab.Title), Value: formatPercent(officeProportionFromRiskProportion(s.ExpProportionAdditionalAccidentalGlaAnnualRiskPremiumSalary, &s))},
 	)
 
 	// Binder & outsource amounts. Add Acc GLA uses ShortCode for these keys.
@@ -380,7 +380,7 @@ func categoryRatingSummaryFields(s models.MemberRatingResultSummary, n benefitNa
 	tb := n.TaxSaver
 	fs = append(fs,
 		Field{Key: fmt.Sprintf("total_%s_risk_premium", tb.Code), Label: fmt.Sprintf("%s — Total Risk Premium", tb.Title), Value: money(s.ExpTotalTaxSaverAnnualRiskPremium)},
-		Field{Key: fmt.Sprintf("total_%s_office_premium", tb.Code), Label: fmt.Sprintf("%s — Total Office Premium", tb.Title), Value: money(s.ExpTotalTaxSaverAnnualOfficePremium)},
+		Field{Key: fmt.Sprintf("total_%s_office_premium", tb.Code), Label: fmt.Sprintf("%s — Total Office Premium", tb.Title), Value: money(models.ComputeOfficePremium(s.ExpTotalTaxSaverAnnualRiskPremium, &s))},
 	)
 
 	return fs
@@ -461,15 +461,15 @@ func benefitCommissionField(b benefitName, amount float64, useShort bool) Field 
 func categoryEducatorSummaryFields(s models.MemberRatingResultSummary, n benefitNaming) []Field {
 	var fs []Field
 	fs = append(fs, educatorSplitBlock(n.GlaEducator,
-		s.ExpAdjTotalGlaEducatorRiskPremium, s.ExpAdjTotalGlaEducatorOfficePremium,
-		s.ExpAdjProportionGlaEducatorRiskPremiumSalary, s.ExpAdjProportionGlaEducatorOfficePremiumSalary,
-		s.ExpGlaEducatorRiskRatePer1000SA, s.ExpGlaEducatorOfficeRatePer1000SA,
+		s.ExpAdjTotalGlaEducatorRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalGlaEducatorRiskPremium, &s),
+		s.ExpAdjProportionGlaEducatorRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionGlaEducatorRiskPremiumSalary, &s),
+		s.ExpGlaEducatorRiskRatePer1000SA, officeRateFromRiskRate(s.ExpGlaEducatorRiskRatePer1000SA, &s),
 		s.ExpAdjTotalGlaEducatorBinderAmount, s.ExpAdjTotalGlaEducatorOutsourcedAmount,
 		s.ExpAdjTotalGlaEducatorCommissionAmount)...)
 	fs = append(fs, educatorSplitBlock(n.PtdEducator,
-		s.ExpAdjTotalPtdEducatorRiskPremium, s.ExpAdjTotalPtdEducatorOfficePremium,
-		s.ExpAdjProportionPtdEducatorRiskPremiumSalary, s.ExpAdjProportionPtdEducatorOfficePremiumSalary,
-		s.ExpPtdEducatorRiskRatePer1000SA, s.ExpPtdEducatorOfficeRatePer1000SA,
+		s.ExpAdjTotalPtdEducatorRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalPtdEducatorRiskPremium, &s),
+		s.ExpAdjProportionPtdEducatorRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionPtdEducatorRiskPremiumSalary, &s),
+		s.ExpPtdEducatorRiskRatePer1000SA, officeRateFromRiskRate(s.ExpPtdEducatorRiskRatePer1000SA, &s),
 		s.ExpAdjTotalPtdEducatorBinderAmount, s.ExpAdjTotalPtdEducatorOutsourcedAmount,
 		s.ExpAdjTotalPtdEducatorCommissionAmount)...)
 	return fs
@@ -508,67 +508,67 @@ func categoryConversionSliceFields(s models.MemberRatingResultSummary, n benefit
 
 	// GLA slices
 	fs = append(fs, conversionSliceBlock(n.GLA, "conv_on_wdr", "Conversion on Withdrawal",
-		s.ExpAdjTotalGlaConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalGlaConversionOnWithdrawalAnnualOfficePremium,
-		s.ExpAdjProportionGlaConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionGlaConversionOnWithdrawalOfficePremiumSalary,
-		s.ExpGlaConversionOnWithdrawalRiskRatePer1000SA, s.ExpGlaConversionOnWithdrawalOfficeRatePer1000SA)...)
+		s.ExpAdjTotalGlaConversionOnWithdrawalAnnualRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalGlaConversionOnWithdrawalAnnualRiskPremium, &s),
+		s.ExpAdjProportionGlaConversionOnWithdrawalRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionGlaConversionOnWithdrawalRiskPremiumSalary, &s),
+		s.ExpGlaConversionOnWithdrawalRiskRatePer1000SA, officeRateFromRiskRate(s.ExpGlaConversionOnWithdrawalRiskRatePer1000SA, &s))...)
 	fs = append(fs, conversionSliceBlock(n.GLA, "conv_on_ret", "Conversion on Retirement",
-		s.ExpAdjTotalGlaConversionOnRetirementAnnualRiskPremium, s.ExpAdjTotalGlaConversionOnRetirementAnnualOfficePremium,
-		s.ExpAdjProportionGlaConversionOnRetirementRiskPremiumSalary, s.ExpAdjProportionGlaConversionOnRetirementOfficePremiumSalary,
-		s.ExpGlaConversionOnRetirementRiskRatePer1000SA, s.ExpGlaConversionOnRetirementOfficeRatePer1000SA)...)
+		s.ExpAdjTotalGlaConversionOnRetirementAnnualRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalGlaConversionOnRetirementAnnualRiskPremium, &s),
+		s.ExpAdjProportionGlaConversionOnRetirementRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionGlaConversionOnRetirementRiskPremiumSalary, &s),
+		s.ExpGlaConversionOnRetirementRiskRatePer1000SA, officeRateFromRiskRate(s.ExpGlaConversionOnRetirementRiskRatePer1000SA, &s))...)
 	fs = append(fs, conversionSliceBlock(n.GLA, "cont_dur_dis", "Continuity During Disability",
-		s.ExpAdjTotalGlaContinuityDuringDisabilityAnnualRiskPremium, s.ExpAdjTotalGlaContinuityDuringDisabilityAnnualOfficePremium,
-		s.ExpAdjProportionGlaContinuityDuringDisabilityRiskPremiumSalary, s.ExpAdjProportionGlaContinuityDuringDisabilityOfficePremiumSalary,
-		s.ExpGlaContinuityDuringDisabilityRiskRatePer1000SA, s.ExpGlaContinuityDuringDisabilityOfficeRatePer1000SA)...)
+		s.ExpAdjTotalGlaContinuityDuringDisabilityAnnualRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalGlaContinuityDuringDisabilityAnnualRiskPremium, &s),
+		s.ExpAdjProportionGlaContinuityDuringDisabilityRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionGlaContinuityDuringDisabilityRiskPremiumSalary, &s),
+		s.ExpGlaContinuityDuringDisabilityRiskRatePer1000SA, officeRateFromRiskRate(s.ExpGlaContinuityDuringDisabilityRiskRatePer1000SA, &s))...)
 
 	// GLA educator slices
 	fs = append(fs, conversionSliceBlock(n.GlaEducator, "conv_on_wdr", "Conversion on Withdrawal",
-		s.ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualOfficePremium,
-		s.ExpAdjProportionGlaEducatorConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionGlaEducatorConversionOnWithdrawalOfficePremiumSalary,
-		s.ExpGlaEducatorConversionOnWithdrawalRiskRatePer1000SA, s.ExpGlaEducatorConversionOnWithdrawalOfficeRatePer1000SA)...)
+		s.ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualRiskPremium, &s),
+		s.ExpAdjProportionGlaEducatorConversionOnWithdrawalRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionGlaEducatorConversionOnWithdrawalRiskPremiumSalary, &s),
+		s.ExpGlaEducatorConversionOnWithdrawalRiskRatePer1000SA, officeRateFromRiskRate(s.ExpGlaEducatorConversionOnWithdrawalRiskRatePer1000SA, &s))...)
 	fs = append(fs, conversionSliceBlock(n.GlaEducator, "conv_on_ret", "Conversion on Retirement",
-		s.ExpAdjTotalGlaEducatorConversionOnRetirementAnnualRiskPremium, s.ExpAdjTotalGlaEducatorConversionOnRetirementAnnualOfficePremium,
-		s.ExpAdjProportionGlaEducatorConversionOnRetirementRiskPremiumSalary, s.ExpAdjProportionGlaEducatorConversionOnRetirementOfficePremiumSalary,
-		s.ExpGlaEducatorConversionOnRetirementRiskRatePer1000SA, s.ExpGlaEducatorConversionOnRetirementOfficeRatePer1000SA)...)
+		s.ExpAdjTotalGlaEducatorConversionOnRetirementAnnualRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalGlaEducatorConversionOnRetirementAnnualRiskPremium, &s),
+		s.ExpAdjProportionGlaEducatorConversionOnRetirementRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionGlaEducatorConversionOnRetirementRiskPremiumSalary, &s),
+		s.ExpGlaEducatorConversionOnRetirementRiskRatePer1000SA, officeRateFromRiskRate(s.ExpGlaEducatorConversionOnRetirementRiskRatePer1000SA, &s))...)
 	fs = append(fs, conversionSliceBlock(n.GlaEducator, "cont_dur_dis", "Continuity During Disability",
-		s.ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualRiskPremium, s.ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualOfficePremium,
-		s.ExpAdjProportionGlaEducatorContinuityDuringDisabilityRiskPremiumSalary, s.ExpAdjProportionGlaEducatorContinuityDuringDisabilityOfficePremiumSalary,
-		s.ExpGlaEducatorContinuityDuringDisabilityRiskRatePer1000SA, s.ExpGlaEducatorContinuityDuringDisabilityOfficeRatePer1000SA)...)
+		s.ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualRiskPremium, &s),
+		s.ExpAdjProportionGlaEducatorContinuityDuringDisabilityRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionGlaEducatorContinuityDuringDisabilityRiskPremiumSalary, &s),
+		s.ExpGlaEducatorContinuityDuringDisabilityRiskRatePer1000SA, officeRateFromRiskRate(s.ExpGlaEducatorContinuityDuringDisabilityRiskRatePer1000SA, &s))...)
 
 	// PTD slices
 	fs = append(fs, conversionSliceBlock(n.PTD, "conv_on_wdr", "Conversion on Withdrawal",
-		s.ExpAdjTotalPtdConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalPtdConversionOnWithdrawalAnnualOfficePremium,
-		s.ExpAdjProportionPtdConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionPtdConversionOnWithdrawalOfficePremiumSalary,
-		s.ExpPtdConversionOnWithdrawalRiskRatePer1000SA, s.ExpPtdConversionOnWithdrawalOfficeRatePer1000SA)...)
+		s.ExpAdjTotalPtdConversionOnWithdrawalAnnualRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalPtdConversionOnWithdrawalAnnualRiskPremium, &s),
+		s.ExpAdjProportionPtdConversionOnWithdrawalRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionPtdConversionOnWithdrawalRiskPremiumSalary, &s),
+		s.ExpPtdConversionOnWithdrawalRiskRatePer1000SA, officeRateFromRiskRate(s.ExpPtdConversionOnWithdrawalRiskRatePer1000SA, &s))...)
 	fs = append(fs, conversionSliceBlock(n.PtdEducator, "conv_on_wdr", "Conversion on Withdrawal",
-		s.ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualOfficePremium,
-		s.ExpAdjProportionPtdEducatorConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionPtdEducatorConversionOnWithdrawalOfficePremiumSalary,
-		s.ExpPtdEducatorConversionOnWithdrawalRiskRatePer1000SA, s.ExpPtdEducatorConversionOnWithdrawalOfficeRatePer1000SA)...)
+		s.ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualRiskPremium, &s),
+		s.ExpAdjProportionPtdEducatorConversionOnWithdrawalRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionPtdEducatorConversionOnWithdrawalRiskPremiumSalary, &s),
+		s.ExpPtdEducatorConversionOnWithdrawalRiskRatePer1000SA, officeRateFromRiskRate(s.ExpPtdEducatorConversionOnWithdrawalRiskRatePer1000SA, &s))...)
 	fs = append(fs, conversionSliceBlock(n.PtdEducator, "conv_on_ret", "Conversion on Retirement",
-		s.ExpAdjTotalPtdEducatorConversionOnRetirementAnnualRiskPremium, s.ExpAdjTotalPtdEducatorConversionOnRetirementAnnualOfficePremium,
-		s.ExpAdjProportionPtdEducatorConversionOnRetirementRiskPremiumSalary, s.ExpAdjProportionPtdEducatorConversionOnRetirementOfficePremiumSalary,
-		s.ExpPtdEducatorConversionOnRetirementRiskRatePer1000SA, s.ExpPtdEducatorConversionOnRetirementOfficeRatePer1000SA)...)
+		s.ExpAdjTotalPtdEducatorConversionOnRetirementAnnualRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalPtdEducatorConversionOnRetirementAnnualRiskPremium, &s),
+		s.ExpAdjProportionPtdEducatorConversionOnRetirementRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionPtdEducatorConversionOnRetirementRiskPremiumSalary, &s),
+		s.ExpPtdEducatorConversionOnRetirementRiskRatePer1000SA, officeRateFromRiskRate(s.ExpPtdEducatorConversionOnRetirementRiskRatePer1000SA, &s))...)
 
 	// PHI / CI / SGLA / Funeral conversion on withdrawal
 	fs = append(fs, conversionSliceBlock(n.PHI, "conv_on_wdr", "Conversion on Withdrawal",
-		s.ExpAdjTotalPhiConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalPhiConversionOnWithdrawalAnnualOfficePremium,
-		s.ExpAdjProportionPhiConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionPhiConversionOnWithdrawalOfficePremiumSalary,
-		s.ExpPhiConversionOnWithdrawalRiskRatePer1000SA, s.ExpPhiConversionOnWithdrawalOfficeRatePer1000SA)...)
+		s.ExpAdjTotalPhiConversionOnWithdrawalAnnualRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalPhiConversionOnWithdrawalAnnualRiskPremium, &s),
+		s.ExpAdjProportionPhiConversionOnWithdrawalRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionPhiConversionOnWithdrawalRiskPremiumSalary, &s),
+		s.ExpPhiConversionOnWithdrawalRiskRatePer1000SA, officeRateFromRiskRate(s.ExpPhiConversionOnWithdrawalRiskRatePer1000SA, &s))...)
 	fs = append(fs, conversionSliceBlock(n.CI, "conv_on_wdr", "Conversion on Withdrawal",
-		s.ExpAdjTotalCiConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalCiConversionOnWithdrawalAnnualOfficePremium,
-		s.ExpAdjProportionCiConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionCiConversionOnWithdrawalOfficePremiumSalary,
-		s.ExpCiConversionOnWithdrawalRiskRatePer1000SA, s.ExpCiConversionOnWithdrawalOfficeRatePer1000SA)...)
+		s.ExpAdjTotalCiConversionOnWithdrawalAnnualRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalCiConversionOnWithdrawalAnnualRiskPremium, &s),
+		s.ExpAdjProportionCiConversionOnWithdrawalRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionCiConversionOnWithdrawalRiskPremiumSalary, &s),
+		s.ExpCiConversionOnWithdrawalRiskRatePer1000SA, officeRateFromRiskRate(s.ExpCiConversionOnWithdrawalRiskRatePer1000SA, &s))...)
 	fs = append(fs, conversionSliceBlock(n.SGLA, "conv_on_wdr", "Conversion on Withdrawal",
-		s.ExpAdjTotalSglaConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalSglaConversionOnWithdrawalAnnualOfficePremium,
-		s.ExpAdjProportionSglaConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionSglaConversionOnWithdrawalOfficePremiumSalary,
-		s.ExpSglaConversionOnWithdrawalRiskRatePer1000SA, s.ExpSglaConversionOnWithdrawalOfficeRatePer1000SA)...)
+		s.ExpAdjTotalSglaConversionOnWithdrawalAnnualRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalSglaConversionOnWithdrawalAnnualRiskPremium, &s),
+		s.ExpAdjProportionSglaConversionOnWithdrawalRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionSglaConversionOnWithdrawalRiskPremiumSalary, &s),
+		s.ExpSglaConversionOnWithdrawalRiskRatePer1000SA, officeRateFromRiskRate(s.ExpSglaConversionOnWithdrawalRiskRatePer1000SA, &s))...)
 	fs = append(fs, conversionSliceBlock(n.Funeral, "conv_on_wdr", "Conversion on Withdrawal",
-		s.ExpAdjTotalFunConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalFunConversionOnWithdrawalAnnualOfficePremium,
-		s.ExpAdjProportionFunConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionFunConversionOnWithdrawalOfficePremiumSalary,
-		s.ExpFunConversionOnWithdrawalRiskRatePer1000SA, s.ExpFunConversionOnWithdrawalOfficeRatePer1000SA)...)
+		s.ExpAdjTotalFunConversionOnWithdrawalAnnualRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalFunConversionOnWithdrawalAnnualRiskPremium, &s),
+		s.ExpAdjProportionFunConversionOnWithdrawalRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionFunConversionOnWithdrawalRiskPremiumSalary, &s),
+		s.ExpFunConversionOnWithdrawalRiskRatePer1000SA, officeRateFromRiskRate(s.ExpFunConversionOnWithdrawalRiskRatePer1000SA, &s))...)
 	fs = append(fs, conversionSliceBlock(n.TTD, "conv_on_wdr", "Conversion on Withdrawal",
-		s.ExpAdjTotalTtdConversionOnWithdrawalAnnualRiskPremium, s.ExpAdjTotalTtdConversionOnWithdrawalAnnualOfficePremium,
-		s.ExpAdjProportionTtdConversionOnWithdrawalRiskPremiumSalary, s.ExpAdjProportionTtdConversionOnWithdrawalOfficePremiumSalary,
-		s.ExpTtdConversionOnWithdrawalRiskRatePer1000SA, s.ExpTtdConversionOnWithdrawalOfficeRatePer1000SA)...)
+		s.ExpAdjTotalTtdConversionOnWithdrawalAnnualRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalTtdConversionOnWithdrawalAnnualRiskPremium, &s),
+		s.ExpAdjProportionTtdConversionOnWithdrawalRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionTtdConversionOnWithdrawalRiskPremiumSalary, &s),
+		s.ExpTtdConversionOnWithdrawalRiskRatePer1000SA, officeRateFromRiskRate(s.ExpTtdConversionOnWithdrawalRiskRatePer1000SA, &s))...)
 
 	return fs
 }
@@ -654,8 +654,8 @@ func glaFields(s models.MemberRatingResultSummary, cat models.SchemeCategory, q 
 		{Key: "terminal_illness_benefit", Label: "Terminal Illness Benefit", Value: orDash(cat.GlaTerminalIllnessBenefit)},
 		{Key: "educator_benefit", Label: "Educator Benefit", Value: orDash(cat.GlaEducatorBenefit)},
 		{Key: "total_sum_assured", Label: "Total Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalGlaCappedSumAssured)},
-		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalGlaAnnualOfficePremium)},
-		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(s.ExpProportionGlaOfficePremiumSalary)},
+		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(models.ComputeOfficePremium(s.ExpTotalGlaAnnualRiskPremium, &s))},
+		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(officeProportionFromRiskProportion(s.ExpProportionGlaAnnualRiskPremiumSalary, &s))},
 	}
 }
 
@@ -667,8 +667,8 @@ func sglaFields(s models.MemberRatingResultSummary, cat models.SchemeCategory, q
 		{Key: "benefit_structure", Label: "Benefit Structure", Value: "rider"},
 		{Key: "max_benefit", Label: "Maximum Benefit", Value: quote_docx.RoundUpToTwoDecimalsAccounting(cat.SglaMaxBenefit)},
 		{Key: "total_sum_assured", Label: "Total Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalSglaCappedSumAssured)},
-		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalSglaAnnualOfficePremium)},
-		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(s.ExpProportionSglaOfficePremiumSalary)},
+		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(models.ComputeOfficePremium(s.ExpTotalSglaAnnualRiskPremium, &s))},
+		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(officeProportionFromRiskProportion(s.ExpProportionSglaAnnualRiskPremiumSalary, &s))},
 	}
 }
 
@@ -683,8 +683,8 @@ func ptdFields(s models.MemberRatingResultSummary, cat models.SchemeCategory, q 
 		{Key: "risk_type", Label: "Risk Type", Value: orDash(cat.PtdRiskType)},
 		{Key: "educator_benefit", Label: "Educator Benefit", Value: orDash(cat.PtdEducatorBenefit)},
 		{Key: "total_sum_assured", Label: "Total Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalPtdCappedSumAssured)},
-		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalPtdAnnualOfficePremium)},
-		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(s.ExpProportionPtdOfficePremiumSalary)},
+		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(models.ComputeOfficePremium(s.ExpTotalPtdAnnualRiskPremium, &s))},
+		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(officeProportionFromRiskProportion(s.ExpProportionPtdAnnualRiskPremiumSalary, &s))},
 	}
 }
 
@@ -698,8 +698,8 @@ func ciFields(s models.MemberRatingResultSummary, cat models.SchemeCategory, q m
 		{Key: "benefit_definition", Label: "Benefit Definition", Value: orDash(cat.CiBenefitDefinition)},
 		{Key: "max_benefit", Label: "Maximum Benefit", Value: quote_docx.RoundUpToTwoDecimalsAccounting(cat.CiMaxBenefit)},
 		{Key: "total_sum_assured", Label: "Total Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalCiCappedSumAssured)},
-		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalCiAnnualOfficePremium)},
-		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(s.ExpProportionCiOfficePremiumSalary)},
+		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(models.ComputeOfficePremium(s.ExpTotalCiAnnualRiskPremium, &s))},
+		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(officeProportionFromRiskProportion(s.ExpProportionCiAnnualRiskPremiumSalary, &s))},
 	}
 }
 
@@ -715,8 +715,8 @@ func phiFields(s models.MemberRatingResultSummary, cat models.SchemeCategory, t 
 		{Key: "medical_aid_premium_waiver", Label: "Medical Aid Premium Waiver", Value: orDash(cat.PhiMedicalAidPremiumWaiver)},
 		{Key: "benefit_escalation", Label: "Benefit Escalation", Value: orDash(cat.PhiBenefitEscalation)},
 		{Key: "total_sum_assured", Label: "Total Covered Income", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalPhiCappedIncome)},
-		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalPhiAnnualOfficePremium)},
-		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(s.ExpProportionPhiOfficePremiumSalary)},
+		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(models.ComputeOfficePremium(s.ExpTotalPhiAnnualRiskPremium, &s))},
+		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(officeProportionFromRiskProportion(s.ExpProportionPhiAnnualRiskPremiumSalary, &s))},
 	}
 }
 
@@ -729,8 +729,8 @@ func ttdFields(s models.MemberRatingResultSummary, cat models.SchemeCategory, t 
 		{Key: "disability_definition", Label: "Disability Definition", Value: orDash(cat.TtdDisabilityDefinition)},
 		{Key: "risk_type", Label: "Risk Type", Value: orDash(cat.TtdRiskType)},
 		{Key: "total_sum_assured", Label: "Total Covered Income", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalTtdCappedIncome)},
-		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalTtdAnnualOfficePremium)},
-		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(s.ExpProportionTtdOfficePremiumSalary)},
+		{Key: "premium", Label: "Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(models.ComputeOfficePremium(s.ExpTotalTtdAnnualRiskPremium, &s))},
+		{Key: "percent_salary", Label: "% of Salary", Value: formatPercent(officeProportionFromRiskProportion(s.ExpProportionTtdAnnualRiskPremiumSalary, &s))},
 	}
 }
 
@@ -739,7 +739,7 @@ func funeralFields(s models.MemberRatingResultSummary, cat models.SchemeCategory
 		{Key: "title", Label: "Benefit Title", Value: t.FamilyFuneralBenefitTitle},
 		{Key: "monthly_premium_per_member", Label: "Monthly Premium per Member", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalFunMonthlyPremiumPerMember)},
 		{Key: "premium_per_member", Label: "Premium per Member", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.ExpTotalFunAnnualPremiumPerMember)},
-		{Key: "total_premium", Label: "Total Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(s.TotalFunAnnualOfficePremium)},
+		{Key: "total_premium", Label: "Total Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(models.ComputeOfficePremium(s.TotalFunAnnualRiskPremium, &s))},
 		{Key: "main_member_sum_assured", Label: "Main Member Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(cat.FamilyFuneralMainMemberFuneralSumAssured)},
 		{Key: "spouse_sum_assured", Label: "Spouse Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(cat.FamilyFuneralSpouseFuneralSumAssured)},
 		{Key: "child_sum_assured", Label: "Child Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(cat.FamilyFuneralChildrenFuneralSumAssured)},
@@ -835,4 +835,30 @@ func benefitSpecsForSample(n benefitNaming) []BenefitSpec {
 		{Prefix: n.TTD.Code, Title: n.TTD.Title, Fields: func() []Field { return ttdFields(zs, zc, zt) }},
 		{Prefix: n.Funeral.Code, Title: n.Funeral.Title, Fields: func() []Field { return funeralFields(zs, zc, zt) }},
 	}
+}
+
+// officeRateFromRiskRate scales a per-1000 risk rate up to its office
+// equivalent using the scheme-level loading on the summary.
+func officeRateFromRiskRate(riskRatePer1000 float64, s *models.MemberRatingResultSummary) float64 {
+	if s == nil {
+		return 0
+	}
+	denom := 1.0 - s.SchemeTotalLoading()
+	if denom <= 0 {
+		return 0
+	}
+	return riskRatePer1000 / denom
+}
+
+// officeProportionFromRiskProportion scales a risk-premium-proportion-of-salary
+// up to its office equivalent using the scheme-level loading on the summary.
+func officeProportionFromRiskProportion(riskProportion float64, s *models.MemberRatingResultSummary) float64 {
+	if s == nil {
+		return 0
+	}
+	denom := 1.0 - s.SchemeTotalLoading()
+	if denom <= 0 {
+		return 0
+	}
+	return riskProportion / denom
 }

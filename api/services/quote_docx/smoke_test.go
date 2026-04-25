@@ -46,14 +46,19 @@ func TestSmokeAssembly(t *testing.T) {
 			TotalAnnualSalary:                         12_000_000,
 			TotalSumAssured:                           36_000_000,
 			TotalGlaCappedSumAssured:                  36_000_000,
-			ExpTotalGlaAnnualOfficePremium:            120_000,
-			ExpProportionGlaOfficePremiumSalary:       0.01,
-			ExpTotalAnnualPremiumExclFuneral:          120_000,
+			// 0.2 scheme loading => office premium = risk / 0.8.
+			// 96_000 / 0.8 = 120_000 office premium.
+			ExpenseLoading:                          0.05,
+			CommissionLoading:                       0.10,
+			ProfitLoading:                           0.05,
+			ExpTotalGlaAnnualRiskPremium:            96_000,
+			ExpProportionGlaAnnualRiskPremiumSalary: 0.008,
+			ExpTotalAnnualPremiumExclFuneral:        120_000,
 			ProportionExpTotalPremiumExclFuneralSalary: 0.01,
-			ExpTotalFunAnnualOfficePremium:            9_000,
-			ExpTotalFunAnnualPremiumPerMember:         180,
-			ExpTotalFunMonthlyPremiumPerMember:        15,
-			TotalAnnualPremium:                        129_000,
+			ExpTotalFunAnnualRiskPremium:               7_200,
+			ExpTotalFunAnnualPremiumPerMember:          180,
+			ExpTotalFunMonthlyPremiumPerMember:         15,
+			TotalAnnualPremium:                         129_000,
 		},
 	}
 	insurer := models.GroupPricingInsurerDetail{

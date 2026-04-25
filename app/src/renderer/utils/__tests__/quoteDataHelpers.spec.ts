@@ -33,35 +33,42 @@ const mockBenefitTitles: BenefitTitles = {
 }
 
 function makeSummary(overrides: Record<string, any> = {}) {
+  // Office premium is now derived from the risk premium and the scheme-level
+  // loading. With expense + commission + profit = 0.20, office = risk / 0.8.
+  // The values below are the equivalent risk premiums for the previous
+  // office-premium fixtures (e.g. 96000 / 0.8 = 120000).
   return {
     category: 'Category A',
     member_count: 100,
     total_sum_assured: 50000000,
     total_annual_salary: 20000000,
     total_annual_premium: 300000,
+    expense_loading: 0.05,
+    commission_loading: 0.1,
+    profit_loading: 0.05,
     total_gla_capped_sum_assured: 30000000,
     total_ptd_capped_sum_assured: 10000000,
     total_ci_capped_sum_assured: 5000000,
     total_sgla_capped_sum_assured: 3000000,
     total_phi_capped_income: 1000000,
     total_ttd_capped_income: 500000,
-    exp_total_gla_annual_office_premium: 120000,
-    exp_total_ptd_annual_office_premium: 50000,
-    exp_total_ci_annual_office_premium: 30000,
-    exp_total_sgla_annual_office_premium: 20000,
-    exp_total_phi_annual_office_premium: 15000,
-    exp_total_ttd_annual_office_premium: 10000,
+    exp_total_gla_annual_risk_premium: 96000,
+    exp_total_ptd_annual_risk_premium: 40000,
+    exp_total_ci_annual_risk_premium: 24000,
+    exp_total_sgla_annual_risk_premium: 16000,
+    exp_total_phi_annual_risk_premium: 12000,
+    exp_total_ttd_annual_risk_premium: 8000,
     exp_total_annual_premium_excl_funeral: 245000,
     proportion_exp_total_premium_excl_funeral_salary: 0.01225,
-    exp_proportion_gla_office_premium_salary: 0.006,
-    exp_proportion_ptd_office_premium_salary: 0.0025,
-    exp_proportion_ci_office_premium_salary: 0.0015,
-    exp_proportion_sgla_office_premium_salary: 0.001,
-    exp_proportion_phi_office_premium_salary: 0.00075,
-    exp_proportion_ttd_office_premium_salary: 0.0005,
+    exp_proportion_gla_annual_risk_premium_salary: 0.0048,
+    exp_proportion_ptd_annual_risk_premium_salary: 0.002,
+    exp_proportion_ci_annual_risk_premium_salary: 0.0012,
+    exp_proportion_sgla_annual_risk_premium_salary: 0.0008,
+    exp_proportion_phi_annual_risk_premium_salary: 0.0006,
+    exp_proportion_ttd_annual_risk_premium_salary: 0.0004,
     exp_total_fun_monthly_premium_per_member: 45.5,
     exp_total_fun_annual_premium_per_member: 546,
-    exp_total_fun_annual_office_premium: 54600,
+    exp_total_fun_annual_risk_premium: 43680,
     ...overrides
   }
 }

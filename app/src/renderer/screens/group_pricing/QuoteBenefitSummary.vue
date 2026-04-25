@@ -267,6 +267,11 @@ import * as XLSX from 'xlsx'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import GroupPricingDataGrid from '@/renderer/components/tables/GroupPricingDataGrid.vue'
+import {
+  computeOfficePremium,
+  officeRateFromRiskRate,
+  officeProportionFromRiskProportion
+} from '@/renderer/utils/quoteDataHelpers'
 
 // import all necessary components and services
 
@@ -712,9 +717,15 @@ const convertExcelDataToGridData = () => {
         ? resultSummary.total_annual_salary
         : 0,
       totalSumAssured: resultSummary.total_gla_capped_sum_assured,
-      annualPremium: resultSummary.exp_total_gla_annual_office_premium,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(resultSummary.exp_proportion_gla_office_premium_salary * 100)}%`,
-      ratePer1000SA: resultSummary.exp_gla_office_rate_per_1000_sa
+      annualPremium: computeOfficePremium(
+        resultSummary.exp_total_gla_annual_risk_premium,
+        resultSummary
+      ),
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_gla_annual_risk_premium_salary, resultSummary) * 100)}%`,
+      ratePer1000SA: officeRateFromRiskRate(
+        resultSummary.exp_gla_risk_rate_per_1000_sa,
+        resultSummary
+      )
     })
 
     // Tax Saver slice of GLA — already included in the GLA row above; this
@@ -723,7 +734,10 @@ const convertExcelDataToGridData = () => {
     if (resultSummary.tax_saver_benefit) {
       const salary = resultSummary.total_annual_salary || 0
       const taxSaverPremium =
-        resultSummary.exp_total_tax_saver_annual_office_premium || 0
+        computeOfficePremium(
+          resultSummary.exp_total_tax_saver_annual_risk_premium,
+          resultSummary
+        ) || 0
       gridData.push({
         category,
         benefit: `${glaBenefitTitle.value} — Tax Saver (of GLA)`,
@@ -744,9 +758,15 @@ const convertExcelDataToGridData = () => {
         ? resultSummary.total_annual_salary
         : 0,
       totalSumAssured: resultSummary.total_ptd_capped_sum_assured,
-      annualPremium: resultSummary.exp_total_ptd_annual_office_premium,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(resultSummary.exp_proportion_ptd_office_premium_salary * 100)}%`,
-      ratePer1000SA: resultSummary.exp_ptd_office_rate_per_1000_sa
+      annualPremium: computeOfficePremium(
+        resultSummary.exp_total_ptd_annual_risk_premium,
+        resultSummary
+      ),
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_ptd_annual_risk_premium_salary, resultSummary) * 100)}%`,
+      ratePer1000SA: officeRateFromRiskRate(
+        resultSummary.exp_ptd_risk_rate_per_1000_sa,
+        resultSummary
+      )
     })
 
     gridData.push({
@@ -756,9 +776,15 @@ const convertExcelDataToGridData = () => {
         ? resultSummary.total_annual_salary
         : 0,
       totalSumAssured: resultSummary.total_ci_capped_sum_assured,
-      annualPremium: resultSummary.exp_total_ci_annual_office_premium,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(resultSummary.exp_proportion_ci_office_premium_salary * 100)}%`,
-      ratePer1000SA: resultSummary.exp_ci_office_rate_per_1000_sa
+      annualPremium: computeOfficePremium(
+        resultSummary.exp_total_ci_annual_risk_premium,
+        resultSummary
+      ),
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_ci_annual_risk_premium_salary, resultSummary) * 100)}%`,
+      ratePer1000SA: officeRateFromRiskRate(
+        resultSummary.exp_ci_risk_rate_per_1000_sa,
+        resultSummary
+      )
     })
 
     gridData.push({
@@ -768,9 +794,15 @@ const convertExcelDataToGridData = () => {
         ? resultSummary.total_annual_salary
         : 0,
       totalSumAssured: resultSummary.total_sgla_capped_sum_assured,
-      annualPremium: resultSummary.exp_total_sgla_annual_office_premium,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(resultSummary.exp_proportion_sgla_office_premium_salary * 100)}%`,
-      ratePer1000SA: resultSummary.exp_sgla_office_rate_per_1000_sa
+      annualPremium: computeOfficePremium(
+        resultSummary.exp_total_sgla_annual_risk_premium,
+        resultSummary
+      ),
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_sgla_annual_risk_premium_salary, resultSummary) * 100)}%`,
+      ratePer1000SA: officeRateFromRiskRate(
+        resultSummary.exp_sgla_risk_rate_per_1000_sa,
+        resultSummary
+      )
     })
 
     gridData.push({
@@ -780,9 +812,15 @@ const convertExcelDataToGridData = () => {
         ? resultSummary.total_annual_salary
         : 0,
       totalSumAssured: resultSummary.total_phi_capped_income,
-      annualPremium: resultSummary.exp_total_phi_annual_office_premium,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(resultSummary.exp_proportion_phi_office_premium_salary * 100)}%`,
-      ratePer1000SA: resultSummary.exp_phi_office_rate_per_1000_sa
+      annualPremium: computeOfficePremium(
+        resultSummary.exp_total_phi_annual_risk_premium,
+        resultSummary
+      ),
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_phi_annual_risk_premium_salary, resultSummary) * 100)}%`,
+      ratePer1000SA: officeRateFromRiskRate(
+        resultSummary.exp_phi_risk_rate_per_1000_sa,
+        resultSummary
+      )
     })
 
     gridData.push({
@@ -792,9 +830,15 @@ const convertExcelDataToGridData = () => {
         ? resultSummary.total_annual_salary
         : 0,
       totalSumAssured: resultSummary.total_ttd_capped_income,
-      annualPremium: resultSummary.exp_total_ttd_annual_office_premium,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(resultSummary.exp_proportion_ttd_office_premium_salary * 100)}%`,
-      ratePer1000SA: resultSummary.exp_ttd_office_rate_per_1000_sa
+      annualPremium: computeOfficePremium(
+        resultSummary.exp_total_ttd_annual_risk_premium,
+        resultSummary
+      ),
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_ttd_annual_risk_premium_salary, resultSummary) * 100)}%`,
+      ratePer1000SA: officeRateFromRiskRate(
+        resultSummary.exp_ttd_risk_rate_per_1000_sa,
+        resultSummary
+      )
     })
 
     // Add subtotal row
@@ -827,13 +871,20 @@ const convertExcelDataToGridData = () => {
       benefit: 'Group Funeral Annual Premium',
       annualSalary: '',
       totalSumAssured: '',
-      annualPremium: resultSummary.exp_total_fun_annual_office_premium,
+      annualPremium: computeOfficePremium(
+        resultSummary.exp_total_fun_annual_risk_premium,
+        resultSummary
+      ),
       percentSalary: '',
       ratePer1000SA: ''
     })
   })
 
-  // Calculate totals across all categories
+  // Calculate totals across all categories.
+  // Office premium / proportion / rate fields are accumulated by computing
+  // each category's value from its own scheme loading first and then summing
+  // — this preserves correctness across schemes that have different
+  // expense / commission / profit loading mixes.
   if (props.resultSummaries.length > 0) {
     const totals: any = props.resultSummaries.reduce(
       (acc: any, resultSummary: any) => {
@@ -843,60 +894,96 @@ const convertExcelDataToGridData = () => {
             (resultSummary.total_gla_capped_sum_assured || 0),
           exp_total_gla_annual_office_premium:
             (acc.exp_total_gla_annual_office_premium || 0) +
-            (resultSummary.exp_total_gla_annual_office_premium || 0),
+            (computeOfficePremium(
+              resultSummary.exp_total_gla_annual_risk_premium,
+              resultSummary
+            ) || 0),
           exp_proportion_gla_office_premium_salary:
             (acc.exp_proportion_gla_office_premium_salary || 0) +
-            (resultSummary.exp_proportion_gla_office_premium_salary || 0),
+            (officeProportionFromRiskProportion(
+              resultSummary.exp_proportion_gla_annual_risk_premium_salary,
+              resultSummary
+            ) || 0),
 
           total_ptd_capped_sum_assured:
             (acc.total_ptd_capped_sum_assured || 0) +
             (resultSummary.total_ptd_capped_sum_assured || 0),
           exp_total_ptd_annual_office_premium:
             (acc.exp_total_ptd_annual_office_premium || 0) +
-            (resultSummary.exp_total_ptd_annual_office_premium || 0),
+            (computeOfficePremium(
+              resultSummary.exp_total_ptd_annual_risk_premium,
+              resultSummary
+            ) || 0),
           exp_proportion_ptd_office_premium_salary:
             (acc.exp_proportion_ptd_office_premium_salary || 0) +
-            (resultSummary.exp_proportion_ptd_office_premium_salary || 0),
+            (officeProportionFromRiskProportion(
+              resultSummary.exp_proportion_ptd_annual_risk_premium_salary,
+              resultSummary
+            ) || 0),
 
           total_ci_capped_sum_assured:
             (acc.total_ci_capped_sum_assured || 0) +
             (resultSummary.total_ci_capped_sum_assured || 0),
           exp_total_ci_annual_office_premium:
             (acc.exp_total_ci_annual_office_premium || 0) +
-            (resultSummary.exp_total_ci_annual_office_premium || 0),
+            (computeOfficePremium(
+              resultSummary.exp_total_ci_annual_risk_premium,
+              resultSummary
+            ) || 0),
           exp_proportion_ci_office_premium_salary:
             (acc.exp_proportion_ci_office_premium_salary || 0) +
-            (resultSummary.exp_proportion_ci_office_premium_salary || 0),
+            (officeProportionFromRiskProportion(
+              resultSummary.exp_proportion_ci_annual_risk_premium_salary,
+              resultSummary
+            ) || 0),
 
           total_sgla_capped_sum_assured:
             (acc.total_sgla_capped_sum_assured || 0) +
             (resultSummary.total_sgla_capped_sum_assured || 0),
           exp_total_sgla_annual_office_premium:
             (acc.exp_total_sgla_annual_office_premium || 0) +
-            (resultSummary.exp_total_sgla_annual_office_premium || 0),
+            (computeOfficePremium(
+              resultSummary.exp_total_sgla_annual_risk_premium,
+              resultSummary
+            ) || 0),
           exp_proportion_sgla_office_premium_salary:
             (acc.exp_proportion_sgla_office_premium_salary || 0) +
-            (resultSummary.exp_proportion_sgla_office_premium_salary || 0),
+            (officeProportionFromRiskProportion(
+              resultSummary.exp_proportion_sgla_annual_risk_premium_salary,
+              resultSummary
+            ) || 0),
 
           total_phi_capped_income:
             (acc.total_phi_capped_income || 0) +
             (resultSummary.total_phi_capped_income || 0),
           exp_total_phi_annual_office_premium:
             (acc.exp_total_phi_annual_office_premium || 0) +
-            (resultSummary.exp_total_phi_annual_office_premium || 0),
+            (computeOfficePremium(
+              resultSummary.exp_total_phi_annual_risk_premium,
+              resultSummary
+            ) || 0),
           exp_proportion_phi_office_premium_salary:
             (acc.exp_proportion_phi_office_premium_salary || 0) +
-            (resultSummary.exp_proportion_phi_office_premium_salary || 0),
+            (officeProportionFromRiskProportion(
+              resultSummary.exp_proportion_phi_annual_risk_premium_salary,
+              resultSummary
+            ) || 0),
 
           total_ttd_capped_income:
             (acc.total_ttd_capped_income || 0) +
             (resultSummary.total_ttd_capped_income || 0),
           exp_total_ttd_annual_office_premium:
             (acc.exp_total_ttd_annual_office_premium || 0) +
-            (resultSummary.exp_total_ttd_annual_office_premium || 0),
+            (computeOfficePremium(
+              resultSummary.exp_total_ttd_annual_risk_premium,
+              resultSummary
+            ) || 0),
           exp_proportion_ttd_office_premium_salary:
             (acc.exp_proportion_ttd_office_premium_salary || 0) +
-            (resultSummary.exp_proportion_ttd_office_premium_salary || 0),
+            (officeProportionFromRiskProportion(
+              resultSummary.exp_proportion_ttd_annual_risk_premium_salary,
+              resultSummary
+            ) || 0),
 
           exp_total_annual_premium_excl_funeral:
             (acc.exp_total_annual_premium_excl_funeral || 0) +
@@ -914,7 +1001,10 @@ const convertExcelDataToGridData = () => {
             (resultSummary.exp_total_fun_annual_premium_per_member || 0),
           exp_total_fun_annual_office_premium:
             (acc.exp_total_fun_annual_office_premium || 0) +
-            (resultSummary.exp_total_fun_annual_office_premium || 0),
+            (computeOfficePremium(
+              resultSummary.exp_total_fun_annual_risk_premium,
+              resultSummary
+            ) || 0),
 
           total_annual_salary:
             (acc.total_annual_salary || 0) +

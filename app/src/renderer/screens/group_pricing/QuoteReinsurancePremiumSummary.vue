@@ -36,6 +36,7 @@ import { ref, onMounted, watch } from 'vue'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import GroupPricingDataGrid from '@/renderer/components/tables/GroupPricingDataGrid.vue'
+import { computeOfficePremium } from '@/renderer/utils/quoteDataHelpers'
 
 const glaBenefitTitle = ref('GLA')
 const sglaBenefitTitle = ref('SGLA')
@@ -253,7 +254,7 @@ const buildGridData = () => {
       'GLA',
       glaBenefitTitle.value,
       rs.total_gla_capped_sum_assured,
-      rs.exp_total_gla_annual_office_premium,
+      computeOfficePremium(rs.exp_total_gla_annual_risk_premium, rs),
       rs.total_gla_ceded_sum_assured,
       rs.total_gla_reinsurance_premium,
       rs.gla_reinsurance_premium_proportion
@@ -262,7 +263,7 @@ const buildGridData = () => {
       'PTD',
       ptdBenefitTitle.value,
       rs.total_ptd_capped_sum_assured,
-      rs.exp_total_ptd_annual_office_premium,
+      computeOfficePremium(rs.exp_total_ptd_annual_risk_premium, rs),
       rs.total_ptd_ceded_sum_assured,
       rs.total_ptd_reinsurance_premium,
       rs.ptd_reinsurance_premium_proportion
@@ -271,7 +272,7 @@ const buildGridData = () => {
       'CI',
       ciBenefitTitle.value,
       rs.total_ci_capped_sum_assured,
-      rs.exp_total_ci_annual_office_premium,
+      computeOfficePremium(rs.exp_total_ci_annual_risk_premium, rs),
       rs.total_ci_ceded_sum_assured,
       rs.total_ci_reinsurance_premium,
       rs.ci_reinsurance_premium_proportion
@@ -280,7 +281,7 @@ const buildGridData = () => {
       'SGLA',
       sglaBenefitTitle.value,
       rs.total_sgla_capped_sum_assured,
-      rs.exp_total_sgla_annual_office_premium,
+      computeOfficePremium(rs.exp_total_sgla_annual_risk_premium, rs),
       rs.total_sgla_ceded_sum_assured,
       rs.total_sgla_reinsurance_premium,
       rs.sgla_reinsurance_premium_proportion
@@ -292,7 +293,7 @@ const buildGridData = () => {
       'TTD',
       ttdBenefitTitle.value,
       rs.total_ttd_capped_income,
-      rs.exp_total_ttd_annual_office_premium,
+      computeOfficePremium(rs.exp_total_ttd_annual_risk_premium, rs),
       rs.total_ttd_ceded_monthly_benefit,
       rs.total_ttd_reinsurance_premium,
       rs.ttd_reinsurance_premium_proportion
@@ -301,7 +302,7 @@ const buildGridData = () => {
       'PHI',
       phiBenefitTitle.value,
       rs.total_phi_capped_income,
-      rs.exp_total_phi_annual_office_premium,
+      computeOfficePremium(rs.exp_total_phi_annual_risk_premium, rs),
       rs.total_phi_ceded_monthly_benefit,
       rs.total_phi_reinsurance_premium,
       rs.phi_reinsurance_premium_proportion
@@ -310,7 +311,7 @@ const buildGridData = () => {
       'GFF',
       familyFuneralBenefitTitle.value,
       '',
-      rs.exp_total_fun_annual_office_premium,
+      computeOfficePremium(rs.exp_total_fun_annual_risk_premium, rs),
       rs.total_fun_ceded_sum_assured,
       rs.total_fun_reinsurance_premium,
       rs.fun_reinsurance_premium_proportion
@@ -339,27 +340,31 @@ const buildGridData = () => {
       acc.total_phi_capped_income =
         (acc.total_phi_capped_income || 0) + (rs.total_phi_capped_income || 0)
 
+      // Office premium accumulators sum each category's derived office
+      // premium (computed from the per-category risk premium and that
+      // scheme's loading), so categories with different loadings still
+      // sum correctly.
       acc.exp_total_gla_annual_office_premium =
         (acc.exp_total_gla_annual_office_premium || 0) +
-        (rs.exp_total_gla_annual_office_premium || 0)
+        (computeOfficePremium(rs.exp_total_gla_annual_risk_premium, rs) || 0)
       acc.exp_total_ptd_annual_office_premium =
         (acc.exp_total_ptd_annual_office_premium || 0) +
-        (rs.exp_total_ptd_annual_office_premium || 0)
+        (computeOfficePremium(rs.exp_total_ptd_annual_risk_premium, rs) || 0)
       acc.exp_total_ci_annual_office_premium =
         (acc.exp_total_ci_annual_office_premium || 0) +
-        (rs.exp_total_ci_annual_office_premium || 0)
+        (computeOfficePremium(rs.exp_total_ci_annual_risk_premium, rs) || 0)
       acc.exp_total_sgla_annual_office_premium =
         (acc.exp_total_sgla_annual_office_premium || 0) +
-        (rs.exp_total_sgla_annual_office_premium || 0)
+        (computeOfficePremium(rs.exp_total_sgla_annual_risk_premium, rs) || 0)
       acc.exp_total_ttd_annual_office_premium =
         (acc.exp_total_ttd_annual_office_premium || 0) +
-        (rs.exp_total_ttd_annual_office_premium || 0)
+        (computeOfficePremium(rs.exp_total_ttd_annual_risk_premium, rs) || 0)
       acc.exp_total_phi_annual_office_premium =
         (acc.exp_total_phi_annual_office_premium || 0) +
-        (rs.exp_total_phi_annual_office_premium || 0)
+        (computeOfficePremium(rs.exp_total_phi_annual_risk_premium, rs) || 0)
       acc.exp_total_fun_annual_office_premium =
         (acc.exp_total_fun_annual_office_premium || 0) +
-        (rs.exp_total_fun_annual_office_premium || 0)
+        (computeOfficePremium(rs.exp_total_fun_annual_risk_premium, rs) || 0)
 
       acc.total_gla_ceded_sum_assured =
         (acc.total_gla_ceded_sum_assured || 0) +

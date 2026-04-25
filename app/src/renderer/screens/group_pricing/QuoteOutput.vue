@@ -226,7 +226,9 @@ import 'ag-grid-community/styles/ag-theme-balham.css'
 import {
   safeGetValue as _safeGetValue,
   roundUpToTwoDecimalsAccounting as _roundUpToTwoDecimalsAccounting,
-  dashIfEmpty as _dashIfEmpty
+  dashIfEmpty as _dashIfEmpty,
+  computeOfficePremium,
+  officeProportionFromRiskProportion
 } from '@/renderer/utils/quoteDataHelpers'
 import { useDocxQuoteGeneration } from '@/renderer/composables/useDocxQuoteGeneration'
 
@@ -456,8 +458,11 @@ const convertExcelDataToGridData = () => {
       category,
       benefit: glaBenefitTitle.value,
       totalSumAssured: resultSummary.total_gla_capped_sum_assured,
-      annualPremium: resultSummary.exp_total_gla_annual_office_premium,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(resultSummary.exp_proportion_gla_office_premium_salary * 100)}%`
+      annualPremium: computeOfficePremium(
+        resultSummary.exp_total_gla_annual_risk_premium,
+        resultSummary
+      ),
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_gla_annual_risk_premium_salary, resultSummary) * 100)}%`
     })
 
     if (resultSummary.total_additional_accidental_gla_capped_sum_assured > 0) {
@@ -466,9 +471,11 @@ const convertExcelDataToGridData = () => {
         benefit: additionalAccidentalGlaBenefitTitle.value,
         totalSumAssured:
           resultSummary.total_additional_accidental_gla_capped_sum_assured,
-        annualPremium:
-          resultSummary.exp_total_additional_accidental_gla_annual_office_premium,
-        percentSalary: `${roundUpToTwoDecimalsAccounting((resultSummary.exp_proportion_additional_accidental_gla_office_premium_salary || 0) * 100)}%`
+        annualPremium: computeOfficePremium(
+          resultSummary.exp_total_additional_accidental_gla_annual_risk_premium,
+          resultSummary
+        ),
+        percentSalary: `${roundUpToTwoDecimalsAccounting((officeProportionFromRiskProportion(resultSummary.exp_proportion_additional_accidental_gla_annual_risk_premium_salary, resultSummary) || 0) * 100)}%`
       })
     }
 
@@ -476,40 +483,55 @@ const convertExcelDataToGridData = () => {
       category,
       benefit: ptdBenefitTitle.value,
       totalSumAssured: resultSummary.total_ptd_capped_sum_assured,
-      annualPremium: resultSummary.exp_total_ptd_annual_office_premium,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(resultSummary.exp_proportion_ptd_office_premium_salary * 100)}%`
+      annualPremium: computeOfficePremium(
+        resultSummary.exp_total_ptd_annual_risk_premium,
+        resultSummary
+      ),
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_ptd_annual_risk_premium_salary, resultSummary) * 100)}%`
     })
 
     gridData.push({
       category,
       benefit: ciBenefitTitle.value,
       totalSumAssured: resultSummary.total_ci_capped_sum_assured,
-      annualPremium: resultSummary.exp_total_ci_annual_office_premium,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(resultSummary.exp_proportion_ci_office_premium_salary * 100)}%`
+      annualPremium: computeOfficePremium(
+        resultSummary.exp_total_ci_annual_risk_premium,
+        resultSummary
+      ),
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_ci_annual_risk_premium_salary, resultSummary) * 100)}%`
     })
 
     gridData.push({
       category,
       benefit: sglaBenefitTitle.value,
       totalSumAssured: resultSummary.total_sgla_capped_sum_assured,
-      annualPremium: resultSummary.exp_total_sgla_annual_office_premium,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(resultSummary.exp_proportion_sgla_office_premium_salary * 100)}%`
+      annualPremium: computeOfficePremium(
+        resultSummary.exp_total_sgla_annual_risk_premium,
+        resultSummary
+      ),
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_sgla_annual_risk_premium_salary, resultSummary) * 100)}%`
     })
 
     gridData.push({
       category,
       benefit: phiBenefitTitle.value,
       totalSumAssured: resultSummary.total_phi_capped_income,
-      annualPremium: resultSummary.exp_total_phi_annual_office_premium,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(resultSummary.exp_proportion_phi_office_premium_salary * 100)}%`
+      annualPremium: computeOfficePremium(
+        resultSummary.exp_total_phi_annual_risk_premium,
+        resultSummary
+      ),
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_phi_annual_risk_premium_salary, resultSummary) * 100)}%`
     })
 
     gridData.push({
       category,
       benefit: ttdBenefitTitle.value,
       totalSumAssured: resultSummary.total_ttd_capped_income,
-      annualPremium: resultSummary.exp_total_ttd_annual_office_premium,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(resultSummary.exp_proportion_ttd_office_premium_salary * 100)}%`
+      annualPremium: computeOfficePremium(
+        resultSummary.exp_total_ttd_annual_risk_premium,
+        resultSummary
+      ),
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_ttd_annual_risk_premium_salary, resultSummary) * 100)}%`
     })
 
     // Add subtotal row
@@ -558,7 +580,10 @@ const convertExcelDataToGridData = () => {
       benefit: 'Total Annual Premium',
       totalSumAssured: '',
       annualPremium: roundUpToTwoDecimalsAccounting(
-        resultSummary.exp_total_fun_annual_office_premium
+        computeOfficePremium(
+          resultSummary.exp_total_fun_annual_risk_premium,
+          resultSummary
+        )
       ),
       percentSalary: ''
     })
@@ -716,12 +741,18 @@ const exportBenefitDataToExcel = () => {
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            resultSummary.exp_total_gla_annual_office_premium
+            computeOfficePremium(
+              resultSummary.exp_total_gla_annual_risk_premium,
+              resultSummary
+            )
           )
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            resultSummary.exp_proportion_gla_office_premium_salary * 100
+            officeProportionFromRiskProportion(
+              resultSummary.exp_proportion_gla_annual_risk_premium_salary,
+              resultSummary
+            ) * 100
           ) + '%'
         )
       ],
@@ -734,12 +765,18 @@ const exportBenefitDataToExcel = () => {
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            resultSummary.exp_total_ptd_annual_office_premium
+            computeOfficePremium(
+              resultSummary.exp_total_ptd_annual_risk_premium,
+              resultSummary
+            )
           )
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            resultSummary.exp_proportion_ptd_office_premium_salary * 100
+            officeProportionFromRiskProportion(
+              resultSummary.exp_proportion_ptd_annual_risk_premium_salary,
+              resultSummary
+            ) * 100
           ) + '%'
         )
       ],
@@ -752,12 +789,18 @@ const exportBenefitDataToExcel = () => {
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            resultSummary.exp_total_ci_annual_office_premium
+            computeOfficePremium(
+              resultSummary.exp_total_ci_annual_risk_premium,
+              resultSummary
+            )
           )
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            resultSummary.exp_proportion_ci_office_premium_salary * 100
+            officeProportionFromRiskProportion(
+              resultSummary.exp_proportion_ci_annual_risk_premium_salary,
+              resultSummary
+            ) * 100
           ) + '%'
         )
       ],
@@ -770,12 +813,18 @@ const exportBenefitDataToExcel = () => {
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            resultSummary.exp_total_sgla_annual_office_premium
+            computeOfficePremium(
+              resultSummary.exp_total_sgla_annual_risk_premium,
+              resultSummary
+            )
           )
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            resultSummary.exp_proportion_sgla_office_premium_salary * 100
+            officeProportionFromRiskProportion(
+              resultSummary.exp_proportion_sgla_annual_risk_premium_salary,
+              resultSummary
+            ) * 100
           ) + '%'
         )
       ],
@@ -786,12 +835,18 @@ const exportBenefitDataToExcel = () => {
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            resultSummary.exp_total_phi_annual_office_premium
+            computeOfficePremium(
+              resultSummary.exp_total_phi_annual_risk_premium,
+              resultSummary
+            )
           )
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            resultSummary.exp_proportion_phi_office_premium_salary * 100
+            officeProportionFromRiskProportion(
+              resultSummary.exp_proportion_phi_annual_risk_premium_salary,
+              resultSummary
+            ) * 100
           ) + '%'
         )
       ],
@@ -802,12 +857,18 @@ const exportBenefitDataToExcel = () => {
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            resultSummary.exp_total_ttd_annual_office_premium
+            computeOfficePremium(
+              resultSummary.exp_total_ttd_annual_risk_premium,
+              resultSummary
+            )
           )
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            resultSummary.exp_proportion_ttd_office_premium_salary * 100
+            officeProportionFromRiskProportion(
+              resultSummary.exp_proportion_ttd_annual_risk_premium_salary,
+              resultSummary
+            ) * 100
           ) + '%'
         )
       ],
@@ -852,7 +913,10 @@ const exportBenefitDataToExcel = () => {
         'Total Annual Premium',
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            resultSummary.exp_total_fun_annual_office_premium
+            computeOfficePremium(
+              resultSummary.exp_total_fun_annual_risk_premium,
+              resultSummary
+            )
           )
         )
       ]
@@ -1332,7 +1396,9 @@ const generatePDF = async () => {
       roundUpToTwoDecimalsAccounting(
         item.exp_total_fun_annual_premium_per_member
       ),
-      roundUpToTwoDecimalsAccounting(item.exp_total_fun_annual_office_premium)
+      roundUpToTwoDecimalsAccounting(
+        computeOfficePremium(item.exp_total_fun_annual_risk_premium, item)
+      )
     ])
   })
   groupFuneralData.push([
@@ -1352,7 +1418,9 @@ const generatePDF = async () => {
     ),
     roundUpToTwoDecimalsAccounting(
       resultSummaries.value.reduce(
-        (sum, item) => sum + item.exp_total_fun_annual_office_premium,
+        (sum, item) =>
+          sum +
+          computeOfficePremium(item.exp_total_fun_annual_risk_premium, item),
         0
       )
     )
@@ -1431,38 +1499,50 @@ const generatePDF = async () => {
     premiumBreakdownData.push([
       glaBenefitTitle.value,
       roundUpToTwoDecimalsAccounting(item.total_gla_capped_sum_assured),
-      roundUpToTwoDecimalsAccounting(item.exp_total_gla_annual_office_premium),
-      `${roundUpToTwoDecimalsAccounting(item.exp_proportion_gla_office_premium_salary * 100)}%`
+      roundUpToTwoDecimalsAccounting(
+        computeOfficePremium(item.exp_total_gla_annual_risk_premium, item)
+      ),
+      `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_gla_annual_risk_premium_salary, item) * 100)}%`
     ])
     premiumBreakdownData.push([
       sglaBenefitTitle.value,
       roundUpToTwoDecimalsAccounting(item.total_sgla_capped_sum_assured),
-      roundUpToTwoDecimalsAccounting(item.exp_total_sgla_annual_office_premium),
-      `${roundUpToTwoDecimalsAccounting(item.exp_proportion_sgla_office_premium_salary * 100)}%`
+      roundUpToTwoDecimalsAccounting(
+        computeOfficePremium(item.exp_total_sgla_annual_risk_premium, item)
+      ),
+      `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_sgla_annual_risk_premium_salary, item) * 100)}%`
     ])
     premiumBreakdownData.push([
       ptdBenefitTitle.value,
       roundUpToTwoDecimalsAccounting(item.total_ptd_capped_sum_assured),
-      roundUpToTwoDecimalsAccounting(item.exp_total_ptd_annual_office_premium),
-      `${roundUpToTwoDecimalsAccounting(item.exp_proportion_ptd_office_premium_salary * 100)}%`
+      roundUpToTwoDecimalsAccounting(
+        computeOfficePremium(item.exp_total_ptd_annual_risk_premium, item)
+      ),
+      `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_ptd_annual_risk_premium_salary, item) * 100)}%`
     ])
     premiumBreakdownData.push([
       ciBenefitTitle.value,
       roundUpToTwoDecimalsAccounting(item.total_ci_capped_sum_assured),
-      roundUpToTwoDecimalsAccounting(item.exp_total_ci_annual_office_premium),
-      `${roundUpToTwoDecimalsAccounting(item.exp_proportion_ci_office_premium_salary * 100)}%`
+      roundUpToTwoDecimalsAccounting(
+        computeOfficePremium(item.exp_total_ci_annual_risk_premium, item)
+      ),
+      `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_ci_annual_risk_premium_salary, item) * 100)}%`
     ])
     premiumBreakdownData.push([
       phiBenefitTitle.value,
       roundUpToTwoDecimalsAccounting(item.total_phi_capped_income),
-      roundUpToTwoDecimalsAccounting(item.exp_total_phi_annual_office_premium),
-      `${roundUpToTwoDecimalsAccounting(item.exp_proportion_phi_office_premium_salary * 100)}%`
+      roundUpToTwoDecimalsAccounting(
+        computeOfficePremium(item.exp_total_phi_annual_risk_premium, item)
+      ),
+      `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_phi_annual_risk_premium_salary, item) * 100)}%`
     ])
     premiumBreakdownData.push([
       ttdBenefitTitle.value,
       roundUpToTwoDecimalsAccounting(item.total_ttd_capped_income),
-      roundUpToTwoDecimalsAccounting(item.exp_total_ttd_annual_office_premium),
-      `${roundUpToTwoDecimalsAccounting(item.exp_proportion_ttd_office_premium_salary * 100)}%`
+      roundUpToTwoDecimalsAccounting(
+        computeOfficePremium(item.exp_total_ttd_annual_risk_premium, item)
+      ),
+      `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_ttd_annual_risk_premium_salary, item) * 100)}%`
     ])
 
     if (hasAnyNonFuneralBenefits) {
@@ -1532,7 +1612,9 @@ const generatePDF = async () => {
       ],
       [
         'Total Annual Premium',
-        roundUpToTwoDecimalsAccounting(item.exp_total_fun_annual_office_premium)
+        roundUpToTwoDecimalsAccounting(
+          computeOfficePremium(item.exp_total_fun_annual_risk_premium, item)
+        )
       ]
     ]
 

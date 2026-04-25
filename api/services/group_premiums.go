@@ -2084,19 +2084,19 @@ func PremiumComputation(member models.GPricingMemberDataInForce, coveredSA model
 	var premiums models.PremiumComputation
 
 	premiums.GlaRiskPremium = utils.FloatPrecision(coveredSA.GlaCoveredSumAssured*memberratingresultsummary.ExpGlaRiskRatePer1000SA/1000.0, AccountingPrecision)
-	premiums.GlaOfficePremium = utils.FloatPrecision(coveredSA.GlaCoveredSumAssured*memberratingresultsummary.ExpGlaOfficeRatePer1000SA/1000.0, AccountingPrecision)
+	premiums.GlaOfficePremium = utils.FloatPrecision(models.ComputeOfficePremium(premiums.GlaRiskPremium, &memberratingresultsummary), AccountingPrecision)
 	premiums.PtdRiskPremium = utils.FloatPrecision(coveredSA.PtdCoveredSumAssured*memberratingresultsummary.ExpPtdRiskRatePer1000SA/1000.0, AccountingPrecision)
-	premiums.PtdOfficePremium = utils.FloatPrecision(coveredSA.PtdCoveredSumAssured*memberratingresultsummary.ExpPtdOfficeRatePer1000SA/1000.0, AccountingPrecision)
+	premiums.PtdOfficePremium = utils.FloatPrecision(models.ComputeOfficePremium(premiums.PtdRiskPremium, &memberratingresultsummary), AccountingPrecision)
 	premiums.CiRiskPremium = utils.FloatPrecision(coveredSA.CiCoveredSumAssured*memberratingresultsummary.ExpCiRiskRatePer1000SA/1000.0, AccountingPrecision)
-	premiums.CiOfficePremium = utils.FloatPrecision(coveredSA.CiCoveredSumAssured*memberratingresultsummary.ExpCiOfficeRatePer1000SA/1000.0, AccountingPrecision)
+	premiums.CiOfficePremium = utils.FloatPrecision(models.ComputeOfficePremium(premiums.CiRiskPremium, &memberratingresultsummary), AccountingPrecision)
 	premiums.SglaRiskPremium = utils.FloatPrecision(coveredSA.SglaCoveredSumAssured*memberratingresultsummary.ExpSglaRiskRatePer1000SA/1000.0, AccountingPrecision)
-	premiums.SglaOfficePremium = utils.FloatPrecision(coveredSA.SglaCoveredSumAssured*memberratingresultsummary.ExpSglaOfficeRatePer1000SA/1000.0, AccountingPrecision)
+	premiums.SglaOfficePremium = utils.FloatPrecision(models.ComputeOfficePremium(premiums.SglaRiskPremium, &memberratingresultsummary), AccountingPrecision)
 	premiums.PhiRiskPremium = utils.FloatPrecision(member.AnnualSalary*memberratingresultsummary.ExpProportionPhiAnnualRiskPremiumSalary, AccountingPrecision)
-	premiums.PhiOfficePremium = utils.FloatPrecision(member.AnnualSalary*memberratingresultsummary.ExpProportionPhiOfficePremiumSalary, AccountingPrecision)
+	premiums.PhiOfficePremium = utils.FloatPrecision(models.ComputeOfficePremium(premiums.PhiRiskPremium, &memberratingresultsummary), AccountingPrecision)
 	premiums.TtdRiskPremium = utils.FloatPrecision(member.AnnualSalary*memberratingresultsummary.ExpProportionTtdAnnualRiskPremiumSalary, AccountingPrecision)
-	premiums.TtdOfficePremium = utils.FloatPrecision(member.AnnualSalary*memberratingresultsummary.ExpProportionTtdOfficePremiumSalary, AccountingPrecision)
+	premiums.TtdOfficePremium = utils.FloatPrecision(models.ComputeOfficePremium(premiums.TtdRiskPremium, &memberratingresultsummary), AccountingPrecision)
 	premiums.FuneralRiskPremium = utils.FloatPrecision(memberratingresultsummary.ExpTotalFunAnnualRiskPremium, AccountingPrecision)
-	premiums.FuneralOfficePremium = utils.FloatPrecision(memberratingresultsummary.ExpTotalFunAnnualOfficePremium, AccountingPrecision)
+	premiums.FuneralOfficePremium = utils.FloatPrecision(models.ComputeOfficePremium(memberratingresultsummary.ExpTotalFunAnnualRiskPremium, &memberratingresultsummary), AccountingPrecision)
 
 	premiums.TotalRiskPremiumExclFun = utils.FloatPrecision(premiums.GlaRiskPremium+premiums.PtdRiskPremium+premiums.CiRiskPremium+premiums.SglaRiskPremium+premiums.PhiRiskPremium+premiums.TtdRiskPremium, AccountingPrecision)
 

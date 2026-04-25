@@ -61,6 +61,78 @@ export function dashIfEmpty(value: any): string {
 }
 
 // ---------------------------------------------------------------------------
+// Office-premium derivation
+// ---------------------------------------------------------------------------
+//
+// Office premium is no longer persisted on the rating result summary. It is
+// derived on the fly from the risk premium and the scheme-level loading
+// (expense + commission + profit).
+
+/**
+ * Sum of the three scheme-level loadings (expense, commission, profit) that
+ * make up the office-premium denominator. Each loading is a fraction
+ * (e.g. 0.05 for 5%).
+ */
+export function schemeTotalLoading(s: {
+  expense_loading?: number
+  commission_loading?: number
+  profit_loading?: number
+}): number {
+  return (
+    (s?.expense_loading ?? 0) +
+    (s?.commission_loading ?? 0) +
+    (s?.profit_loading ?? 0)
+  )
+}
+
+/**
+ * Derive the office premium from a risk premium and the scheme-level
+ * loading on the summary row. Guards against denom <= 0.
+ */
+export function computeOfficePremium(
+  riskPremium: number,
+  s: {
+    expense_loading?: number
+    commission_loading?: number
+    profit_loading?: number
+  }
+): number {
+  const denom = 1 - schemeTotalLoading(s)
+  return denom <= 0 ? 0 : (riskPremium ?? 0) / denom
+}
+
+/**
+ * Convert a risk-rate-per-1000-SA into the equivalent office rate by
+ * scaling by 1 / (1 - schemeTotalLoading).
+ */
+export function officeRateFromRiskRate(
+  riskRatePer1000: number,
+  s: {
+    expense_loading?: number
+    commission_loading?: number
+    profit_loading?: number
+  }
+): number {
+  const denom = 1 - schemeTotalLoading(s)
+  return denom <= 0 ? 0 : (riskRatePer1000 ?? 0) / denom
+}
+
+/**
+ * Convert a risk-premium-proportion-of-salary into its office equivalent.
+ */
+export function officeProportionFromRiskProportion(
+  riskProportion: number,
+  s: {
+    expense_loading?: number
+    commission_loading?: number
+    profit_loading?: number
+  }
+): number {
+  const denom = 1 - schemeTotalLoading(s)
+  return denom <= 0 ? 0 : (riskProportion ?? 0) / denom
+}
+
+// ---------------------------------------------------------------------------
 // Aggregation helpers
 // ---------------------------------------------------------------------------
 
@@ -238,7 +310,7 @@ export function buildGroupFuneralRows(
         item.exp_total_fun_annual_premium_per_member
       ),
       totalAnnualPremium: roundUpToTwoDecimalsAccounting(
-        item.exp_total_fun_annual_office_premium
+        computeOfficePremium(item.exp_total_fun_annual_risk_premium, item)
       )
     })
   })
@@ -263,7 +335,9 @@ export function buildGroupFuneralRows(
     ),
     totalAnnualPremium: roundUpToTwoDecimalsAccounting(
       resultSummaries.reduce(
-        (sum, item) => sum + item.exp_total_fun_annual_office_premium,
+        (sum, item) =>
+          sum +
+          computeOfficePremium(item.exp_total_fun_annual_risk_premium, item),
         0
       )
     )
@@ -291,9 +365,9 @@ export function buildPremiumBreakdownRows(
         item.total_gla_capped_sum_assured
       ),
       annualPremium: roundUpToTwoDecimalsAccounting(
-        item.exp_total_gla_annual_office_premium
+        computeOfficePremium(item.exp_total_gla_annual_risk_premium, item)
       ),
-      percentSalary: `${roundUpToTwoDecimalsAccounting(item.exp_proportion_gla_office_premium_salary * 100)}%`
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_gla_annual_risk_premium_salary, item) * 100)}%`
     },
     {
       benefit: benefitTitles.sglaBenefitTitle,
@@ -301,9 +375,9 @@ export function buildPremiumBreakdownRows(
         item.total_sgla_capped_sum_assured
       ),
       annualPremium: roundUpToTwoDecimalsAccounting(
-        item.exp_total_sgla_annual_office_premium
+        computeOfficePremium(item.exp_total_sgla_annual_risk_premium, item)
       ),
-      percentSalary: `${roundUpToTwoDecimalsAccounting(item.exp_proportion_sgla_office_premium_salary * 100)}%`
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_sgla_annual_risk_premium_salary, item) * 100)}%`
     },
     {
       benefit: benefitTitles.ptdBenefitTitle,
@@ -311,9 +385,9 @@ export function buildPremiumBreakdownRows(
         item.total_ptd_capped_sum_assured
       ),
       annualPremium: roundUpToTwoDecimalsAccounting(
-        item.exp_total_ptd_annual_office_premium
+        computeOfficePremium(item.exp_total_ptd_annual_risk_premium, item)
       ),
-      percentSalary: `${roundUpToTwoDecimalsAccounting(item.exp_proportion_ptd_office_premium_salary * 100)}%`
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_ptd_annual_risk_premium_salary, item) * 100)}%`
     },
     {
       benefit: benefitTitles.ciBenefitTitle,
@@ -321,9 +395,9 @@ export function buildPremiumBreakdownRows(
         item.total_ci_capped_sum_assured
       ),
       annualPremium: roundUpToTwoDecimalsAccounting(
-        item.exp_total_ci_annual_office_premium
+        computeOfficePremium(item.exp_total_ci_annual_risk_premium, item)
       ),
-      percentSalary: `${roundUpToTwoDecimalsAccounting(item.exp_proportion_ci_office_premium_salary * 100)}%`
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_ci_annual_risk_premium_salary, item) * 100)}%`
     },
     {
       benefit: benefitTitles.phiBenefitTitle,
@@ -331,9 +405,9 @@ export function buildPremiumBreakdownRows(
         item.total_phi_capped_income
       ),
       annualPremium: roundUpToTwoDecimalsAccounting(
-        item.exp_total_phi_annual_office_premium
+        computeOfficePremium(item.exp_total_phi_annual_risk_premium, item)
       ),
-      percentSalary: `${roundUpToTwoDecimalsAccounting(item.exp_proportion_phi_office_premium_salary * 100)}%`
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_phi_annual_risk_premium_salary, item) * 100)}%`
     },
     {
       benefit: benefitTitles.ttdBenefitTitle,
@@ -341,9 +415,9 @@ export function buildPremiumBreakdownRows(
         item.total_ttd_capped_income
       ),
       annualPremium: roundUpToTwoDecimalsAccounting(
-        item.exp_total_ttd_annual_office_premium
+        computeOfficePremium(item.exp_total_ttd_annual_risk_premium, item)
       ),
-      percentSalary: `${roundUpToTwoDecimalsAccounting(item.exp_proportion_ttd_office_premium_salary * 100)}%`
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_ttd_annual_risk_premium_salary, item) * 100)}%`
     }
   ]
 }
@@ -369,7 +443,7 @@ export function buildGroupFuneralBreakdownRows(item: any): LabelValueRow[] {
     {
       label: 'Total Annual Premium',
       value: roundUpToTwoDecimalsAccounting(
-        item.exp_total_fun_annual_office_premium
+        computeOfficePremium(item.exp_total_fun_annual_risk_premium, item)
       )
     }
   ]
