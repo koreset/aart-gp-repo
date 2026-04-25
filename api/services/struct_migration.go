@@ -8,36 +8,100 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
 
-// GenerateMigrationForStruct generates SQL migration files for a given struct
-func GenerateMigrationForStruct(structName, migrationName, dbType string) error {
-	// Get the struct type using reflection
-	structType, err := getStructType(structName)
-	if err != nil {
-		return err
+// GenerateOptions controls the diff-based migration generator's behaviour.
+//
+// All flags default to the conservative value: only additive, non-destructive
+// changes are emitted. Type changes and drops must be opted into explicitly
+// because they can churn indexes and lose data.
+type GenerateOptions struct {
+	// AllowTypeChanges, if true, emits ALTER COLUMN TYPE statements when the
+	// live column's declared type differs from what the struct says. Off by
+	// default — comparison across dialects is fuzzy and easily produces
+	// spurious diffs.
+	AllowTypeChanges bool
+
+	// AllowDestructive, if true, emits DROP COLUMN and DROP INDEX statements
+	// for objects present in the database but absent from the struct. Off by
+	// default — data loss is irreversible.
+	AllowDestructive bool
+
+	// Message is used in the generated migration filename. If empty, a default
+	// is derived from the struct name(s) being migrated.
+	Message string
+}
+
+// GenerateMigrationForStruct generates an incremental SQL migration file for
+// a single struct. It compares the struct's expected schema to the live
+// database and emits only the deltas (ALTER TABLE ... ADD COLUMN, CREATE
+// INDEX, etc.).
+//
+// The dialect is auto-detected from the connected database (services.DbBackend)
+// and output is written to migrations/<dialect>/<timestamp>_<message>.sql,
+// which is the layout RunMigrationsOnStartup picks up.
+//
+// Returns the generated file path, or "" with no error if no schema changes
+// were detected.
+func GenerateMigrationForStruct(structName string, opts GenerateOptions) (string, error) {
+	return GenerateMigrationForStructs([]string{structName}, opts)
+}
+
+// GenerateMigrationForStructs generates a single migration file containing
+// the deltas for every named struct. Useful when a release introduces
+// changes across several models — they end up in one timestamped file
+// rather than one per struct.
+func GenerateMigrationForStructs(structNames []string, opts GenerateOptions) (string, error) {
+	if DB == nil {
+		return "", fmt.Errorf("database not initialized; call services.SetupTables first")
+	}
+	if DbBackend == "" {
+		return "", fmt.Errorf("database backend not detected (services.DbBackend is empty)")
+	}
+	if len(structNames) == 0 {
+		return "", fmt.Errorf("at least one struct name is required")
 	}
 
-	// Generate SQL for the specified database type(s)
-	if dbType == "all" {
-		// Generate for all supported database types
-		for _, db := range []string{"postgresql", "mysql", "mssql"} {
-			if err := generateSQLForStruct(structType, migrationName, db); err != nil {
-				return err
-			}
+	var combined strings.Builder
+	var emittedFor []string
+
+	for _, name := range structNames {
+		structType, err := getStructType(name)
+		if err != nil {
+			return "", err
 		}
-	} else {
-		// Generate for a specific database type
-		if err := generateSQLForStruct(structType, migrationName, dbType); err != nil {
-			return err
+		model := reflect.New(structType).Interface()
+
+		body, err := generateIncrementalSQLForModel(model, opts)
+		if err != nil {
+			return "", fmt.Errorf("generate %s: %w", name, err)
 		}
+		if strings.TrimSpace(body) == "" {
+			appLog.WithField("struct", name).Info("No schema changes detected for struct")
+			continue
+		}
+		combined.WriteString(body)
+		combined.WriteString("\n")
+		emittedFor = append(emittedFor, name)
 	}
 
-	return nil
+	sqlBody := combined.String()
+	if strings.TrimSpace(sqlBody) == "" {
+		appLog.Info("No schema changes detected — nothing to write")
+		return "", nil
+	}
+
+	msg := opts.Message
+	if msg == "" {
+		msg = "update_" + strings.Join(emittedFor, "_")
+	}
+
+	return writeMigrationFile(msg, sqlBody)
 }
 
 // getStructType returns the reflect.Type for a struct by name
@@ -884,384 +948,449 @@ func getStructType(structName string) (reflect.Type, error) {
 	}
 }
 
-// generateSQLForStruct generates SQL for a struct for a specific database type
-func generateSQLForStruct(structType reflect.Type, migrationName, dbType string) error {
-	// Create migration directory if it doesn't exist
-	migrationDir := filepath.Join("migrations", dbType)
-	if err := os.MkdirAll(migrationDir, 0755); err != nil {
-		return err
+// generateIncrementalSQLForModel returns the SQL needed to bring the live
+// table for the given model up to the struct's expected schema. Returns ""
+// when nothing has changed.
+//
+// Only additive changes are emitted by default; opts.AllowTypeChanges and
+// opts.AllowDestructive enable the riskier transformations.
+func generateIncrementalSQLForModel(model interface{}, opts GenerateOptions) (string, error) {
+	s, err := parseSchema(model)
+	if err != nil {
+		return "", err
 	}
 
-	// Generate version based on timestamp
-	version := time.Now().Format("20060102150405")
+	// Brand-new table — render full CREATE TABLE plus its indexes.
+	if !DB.Migrator().HasTable(model) {
+		return renderCreateTable(s, DbBackend), nil
+	}
 
-	// Create filename
-	filename := fmt.Sprintf("%s_%s.sql", version, migrationName)
-	filePath := filepath.Join(migrationDir, filename)
+	// Existing table — diff columns and indexes.
+	liveCols, err := DB.Migrator().ColumnTypes(model)
+	if err != nil {
+		return "", fmt.Errorf("introspect %s: %w", s.Table, err)
+	}
+	liveByName := make(map[string]gorm.ColumnType, len(liveCols))
+	for _, c := range liveCols {
+		liveByName[c.Name()] = c
+	}
 
-	// Generate SQL based on struct fields and database type
-	sql := generateSQL(structType, dbType)
+	var sb strings.Builder
+	var changes int
 
-	// Write SQL to file
-	if err := os.WriteFile(filePath, []byte(sql), 0644); err != nil {
-		return err
+	sb.WriteString(fmt.Sprintf("-- Migration for: %s (table: %s)\n\n", s.Name, s.Table))
+
+	// Pass 1: columns in struct but missing from DB → ADD COLUMN.
+	for _, f := range s.Fields {
+		if !isMigratableField(f) {
+			continue
+		}
+		if live, exists := liveByName[f.DBName]; exists {
+			// Column exists. Type changes are out of scope unless explicitly
+			// allowed; comparing types reliably across dialects is fuzzy.
+			if opts.AllowTypeChanges {
+				if alter := renderAlterColumnType(s.Table, f, live, DbBackend); alter != "" {
+					sb.WriteString(alter)
+					changes++
+				}
+			}
+			continue
+		}
+		sb.WriteString(renderAddColumn(s.Table, f, DbBackend))
+		changes++
+	}
+
+	// Pass 2: columns in DB but absent from struct → DROP COLUMN (opt-in).
+	if opts.AllowDestructive {
+		expected := make(map[string]struct{}, len(s.Fields))
+		for _, f := range s.Fields {
+			if isMigratableField(f) {
+				expected[f.DBName] = struct{}{}
+			}
+		}
+		for name := range liveByName {
+			if _, ok := expected[name]; ok {
+				continue
+			}
+			sb.WriteString(renderDropColumn(s.Table, name))
+			changes++
+		}
+	}
+
+	// Pass 3: indexes — additive only by default, drops opt-in.
+	expectedIdx := s.ParseIndexes()
+	for _, idx := range expectedIdx {
+		if idx.Class == "PRIMARY" {
+			continue
+		}
+		if !DB.Migrator().HasIndex(model, idx.Name) {
+			sb.WriteString(renderCreateIndex(s.Table, idx))
+			changes++
+		}
+	}
+	if opts.AllowDestructive {
+		liveIdx, _ := DB.Migrator().GetIndexes(model)
+		expectedNames := make(map[string]struct{}, len(expectedIdx))
+		for name := range expectedIdx {
+			expectedNames[name] = struct{}{}
+		}
+		for _, idx := range liveIdx {
+			if _, ok := expectedNames[idx.Name()]; ok {
+				continue
+			}
+			// Skip primary key indexes — those follow the table's lifecycle.
+			if strings.HasSuffix(idx.Name(), "_pkey") || idx.Name() == "PRIMARY" {
+				continue
+			}
+			sb.WriteString(renderDropIndex(s.Table, idx.Name(), DbBackend))
+			changes++
+		}
+	}
+
+	if changes == 0 {
+		return "", nil
+	}
+	return sb.String(), nil
+}
+
+// parseSchema runs gorm's schema parser on the given model, producing the
+// canonical expected schema (table name, fields with DBName, indexes, etc.).
+func parseSchema(model interface{}) (*schema.Schema, error) {
+	cache := &sync.Map{}
+	s, err := schema.Parse(model, cache, DB.NamingStrategy)
+	if err != nil {
+		return nil, fmt.Errorf("parse schema: %w", err)
+	}
+	return s, nil
+}
+
+// isMigratableField reports whether the field should be considered for
+// column-level migration. Filters out relations, ignored fields, and fields
+// without a DB column (e.g. embedded relation handles).
+func isMigratableField(f *schema.Field) bool {
+	if f == nil || f.DBName == "" {
+		return false
+	}
+	if f.IgnoreMigration {
+		return false
+	}
+	return true
+}
+
+// writeMigrationFile writes the generated SQL to the dialect-specific
+// migrations directory under the working directory, using a timestamp prefix
+// so the runner applies files in order.
+func writeMigrationFile(message, body string) (string, error) {
+	dir := filepath.Join("migrations", DbBackend)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+
+	safe := sanitizeFilenameSegment(message)
+	filename := fmt.Sprintf("%s_%s.sql", time.Now().Format("20060102150405"), safe)
+	path := filepath.Join(dir, filename)
+
+	header := fmt.Sprintf("-- Generated %s for dialect %s\n\n", time.Now().Format(time.RFC3339), DbBackend)
+	if err := os.WriteFile(path, []byte(header+body), 0o644); err != nil {
+		return "", err
 	}
 
 	appLog.WithFields(map[string]interface{}{
-		"db_type": dbType,
-		"file":    filePath,
-	}).Info("Generated migration file for struct")
+		"file":    path,
+		"dialect": DbBackend,
+	}).Info("Wrote incremental migration file")
 
-	return nil
+	return path, nil
 }
 
-// generateSQL generates SQL for a struct based on the database type
-func generateSQL(structType reflect.Type, dbType string) string {
-	tableName := getTableName(structType)
-	var sql strings.Builder
-
-	sql.WriteString(fmt.Sprintf("-- Migration for struct: %s\n\n", structType.Name()))
-	sql.WriteString(fmt.Sprintf("-- Table: %s\n\n", tableName))
-
-	// First, ensure the table exists
-	sql.WriteString("-- Ensure table exists\n")
-	switch dbType {
-	case "postgresql":
-		sql.WriteString(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n", tableName))
-		// Add a placeholder ID column if the table is being created
-		sql.WriteString("    id SERIAL PRIMARY KEY\n")
-		sql.WriteString(");\n\n")
-	case "mysql":
-		sql.WriteString(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n", tableName))
-		// Add a placeholder ID column if the table is being created
-		sql.WriteString("    id INT AUTO_INCREMENT PRIMARY KEY\n")
-		sql.WriteString(");\n\n")
-	case "mssql":
-		sql.WriteString(fmt.Sprintf("IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = '%s')\n", tableName))
-		sql.WriteString("BEGIN\n")
-		sql.WriteString(fmt.Sprintf("    CREATE TABLE %s (\n", tableName))
-		// Add a placeholder ID column if the table is being created
-		sql.WriteString("        id INT IDENTITY(1,1) PRIMARY KEY\n")
-		sql.WriteString("    );\n")
-		sql.WriteString("END;\n\n")
+func sanitizeFilenameSegment(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "migration"
 	}
+	var sb strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			sb.WriteRune(r)
+		case r == '_' || r == '-':
+			sb.WriteRune(r)
+		default:
+			sb.WriteRune('_')
+		}
+	}
+	return sb.String()
+}
 
-	// Collect fields including embedded structs with prefixes
-	fields := collectDBFields(structType, "")
+// ----- SQL rendering helpers -----
 
-	// Generate ALTER TABLE statements for each collected field
-	for _, f := range fields {
-		// Skip the top-level ID field if it's already included in the CREATE TABLE statement
-		if f.Field.Name == "ID" && f.Prefix == "" {
-			baseName := getColumnName(f.Field)
-			if baseName == "id" {
-				continue
+// renderCreateTable emits a full CREATE TABLE statement for a brand-new table,
+// followed by any indexes declared in struct tags. The runner gates re-runs
+// via the migrations history table, so we don't emit IF NOT EXISTS guards.
+func renderCreateTable(s *schema.Schema, dialect string) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("-- Create table: %s\n", s.Table))
+	sb.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", s.Table))
+
+	var lines []string
+	var pkCols []string
+	for _, f := range s.Fields {
+		if !isMigratableField(f) {
+			continue
+		}
+		spec := fmt.Sprintf("    %s %s", f.DBName, resolveSQLType(f, dialect))
+		if !f.PrimaryKey {
+			if f.NotNull {
+				spec += " NOT NULL"
+			}
+			if f.Unique {
+				spec += " UNIQUE"
+			}
+			if hasNonEmptyDefault(f) {
+				spec += " DEFAULT " + f.DefaultValue
 			}
 		}
+		lines = append(lines, spec)
+		if f.PrimaryKey {
+			pkCols = append(pkCols, f.DBName)
+		}
+	}
+	if len(pkCols) > 0 {
+		lines = append(lines, fmt.Sprintf("    PRIMARY KEY (%s)", strings.Join(pkCols, ", ")))
+	}
+	sb.WriteString(strings.Join(lines, ",\n"))
+	sb.WriteString("\n);\n\n")
 
-		baseColumnName := getColumnName(f.Field)
-		columnName := f.Prefix + baseColumnName
-		columnType := getColumnType(f.Field, dbType)
+	for _, idx := range s.ParseIndexes() {
+		if idx.Class == "PRIMARY" {
+			continue
+		}
+		sb.WriteString(renderCreateIndex(s.Table, idx))
+	}
+	sb.WriteString("\n")
+	return sb.String()
+}
 
-		// Generate ALTER TABLE statement
-		sql.WriteString(fmt.Sprintf("-- Add or modify column for field: %s\n", f.Field.Name))
+// renderAddColumn emits an ALTER TABLE ... ADD COLUMN. NOT NULL is honored
+// only when a default is also declared, otherwise the column is added
+// nullable with a comment so manual backfill can complete the migration.
+func renderAddColumn(table string, f *schema.Field, dialect string) string {
+	sqlType := resolveSQLType(f, dialect)
+	spec := sqlType
 
-		switch dbType {
-		case "postgresql":
-			// PostgreSQL supports IF NOT EXISTS for ADD COLUMN
-			sql.WriteString(fmt.Sprintf("ALTER TABLE %s ADD COLUMN IF NOT EXISTS %s %s;\n",
-				tableName, columnName, columnType))
+	if f.NotNull {
+		if hasNonEmptyDefault(f) {
+			spec += " NOT NULL DEFAULT " + f.DefaultValue
+		} else {
+			spec += " /* NOT NULL omitted: declare a default or backfill manually before tightening */"
+		}
+	} else if hasNonEmptyDefault(f) {
+		spec += " DEFAULT " + f.DefaultValue
+	}
 
-			// Also add an ALTER COLUMN statement to modify the column type if it exists
-			sql.WriteString("-- Update column type if it exists\n")
-			sql.WriteString("DO $$\n")
-			sql.WriteString("BEGIN\n")
-			sql.WriteString(fmt.Sprintf("    IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='%s' AND column_name='%s') THEN\n",
-				tableName, columnName))
-			sql.WriteString(fmt.Sprintf("        ALTER TABLE %s ALTER COLUMN %s TYPE %s;\n",
-				tableName, columnName, columnType))
-			sql.WriteString("    END IF;\n")
-			sql.WriteString("END $$;\n\n")
+	keyword := "ADD COLUMN"
+	if dialect == "mssql" {
+		keyword = "ADD"
+	}
+	return fmt.Sprintf("ALTER TABLE %s %s %s %s;\n", table, keyword, f.DBName, spec)
+}
 
-		case "mysql":
-			// MySQL doesn't support IF NOT EXISTS for ADD COLUMN
-			// Use ALTER TABLE MODIFY to add or modify the column
-			sql.WriteString("-- MySQL: Add or modify column\n")
-			sql.WriteString("SET @s = (SELECT IF(\n")
-			sql.WriteString(fmt.Sprintf("    EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='%s' AND COLUMN_NAME='%s' AND TABLE_SCHEMA = DATABASE()),\n",
-				tableName, columnName))
-			sql.WriteString(fmt.Sprintf("    'ALTER TABLE %s MODIFY COLUMN %s %s;',\n",
-				tableName, columnName, columnType))
-			sql.WriteString(fmt.Sprintf("    'ALTER TABLE %s ADD COLUMN %s %s;'\n",
-				tableName, columnName, columnType))
-			sql.WriteString("));\n")
-			sql.WriteString("PREPARE stmt FROM @s;\n")
-			sql.WriteString("EXECUTE stmt;\n")
-			sql.WriteString("DEALLOCATE PREPARE stmt;\n\n")
+// renderAlterColumnType emits an ALTER COLUMN TYPE when the live column's
+// declared type doesn't match the struct's expected type. Returns "" when
+// the types are compatible.
+func renderAlterColumnType(table string, f *schema.Field, live gorm.ColumnType, dialect string) string {
+	expected := resolveSQLType(f, dialect)
+	actual, ok := live.ColumnType()
+	if !ok || actual == "" {
+		actual = live.DatabaseTypeName()
+	}
+	if normalizeType(actual) == normalizeType(expected) {
+		return ""
+	}
+	switch dialect {
+	case "postgresql":
+		return fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s TYPE %s;\n", table, f.DBName, expected)
+	case "mysql":
+		return fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN %s %s;\n", table, f.DBName, expected)
+	case "mssql":
+		return fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s %s;\n", table, f.DBName, expected)
+	}
+	return ""
+}
 
+// renderDropColumn emits ALTER TABLE ... DROP COLUMN. Destructive — only
+// reachable via opts.AllowDestructive.
+func renderDropColumn(table, column string) string {
+	return fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s;\n", table, column)
+}
+
+// renderCreateIndex emits CREATE INDEX (or CREATE UNIQUE INDEX) for a parsed
+// gorm index definition.
+func renderCreateIndex(table string, idx schema.Index) string {
+	cols := make([]string, 0, len(idx.Fields))
+	for _, opt := range idx.Fields {
+		cols = append(cols, opt.DBName)
+	}
+	unique := ""
+	if idx.Class == "UNIQUE" {
+		unique = "UNIQUE "
+	}
+	return fmt.Sprintf("CREATE %sINDEX %s ON %s (%s);\n", unique, idx.Name, table, strings.Join(cols, ", "))
+}
+
+// renderDropIndex emits DROP INDEX. MySQL requires the table reference;
+// PostgreSQL and SQL Server do not.
+func renderDropIndex(table, name, dialect string) string {
+	if dialect == "mysql" {
+		return fmt.Sprintf("DROP INDEX %s ON %s;\n", name, table)
+	}
+	return fmt.Sprintf("DROP INDEX %s;\n", name)
+}
+
+// hasNonEmptyDefault returns true when the field declares a default value
+// suitable for SQL emission. GORM uses "(-)" as a sentinel for "explicitly
+// no default", which we treat as no default at all.
+func hasNonEmptyDefault(f *schema.Field) bool {
+	return f.HasDefaultValue && f.DefaultValue != "" && f.DefaultValue != "(-)"
+}
+
+// normalizeType reduces a SQL type string to a comparable form so trivial
+// formatting differences (case, spacing, "character varying" vs. "VARCHAR")
+// don't trigger spurious ALTER COLUMN TYPE statements.
+func normalizeType(t string) string {
+	t = strings.ToLower(strings.TrimSpace(t))
+	t = strings.ReplaceAll(t, "character varying", "varchar")
+	t = strings.ReplaceAll(t, "double precision", "double")
+	t = strings.ReplaceAll(t, " ", "")
+	return t
+}
+
+// resolveSQLType returns the dialect-specific SQL type string for a field,
+// honouring an explicit `gorm:"type:..."` override when present.
+func resolveSQLType(f *schema.Field, dialect string) string {
+	if t, ok := f.TagSettings["TYPE"]; ok && strings.TrimSpace(t) != "" {
+		return t
+	}
+	switch f.GORMDataType {
+	case schema.String:
+		size := f.Size
+		if size <= 0 {
+			size = 255
+		}
+		switch dialect {
+		case "postgresql", "mysql":
+			return fmt.Sprintf("VARCHAR(%d)", size)
 		case "mssql":
-			// SQL Server requires a different approach
-			sql.WriteString("-- SQL Server: Add column if it doesn't exist\n")
-			sql.WriteString(fmt.Sprintf("IF NOT EXISTS(SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '%s' AND COLUMN_NAME = '%s')\n",
-				tableName, columnName))
-			sql.WriteString(fmt.Sprintf("BEGIN\n    ALTER TABLE %s ADD %s %s;\nEND;\n",
-				tableName, columnName, columnType))
-
-			// Also add an ALTER COLUMN statement to modify the column type if it exists
-			sql.WriteString("ELSE\n")
-			sql.WriteString(fmt.Sprintf("BEGIN\n    ALTER TABLE %s ALTER COLUMN %s %s;\nEND;\n\n",
-				tableName, columnName, columnType))
+			return fmt.Sprintf("NVARCHAR(%d)", size)
 		}
-	}
-
-	return sql.String()
-}
-
-// fieldInfo holds a struct field with an accumulated column prefix
-type fieldInfo struct {
-	Field  reflect.StructField
-	Prefix string
-}
-
-// collectDBFields flattens a struct type into a list of fields to generate columns for,
-// handling gorm embedded structs with optional embeddedPrefix.
-func collectDBFields(t reflect.Type, prefix string) []fieldInfo {
-	// If we have a pointer, dereference
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-
-	var result []fieldInfo
-
-	// Only process struct types
-	if t.Kind() != reflect.Struct {
-		return result
-	}
-
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-
-		// Skip ignored fields
-		if field.Tag.Get("gorm") == "-" {
-			continue
-		}
-
-		// Detect embedded handling via gorm tag
-		gormSettings := parseGormTag(field.Tag.Get("gorm"))
-		if _, isEmbedded := gormSettings["embedded"]; isEmbedded {
-			// Determine the embedded prefix for this field
-			embeddedPrefix := gormSettings["embeddedPrefix"]
-			newPrefix := prefix + embeddedPrefix
-
-			// Recurse into the embedded struct type
-			ft := field.Type
-			if ft.Kind() == reflect.Ptr {
-				ft = ft.Elem()
-			}
-			if ft.Kind() == reflect.Struct {
-				// Special-case: avoid recursing into time.Time
-				if ft.PkgPath() == "time" && ft.Name() == "Time" {
-					// Treat as regular field
-					result = append(result, fieldInfo{Field: field, Prefix: prefix})
-				} else {
-					// Recurse into its fields, carrying the newPrefix
-					nested := collectDBFields(ft, newPrefix)
-					result = append(result, nested...)
+	case schema.Int:
+		big := f.Size >= 64
+		switch dialect {
+		case "postgresql":
+			if f.AutoIncrement {
+				if big {
+					return "BIGSERIAL"
 				}
-			} else {
-				// Not a struct, just add as regular field
-				result = append(result, fieldInfo{Field: field, Prefix: prefix})
+				return "SERIAL"
 			}
-			continue
-		}
-
-		// Regular field
-		result = append(result, fieldInfo{Field: field, Prefix: prefix})
-	}
-
-	return result
-}
-
-// parseGormTag parses a gorm struct tag into a key-value map.
-// Flags like "embedded" are represented with value "true".
-func parseGormTag(tag string) map[string]string {
-	res := make(map[string]string)
-	if tag == "" {
-		return res
-	}
-	parts := strings.Split(tag, ";")
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		if strings.Contains(p, ":") {
-			kv := strings.SplitN(p, ":", 2)
-			key := strings.TrimSpace(kv[0])
-			val := strings.TrimSpace(kv[1])
-			res[key] = val
-		} else {
-			// boolean flag
-			res[p] = "true"
-		}
-	}
-	return res
-}
-
-// getTableName returns the table name for a struct using Gorm's schema API
-func getTableName(structType reflect.Type) string {
-	// Create a new instance of the struct
-	modelValue := reflect.New(structType).Interface()
-
-	// Try to get the table name using Gorm's schema API
-	tableName := ""
-
-	// If DB is initialized, use it to get the table name
-	if DB != nil {
-		stmt := &gorm.Statement{DB: DB}
-		if err := stmt.Parse(modelValue); err == nil {
-			tableName = stmt.Table
-		}
-	}
-
-	// Fallback to manual determination if DB is not available or parsing fails
-	if tableName == "" {
-		// Create a new schema namer
-		namer := schema.NamingStrategy{}
-
-		// Check if the model implements Tabler interface
-		if tabler, ok := modelValue.(schema.Tabler); ok {
-			tableName = tabler.TableName()
-		} else {
-			// Use Gorm's default naming strategy
-			tableName = namer.TableName(structType.Name())
-		}
-	}
-
-	return tableName
-}
-
-// getColumnName returns the column name for a struct field using Gorm's schema API
-func getColumnName(field reflect.StructField) string {
-	// Try to get the column name from the gorm tag first
-	tag, ok := field.Tag.Lookup("gorm")
-	if ok {
-		for _, str := range strings.Split(tag, ";") {
-			if strings.HasPrefix(str, "column:") {
-				return strings.TrimPrefix(str, "column:")
+			if big {
+				return "BIGINT"
 			}
-		}
-	}
-
-	// Create a new schema namer
-	namer := schema.NamingStrategy{}
-
-	// Use Gorm's naming strategy to get the column name
-	return namer.ColumnName("", field.Name)
-}
-
-// getColumnType returns the SQL column type for a struct field based on the database type
-func getColumnType(field reflect.StructField, dbType string) string {
-	// Get Go type, preserving special handling for time.Time (including pointers)
-	var goType string
-	timeType := reflect.TypeOf(time.Time{})
-	t := field.Type
-	if t == timeType || (t.Kind() == reflect.Ptr && t.Elem() == timeType) {
-		goType = "time.Time"
-	} else {
-		goType = t.Kind().String()
-	}
-
-	// Check for specific type mappings in gorm tag
-	gormTag := field.Tag.Get("gorm")
-	if gormTag != "" {
-		for _, tag := range strings.Split(gormTag, ";") {
-			if strings.HasPrefix(tag, "type:") {
-				return strings.TrimPrefix(tag, "type:")
+			return "INTEGER"
+		case "mysql":
+			base := "INT"
+			if big {
+				base = "BIGINT"
 			}
+			if f.AutoIncrement {
+				base += " AUTO_INCREMENT"
+			}
+			return base
+		case "mssql":
+			base := "INT"
+			if big {
+				base = "BIGINT"
+			}
+			if f.AutoIncrement {
+				base += " IDENTITY(1,1)"
+			}
+			return base
+		}
+	case schema.Uint:
+		big := f.Size >= 64
+		switch dialect {
+		case "postgresql":
+			if big {
+				return "BIGINT"
+			}
+			return "INTEGER"
+		case "mysql":
+			base := "INT UNSIGNED"
+			if big {
+				base = "BIGINT UNSIGNED"
+			}
+			if f.AutoIncrement {
+				base += " AUTO_INCREMENT"
+			}
+			return base
+		case "mssql":
+			if big {
+				return "BIGINT"
+			}
+			return "INT"
+		}
+	case schema.Float:
+		switch dialect {
+		case "postgresql":
+			if f.Precision > 0 {
+				return fmt.Sprintf("NUMERIC(%d,%d)", f.Precision, f.Scale)
+			}
+			return "NUMERIC(15,5)"
+		case "mysql":
+			if f.Precision > 0 {
+				return fmt.Sprintf("DECIMAL(%d,%d)", f.Precision, f.Scale)
+			}
+			return "DOUBLE"
+		case "mssql":
+			if f.Precision > 0 {
+				return fmt.Sprintf("DECIMAL(%d,%d)", f.Precision, f.Scale)
+			}
+			return "DECIMAL(15,5)"
+		}
+	case schema.Bool:
+		switch dialect {
+		case "postgresql":
+			return "BOOLEAN"
+		case "mysql":
+			return "TINYINT(1)"
+		case "mssql":
+			return "BIT"
+		}
+	case schema.Time:
+		switch dialect {
+		case "postgresql":
+			return "TIMESTAMP WITH TIME ZONE"
+		case "mysql":
+			return "DATETIME"
+		case "mssql":
+			return "DATETIME2"
+		}
+	case schema.Bytes:
+		switch dialect {
+		case "postgresql":
+			return "BYTEA"
+		case "mysql":
+			return "BLOB"
+		case "mssql":
+			return "VARBINARY(MAX)"
 		}
 	}
-
-	// Map Go types to SQL types based on database type
-	switch dbType {
-	case "postgresql":
-		return mapGoTypeToPostgreSQL(goType)
-	case "mysql":
-		return mapGoTypeToMySQL(goType)
+	// Fallback for any other types.
+	switch dialect {
+	case "postgresql", "mysql":
+		return "TEXT"
 	case "mssql":
-		return mapGoTypeToMSSQL(goType)
-	default:
-		return "TEXT" // Default fallback
-	}
-}
-
-// mapGoTypeToPostgreSQL maps Go types to PostgreSQL types
-func mapGoTypeToPostgreSQL(goType string) string {
-	switch goType {
-	case "string":
-		return "VARCHAR(255)"
-	case "int", "int32", "int64":
-		return "INTEGER"
-	case "float32", "float64":
-		return "NUMERIC(15,5)"
-	case "bool":
-		return "BOOLEAN"
-	case "time.Time":
-		return "TIMESTAMP WITH TIME ZONE"
-	default:
-		return "TEXT"
-	}
-}
-
-// mapGoTypeToMySQL maps Go types to MySQL types
-func mapGoTypeToMySQL(goType string) string {
-	switch goType {
-	case "string":
-		return "VARCHAR(255)"
-	case "int", "int32", "int64":
-		return "INT"
-	case "float32", "float64":
-		return "DOUBLE"
-	case "bool":
-		return "TINYINT(1)"
-	case "time.Time":
-		return "DATETIME"
-	default:
-		return "TEXT"
-	}
-}
-
-// mapGoTypeToMSSQL maps Go types to SQL Server types
-func mapGoTypeToMSSQL(goType string) string {
-	switch goType {
-	case "string":
-		return "NVARCHAR(255)"
-	case "int", "int32", "int64":
-		return "INT"
-	case "float32", "float64":
-		return "DECIMAL(15,5)"
-	case "bool":
-		return "BIT"
-	case "time.Time":
-		return "DATETIME2"
-	default:
 		return "NVARCHAR(MAX)"
 	}
-}
-
-// toSnakeCase converts a string from camelCase to snake_case
-func toSnakeCase(s string) string {
-	// Special case for "ID" to convert to "id" instead of "i_d"
-	if s == "ID" {
-		return "id"
-	}
-
-	var result strings.Builder
-	for i, r := range s {
-		if i > 0 && 'A' <= r && r <= 'Z' {
-			result.WriteRune('_')
-		}
-		result.WriteRune(r)
-	}
-	return strings.ToLower(result.String())
+	return "TEXT"
 }

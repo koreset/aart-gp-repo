@@ -314,6 +314,57 @@ func RunMigrationsOnStartup() {
 	appLog.Info("Migrations completed successfully")
 }
 
+// MarkAllMigrationsAsApplied records every migration file currently on disk
+// as already applied for the connected database, without executing the SQL.
+//
+// This is the baseline-insertion path: call it after a fresh-install
+// AutoMigrate so the runner does not try to re-apply migration files to a
+// database whose schema was already created from current structs. Files that
+// are already recorded are left alone, so it's safe to call repeatedly.
+func MarkAllMigrationsAsApplied() error {
+	if DB == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	mgr := NewMigrationManager(DB)
+	if err := mgr.Initialize(); err != nil {
+		return err
+	}
+
+	files, err := mgr.getMigrationFiles()
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	recorded := 0
+	for _, file := range files {
+		version := strings.Split(filepath.Base(file), "_")[0]
+
+		var existing Migration
+		err := DB.Where("version = ?", version).First(&existing).Error
+		if err == nil {
+			continue // already recorded
+		}
+
+		m := Migration{
+			Version:   version,
+			Name:      strings.TrimSuffix(filepath.Base(file), filepath.Ext(file)),
+			AppliedAt: now,
+		}
+		if err := DB.Create(&m).Error; err != nil {
+			return fmt.Errorf("record baseline migration %s: %w", version, err)
+		}
+		recorded++
+	}
+
+	appLog.WithFields(map[string]interface{}{
+		"total":    len(files),
+		"recorded": recorded,
+	}).Info("Marked existing migration files as applied (baseline)")
+	return nil
+}
+
 func splitSQLStatements(sqlScript string) []string {
 	var statements []string
 	var sb strings.Builder

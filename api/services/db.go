@@ -369,6 +369,14 @@ func SetupTables(initTables, initDatabaseTables bool) {
 			if err := MigratePhiValuationTables(); err != nil {
 				appLog.WithField("error", err.Error()).Error("Failed to migrate PHI valuation tables")
 			}
+
+			// AutoMigrate has just produced a schema matching the current
+			// structs. Record every migration file already on disk as applied
+			// so RunMigrationsOnStartup does not try to re-run baseline files
+			// against a database that's already at HEAD.
+			if err := MarkAllMigrationsAsApplied(); err != nil {
+				appLog.WithField("error", err.Error()).Error("Failed to record baseline migrations")
+			}
 		} else {
 			// Database already has tables — skip auto-migrations.
 			// Schema changes for existing databases are applied via manual
