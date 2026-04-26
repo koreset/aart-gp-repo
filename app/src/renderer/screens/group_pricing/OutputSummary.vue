@@ -563,9 +563,9 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              computeOfficePremium(
-                                resultSummary.exp_total_gla_annual_risk_premium,
-                                resultSummary
+                              finalFieldValue(
+                                resultSummary,
+                                'final_gla_annual_office_premium'
                               )
                             )
                           )
@@ -1056,9 +1056,9 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              computeOfficePremium(
-                                resultSummary.exp_total_ptd_annual_risk_premium,
-                                resultSummary
+                              finalFieldValue(
+                                resultSummary,
+                                'final_ptd_annual_office_premium'
                               )
                             )
                           )
@@ -1547,9 +1547,9 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              computeOfficePremium(
-                                resultSummary.exp_total_ci_annual_risk_premium,
-                                resultSummary
+                              finalFieldValue(
+                                resultSummary,
+                                'final_ci_annual_office_premium'
                               )
                             )
                           )
@@ -2026,9 +2026,9 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              computeOfficePremium(
-                                resultSummary.exp_total_phi_annual_risk_premium,
-                                resultSummary
+                              finalFieldValue(
+                                resultSummary,
+                                'final_phi_annual_office_premium'
                               )
                             )
                           )
@@ -2505,9 +2505,9 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              computeOfficePremium(
-                                resultSummary.exp_total_ttd_annual_risk_premium,
-                                resultSummary
+                              finalFieldValue(
+                                resultSummary,
+                                'final_ttd_annual_office_premium'
                               )
                             )
                           )
@@ -3000,9 +3000,9 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              computeOfficePremium(
-                                resultSummary.exp_total_sgla_annual_risk_premium,
-                                resultSummary
+                              finalFieldValue(
+                                resultSummary,
+                                'final_sgla_annual_office_premium'
                               )
                             )
                           )
@@ -3312,9 +3312,9 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              computeOfficePremium(
-                                resultSummary.exp_total_fun_annual_risk_premium,
-                                resultSummary
+                              finalFieldValue(
+                                resultSummary,
+                                'final_fun_annual_office_premium'
                               )
                             )
                           )
@@ -3416,7 +3416,8 @@ import { applyPlugin } from 'jspdf-autotable'
 import {
   computeOfficePremium,
   officeRateFromRiskRate,
-  officeProportionFromRiskProportion
+  officeProportionFromRiskProportion,
+  finalFieldValue
 } from '@/renderer/utils/quoteDataHelpers'
 applyPlugin(jsPDF)
 
@@ -3563,8 +3564,13 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
   const ex = (field: string) => fmtNum(resolve(field))
   const thP = (field: string) => fmtNum(resolve(field), true)
   const exP = (field: string) => fmtNum(resolve(field), true)
-  const row = (label: string, thVal: string, expVal: string) =>
-    rows.push([label, thVal, expVal, expVal])
+  const f = (field: string) => fmtNum(finalFieldValue(rs, field))
+  const row = (
+    label: string,
+    thVal: string,
+    expVal: string,
+    finalVal?: string
+  ) => rows.push([label, thVal, expVal, finalVal ?? expVal])
   const sec = (label: string) => rows.push([label, '', '', ''])
 
   switch (code) {
@@ -3620,7 +3626,8 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       row(
         'Annual Office Premium',
         th('total_gla_annual_office_premium'),
-        ex('exp_total_gla_annual_office_premium')
+        ex('exp_total_gla_annual_office_premium'),
+        f('final_gla_annual_office_premium')
       )
       row(
         'Unit Office Premium Rate per 1000 Covered Sum Assured',
@@ -3685,7 +3692,8 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       row(
         'Annual Office Premium',
         th('total_ptd_annual_office_premium'),
-        ex('exp_total_ptd_annual_office_premium')
+        ex('exp_total_ptd_annual_office_premium'),
+        f('final_ptd_annual_office_premium')
       )
       row(
         'Unit Office Premium Rate per 1000 Covered Sum Assured',
@@ -3750,7 +3758,8 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       row(
         'Annual Office Premium',
         th('total_ci_annual_office_premium'),
-        ex('exp_total_ci_annual_office_premium')
+        ex('exp_total_ci_annual_office_premium'),
+        f('final_ci_annual_office_premium')
       )
       row(
         'Unit Office Premium Rate per 1000 Covered Sum Assured',
@@ -3815,7 +3824,8 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       row(
         'Annual Office Premium',
         th('total_sgla_annual_office_premium'),
-        ex('exp_total_sgla_annual_office_premium')
+        ex('exp_total_sgla_annual_office_premium'),
+        f('final_sgla_annual_office_premium')
       )
       row(
         'Unit Office Premium Rate per 1000 Covered Sum Assured',
@@ -3872,7 +3882,8 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       row(
         'Annual Office Premium',
         th('total_phi_annual_office_premium'),
-        ex('exp_total_phi_annual_office_premium')
+        ex('exp_total_phi_annual_office_premium'),
+        f('final_phi_annual_office_premium')
       )
       row(
         'Unit Office Premium Rate per 1000 Covered Sum Assured',
@@ -3929,7 +3940,8 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       row(
         'Annual Office Premium',
         th('total_ttd_annual_office_premium'),
-        ex('exp_total_ttd_annual_office_premium')
+        ex('exp_total_ttd_annual_office_premium'),
+        f('final_ttd_annual_office_premium')
       )
       row(
         'Unit Office Premium Rate per 1000 Covered Sum Assured',
@@ -3964,7 +3976,8 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       row(
         'Annual Office Premium',
         th('total_fun_annual_office_premium'),
-        ex('exp_total_fun_annual_office_premium')
+        ex('exp_total_fun_annual_office_premium'),
+        f('final_fun_annual_office_premium')
       )
       row(
         'Office Premium per Member per Month',

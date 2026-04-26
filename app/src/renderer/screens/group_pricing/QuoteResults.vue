@@ -21,6 +21,12 @@
             {{
               item.populated ? `${item.count} records loaded` : 'Data required'
             }}
+            <span
+              v-if="item.populated && calculationCompletedLabel"
+              class="ml-2 text-medium-emphasis"
+            >
+              · {{ calculationCompletedLabel }}
+            </span>
           </v-list-item-subtitle>
 
           <template #append>
@@ -493,6 +499,27 @@ onMounted(async () => {
     }
   })
 })
+// Formatted timestamp shown beside each populated result row so the user
+// can see at a glance when the underlying calculation last produced these
+// records. Returns empty string when the quote has never been calculated.
+const calculationCompletedLabel = computed(() => {
+  const ts = props.quote?.calculation_completed_at
+  if (!ts) return ''
+  const d = new Date(ts)
+  if (isNaN(d.getTime())) return ''
+  const datePart = d.toLocaleDateString(undefined, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  })
+  const timePart = d.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  })
+  return `Calculated ${datePart} at ${timePart}`
+})
+
 const relatedResultTables = computed(() => {
   const tables: any = []
 

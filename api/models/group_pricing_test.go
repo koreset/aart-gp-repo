@@ -17,22 +17,26 @@ func TestSchemeTotalLoading(t *testing.T) {
 			want: 0,
 		},
 		{
-			name: "typical 0.2 loading",
+			// SchemeTotalLoading is now ExpenseLoading + ProfitLoading only —
+			// CommissionLoading is excluded because commission is added on top
+			// of the pre-comm office premium via the progressive allocation,
+			// not baked into the gross-up denominator.
+			name: "typical loading: expense + profit",
 			in: MemberRatingResultSummary{
 				ExpenseLoading:    0.05,
-				CommissionLoading: 0.10,
+				CommissionLoading: 0.10, // ignored
 				ProfitLoading:     0.05,
 			},
-			want: 0.20,
+			want: 0.10,
 		},
 		{
-			name: "full loading sums all three",
+			name: "full loading sums expense + profit only",
 			in: MemberRatingResultSummary{
 				ExpenseLoading:    0.10,
-				CommissionLoading: 0.20,
+				CommissionLoading: 0.20, // ignored
 				ProfitLoading:     0.15,
 			},
-			want: 0.45,
+			want: 0.25,
 		},
 	}
 	for _, tt := range tests {
@@ -65,22 +69,24 @@ func TestComputeOfficePremium(t *testing.T) {
 			want:        100,
 		},
 		{
-			name:        "typical 0.2 loading",
-			riskPremium: 80,
+			// CommissionLoading is intentionally excluded from the gross-up;
+			// see SchemeTotalLoading() doc.
+			name:        "typical 0.1 loading (expense + profit)",
+			riskPremium: 90,
 			summary: &MemberRatingResultSummary{
 				ExpenseLoading:    0.05,
-				CommissionLoading: 0.10,
+				CommissionLoading: 0.10, // ignored
 				ProfitLoading:     0.05,
 			},
-			want: 100, // 80 / (1 - 0.20)
+			want: 100, // 90 / (1 - 0.10)
 		},
 		{
 			name:        "denom guard at 1.0 loading",
 			riskPremium: 100,
 			summary: &MemberRatingResultSummary{
 				ExpenseLoading:    0.50,
-				CommissionLoading: 0.30,
-				ProfitLoading:     0.20,
+				CommissionLoading: 0.30, // ignored
+				ProfitLoading:     0.50,
 			},
 			want: 0,
 		},
@@ -89,8 +95,8 @@ func TestComputeOfficePremium(t *testing.T) {
 			riskPremium: 100,
 			summary: &MemberRatingResultSummary{
 				ExpenseLoading:    0.60,
-				CommissionLoading: 0.30,
-				ProfitLoading:     0.20,
+				CommissionLoading: 0.30, // ignored
+				ProfitLoading:     0.50,
 			},
 			want: 0,
 		},

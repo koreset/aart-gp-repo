@@ -1062,6 +1062,17 @@ func CalculateGroupPricingQuote(quoteId string, basis string, credibility float6
 		logger.WithField("error", err.Error()).Error("Failed to apply scheme-wide commission")
 	}
 
+	// Stamp the calculation completion time on the quote so the UI can show
+	// users when the results were last produced. Done before emitting the
+	// completion event so a client that queries the quote on receipt sees the
+	// updated timestamp.
+	completedAt := time.Now()
+	if err := DB.Model(&models.GroupPricingQuote{}).
+		Where("id = ?", intQuoteID(quoteId)).
+		Update("calculation_completed_at", completedAt).Error; err != nil {
+		logger.WithField("error", err.Error()).Error("Failed to stamp calculation_completed_at on quote")
+	}
+
 	// Send final 100% completion event
 	sendCalculationProgress(user.UserEmail, CalculationProgress{
 		QuoteID:             quoteId,
@@ -1961,9 +1972,11 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 
 	// Compute derived summary fields after the reduce loop
 	mdrs.TotalAnnualPremium = models.ComputeOfficePremium(mdrs.TotalGlaAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalPtdAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalTtdAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalPhiAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalCiAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalSglaAnnualRiskPremium, &mdrs)
-	// Sub Total (Excl. Funeral) includes the GLA TaxSaver rider, GLA Educator
-	// and PTD Educator components on top of the six core benefits.
+	// Sub Total (Excl. Funeral) includes the Additional Accidental GLA rider,
+	// the GLA TaxSaver rider, GLA Educator and PTD Educator components on top
+	// of the six core benefits.
 	mdrs.ExpTotalAnnualPremiumExclFuneral = models.ComputeOfficePremium(mdrs.ExpTotalGlaAnnualRiskPremium, &mdrs) +
+		models.ComputeOfficePremium(mdrs.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium, &mdrs) +
 		models.ComputeOfficePremium(mdrs.ExpTotalPtdAnnualRiskPremium, &mdrs) +
 		models.ComputeOfficePremium(mdrs.ExpTotalTtdAnnualRiskPremium, &mdrs) +
 		models.ComputeOfficePremium(mdrs.ExpTotalPhiAnnualRiskPremium, &mdrs) +
@@ -2991,7 +3004,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	memberDataPointResult.ExpAdjTotalFuneralRiskPremium = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
 	memberDataPointResult.TotalFuneralOfficePremium = memberDataPointResult.TotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
 	memberDataPointResult.ExpAdjTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
-	memberDataPointResult.FinalTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralOfficePremium + memberDataPointResult.ExpAdjTotalFuneralOfficePremium*discountFraction
+	memberDataPointResult.FinalTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - (memberDataPointResult.TotalPremiumLoading + discountFraction))
 
 	// Compute all non-educator conversion / continuity slice premiums now
 	// that Loaded*Rates and TotalFuneralRiskCost are final. Educator slice
@@ -3964,7 +3977,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 
 	memberDataPointResult.ExpAdjTotalFuneralRiskPremium = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
 	memberDataPointResult.ExpAdjTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
-	memberDataPointResult.FinalTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralOfficePremium + memberDataPointResult.ExpAdjTotalFuneralOfficePremium*discountFraction
+	memberDataPointResult.FinalTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - (memberDataPointResult.TotalPremiumLoading + discountFraction))
 
 	// Re-derive the educator loaded rates now that ExpAdjLoaded*Rate values
 	// are set so the ExpAdjLoadedGla/PtdEducatorRate fields are accurate.
@@ -7033,26 +7046,331 @@ func GetGeneralLoading(riskRateCode string, age int, gender string) models.Gener
 	return generalLoading
 }
 
+// benefitAccessor is the canonical per-benefit getter/setter table used by
+// both the Exp* commission allocation in applySchemeWideCommission and the
+// Final* premium + commission allocation in recomputeFinalPremiumsAndCommission.
+// Adding a new benefit (one that participates in TotalAnnualPremium /
+// FinalTotalAnnualPremium) is a single-row change here.
+type benefitAccessor struct {
+	name              string
+	expRiskPremium    func(*models.MemberRatingResultSummary) float64
+	expBinder         func(*models.MemberRatingResultSummary) float64
+	expOutsource      func(*models.MemberRatingResultSummary) float64
+	setExpComm        func(*models.MemberRatingResultSummary, float64)
+	setFinalPremium   func(*models.MemberRatingResultSummary, float64)
+	setFinalComm      func(*models.MemberRatingResultSummary, float64)
+	setFinalBinder    func(*models.MemberRatingResultSummary, float64)
+	setFinalOutsource func(*models.MemberRatingResultSummary, float64)
+	includeInExclFun  bool
+}
+
+// benefitAccessors returns the 11-benefit table mirroring the composition of
+// ExpTotalAnnualPremiumExclFuneral (+ funeral). The order is significant:
+// the last accessor receives the residual when commission is sliced.
+func benefitAccessors() []benefitAccessor {
+	return []benefitAccessor{
+		{
+			name:              "gla",
+			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalGlaAnnualRiskPremium },
+			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalGlaAnnualBinderAmount },
+			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalGlaAnnualOutsourcedAmount },
+			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalGlaAnnualCommissionAmount = v },
+			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalGlaAnnualOfficePremium = v },
+			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalGlaAnnualCommissionAmount = v },
+			setFinalBinder:    func(s *models.MemberRatingResultSummary, v float64) { s.FinalGlaAnnualBinderAmount = v },
+			setFinalOutsource: func(s *models.MemberRatingResultSummary, v float64) { s.FinalGlaAnnualOutsourcedAmount = v },
+			includeInExclFun:  true,
+		},
+		{
+			name:              "add_acc_gla",
+			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium },
+			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalAdditionalAccidentalGlaAnnualBinderAmount },
+			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalAdditionalAccidentalGlaAnnualOutsourcedAmt },
+			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalAdditionalAccidentalGlaAnnualCommissionAmount = v },
+			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalAdditionalAccidentalGlaAnnualOfficePremium = v },
+			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalAdditionalAccidentalGlaAnnualCommissionAmount = v },
+			setFinalBinder:    func(s *models.MemberRatingResultSummary, v float64) { s.FinalAdditionalAccidentalGlaAnnualBinderAmount = v },
+			setFinalOutsource: func(s *models.MemberRatingResultSummary, v float64) { s.FinalAdditionalAccidentalGlaAnnualOutsourcedAmt = v },
+			includeInExclFun:  true,
+		},
+		{
+			name:              "ptd",
+			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalPtdAnnualRiskPremium },
+			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalPtdAnnualBinderAmount },
+			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalPtdAnnualOutsourcedAmount },
+			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalPtdAnnualCommissionAmount = v },
+			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalPtdAnnualOfficePremium = v },
+			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalPtdAnnualCommissionAmount = v },
+			setFinalBinder:    func(s *models.MemberRatingResultSummary, v float64) { s.FinalPtdAnnualBinderAmount = v },
+			setFinalOutsource: func(s *models.MemberRatingResultSummary, v float64) { s.FinalPtdAnnualOutsourcedAmount = v },
+			includeInExclFun:  true,
+		},
+		{
+			name:              "ci",
+			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalCiAnnualRiskPremium },
+			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalCiAnnualBinderAmount },
+			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalCiAnnualOutsourcedAmount },
+			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalCiAnnualCommissionAmount = v },
+			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalCiAnnualOfficePremium = v },
+			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalCiAnnualCommissionAmount = v },
+			setFinalBinder:    func(s *models.MemberRatingResultSummary, v float64) { s.FinalCiAnnualBinderAmount = v },
+			setFinalOutsource: func(s *models.MemberRatingResultSummary, v float64) { s.FinalCiAnnualOutsourcedAmount = v },
+			includeInExclFun:  true,
+		},
+		{
+			name:              "sgla",
+			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalSglaAnnualRiskPremium },
+			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalSglaAnnualBinderAmount },
+			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalSglaAnnualOutsourcedAmount },
+			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalSglaAnnualCommissionAmount = v },
+			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalSglaAnnualOfficePremium = v },
+			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalSglaAnnualCommissionAmount = v },
+			setFinalBinder:    func(s *models.MemberRatingResultSummary, v float64) { s.FinalSglaAnnualBinderAmount = v },
+			setFinalOutsource: func(s *models.MemberRatingResultSummary, v float64) { s.FinalSglaAnnualOutsourcedAmount = v },
+			includeInExclFun:  true,
+		},
+		{
+			// Tax saver has no persisted Exp* binder/outsource aggregates
+			// (it's an informational rider on top of GLA), so the Exp
+			// getters return 0 — finalBinder/finalOutsource scale to 0
+			// for this benefit, matching the calc-time behaviour.
+			name:              "tax_saver",
+			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalTaxSaverAnnualRiskPremium },
+			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return 0 },
+			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return 0 },
+			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalTaxSaverAnnualCommissionAmount = v },
+			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalTaxSaverAnnualOfficePremium = v },
+			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalTaxSaverAnnualCommissionAmount = v },
+			setFinalBinder:    func(s *models.MemberRatingResultSummary, v float64) { s.FinalTaxSaverAnnualBinderAmount = v },
+			setFinalOutsource: func(s *models.MemberRatingResultSummary, v float64) { s.FinalTaxSaverAnnualOutsourcedAmount = v },
+			includeInExclFun:  true,
+		},
+		{
+			name:              "ttd",
+			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalTtdAnnualRiskPremium },
+			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalTtdAnnualBinderAmount },
+			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalTtdAnnualOutsourcedAmount },
+			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalTtdAnnualCommissionAmount = v },
+			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalTtdAnnualOfficePremium = v },
+			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalTtdAnnualCommissionAmount = v },
+			setFinalBinder:    func(s *models.MemberRatingResultSummary, v float64) { s.FinalTtdAnnualBinderAmount = v },
+			setFinalOutsource: func(s *models.MemberRatingResultSummary, v float64) { s.FinalTtdAnnualOutsourcedAmount = v },
+			includeInExclFun:  true,
+		},
+		{
+			name:              "phi",
+			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalPhiAnnualRiskPremium },
+			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalPhiAnnualBinderAmount },
+			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalPhiAnnualOutsourcedAmount },
+			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalPhiAnnualCommissionAmount = v },
+			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalPhiAnnualOfficePremium = v },
+			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalPhiAnnualCommissionAmount = v },
+			setFinalBinder:    func(s *models.MemberRatingResultSummary, v float64) { s.FinalPhiAnnualBinderAmount = v },
+			setFinalOutsource: func(s *models.MemberRatingResultSummary, v float64) { s.FinalPhiAnnualOutsourcedAmount = v },
+			includeInExclFun:  true,
+		},
+		{
+			name:              "fun",
+			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalFunAnnualRiskPremium },
+			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalFunAnnualBinderAmount },
+			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalFunAnnualOutsourcedAmount },
+			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalFunAnnualCommissionAmount = v },
+			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalFunAnnualOfficePremium = v },
+			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalFunAnnualCommissionAmount = v },
+			setFinalBinder:    func(s *models.MemberRatingResultSummary, v float64) { s.FinalFunAnnualBinderAmount = v },
+			setFinalOutsource: func(s *models.MemberRatingResultSummary, v float64) { s.FinalFunAnnualOutsourcedAmount = v },
+			includeInExclFun:  false,
+		},
+		{
+			name:              "gla_educator",
+			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpAdjTotalGlaEducatorRiskPremium },
+			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpAdjTotalGlaEducatorBinderAmount },
+			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpAdjTotalGlaEducatorOutsourcedAmount },
+			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpAdjTotalGlaEducatorCommissionAmount = v },
+			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalGlaEducatorAnnualOfficePremium = v },
+			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalGlaEducatorAnnualCommissionAmount = v },
+			setFinalBinder:    func(s *models.MemberRatingResultSummary, v float64) { s.FinalGlaEducatorAnnualBinderAmount = v },
+			setFinalOutsource: func(s *models.MemberRatingResultSummary, v float64) { s.FinalGlaEducatorAnnualOutsourcedAmount = v },
+			includeInExclFun:  true,
+		},
+		{
+			name:              "ptd_educator",
+			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpAdjTotalPtdEducatorRiskPremium },
+			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpAdjTotalPtdEducatorBinderAmount },
+			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpAdjTotalPtdEducatorOutsourcedAmount },
+			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpAdjTotalPtdEducatorCommissionAmount = v },
+			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalPtdEducatorAnnualOfficePremium = v },
+			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalPtdEducatorAnnualCommissionAmount = v },
+			setFinalBinder:    func(s *models.MemberRatingResultSummary, v float64) { s.FinalPtdEducatorAnnualBinderAmount = v },
+			setFinalOutsource: func(s *models.MemberRatingResultSummary, v float64) { s.FinalPtdEducatorAnnualOutsourcedAmount = v },
+			includeInExclFun:  true,
+		},
+	}
+}
+
+// recomputeFinalPremiumsAndCommission writes Final*OfficePremium and
+// Final*CommissionAmount onto every summary for the quote using the Discount
+// currently stored on each summary. Each persisted Final*OfficePremium is the
+// pre-commission office premium (RiskPremium / (1 - FinalSchemeTotalLoading))
+// plus that benefit's commission slice — so the per-benefit values include
+// commission and reconcile exactly to FinalTotalAnnualPremium{,ExclFuneral}.
+// The progressive commission rate is derived against the scheme-wide pre-comm
+// total via ComputeProgressiveCommission, then split scheme → category →
+// benefit by pre-comm Final premium share with the last slice absorbing the
+// residual (mirroring the Exp* allocation pattern).
+//
+// Note: Exp*OfficePremium remains pre-commission, so post-change the
+// "Discount == 0 ⇒ Final == Exp" invariant no longer holds — the gap equals
+// SchemeTotalCommission.
+func recomputeFinalPremiumsAndCommission(quoteID int, groupQuote models.GroupPricingQuote) error {
+	var summaries []models.MemberRatingResultSummary
+	if err := DB.Where("quote_id = ?", quoteID).Order("id ASC").Find(&summaries).Error; err != nil {
+		return fmt.Errorf("load summaries for final recompute: %w", err)
+	}
+	if len(summaries) == 0 {
+		return nil
+	}
+
+	accessors := benefitAccessors()
+
+	// 1. Seed pre-comm Final*OfficePremium for every benefit on every summary
+	//    and the FinalTotalAnnualPremium{ExclFuneral,} rollups derived from
+	//    them. These are overwritten in pass 3 once commission is allocated;
+	//    the seed is kept so pass 1's persisted values are self-consistent if
+	//    a later pass bails out. Also derive Final*Binder/Outsourced amounts
+	//    by scaling each benefit's persisted Exp*Binder/Outsource by the
+	//    pre-comm discount ratio OfficeFinalPreComm / OfficePre. At
+	//    Discount == 0 the ratio is 1, so Final == Exp exactly; at Discount
+	//    != 0 it shrinks (or grows) the Exp amount by exactly the discount-
+	//    driven loading change. This avoids depending on s.BinderFeeRate /
+	//    s.OutsourceFeeRate, which are 0 on legacy summaries that pre-date
+	//    the rate columns and on non-binder distribution channels.
+	categoryTotals := make([]float64, len(summaries))
+	schemeTotal := 0.0
+	for i := range summaries {
+		s := &summaries[i]
+		var exclFun, total float64
+		for _, acc := range accessors {
+			risk := acc.expRiskPremium(s)
+			expOffice := models.ComputeOfficePremium(risk, s)
+			finalOfficePreComm := models.ComputeFinalOfficePremium(risk, s)
+			acc.setFinalPremium(s, finalOfficePreComm)
+
+			scale := 0.0
+			if expOffice > 0 {
+				scale = finalOfficePreComm / expOffice
+			}
+			acc.setFinalBinder(s, acc.expBinder(s)*scale)
+			acc.setFinalOutsource(s, acc.expOutsource(s)*scale)
+
+			total += finalOfficePreComm
+			if acc.includeInExclFun {
+				exclFun += finalOfficePreComm
+			}
+		}
+		s.FinalTotalAnnualPremiumExclFuneral = exclFun
+		s.FinalTotalAnnualPremium = total
+		categoryTotals[i] = total
+		schemeTotal += total
+	}
+
+	// 2. Re-derive the progressive commission rate against the new scheme total.
+	channel := string(groupQuote.DistributionChannel)
+	holderName := strings.TrimSpace(groupQuote.QuoteBroker.Name)
+	rate := 0.0
+	if schemeTotal > 0 {
+		r, err := ComputeProgressiveCommission(channel, holderName, schemeTotal)
+		if err != nil {
+			return fmt.Errorf("compute final progressive commission: %w", err)
+		}
+		rate = r
+	}
+	overallCommission := schemeTotal * rate
+
+	// 3. Split scheme commission into per-category commissions by share, with
+	//    the last category absorbing any rounding residual.
+	categoryCommissions := make([]float64, len(summaries))
+	lastCatIdx := len(summaries) - 1
+	remainingScheme := overallCommission
+	for i := range summaries {
+		if i == lastCatIdx {
+			categoryCommissions[i] = remainingScheme
+		} else if schemeTotal > 0 {
+			categoryCommissions[i] = overallCommission * (categoryTotals[i] / schemeTotal)
+			remainingScheme -= categoryCommissions[i]
+		}
+	}
+
+	// 4. Within each category, split commission by benefit share (last benefit
+	//    absorbs the per-category residual). Then gross up Final*OfficePremium
+	//    in place to (pre-comm + commission slice) so the final premium itself
+	//    includes commission, and rewrite FinalTotalAnnualPremium{,ExclFuneral}
+	//    as the sum of the with-commission per-benefit values. Per-benefit
+	//    values reconcile to the rollup because the last slice absorbs all
+	//    floating-point residual.
+	lastBenIdx := len(accessors) - 1
+	for catIdx := range summaries {
+		s := &summaries[catIdx]
+		categoryCommission := categoryCommissions[catIdx]
+		categoryTotal := categoryTotals[catIdx]
+		remainingCat := categoryCommission
+
+		var newTotal, newExclFun float64
+		for benIdx, acc := range accessors {
+			benefitPremium := models.ComputeFinalOfficePremium(acc.expRiskPremium(s), s)
+
+			var slice float64
+			if benIdx == lastBenIdx {
+				slice = remainingCat
+			} else if categoryTotal > 0 {
+				slice = categoryCommission * (benefitPremium / categoryTotal)
+				remainingCat -= slice
+			}
+			acc.setFinalComm(s, slice)
+
+			withComm := benefitPremium + slice
+			acc.setFinalPremium(s, withComm)
+			newTotal += withComm
+			if acc.includeInExclFun {
+				newExclFun += withComm
+			}
+		}
+		s.FinalTotalAnnualPremium = newTotal
+		s.FinalTotalAnnualPremiumExclFuneral = newExclFun
+		s.FinalSchemeTotalCommission = overallCommission
+		s.FinalSchemeTotalCommissionRate = rate
+	}
+
+	for i := range summaries {
+		if err := DB.Save(&summaries[i]).Error; err != nil {
+			return fmt.Errorf("save summary %d: %w", summaries[i].ID, err)
+		}
+	}
+	return nil
+}
+
 // applySchemeWideCommission computes the total commission for the quote by
 // running the tiered CommissionStructure bands against the scheme-wide total
-// premium, then distributes that commission back to each (category × benefit)
-// in proportion to its share of total premium.
+// premium, then distributes that commission down two levels: scheme → category
+// (by total-premium share), and category → benefit (by category-level
+// premium share). This guarantees that on every category
+// TotalCommission == Σ per-benefit commissions, and across the scheme
+// SchemeTotalCommission == Σ TotalCommission == Σ all per-benefit commissions.
 //
 // Flow:
 //  1. Load all MemberRatingResultSummary rows for the quote.
-//  2. Sum Exp-Adj office premium across every benefit and every category to
-//     get the scheme-wide total premium.
+//  2. For each category, sum Exp-Adj office premium across every benefit to
+//     get categoryTotals[i]; sum those to get the scheme-wide total.
 //  3. Call ComputeProgressiveCommission(channel, broker, total) to get the
 //     blended commission rate (also returned so reports can show it).
 //  4. overallCommission = total * rate.
-//  5. For each (category, benefit): commission = overallCommission * (benefit
-//     premium / total). Office premium on the summary is updated in-place to
-//     include its commission slice, and TotalCommission per category is set
-//     to the sum of the category's per-benefit commission slices.
-//  6. A single residual fix-up on the final (category, benefit) pair ensures
-//     the sum of all per-benefit commissions equals overallCommission
-//     exactly, cancelling any floating-point error accumulated during the
-//     proportional distribution.
+//  5. Split overallCommission into per-category commissions in proportion to
+//     categoryTotals[i] / schemeTotal. The last category absorbs the residual
+//     so Σ category commissions == overallCommission exactly.
+//  6. Within each category, split that category's commission across its
+//     benefits in proportion to acc.premium(s) / categoryTotals[i]. The last
+//     benefit absorbs the per-category residual so Σ benefit commissions in
+//     the category == that category's commission exactly.
 //
 // Called once per quote after all category workers have finished.
 func applySchemeWideCommission(quoteID int, groupQuote models.GroupPricingQuote, logger *logrus.Entry) error {
@@ -7064,108 +7382,27 @@ func applySchemeWideCommission(quoteID int, groupQuote models.GroupPricingQuote,
 		return nil
 	}
 
-	// Benefit-level accessors: one entry per benefit field that the commission
-	// is sliced across. Keeping getter + setter + commission setter in one
-	// place means adding a new benefit later is a single-row change.
-	type benefitAccessor struct {
-		name       string
-		premium    func(*models.MemberRatingResultSummary) float64
-		addPremium func(*models.MemberRatingResultSummary, float64)
-		setComm    func(*models.MemberRatingResultSummary, float64)
-	}
-	accessors := []benefitAccessor{
-		{
-			name: "gla",
-			premium: func(s *models.MemberRatingResultSummary) float64 {
-				return models.ComputeOfficePremium(s.ExpTotalGlaAnnualRiskPremium, s)
-			},
-			addPremium: func(s *models.MemberRatingResultSummary, v float64) {},
-			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalGlaAnnualCommissionAmount = v },
-		},
-		{
-			name: "add_acc_gla",
-			premium: func(s *models.MemberRatingResultSummary) float64 {
-				return models.ComputeOfficePremium(s.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium, s)
-			},
-			addPremium: func(s *models.MemberRatingResultSummary, v float64) {
-			},
-			setComm: func(s *models.MemberRatingResultSummary, v float64) {
-				s.ExpTotalAdditionalAccidentalGlaAnnualCommissionAmount = v
-			},
-		},
-		{
-			name: "ptd",
-			premium: func(s *models.MemberRatingResultSummary) float64 {
-				return models.ComputeOfficePremium(s.ExpTotalPtdAnnualRiskPremium, s)
-			},
-			addPremium: func(s *models.MemberRatingResultSummary, v float64) {},
-			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalPtdAnnualCommissionAmount = v },
-		},
-		{
-			name: "ci",
-			premium: func(s *models.MemberRatingResultSummary) float64 {
-				return models.ComputeOfficePremium(s.ExpTotalCiAnnualRiskPremium, s)
-			},
-			addPremium: func(s *models.MemberRatingResultSummary, v float64) {},
-			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalCiAnnualCommissionAmount = v },
-		},
-		{
-			name: "sgla",
-			premium: func(s *models.MemberRatingResultSummary) float64 {
-				return models.ComputeOfficePremium(s.ExpTotalSglaAnnualRiskPremium, s)
-			},
-			addPremium: func(s *models.MemberRatingResultSummary, v float64) {},
-			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalSglaAnnualCommissionAmount = v },
-		},
-		{
-			name: "ttd",
-			premium: func(s *models.MemberRatingResultSummary) float64 {
-				return models.ComputeOfficePremium(s.ExpTotalTtdAnnualRiskPremium, s)
-			},
-			addPremium: func(s *models.MemberRatingResultSummary, v float64) {},
-			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalTtdAnnualCommissionAmount = v },
-		},
-		{
-			name: "phi",
-			premium: func(s *models.MemberRatingResultSummary) float64 {
-				return models.ComputeOfficePremium(s.ExpTotalPhiAnnualRiskPremium, s)
-			},
-			addPremium: func(s *models.MemberRatingResultSummary, v float64) {},
-			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalPhiAnnualCommissionAmount = v },
-		},
-		{
-			name: "fun",
-			premium: func(s *models.MemberRatingResultSummary) float64 {
-				return models.ComputeOfficePremium(s.ExpTotalFunAnnualRiskPremium, s)
-			},
-			addPremium: func(s *models.MemberRatingResultSummary, v float64) {},
-			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalFunAnnualCommissionAmount = v },
-		},
-		{
-			name: "gla_educator",
-			premium: func(s *models.MemberRatingResultSummary) float64 {
-				return models.ComputeOfficePremium(s.ExpAdjTotalGlaEducatorRiskPremium, s)
-			},
-			addPremium: func(s *models.MemberRatingResultSummary, v float64) {},
-			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpAdjTotalGlaEducatorCommissionAmount = v },
-		},
-		{
-			name: "ptd_educator",
-			premium: func(s *models.MemberRatingResultSummary) float64 {
-				return models.ComputeOfficePremium(s.ExpAdjTotalPtdEducatorRiskPremium, s)
-			},
-			addPremium: func(s *models.MemberRatingResultSummary, v float64) {},
-			setComm:    func(s *models.MemberRatingResultSummary, v float64) { s.ExpAdjTotalPtdEducatorCommissionAmount = v },
-		},
+	accessors := benefitAccessors()
+
+	// Per-benefit Exp office premium for the Exp* commission allocation. This
+	// is the pre-discount value: ComputeOfficePremium uses SchemeTotalLoading
+	// (no discount) so Exp* commissions remain frozen at quote-calc time.
+	expOfficePremium := func(s *models.MemberRatingResultSummary, acc benefitAccessor) float64 {
+		return models.ComputeOfficePremium(acc.expRiskPremium(s), s)
 	}
 
-	// Step 2: scheme-wide total premium (pre-commission, since the per-category
-	// calc now excludes commission from the TotalLoading denominator).
+	// Step 2: per-category total premium (sum across all benefits in the
+	// TotalAnnualPremium formula) and the scheme-wide total. categoryTotals[i]
+	// equals s.TotalAnnualPremium for category i once the recompute below has
+	// run; computing it here directly avoids depending on stale stored values.
+	categoryTotals := make([]float64, len(summaries))
 	schemeTotal := 0.0
 	for i := range summaries {
+		s := &summaries[i]
 		for _, acc := range accessors {
-			schemeTotal += acc.premium(&summaries[i])
+			categoryTotals[i] += expOfficePremium(s, acc)
 		}
+		schemeTotal += categoryTotals[i]
 	}
 
 	// Step 3: blended commission rate from the tiered CommissionStructure
@@ -7182,29 +7419,43 @@ func applySchemeWideCommission(quoteID int, groupQuote models.GroupPricingQuote,
 	}
 	overallCommission := schemeTotal * rate
 
-	// Step 5 + 6: distribute proportionally, tracking a running remainder so
-	// the last benefit on the last category absorbs any floating-point
-	// residual and the sum matches overallCommission exactly.
+	// Step 4: split the scheme commission into per-category commissions by
+	// each category's share of total premium. The last category absorbs any
+	// floating-point residual so Σ category commissions == overallCommission
+	// exactly.
+	categoryCommissions := make([]float64, len(summaries))
 	lastCatIdx := len(summaries) - 1
+	remainingScheme := overallCommission
+	for i := range summaries {
+		if i == lastCatIdx {
+			categoryCommissions[i] = remainingScheme
+		} else if schemeTotal > 0 {
+			categoryCommissions[i] = overallCommission * (categoryTotals[i] / schemeTotal)
+			remainingScheme -= categoryCommissions[i]
+		}
+	}
+
+	// Step 5: within each category, split the category commission across
+	// benefits by each benefit's share of the category-level total premium.
+	// The last benefit absorbs the per-category residual so Σ benefit
+	// commissions on a category == that category's commission exactly.
 	lastBenIdx := len(accessors) - 1
-	remaining := overallCommission
 	for catIdx := range summaries {
 		s := &summaries[catIdx]
-		categoryCommission := 0.0
+		categoryCommission := categoryCommissions[catIdx]
+		categoryTotal := categoryTotals[catIdx]
+		remainingCat := categoryCommission
 		for benIdx, acc := range accessors {
 			var slice float64
-			if catIdx == lastCatIdx && benIdx == lastBenIdx {
-				// Final slice takes whatever is left. When schemeTotal is 0
-				// remaining is also 0, so slice is 0 too.
-				slice = remaining
-			} else if schemeTotal > 0 {
-				benefitPremium := acc.premium(s)
-				slice = overallCommission * (benefitPremium / schemeTotal)
-				remaining -= slice
+			if benIdx == lastBenIdx {
+				// Final slice takes whatever is left. When categoryTotal is 0
+				// remainingCat is also 0, so slice is 0 too.
+				slice = remainingCat
+			} else if categoryTotal > 0 {
+				slice = categoryCommission * (expOfficePremium(s, acc) / categoryTotal)
+				remainingCat -= slice
 			}
-			acc.setComm(s, slice)
-			acc.addPremium(s, slice)
-			categoryCommission += slice
+			acc.setExpComm(s, slice)
 		}
 		s.TotalCommission = categoryCommission
 		s.SchemeTotalCommission = overallCommission
@@ -7224,6 +7475,7 @@ func applySchemeWideCommission(quoteID int, groupQuote models.GroupPricingQuote,
 		}
 		// TTD / PHI use income bases rather than sum assured.
 		s.ExpTotalAnnualPremiumExclFuneral = models.ComputeOfficePremium(s.ExpTotalGlaAnnualRiskPremium, s) +
+			models.ComputeOfficePremium(s.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium, s) +
 			models.ComputeOfficePremium(s.ExpTotalPtdAnnualRiskPremium, s) +
 			models.ComputeOfficePremium(s.ExpTotalTtdAnnualRiskPremium, s) +
 			models.ComputeOfficePremium(s.ExpTotalPhiAnnualRiskPremium, s) +
@@ -7232,13 +7484,21 @@ func applySchemeWideCommission(quoteID int, groupQuote models.GroupPricingQuote,
 			models.ComputeOfficePremium(s.ExpTotalTaxSaverAnnualRiskPremium, s) +
 			models.ComputeOfficePremium(s.ExpAdjTotalGlaEducatorRiskPremium, s) +
 			models.ComputeOfficePremium(s.ExpAdjTotalPtdEducatorRiskPremium, s)
-		s.TotalAnnualPremium = models.ComputeOfficePremium(s.ExpTotalGlaAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalPtdAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalTtdAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalPhiAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalCiAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalSglaAnnualRiskPremium, s) + models.ComputeOfficePremium(s.ExpTotalFunAnnualRiskPremium, s)
+		s.TotalAnnualPremium = s.ExpTotalAnnualPremiumExclFuneral + models.ComputeOfficePremium(s.ExpTotalFunAnnualRiskPremium, s)
 	}
 
 	for i := range summaries {
 		if err := DB.Save(&summaries[i]).Error; err != nil {
 			return fmt.Errorf("save summary %d: %w", summaries[i].ID, err)
 		}
+	}
+
+	// Mirror the Exp* allocation onto the Final* fields. With Discount == 0
+	// (the case at calc time), Final*OfficePremium == Exp*OfficePremium and
+	// Final*CommissionAmount == Exp*CommissionAmount. ApplyDiscountToQuote
+	// re-runs this same helper after updating the discount on each summary.
+	if err := recomputeFinalPremiumsAndCommission(quoteID, groupQuote); err != nil {
+		return err
 	}
 
 	if logger != nil {
@@ -7384,8 +7644,12 @@ func GetDiscountAuthorityForUser(userEmail string, riskRateCode string) (models.
 	return da, nil
 }
 
-// ApplyDiscountToQuote applies a discount (in percentage, e.g. 5.0 for 5%) to all
-// MemberRatingResult rows for the quote, recalculating TotalLoading and all office premiums.
+// ApplyDiscountToQuote applies a discount (in percentage, e.g. 5.0 for 5%) to a
+// quote: persists the percentage on the quote loadings, mirrors it onto every
+// MemberRatingResultSummary as a negative fraction so SchemeTotalLoading +
+// Discount drives Final*Premium and Final*Commission via the shared helper,
+// and recomputes the per-member funeral office premium + binder/outsource
+// amounts using the same Risk / (1 - (TotalPremiumLoading + Discount)) formula.
 func ApplyDiscountToQuote(quoteId string, discountPct float64, user models.AppUser) error {
 	var quote models.GroupPricingQuote
 	if err := DB.Where("id = ?", quoteId).First(&quote).Error; err != nil {
@@ -7401,6 +7665,16 @@ func ApplyDiscountToQuote(quoteId string, discountPct float64, user models.AppUs
 
 	// Store discount as a negative fraction so it reduces TotalLoading
 	discount := -(discountPct / 100.0)
+
+	// Mirror the discount onto every summary so SchemeTotalLoading() picks it
+	// up via FinalSchemeTotalLoading(). The recomputeFinalPremiumsAndCommission
+	// call below reads s.Discount when deriving every Final*Premium and
+	// re-allocating Final*Commission against the new scheme total.
+	if err := DB.Model(&models.MemberRatingResultSummary{}).
+		Where("quote_id = ?", quoteId).
+		Update("discount", discount).Error; err != nil {
+		return err
+	}
 
 	var results []models.MemberRatingResult
 	if err := DB.Where("quote_id = ?", quoteId).Find(&results).Error; err != nil {
@@ -7426,23 +7700,32 @@ func ApplyDiscountToQuote(quoteId string, discountPct float64, user models.AppUs
 		}
 		r.TotalFuneralOfficePremium = r.TotalFuneralRiskPremium / divisor
 		r.ExpAdjTotalFuneralOfficePremium = r.ExpAdjTotalFuneralRiskPremium / divisor
-		r.FinalTotalFuneralOfficePremium = r.ExpAdjTotalFuneralOfficePremium + r.ExpAdjTotalFuneralOfficePremium*discount
-		// Conversion / continuity slice office premiums — recomputed from the
-		// persisted risk legs whenever the divisor changes.
-		// Educator office premiums are recomputed from their persisted risk
-		// legs and re-discounted to keep Final* consistent with the new rate.
-		// AdditionalAccidentalGla is a reportable slice — recompute if persisted.
+		// Final = Risk / (1 - (TotalPremiumLoading + discount)). discount is
+		// negative for a positive percentage, so the denominator grows and
+		// Final shrinks below ExpAdj — same direction as the summary-level
+		// FinalFunAnnualOfficePremium derived via ComputeFinalOfficePremium.
+		finalDivisor := 1.0 - (r.TotalPremiumLoading + discount)
+		if finalDivisor == 0 {
+			finalDivisor = 1.0
+		}
+		r.FinalTotalFuneralOfficePremium = r.ExpAdjTotalFuneralRiskPremium / finalDivisor
 		applyBinderOutsourceAmounts(r, &quote, binderFeeRate, outsourceFeeRate)
 	}
 
-	// Delete existing results and recreate with updated values
+	// Delete existing member rows and recreate with updated values.
 	if err := DB.Where("quote_id = ?", quoteId).Delete(&models.MemberRatingResult{}).Error; err != nil {
 		return err
 	}
-	if len(results) == 0 {
-		return nil
+	if len(results) > 0 {
+		if err := DB.CreateInBatches(&results, 100).Error; err != nil {
+			return err
+		}
 	}
-	return DB.CreateInBatches(&results, 100).Error
+
+	// Refresh Final*Premium and Final*Commission on every summary using the
+	// new discount. Pre-discount this was a no-op (Final == Exp); now the
+	// Final values diverge while Exp* commissions stay frozen.
+	return recomputeFinalPremiumsAndCommission(intQuoteID(quoteId), quote)
 }
 
 func GetFuneralRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
@@ -13887,7 +14170,7 @@ func getStructDBColumns(obj interface{}) []string {
 			}
 		}
 		if colName == "" {
-			colName = toSnakeCase(field.Name)
+			colName = DB.NamingStrategy.ColumnName("", field.Name)
 		}
 		cols = append(cols, colName)
 	}
@@ -15499,19 +15782,23 @@ func GetDistinctRegionsForRiskCode(riskRateCode string) ([]string, error) {
 	return regions, err
 }
 
-// schemeLoadingFromQuote returns the scheme-level loading fraction
-// (ExpenseLoading + CommissionLoading + ProfitLoading) read from a quote's
-// Loadings. The quote stores them as percentages (e.g. 5 for 5%) so we
-// divide by 100.
+// schemeLoadingFromQuote returns the per-member office-premium loading
+// fraction (ExpenseLoading + ProfitLoading) used to derive the *pre-commission*
+// office premium. CommissionLoading is excluded — commission is added on top
+// of the pre-comm office premium via the progressive commission allocation,
+// not baked into the gross-up denominator. The quote stores loadings as
+// percentages (e.g. 5 for 5%) so we divide by 100.
 func schemeLoadingFromQuote(quote *models.GroupPricingQuote) float64 {
 	if quote == nil {
 		return 0
 	}
-	return (quote.Loadings.ExpenseLoading + quote.Loadings.CommissionLoading + quote.Loadings.ProfitLoading) / 100.0
+	return (quote.Loadings.ExpenseLoading + quote.Loadings.ProfitLoading) / 100.0
 }
 
-// computeMemberOfficePremium derives an office premium for a per-member
-// risk premium using the scheme-level loading on the quote.
+// computeMemberOfficePremium derives the *pre-commission* office premium for a
+// per-member risk premium using the scheme-level loading on the quote.
+// Commission is added on top via the progressive allocation, not via this
+// denominator.
 func computeMemberOfficePremium(riskPremium float64, quote *models.GroupPricingQuote) float64 {
 	denom := 1.0 - schemeLoadingFromQuote(quote)
 	if denom <= 0 {

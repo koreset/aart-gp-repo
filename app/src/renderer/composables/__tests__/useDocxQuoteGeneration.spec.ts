@@ -142,6 +142,17 @@ function makeSummary(overrides: Record<string, any> = {}) {
     exp_total_fun_monthly_premium_per_member: 45.5,
     exp_total_fun_annual_premium_per_member: 546,
     exp_total_fun_annual_risk_premium: 43680,
+    // Pre-discount, Final*OfficePremium == Exp*RiskPremium / (1 - 0.20).
+    // Discount on this fixture is zero, so the Final values mirror the
+    // computeOfficePremium outputs that the spec relied on previously.
+    final_gla_annual_office_premium: 120000,
+    final_ptd_annual_office_premium: 50000,
+    final_ci_annual_office_premium: 30000,
+    final_sgla_annual_office_premium: 20000,
+    final_phi_annual_office_premium: 15000,
+    final_ttd_annual_office_premium: 10000,
+    final_fun_annual_office_premium: 54600,
+    final_total_annual_premium_excl_funeral: 245000,
     ...overrides
   }
 }

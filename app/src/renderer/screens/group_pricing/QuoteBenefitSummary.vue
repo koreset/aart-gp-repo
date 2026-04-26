@@ -4,21 +4,50 @@
       <span class="headline">Benefits Summary</span>
     </template>
     <template #default>
-      <v-row v-if="rowData.length > 0">
-        <v-col>
-          <group-pricing-data-grid
-            ref="dataGridRef"
-            :key="`premium-grid-${rowDataKey}`"
-            :columnDefs="columnDefs"
-            :show-close-button="false"
-            :rowData="rowData"
-            :table-title="'Premiums Summary By Category'"
-            :suppressAutoSize="true"
-            :density="'compact'"
-            :show-export="true"
-          />
-        </v-col>
-      </v-row>
+      <v-tabs
+        v-model="benefitsSubTab"
+        color="primary"
+        density="compact"
+        show-arrows
+      >
+        <v-tab value="summary">Summary</v-tab>
+        <v-tab value="breakdown">Breakdown</v-tab>
+      </v-tabs>
+      <v-window v-model="benefitsSubTab" class="mt-3">
+        <v-window-item value="summary">
+          <v-row v-if="rowData.length > 0">
+            <v-col>
+              <group-pricing-data-grid
+                ref="dataGridRef"
+                :key="`premium-grid-${rowDataKey}`"
+                :columnDefs="columnDefs"
+                :show-close-button="false"
+                :rowData="rowData"
+                :table-title="'Premiums Summary By Category'"
+                :suppressAutoSize="true"
+                :density="'compact'"
+                :show-export="true"
+              />
+            </v-col>
+          </v-row>
+        </v-window-item>
+        <v-window-item value="breakdown">
+          <v-row v-if="breakdownRowData.length > 0">
+            <v-col>
+              <group-pricing-data-grid
+                :key="`breakdown-grid-${breakdownRowDataKey}`"
+                :columnDefs="breakdownColumnDefs"
+                :show-close-button="false"
+                :rowData="breakdownRowData"
+                :table-title="'Premium Breakdown By Benefit'"
+                :suppressAutoSize="true"
+                :density="'compact'"
+                :show-export="true"
+              />
+            </v-col>
+          </v-row>
+        </v-window-item>
+      </v-window>
     </template>
   </base-card>
 
@@ -388,14 +417,41 @@ const columnDefs: any = ref([
     }
   },
   {
-    field: 'annualPremium',
+    field: 'finalAnnualPremium',
     headerName: 'Annual Premium',
-    width: 160,
+    width: 170,
     minWidth: 150,
     maxWidth: 220,
     resizable: true,
-    suppressAutoSize: false,
-    suppressSizeToFit: false,
+    valueFormatter: (params) => {
+      if (
+        params.value === null ||
+        params.value === undefined ||
+        params.value === ''
+      )
+        return '-'
+      return typeof params.value === 'string'
+        ? params.value
+        : roundUpToTwoDecimalsAccounting(params.value)
+    },
+    type: 'rightAligned',
+    cellStyle: (params) => {
+      if (params.data?.isSubtotal) {
+        return { backgroundColor: '#f0f0f0', textAlign: 'right' }
+      }
+      if (params.data?.isSectionHeader) {
+        return { backgroundColor: '#e3f2fd', textAlign: 'right' }
+      }
+      return { textAlign: 'right' }
+    }
+  },
+  {
+    field: 'finalAnnualCommission',
+    headerName: 'Commission',
+    width: 160,
+    minWidth: 140,
+    maxWidth: 200,
+    resizable: true,
     valueFormatter: (params) => {
       if (
         params.value === null ||
@@ -478,6 +534,187 @@ const rowData: any = ref([])
 // leaves % of Salary / Rate per 1000 SA cells blank because AG Grid can't
 // reconcile rows across the swap without a getRowId.
 const rowDataKey = ref(0)
+
+// Sub-tab inside the Benefits Summary card: 'summary' (existing per-benefit
+// premiums grid) or 'breakdown' (new per-benefit decomposition into base
+// premium + binder fee + outsourcing fee + commission, both pre- and
+// post-discount).
+const benefitsSubTab = ref<'summary' | 'breakdown'>('summary')
+
+// Column defs for the Premium Breakdown grid. Pairs of (pre-discount, final)
+// for each fee component so the eye can compare across columns. Final*Binder
+// and Final*Outsourced amounts are persisted by recomputeFinalPremiumsAndCommission
+// (post-discount they shrink with the office premium); on non-binder
+// distribution channels both rates are 0 so those columns stay 0.
+const moneyCellStyle = (params: any) => {
+  if (params.data?.isSubtotal) {
+    return { backgroundColor: '#f0f0f0', textAlign: 'right' }
+  }
+  if (params.data?.isSectionHeader) {
+    return { backgroundColor: '#e3f2fd', textAlign: 'right' }
+  }
+  return { textAlign: 'right' }
+}
+const moneyValueFormatter = (params: any) => {
+  if (
+    params.value === null ||
+    params.value === undefined ||
+    params.value === ''
+  )
+    return '-'
+  return typeof params.value === 'string'
+    ? params.value
+    : roundUpToTwoDecimalsAccounting(params.value)
+}
+const breakdownColumnDefs: any = ref([
+  { field: 'category', headerName: 'Category', rowGroup: true, hide: true },
+  {
+    field: 'benefit',
+    headerName: 'Benefit',
+    width: 220,
+    minWidth: 180,
+    maxWidth: 320,
+    flex: 1,
+    resizable: true,
+    cellStyle: (params: any) => {
+      if (params.data?.isSubtotal) {
+        return { fontWeight: 'bold', backgroundColor: '#f0f0f0' }
+      }
+      if (params.data?.isSectionHeader) {
+        return {
+          fontWeight: 'bold',
+          backgroundColor: '#e3f2fd',
+          fontStyle: 'italic'
+        }
+      }
+      return { fontWeight: 'bold' }
+    }
+  },
+  {
+    headerName: 'Before Discount',
+    headerClass: 'breakdown-group-header breakdown-group-pre',
+    children: [
+      {
+        field: 'expRiskPremium',
+        headerName: 'Risk Premium',
+        width: 150,
+        minWidth: 130,
+        resizable: true,
+        type: 'rightAligned',
+        valueFormatter: moneyValueFormatter,
+        cellStyle: moneyCellStyle
+      },
+      {
+        field: 'expBasePremium',
+        headerName: 'Base Premium',
+        width: 150,
+        minWidth: 130,
+        resizable: true,
+        type: 'rightAligned',
+        valueFormatter: moneyValueFormatter,
+        cellStyle: moneyCellStyle
+      },
+      {
+        field: 'expBinderFee',
+        headerName: 'Binder Fee',
+        width: 140,
+        minWidth: 120,
+        resizable: true,
+        type: 'rightAligned',
+        valueFormatter: moneyValueFormatter,
+        cellStyle: moneyCellStyle
+      },
+      {
+        field: 'expOutsourcingFee',
+        headerName: 'Outsourcing Fee',
+        width: 160,
+        minWidth: 140,
+        resizable: true,
+        type: 'rightAligned',
+        valueFormatter: moneyValueFormatter,
+        cellStyle: moneyCellStyle
+      },
+      {
+        field: 'expCommission',
+        headerName: 'Commission',
+        width: 150,
+        minWidth: 130,
+        resizable: true,
+        type: 'rightAligned',
+        valueFormatter: moneyValueFormatter,
+        cellStyle: moneyCellStyle
+      },
+      {
+        field: 'expGrossPremium',
+        headerName: 'Gross Premium',
+        width: 160,
+        minWidth: 140,
+        resizable: true,
+        type: 'rightAligned',
+        valueFormatter: moneyValueFormatter,
+        cellStyle: moneyCellStyle
+      }
+    ]
+  },
+  {
+    headerName: 'After Discount',
+    headerClass: 'breakdown-group-header breakdown-group-post',
+    children: [
+      {
+        field: 'finalBasePremium',
+        headerName: 'Base Premium',
+        width: 150,
+        minWidth: 130,
+        resizable: true,
+        type: 'rightAligned',
+        valueFormatter: moneyValueFormatter,
+        cellStyle: moneyCellStyle
+      },
+      {
+        field: 'finalBinderFee',
+        headerName: 'Binder Fee',
+        width: 140,
+        minWidth: 120,
+        resizable: true,
+        type: 'rightAligned',
+        valueFormatter: moneyValueFormatter,
+        cellStyle: moneyCellStyle
+      },
+      {
+        field: 'finalOutsourcingFee',
+        headerName: 'Outsourcing Fee',
+        width: 160,
+        minWidth: 140,
+        resizable: true,
+        type: 'rightAligned',
+        valueFormatter: moneyValueFormatter,
+        cellStyle: moneyCellStyle
+      },
+      {
+        field: 'finalCommission',
+        headerName: 'Commission',
+        width: 150,
+        minWidth: 130,
+        resizable: true,
+        type: 'rightAligned',
+        valueFormatter: moneyValueFormatter,
+        cellStyle: moneyCellStyle
+      },
+      {
+        field: 'finalPremium',
+        headerName: 'Final Premium',
+        width: 160,
+        minWidth: 140,
+        resizable: true,
+        type: 'rightAligned',
+        valueFormatter: moneyValueFormatter,
+        cellStyle: moneyCellStyle
+      }
+    ]
+  }
+])
+const breakdownRowData: any = ref([])
+const breakdownRowDataKey = ref(0)
 
 const roundUpToTwoDecimalsAccounting = (num) => {
   const roundedNum = Math.ceil(num * 100) / 100 // Round up to two decimal places
@@ -723,6 +960,8 @@ const convertExcelDataToGridData = () => {
         resultSummary.exp_total_gla_annual_risk_premium,
         resultSummary
       ),
+      finalAnnualPremium: resultSummary.final_gla_annual_office_premium,
+      finalAnnualCommission: resultSummary.final_gla_annual_commission_amount,
       percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_gla_annual_risk_premium_salary, resultSummary) * 100)}%`,
       ratePer1000SA: officeRateFromRiskRate(
         resultSummary.exp_gla_risk_rate_per_1000_sa,
@@ -746,6 +985,9 @@ const convertExcelDataToGridData = () => {
         annualSalary: 0,
         totalSumAssured: 0,
         annualPremium: taxSaverPremium,
+        finalAnnualPremium: resultSummary.final_tax_saver_annual_office_premium,
+        finalAnnualCommission:
+          resultSummary.final_tax_saver_annual_commission_amount,
         percentSalary: `${roundUpToTwoDecimalsAccounting(
           (salary > 0 ? taxSaverPremium / salary : 0) * 100
         )}%`,
@@ -767,6 +1009,10 @@ const convertExcelDataToGridData = () => {
           resultSummary.exp_adj_total_gla_educator_risk_premium,
           resultSummary
         ),
+        finalAnnualPremium:
+          resultSummary.final_gla_educator_annual_office_premium,
+        finalAnnualCommission:
+          resultSummary.final_gla_educator_annual_comm_amount,
         percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_adj_proportion_gla_educator_risk_premium_salary, resultSummary) * 100)}%`,
         ratePer1000SA: officeRateFromRiskRate(
           resultSummary.exp_gla_educator_risk_rate_per_1000_sa,
@@ -786,6 +1032,8 @@ const convertExcelDataToGridData = () => {
         resultSummary.exp_total_ptd_annual_risk_premium,
         resultSummary
       ),
+      finalAnnualPremium: resultSummary.final_ptd_annual_office_premium,
+      finalAnnualCommission: resultSummary.final_ptd_annual_commission_amount,
       percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_ptd_annual_risk_premium_salary, resultSummary) * 100)}%`,
       ratePer1000SA: officeRateFromRiskRate(
         resultSummary.exp_ptd_risk_rate_per_1000_sa,
@@ -804,6 +1052,10 @@ const convertExcelDataToGridData = () => {
           resultSummary.exp_adj_total_ptd_educator_risk_premium,
           resultSummary
         ),
+        finalAnnualPremium:
+          resultSummary.final_ptd_educator_annual_office_premium,
+        finalAnnualCommission:
+          resultSummary.final_ptd_educator_annual_comm_amount,
         percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_adj_proportion_ptd_educator_risk_premium_salary, resultSummary) * 100)}%`,
         ratePer1000SA: officeRateFromRiskRate(
           resultSummary.exp_ptd_educator_risk_rate_per_1000_sa,
@@ -823,6 +1075,8 @@ const convertExcelDataToGridData = () => {
         resultSummary.exp_total_ci_annual_risk_premium,
         resultSummary
       ),
+      finalAnnualPremium: resultSummary.final_ci_annual_office_premium,
+      finalAnnualCommission: resultSummary.final_ci_annual_commission_amount,
       percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_ci_annual_risk_premium_salary, resultSummary) * 100)}%`,
       ratePer1000SA: officeRateFromRiskRate(
         resultSummary.exp_ci_risk_rate_per_1000_sa,
@@ -841,6 +1095,8 @@ const convertExcelDataToGridData = () => {
         resultSummary.exp_total_sgla_annual_risk_premium,
         resultSummary
       ),
+      finalAnnualPremium: resultSummary.final_sgla_annual_office_premium,
+      finalAnnualCommission: resultSummary.final_sgla_annual_commission_amount,
       percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_sgla_annual_risk_premium_salary, resultSummary) * 100)}%`,
       ratePer1000SA: officeRateFromRiskRate(
         resultSummary.exp_sgla_risk_rate_per_1000_sa,
@@ -859,6 +1115,8 @@ const convertExcelDataToGridData = () => {
         resultSummary.exp_total_phi_annual_risk_premium,
         resultSummary
       ),
+      finalAnnualPremium: resultSummary.final_phi_annual_office_premium,
+      finalAnnualCommission: resultSummary.final_phi_annual_commission_amount,
       percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_phi_annual_risk_premium_salary, resultSummary) * 100)}%`,
       ratePer1000SA: officeRateFromRiskRate(
         resultSummary.exp_phi_risk_rate_per_1000_sa,
@@ -877,6 +1135,8 @@ const convertExcelDataToGridData = () => {
         resultSummary.exp_total_ttd_annual_risk_premium,
         resultSummary
       ),
+      finalAnnualPremium: resultSummary.final_ttd_annual_office_premium,
+      finalAnnualCommission: resultSummary.final_ttd_annual_commission_amount,
       percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_ttd_annual_risk_premium_salary, resultSummary) * 100)}%`,
       ratePer1000SA: officeRateFromRiskRate(
         resultSummary.exp_ttd_risk_rate_per_1000_sa,
@@ -896,6 +1156,9 @@ const convertExcelDataToGridData = () => {
       annualSalary: anyBenefitEnabled ? resultSummary.total_annual_salary : 0,
       totalSumAssured: resultSummary.total_gla_capped_sum_assured,
       annualPremium: resultSummary.exp_total_annual_premium_excl_funeral,
+      finalAnnualPremium:
+        resultSummary.final_total_annual_premium_excl_funeral,
+      finalAnnualCommission: '',
       percentSalary: `${roundUpToTwoDecimalsAccounting(resultSummary.proportion_exp_total_premium_excl_funeral_salary * 100)}%`,
       ratePer1000SA: '',
       isSubtotal: true
@@ -907,6 +1170,8 @@ const convertExcelDataToGridData = () => {
       annualSalary: '',
       totalSumAssured: '',
       annualPremium: resultSummary.exp_total_fun_annual_premium_per_member,
+      finalAnnualPremium: '',
+      finalAnnualCommission: '',
       percentSalary: '',
       ratePer1000SA: ''
     })
@@ -920,6 +1185,8 @@ const convertExcelDataToGridData = () => {
         resultSummary.exp_total_fun_annual_risk_premium,
         resultSummary
       ),
+      finalAnnualPremium: resultSummary.final_fun_annual_office_premium,
+      finalAnnualCommission: resultSummary.final_fun_annual_commission_amount,
       percentSalary: '',
       ratePer1000SA: ''
     })
@@ -1069,7 +1336,68 @@ const convertExcelDataToGridData = () => {
 
           total_annual_salary:
             (acc.total_annual_salary || 0) +
-            (resultSummary.total_annual_salary || 0)
+            (resultSummary.total_annual_salary || 0),
+
+          // Final*OfficePremium and Final*CommissionAmount are persisted on
+          // each summary by the backend (recomputeFinalPremiumsAndCommission)
+          // so the totals row simply sums them — no client-side derivation.
+          final_gla_annual_office_premium:
+            (acc.final_gla_annual_office_premium || 0) +
+            (resultSummary.final_gla_annual_office_premium || 0),
+          final_gla_annual_commission_amount:
+            (acc.final_gla_annual_commission_amount || 0) +
+            (resultSummary.final_gla_annual_commission_amount || 0),
+          final_ptd_annual_office_premium:
+            (acc.final_ptd_annual_office_premium || 0) +
+            (resultSummary.final_ptd_annual_office_premium || 0),
+          final_ptd_annual_commission_amount:
+            (acc.final_ptd_annual_commission_amount || 0) +
+            (resultSummary.final_ptd_annual_commission_amount || 0),
+          final_ci_annual_office_premium:
+            (acc.final_ci_annual_office_premium || 0) +
+            (resultSummary.final_ci_annual_office_premium || 0),
+          final_ci_annual_commission_amount:
+            (acc.final_ci_annual_commission_amount || 0) +
+            (resultSummary.final_ci_annual_commission_amount || 0),
+          final_sgla_annual_office_premium:
+            (acc.final_sgla_annual_office_premium || 0) +
+            (resultSummary.final_sgla_annual_office_premium || 0),
+          final_sgla_annual_commission_amount:
+            (acc.final_sgla_annual_commission_amount || 0) +
+            (resultSummary.final_sgla_annual_commission_amount || 0),
+          final_phi_annual_office_premium:
+            (acc.final_phi_annual_office_premium || 0) +
+            (resultSummary.final_phi_annual_office_premium || 0),
+          final_phi_annual_commission_amount:
+            (acc.final_phi_annual_commission_amount || 0) +
+            (resultSummary.final_phi_annual_commission_amount || 0),
+          final_ttd_annual_office_premium:
+            (acc.final_ttd_annual_office_premium || 0) +
+            (resultSummary.final_ttd_annual_office_premium || 0),
+          final_ttd_annual_commission_amount:
+            (acc.final_ttd_annual_commission_amount || 0) +
+            (resultSummary.final_ttd_annual_commission_amount || 0),
+          final_fun_annual_office_premium:
+            (acc.final_fun_annual_office_premium || 0) +
+            (resultSummary.final_fun_annual_office_premium || 0),
+          final_fun_annual_commission_amount:
+            (acc.final_fun_annual_commission_amount || 0) +
+            (resultSummary.final_fun_annual_commission_amount || 0),
+          final_gla_educator_annual_office_premium:
+            (acc.final_gla_educator_annual_office_premium || 0) +
+            (resultSummary.final_gla_educator_annual_office_premium || 0),
+          final_gla_educator_annual_comm_amount:
+            (acc.final_gla_educator_annual_comm_amount || 0) +
+            (resultSummary.final_gla_educator_annual_comm_amount || 0),
+          final_ptd_educator_annual_office_premium:
+            (acc.final_ptd_educator_annual_office_premium || 0) +
+            (resultSummary.final_ptd_educator_annual_office_premium || 0),
+          final_ptd_educator_annual_comm_amount:
+            (acc.final_ptd_educator_annual_comm_amount || 0) +
+            (resultSummary.final_ptd_educator_annual_comm_amount || 0),
+          final_total_annual_premium_excl_funeral:
+            (acc.final_total_annual_premium_excl_funeral || 0) +
+            (resultSummary.final_total_annual_premium_excl_funeral || 0)
         }
       },
       {}
@@ -1084,6 +1412,8 @@ const convertExcelDataToGridData = () => {
       annualSalary: totals.total_annual_salary,
       totalSumAssured: totals.total_gla_capped_sum_assured,
       annualPremium: totals.exp_total_gla_annual_office_premium,
+      finalAnnualPremium: totals.final_gla_annual_office_premium,
+      finalAnnualCommission: totals.final_gla_annual_commission_amount,
       percentSalary: `${roundUpToTwoDecimalsAccounting(
         (totals.exp_total_gla_annual_office_premium /
           totals.total_annual_salary || 0) * 100
@@ -1104,6 +1434,8 @@ const convertExcelDataToGridData = () => {
         annualSalary: totals.total_annual_salary,
         totalSumAssured: totals.total_educator_sum_assured,
         annualPremium: totals.exp_adj_total_gla_educator_office_premium,
+        finalAnnualPremium: totals.final_gla_educator_annual_office_premium,
+        finalAnnualCommission: totals.final_gla_educator_annual_comm_amount,
         percentSalary: `${roundUpToTwoDecimalsAccounting(
           (totals.exp_adj_total_gla_educator_office_premium /
             totals.total_annual_salary || 0) * 100
@@ -1121,6 +1453,8 @@ const convertExcelDataToGridData = () => {
       annualSalary: totals.total_annual_salary,
       totalSumAssured: totals.total_ptd_capped_sum_assured,
       annualPremium: totals.exp_total_ptd_annual_office_premium,
+      finalAnnualPremium: totals.final_ptd_annual_office_premium,
+      finalAnnualCommission: totals.final_ptd_annual_commission_amount,
       percentSalary: `${roundUpToTwoDecimalsAccounting((totals.exp_total_ptd_annual_office_premium / totals.total_annual_salary || 0) * 100)}%`,
       ratePer1000SA: totals.total_ptd_capped_sum_assured
         ? (totals.exp_total_ptd_annual_office_premium * 1000) /
@@ -1138,6 +1472,8 @@ const convertExcelDataToGridData = () => {
         annualSalary: totals.total_annual_salary,
         totalSumAssured: totals.total_educator_sum_assured,
         annualPremium: totals.exp_adj_total_ptd_educator_office_premium,
+        finalAnnualPremium: totals.final_ptd_educator_annual_office_premium,
+        finalAnnualCommission: totals.final_ptd_educator_annual_comm_amount,
         percentSalary: `${roundUpToTwoDecimalsAccounting(
           (totals.exp_adj_total_ptd_educator_office_premium /
             totals.total_annual_salary || 0) * 100
@@ -1155,6 +1491,8 @@ const convertExcelDataToGridData = () => {
       annualSalary: totals.total_annual_salary,
       totalSumAssured: totals.total_ci_capped_sum_assured,
       annualPremium: totals.exp_total_ci_annual_office_premium,
+      finalAnnualPremium: totals.final_ci_annual_office_premium,
+      finalAnnualCommission: totals.final_ci_annual_commission_amount,
       percentSalary: `${roundUpToTwoDecimalsAccounting(
         (totals.exp_total_ci_annual_office_premium /
           totals.total_annual_salary || 0) * 100
@@ -1171,6 +1509,8 @@ const convertExcelDataToGridData = () => {
       annualSalary: totals.total_annual_salary,
       totalSumAssured: totals.total_sgla_capped_sum_assured,
       annualPremium: totals.exp_total_sgla_annual_office_premium,
+      finalAnnualPremium: totals.final_sgla_annual_office_premium,
+      finalAnnualCommission: totals.final_sgla_annual_commission_amount,
       percentSalary: `${roundUpToTwoDecimalsAccounting(
         (totals.exp_total_sgla_annual_office_premium /
           totals.total_annual_salary || 0) * 100
@@ -1187,6 +1527,8 @@ const convertExcelDataToGridData = () => {
       annualSalary: totals.total_annual_salary,
       totalSumAssured: totals.total_phi_capped_income,
       annualPremium: totals.exp_total_phi_annual_office_premium,
+      finalAnnualPremium: totals.final_phi_annual_office_premium,
+      finalAnnualCommission: totals.final_phi_annual_commission_amount,
       percentSalary: `${roundUpToTwoDecimalsAccounting(
         (totals.exp_total_phi_annual_office_premium /
           totals.total_annual_salary || 0) * 100
@@ -1203,6 +1545,8 @@ const convertExcelDataToGridData = () => {
       annualSalary: totals.total_annual_salary,
       totalSumAssured: totals.total_ttd_capped_income,
       annualPremium: totals.exp_total_ttd_annual_office_premium,
+      finalAnnualPremium: totals.final_ttd_annual_office_premium,
+      finalAnnualCommission: totals.final_ttd_annual_commission_amount,
       percentSalary: `${roundUpToTwoDecimalsAccounting(
         (totals.exp_total_ttd_annual_office_premium /
           totals.total_annual_salary || 0) * 100
@@ -1241,6 +1585,8 @@ const convertExcelDataToGridData = () => {
       annualSalary: totalAnnualSalaryForEnabledBenefits,
       totalSumAssured: totals.total_gla_capped_sum_assured,
       annualPremium: totals.exp_total_annual_premium_excl_funeral,
+      finalAnnualPremium: totals.final_total_annual_premium_excl_funeral,
+      finalAnnualCommission: '',
       percentSalary: `${roundUpToTwoDecimalsAccounting(
         (totals.exp_total_annual_premium_excl_funeral /
           totalAnnualSalaryForEnabledBenefits || 0) * 100
@@ -1255,6 +1601,8 @@ const convertExcelDataToGridData = () => {
       annualSalary: '',
       totalSumAssured: '',
       annualPremium: totals.exp_total_fun_annual_premium_per_member,
+      finalAnnualPremium: '',
+      finalAnnualCommission: '',
       percentSalary: '',
       ratePer1000SA: ''
     })
@@ -1265,6 +1613,8 @@ const convertExcelDataToGridData = () => {
       annualSalary: '',
       totalSumAssured: '',
       annualPremium: totals.exp_total_fun_annual_office_premium,
+      finalAnnualPremium: totals.final_fun_annual_office_premium,
+      finalAnnualCommission: totals.final_fun_annual_commission_amount,
       percentSalary: '',
       ratePer1000SA: ''
     })
@@ -1402,11 +1752,433 @@ watch(
     ) {
       rowData.value = convertExcelDataToGridData()
       rowDataKey.value++
+      breakdownRowData.value = convertResultSummariesToBreakdown()
+      breakdownRowDataKey.value++
     } else {
       rowData.value = []
+      breakdownRowData.value = []
     }
   },
   { deep: true, immediate: true }
 )
+
+// Build per-category, per-benefit Premium Breakdown rows. Decomposes each
+// benefit's office premium into base premium + binder fee + outsourcing fee
+// + commission, both pre-discount (Exp*) and post-discount (Final*).
+//
+// expBase = ExpOfficePremium - expBinder - expOutsource - expCommission
+// finalBase = FinalOfficePremium - finalBinder - finalOutsource - finalCommission
+//
+// Pre-discount values come straight from persisted Exp* fields. Final binder
+// and outsource amounts are persisted by recomputeFinalPremiumsAndCommission
+// (added 2026-04-28) — finalBinder = FinalOfficePremium * BinderFeeRate,
+// 0 on non-binder distribution channels.
+function convertResultSummariesToBreakdown(): any[] {
+  if (!props.resultSummaries || props.resultSummaries.length === 0) return []
+
+  const isBenefitEnabled = (benefitCode: string, categoryName: string) => {
+    if (!props.quote?.scheme_categories) return true
+    const schemeCategory = props.quote.scheme_categories.find(
+      (cat: any) => cat.scheme_category === categoryName
+    )
+    if (!schemeCategory) return true
+    switch (benefitCode) {
+      case 'GLA':
+        return schemeCategory.gla_benefit === true
+      case 'PTD':
+        return schemeCategory.ptd_benefit === true
+      case 'CI':
+        return schemeCategory.ci_benefit === true
+      case 'SGLA':
+        return schemeCategory.sgla_benefit === true
+      case 'PHI':
+        return schemeCategory.phi_benefit === true
+      case 'TTD':
+        return schemeCategory.ttd_benefit === true
+      default:
+        return true
+    }
+  }
+
+  const num = (v: any) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+
+  // Build a row from the (binder, outsource, commission) triple plus the
+  // pre/post office premium.
+  //
+  // Pre side: expOffice is the *pre-commission* office premium
+  // (risk / (1 - (expense + profit))). Commission is added on top, so:
+  //   expBase  = expOffice - expBinder - expOutsource          (no commission subtraction)
+  //   expGross = expOffice + expCommission                     = base + binder + outsource + commission
+  // Invariants the user expects:
+  //   gross - commission == ExpRiskPremium / (1 - SchemeTotal)
+  //   base              == ExpRiskPremium / (1 - SchemeTotal) - binder - outsource
+  //
+  // Final side: persisted finalOffice already includes its commission slice
+  // (Phase 1 gross-up in recomputeFinalPremiumsAndCommission). So commission
+  // *is* subtracted from finalOffice when carving out finalBase:
+  //   finalBase    = finalOffice - finalBinder - finalOutsource - finalCommission
+  //   finalPremium = finalOffice                                = finalBase + finalBinder + finalOutsource + finalCommission
+  const buildRow = (
+    category: string,
+    benefit: string,
+    expRiskPremium: number,
+    expOffice: number,
+    expBinder: number,
+    expOutsource: number,
+    expCommission: number,
+    finalOffice: number,
+    finalBinder: number,
+    finalOutsource: number,
+    finalCommission: number,
+    extra: Record<string, any> = {}
+  ) => {
+    const expBase = expOffice - expBinder - expOutsource
+    const finalBase =
+      finalOffice - finalBinder - finalOutsource - finalCommission
+    return {
+      category,
+      benefit,
+      expRiskPremium,
+      expBasePremium: expBase,
+      expBinderFee: expBinder,
+      expOutsourcingFee: expOutsource,
+      expCommission,
+      expGrossPremium:
+        expBase + expBinder + expOutsource + expCommission,
+      finalBasePremium: finalBase,
+      finalBinderFee: finalBinder,
+      finalOutsourcingFee: finalOutsource,
+      finalCommission,
+      finalPremium:
+        finalBase + finalBinder + finalOutsource + finalCommission,
+      ...extra
+    }
+  }
+
+  const gridData: any[] = []
+  const totals = {
+    expRisk: 0,
+    expBase: 0,
+    expBinder: 0,
+    expOutsource: 0,
+    expCommission: 0,
+    expGross: 0,
+    finalBase: 0,
+    finalBinder: 0,
+    finalOutsource: 0,
+    finalCommission: 0,
+    finalPremium: 0
+  }
+
+  props.resultSummaries.forEach((rs: any) => {
+    const category = rs.category
+    const schemeCategory = props.quote?.scheme_categories?.find(
+      (cat: any) => cat.scheme_category === category
+    )
+
+    let catExpRisk = 0
+    let catExpBase = 0
+    let catExpBinder = 0
+    let catExpOutsource = 0
+    let catExpCommission = 0
+    let catExpGross = 0
+    let catFinalBase = 0
+    let catFinalBinder = 0
+    let catFinalOutsource = 0
+    let catFinalCommission = 0
+    let catFinalPremium = 0
+
+    const pushBenefit = (
+      label: string,
+      expRiskPremium: number,
+      expOffice: number,
+      expBinder: number,
+      expOutsource: number,
+      expCommission: number,
+      finalOffice: number,
+      finalBinder: number,
+      finalOutsource: number,
+      finalCommission: number,
+      includeInTotals = true
+    ) => {
+      const row = buildRow(
+        category,
+        label,
+        expRiskPremium,
+        expOffice,
+        expBinder,
+        expOutsource,
+        expCommission,
+        finalOffice,
+        finalBinder,
+        finalOutsource,
+        finalCommission
+      )
+      gridData.push(row)
+      if (includeInTotals) {
+        catExpRisk += expRiskPremium
+        catExpBase += row.expBasePremium
+        catExpBinder += expBinder
+        catExpOutsource += expOutsource
+        catExpCommission += expCommission
+        catExpGross += row.expGrossPremium
+        catFinalBase += row.finalBasePremium
+        catFinalBinder += finalBinder
+        catFinalOutsource += finalOutsource
+        catFinalCommission += finalCommission
+        catFinalPremium += row.finalPremium
+      }
+    }
+
+    // GLA
+    if (isBenefitEnabled('GLA', category)) {
+      pushBenefit(
+        glaBenefitTitle.value,
+        num(rs.exp_total_gla_annual_risk_premium),
+        computeOfficePremium(num(rs.exp_total_gla_annual_risk_premium), rs),
+        num(rs.exp_total_gla_annual_binder_amount),
+        num(rs.exp_total_gla_annual_outsourced_amount),
+        num(rs.exp_total_gla_annual_commission_amount),
+        num(rs.final_gla_annual_office_premium),
+        num(rs.final_gla_annual_binder_amount),
+        num(rs.final_gla_annual_outsourced_amount),
+        num(rs.final_gla_annual_commission_amount)
+      )
+    }
+
+    // Tax Saver — informational slice of GLA (already counted in GLA totals).
+    // No Exp* binder/outsource is persisted for tax saver, so those columns
+    // stay 0 on this row even on binder schemes.
+    if (rs.tax_saver_benefit) {
+      pushBenefit(
+        `${glaBenefitTitle.value} — Tax Saver (of GLA)`,
+        num(rs.exp_total_tax_saver_annual_risk_premium),
+        computeOfficePremium(
+          num(rs.exp_total_tax_saver_annual_risk_premium),
+          rs
+        ),
+        0,
+        0,
+        num(rs.exp_total_tax_saver_annual_commission_amount),
+        num(rs.final_tax_saver_annual_office_premium),
+        num(rs.final_tax_saver_annual_binder_amount),
+        num(rs.final_tax_saver_annual_outsourced_amount),
+        num(rs.final_tax_saver_annual_commission_amount),
+        false
+      )
+    }
+
+    // GLA Educator (per-category opt-in).
+    if (schemeCategory?.gla_educator_benefit === 'Yes') {
+      pushBenefit(
+        glaEducatorBenefitTitle.value,
+        num(rs.exp_adj_total_gla_educator_risk_premium),
+        computeOfficePremium(
+          num(rs.exp_adj_total_gla_educator_risk_premium),
+          rs
+        ),
+        num(rs.exp_adj_total_gla_educator_binder_amount),
+        num(rs.exp_adj_total_gla_educator_outsourced_amount),
+        num(rs.exp_adj_total_gla_educator_commission_amount),
+        num(rs.final_gla_educator_annual_office_premium),
+        num(rs.final_gla_educator_annual_binder_amount),
+        num(rs.final_gla_educator_annual_outsourced_amount),
+        num(rs.final_gla_educator_annual_comm_amount)
+      )
+    }
+
+    // PTD
+    if (isBenefitEnabled('PTD', category)) {
+      pushBenefit(
+        ptdBenefitTitle.value,
+        num(rs.exp_total_ptd_annual_risk_premium),
+        computeOfficePremium(num(rs.exp_total_ptd_annual_risk_premium), rs),
+        num(rs.exp_total_ptd_annual_binder_amount),
+        num(rs.exp_total_ptd_annual_outsourced_amount),
+        num(rs.exp_total_ptd_annual_commission_amount),
+        num(rs.final_ptd_annual_office_premium),
+        num(rs.final_ptd_annual_binder_amount),
+        num(rs.final_ptd_annual_outsourced_amount),
+        num(rs.final_ptd_annual_commission_amount)
+      )
+    }
+
+    if (schemeCategory?.ptd_educator_benefit === 'Yes') {
+      pushBenefit(
+        ptdEducatorBenefitTitle.value,
+        num(rs.exp_adj_total_ptd_educator_risk_premium),
+        computeOfficePremium(
+          num(rs.exp_adj_total_ptd_educator_risk_premium),
+          rs
+        ),
+        num(rs.exp_adj_total_ptd_educator_binder_amount),
+        num(rs.exp_adj_total_ptd_educator_outsourced_amount),
+        num(rs.exp_adj_total_ptd_educator_commission_amount),
+        num(rs.final_ptd_educator_annual_office_premium),
+        num(rs.final_ptd_educator_annual_binder_amount),
+        num(rs.final_ptd_educator_annual_outsourced_amount),
+        num(rs.final_ptd_educator_annual_comm_amount)
+      )
+    }
+
+    // CI
+    if (isBenefitEnabled('CI', category)) {
+      pushBenefit(
+        ciBenefitTitle.value,
+        num(rs.exp_total_ci_annual_risk_premium),
+        computeOfficePremium(num(rs.exp_total_ci_annual_risk_premium), rs),
+        num(rs.exp_total_ci_annual_binder_amount),
+        num(rs.exp_total_ci_annual_outsourced_amount),
+        num(rs.exp_total_ci_annual_commission_amount),
+        num(rs.final_ci_annual_office_premium),
+        num(rs.final_ci_annual_binder_amount),
+        num(rs.final_ci_annual_outsourced_amount),
+        num(rs.final_ci_annual_commission_amount)
+      )
+    }
+
+    // SGLA
+    if (isBenefitEnabled('SGLA', category)) {
+      pushBenefit(
+        sglaBenefitTitle.value,
+        num(rs.exp_total_sgla_annual_risk_premium),
+        computeOfficePremium(num(rs.exp_total_sgla_annual_risk_premium), rs),
+        num(rs.exp_total_sgla_annual_binder_amount),
+        num(rs.exp_total_sgla_annual_outsourced_amount),
+        num(rs.exp_total_sgla_annual_commission_amount),
+        num(rs.final_sgla_annual_office_premium),
+        num(rs.final_sgla_annual_binder_amount),
+        num(rs.final_sgla_annual_outsourced_amount),
+        num(rs.final_sgla_annual_commission_amount)
+      )
+    }
+
+    // PHI
+    if (isBenefitEnabled('PHI', category)) {
+      pushBenefit(
+        phiBenefitTitle.value,
+        num(rs.exp_total_phi_annual_risk_premium),
+        computeOfficePremium(num(rs.exp_total_phi_annual_risk_premium), rs),
+        num(rs.exp_total_phi_annual_binder_amount),
+        num(rs.exp_total_phi_annual_outsourced_amount),
+        num(rs.exp_total_phi_annual_commission_amount),
+        num(rs.final_phi_annual_office_premium),
+        num(rs.final_phi_annual_binder_amount),
+        num(rs.final_phi_annual_outsourced_amount),
+        num(rs.final_phi_annual_commission_amount)
+      )
+    }
+
+    // TTD
+    if (isBenefitEnabled('TTD', category)) {
+      pushBenefit(
+        ttdBenefitTitle.value,
+        num(rs.exp_total_ttd_annual_risk_premium),
+        computeOfficePremium(num(rs.exp_total_ttd_annual_risk_premium), rs),
+        num(rs.exp_total_ttd_annual_binder_amount),
+        num(rs.exp_total_ttd_annual_outsourced_amount),
+        num(rs.exp_total_ttd_annual_commission_amount),
+        num(rs.final_ttd_annual_office_premium),
+        num(rs.final_ttd_annual_binder_amount),
+        num(rs.final_ttd_annual_outsourced_amount),
+        num(rs.final_ttd_annual_commission_amount)
+      )
+    }
+
+    // Per-category sub-total (excl. funeral)
+    gridData.push({
+      category,
+      benefit: 'Sub Total (Excl. Funeral)',
+      expRiskPremium: catExpRisk,
+      expBasePremium: catExpBase,
+      expBinderFee: catExpBinder,
+      expOutsourcingFee: catExpOutsource,
+      expCommission: catExpCommission,
+      expGrossPremium: catExpGross,
+      finalBasePremium: catFinalBase,
+      finalBinderFee: catFinalBinder,
+      finalOutsourcingFee: catFinalOutsource,
+      finalCommission: catFinalCommission,
+      finalPremium: catFinalPremium,
+      isSubtotal: true
+    })
+
+    // Group Funeral row (always shown if there's any funeral premium)
+    pushBenefit(
+      'Group Funeral',
+      num(rs.exp_total_fun_annual_risk_premium),
+      computeOfficePremium(num(rs.exp_total_fun_annual_risk_premium), rs),
+      num(rs.exp_total_fun_annual_binder_amount),
+      num(rs.exp_total_fun_annual_outsourced_amount),
+      num(rs.exp_total_fun_annual_commission_amount),
+      num(rs.final_fun_annual_office_premium),
+      num(rs.final_fun_annual_binder_amount),
+      num(rs.final_fun_annual_outsourced_amount),
+      num(rs.final_fun_annual_commission_amount)
+    )
+
+    // Roll into scheme-wide totals (using post-pushBenefit accumulators that
+    // already include Funeral via includeInTotals=true on the funeral push).
+    totals.expRisk += catExpRisk
+    totals.expBase += catExpBase
+    totals.expBinder += catExpBinder
+    totals.expOutsource += catExpOutsource
+    totals.expCommission += catExpCommission
+    totals.expGross += catExpGross
+    totals.finalBase += catFinalBase
+    totals.finalBinder += catFinalBinder
+    totals.finalOutsource += catFinalOutsource
+    totals.finalCommission += catFinalCommission
+    totals.finalPremium += catFinalPremium
+  })
+
+  // Scheme-wide totals row (under a synthetic "Totals" group).
+  gridData.push({
+    category: 'Totals',
+    benefit: 'Total',
+    expRiskPremium: totals.expRisk,
+    expBasePremium: totals.expBase,
+    expBinderFee: totals.expBinder,
+    expOutsourcingFee: totals.expOutsource,
+    expCommission: totals.expCommission,
+    expGrossPremium: totals.expGross,
+    finalBasePremium: totals.finalBase,
+    finalBinderFee: totals.finalBinder,
+    finalOutsourcingFee: totals.finalOutsource,
+    finalCommission: totals.finalCommission,
+    finalPremium: totals.finalPremium,
+    isSubtotal: true
+  })
+
+  return gridData
+}
 </script>
-<style scoped></style>
+<style scoped>
+/*
+ * Style the Premium Breakdown grouped header bands ("Before Discount" /
+ * "After Discount") on-brand using the app primary (#003F58). AG Grid
+ * renders headers outside the scoped boundary, so :deep() is required to
+ * reach into the grid DOM.
+ */
+:deep(.ag-theme-balham .ag-header-group-cell.breakdown-group-header) {
+  background-color: #003f58;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-right: 1px solid rgba(255, 255, 255, 0.25);
+}
+:deep(
+    .ag-theme-balham
+      .ag-header-group-cell.breakdown-group-header
+      .ag-header-group-cell-label
+  ) {
+  justify-content: center;
+}
+/* Subtle divider between the two bands so the boundary reads clearly
+ * without colour-coding each side. */
+:deep(.ag-theme-balham .ag-header-group-cell.breakdown-group-pre) {
+  border-right: 2px solid #fff;
+}
+</style>

@@ -1031,8 +1031,8 @@ func generateIncrementalSQLForModel(model interface{}, opts GenerateOptions) (st
 	if opts.AllowDestructive {
 		liveIdx, _ := DB.Migrator().GetIndexes(model)
 		expectedNames := make(map[string]struct{}, len(expectedIdx))
-		for name := range expectedIdx {
-			expectedNames[name] = struct{}{}
+		for _, idx := range expectedIdx {
+			expectedNames[idx.Name] = struct{}{}
 		}
 		for _, idx := range liveIdx {
 			if _, ok := expectedNames[idx.Name()]; ok {
@@ -1226,7 +1226,7 @@ func renderDropColumn(table, column string) string {
 
 // renderCreateIndex emits CREATE INDEX (or CREATE UNIQUE INDEX) for a parsed
 // gorm index definition.
-func renderCreateIndex(table string, idx schema.Index) string {
+func renderCreateIndex(table string, idx *schema.Index) string {
 	cols := make([]string, 0, len(idx.Fields))
 	for _, opt := range idx.Fields {
 		cols = append(cols, opt.DBName)

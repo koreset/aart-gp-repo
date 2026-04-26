@@ -301,27 +301,27 @@ func categoryRatingSummaryFields(s models.MemberRatingResultSummary, n benefitNa
 	fs = append(fs, benefitRatingBlock(n.GLA, false,
 		s.TotalGlaCappedSumAssured, s.ExpTotalGlaRiskRate, s.ExpTotalGlaAnnualRiskPremium,
 		s.ExpGlaRiskRatePer1000SA, s.ExpProportionGlaAnnualRiskPremiumSalary,
-		models.ComputeOfficePremium(s.ExpTotalGlaAnnualRiskPremium, &s), officeRateFromRiskRate(s.ExpGlaRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionGlaAnnualRiskPremiumSalary, &s))...)
+		s.FinalGlaAnnualOfficePremium, officeRateFromRiskRate(s.ExpGlaRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionGlaAnnualRiskPremiumSalary, &s))...)
 	fs = append(fs, benefitRatingBlock(n.PTD, false,
 		s.TotalPtdCappedSumAssured, s.ExpTotalPtdRiskRate, s.ExpTotalPtdAnnualRiskPremium,
 		s.ExpPtdRiskRatePer1000SA, s.ExpProportionPtdAnnualRiskPremiumSalary,
-		models.ComputeOfficePremium(s.ExpTotalPtdAnnualRiskPremium, &s), officeRateFromRiskRate(s.ExpPtdRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionPtdAnnualRiskPremiumSalary, &s))...)
+		s.FinalPtdAnnualOfficePremium, officeRateFromRiskRate(s.ExpPtdRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionPtdAnnualRiskPremiumSalary, &s))...)
 	fs = append(fs, benefitRatingBlock(n.CI, false,
 		s.TotalCiCappedSumAssured, s.ExpTotalCiRiskRate, s.ExpTotalCiAnnualRiskPremium,
 		s.ExpCiRiskRatePer1000SA, s.ExpProportionCiAnnualRiskPremiumSalary,
-		models.ComputeOfficePremium(s.ExpTotalCiAnnualRiskPremium, &s), officeRateFromRiskRate(s.ExpCiRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionCiAnnualRiskPremiumSalary, &s))...)
+		s.FinalCiAnnualOfficePremium, officeRateFromRiskRate(s.ExpCiRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionCiAnnualRiskPremiumSalary, &s))...)
 	fs = append(fs, benefitRatingBlock(n.SGLA, false,
 		s.TotalSglaCappedSumAssured, s.ExpTotalSglaRiskRate, s.ExpTotalSglaAnnualRiskPremium,
 		s.ExpSglaRiskRatePer1000SA, s.ExpProportionSglaAnnualRiskPremiumSalary,
-		models.ComputeOfficePremium(s.ExpTotalSglaAnnualRiskPremium, &s), officeRateFromRiskRate(s.ExpSglaRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionSglaAnnualRiskPremiumSalary, &s))...)
+		s.FinalSglaAnnualOfficePremium, officeRateFromRiskRate(s.ExpSglaRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionSglaAnnualRiskPremiumSalary, &s))...)
 	fs = append(fs, benefitRatingBlock(n.TTD, true,
 		s.TotalTtdCappedIncome, s.ExpTotalTtdRiskRate, s.ExpTotalTtdAnnualRiskPremium,
 		s.ExpTtdRiskRatePer1000SA, s.ExpProportionTtdAnnualRiskPremiumSalary,
-		models.ComputeOfficePremium(s.ExpTotalTtdAnnualRiskPremium, &s), officeRateFromRiskRate(s.ExpTtdRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionTtdAnnualRiskPremiumSalary, &s))...)
+		s.FinalTtdAnnualOfficePremium, officeRateFromRiskRate(s.ExpTtdRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionTtdAnnualRiskPremiumSalary, &s))...)
 	fs = append(fs, benefitRatingBlock(n.PHI, true,
 		s.TotalPhiCappedIncome, s.ExpTotalPhiRiskRate, s.ExpTotalPhiAnnualRiskPremium,
 		s.ExpPhiRiskRatePer1000SA, s.ExpProportionPhiAnnualRiskPremiumSalary,
-		models.ComputeOfficePremium(s.ExpTotalPhiAnnualRiskPremium, &s), officeRateFromRiskRate(s.ExpPhiRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionPhiAnnualRiskPremiumSalary, &s))...)
+		s.FinalPhiAnnualOfficePremium, officeRateFromRiskRate(s.ExpPhiRiskRatePer1000SA, &s), officeProportionFromRiskProportion(s.ExpProportionPhiAnnualRiskPremiumSalary, &s))...)
 
 	// Funeral + aggregate. "monthly" stays on the monthly-premium-per-member
 	// key to disambiguate it from the (default) annual sibling, but the
@@ -329,7 +329,7 @@ func categoryRatingSummaryFields(s models.MemberRatingResultSummary, n benefitNa
 	fs = append(fs,
 		Field{Key: fmt.Sprintf("total_%s_risk_premium", n.Funeral.Code), Label: fmt.Sprintf("%s — Total Risk Premium", n.Funeral.Title), Value: money(s.ExpTotalFunAnnualRiskPremium)},
 		Field{Key: fmt.Sprintf("proportion_%s_risk_premium_salary", n.Funeral.Code), Label: fmt.Sprintf("%s — Risk Premium as %% of Salary", n.Funeral.Title), Value: formatPercent(s.ExpProportionFunAnnualRiskPremiumSalary)},
-		Field{Key: fmt.Sprintf("total_%s_office_premium", n.Funeral.Code), Label: fmt.Sprintf("%s — Total Office Premium", n.Funeral.Title), Value: money(models.ComputeOfficePremium(s.ExpTotalFunAnnualRiskPremium, &s))},
+		Field{Key: fmt.Sprintf("total_%s_office_premium", n.Funeral.Code), Label: fmt.Sprintf("%s — Total Office Premium", n.Funeral.Title), Value: money(s.FinalFunAnnualOfficePremium)},
 		Field{Key: fmt.Sprintf("proportion_%s_office_premium_salary", n.Funeral.Code), Label: fmt.Sprintf("%s — Office Premium as %% of Salary", n.Funeral.Title), Value: formatPercent(officeProportionFromRiskProportion(s.ExpProportionFunAnnualRiskPremiumSalary, &s))},
 		Field{Key: fmt.Sprintf("total_%s_premium_per_member", n.Funeral.Code), Label: fmt.Sprintf("%s — Premium per Member", n.Funeral.Title), Value: money(s.ExpTotalFunAnnualPremiumPerMember)},
 		Field{Key: fmt.Sprintf("total_%s_monthly_premium_per_member", n.Funeral.Code), Label: fmt.Sprintf("%s — Monthly Premium per Member", n.Funeral.Title), Value: money(s.ExpTotalFunMonthlyPremiumPerMember)},
@@ -347,7 +347,7 @@ func categoryRatingSummaryFields(s models.MemberRatingResultSummary, n benefitNa
 		Field{Key: fmt.Sprintf("total_%s_risk_premium", ab.Code), Label: fmt.Sprintf("%s — Total Risk Premium", ab.Title), Value: money(s.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium)},
 		Field{Key: fmt.Sprintf("%s_risk_rate_per1000_sa", ab.Code), Label: fmt.Sprintf("%s — Risk Rate per 1,000 SA", ab.Title), Value: money(s.ExpAdditionalAccidentalGlaRiskRatePer1000SA)},
 		Field{Key: fmt.Sprintf("prop_%s_risk_premium_salary", ab.Code), Label: fmt.Sprintf("%s — Risk Premium as %% of Salary", ab.Title), Value: formatPercent(s.ExpProportionAdditionalAccidentalGlaAnnualRiskPremiumSalary)},
-		Field{Key: fmt.Sprintf("total_%s_office_premium", ab.Code), Label: fmt.Sprintf("%s — Total Office Premium", ab.Title), Value: money(models.ComputeOfficePremium(s.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium, &s))},
+		Field{Key: fmt.Sprintf("total_%s_office_premium", ab.Code), Label: fmt.Sprintf("%s — Total Office Premium", ab.Title), Value: money(s.FinalAdditionalAccidentalGlaAnnualOfficePremium)},
 		Field{Key: fmt.Sprintf("%s_office_rate_per1000_sa", ab.Code), Label: fmt.Sprintf("%s — Office Rate per 1,000 SA", ab.Title), Value: money(officeRateFromRiskRate(s.ExpAdditionalAccidentalGlaRiskRatePer1000SA, &s))},
 		Field{Key: fmt.Sprintf("proportion_%s_office_premium_salary", ab.Code), Label: fmt.Sprintf("%s — Office Premium as %% of Salary", ab.Title), Value: formatPercent(officeProportionFromRiskProportion(s.ExpProportionAdditionalAccidentalGlaAnnualRiskPremiumSalary, &s))},
 	)
@@ -364,23 +364,23 @@ func categoryRatingSummaryFields(s models.MemberRatingResultSummary, n benefitNa
 
 	// Commission amounts (per benefit + scheme totals).
 	fs = append(fs,
-		benefitCommissionField(n.GLA, s.ExpTotalGlaAnnualCommissionAmount, false),
-		benefitCommissionField(n.AdditionalAccidentalGla, s.ExpTotalAdditionalAccidentalGlaAnnualCommissionAmount, true),
-		benefitCommissionField(n.PTD, s.ExpTotalPtdAnnualCommissionAmount, false),
-		benefitCommissionField(n.CI, s.ExpTotalCiAnnualCommissionAmount, false),
-		benefitCommissionField(n.SGLA, s.ExpTotalSglaAnnualCommissionAmount, false),
-		benefitCommissionField(n.TTD, s.ExpTotalTtdAnnualCommissionAmount, false),
-		benefitCommissionField(n.PHI, s.ExpTotalPhiAnnualCommissionAmount, false),
-		benefitCommissionField(n.Funeral, s.ExpTotalFunAnnualCommissionAmount, false),
-		Field{Key: "scheme_total_commission", Label: "Scheme Total Commission", Value: money(s.SchemeTotalCommission)},
-		Field{Key: "scheme_total_commission_rate", Label: "Scheme Total Commission Rate", Value: formatPercent(s.SchemeTotalCommissionRate)},
+		benefitCommissionField(n.GLA, s.FinalGlaAnnualCommissionAmount, false),
+		benefitCommissionField(n.AdditionalAccidentalGla, s.FinalAdditionalAccidentalGlaAnnualCommissionAmount, true),
+		benefitCommissionField(n.PTD, s.FinalPtdAnnualCommissionAmount, false),
+		benefitCommissionField(n.CI, s.FinalCiAnnualCommissionAmount, false),
+		benefitCommissionField(n.SGLA, s.FinalSglaAnnualCommissionAmount, false),
+		benefitCommissionField(n.TTD, s.FinalTtdAnnualCommissionAmount, false),
+		benefitCommissionField(n.PHI, s.FinalPhiAnnualCommissionAmount, false),
+		benefitCommissionField(n.Funeral, s.FinalFunAnnualCommissionAmount, false),
+		Field{Key: "scheme_total_commission", Label: "Scheme Total Commission", Value: money(s.FinalSchemeTotalCommission)},
+		Field{Key: "scheme_total_commission_rate", Label: "Scheme Total Commission Rate", Value: formatPercent(s.FinalSchemeTotalCommissionRate)},
 	)
 
 	// Tax saver (slice of GLA office premium — no SA / rate-per-1000).
 	tb := n.TaxSaver
 	fs = append(fs,
 		Field{Key: fmt.Sprintf("total_%s_risk_premium", tb.Code), Label: fmt.Sprintf("%s — Total Risk Premium", tb.Title), Value: money(s.ExpTotalTaxSaverAnnualRiskPremium)},
-		Field{Key: fmt.Sprintf("total_%s_office_premium", tb.Code), Label: fmt.Sprintf("%s — Total Office Premium", tb.Title), Value: money(models.ComputeOfficePremium(s.ExpTotalTaxSaverAnnualRiskPremium, &s))},
+		Field{Key: fmt.Sprintf("total_%s_office_premium", tb.Code), Label: fmt.Sprintf("%s — Total Office Premium", tb.Title), Value: money(s.FinalTaxSaverAnnualOfficePremium)},
 	)
 
 	return fs
@@ -461,17 +461,17 @@ func benefitCommissionField(b benefitName, amount float64, useShort bool) Field 
 func categoryEducatorSummaryFields(s models.MemberRatingResultSummary, n benefitNaming) []Field {
 	var fs []Field
 	fs = append(fs, educatorSplitBlock(n.GlaEducator,
-		s.ExpAdjTotalGlaEducatorRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalGlaEducatorRiskPremium, &s),
+		s.ExpAdjTotalGlaEducatorRiskPremium, s.FinalGlaEducatorAnnualOfficePremium,
 		s.ExpAdjProportionGlaEducatorRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionGlaEducatorRiskPremiumSalary, &s),
 		s.ExpGlaEducatorRiskRatePer1000SA, officeRateFromRiskRate(s.ExpGlaEducatorRiskRatePer1000SA, &s),
 		s.ExpAdjTotalGlaEducatorBinderAmount, s.ExpAdjTotalGlaEducatorOutsourcedAmount,
-		s.ExpAdjTotalGlaEducatorCommissionAmount)...)
+		s.FinalGlaEducatorAnnualCommissionAmount)...)
 	fs = append(fs, educatorSplitBlock(n.PtdEducator,
-		s.ExpAdjTotalPtdEducatorRiskPremium, models.ComputeOfficePremium(s.ExpAdjTotalPtdEducatorRiskPremium, &s),
+		s.ExpAdjTotalPtdEducatorRiskPremium, s.FinalPtdEducatorAnnualOfficePremium,
 		s.ExpAdjProportionPtdEducatorRiskPremiumSalary, officeProportionFromRiskProportion(s.ExpAdjProportionPtdEducatorRiskPremiumSalary, &s),
 		s.ExpPtdEducatorRiskRatePer1000SA, officeRateFromRiskRate(s.ExpPtdEducatorRiskRatePer1000SA, &s),
 		s.ExpAdjTotalPtdEducatorBinderAmount, s.ExpAdjTotalPtdEducatorOutsourcedAmount,
-		s.ExpAdjTotalPtdEducatorCommissionAmount)...)
+		s.FinalPtdEducatorAnnualCommissionAmount)...)
 	return fs
 }
 

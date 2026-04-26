@@ -89,6 +89,7 @@ type GroupPricingQuote struct {
 	MemberRatingResultCount      int                       `json:"member_rating_result_count"`
 	MemberPremiumScheduleCount   int                       `json:"member_premium_schedule_count"`
 	BordereauxCount              int                       `json:"bordereaux_count"`
+	CalculationCompletedAt       *time.Time                `json:"calculation_completed_at" gorm:"type:datetime"`
 	UseGlobalSalaryMultiple      bool                      `json:"use_global_salary_multiple"`
 	SelectedSchemeCategories     StringArray               `json:"selected_scheme_categories" gorm:"type:json"`
 	SchemeCategories             []SchemeCategory          `json:"scheme_categories" gorm:"foreignKey:QuoteId"`
@@ -1295,6 +1296,10 @@ type MemberRatingResultSummary struct {
 	ExpenseLoading                          float64 `json:"expense_loading" csv:"expense_loading"`
 	CommissionLoading                       float64 `json:"commission_loading" csv:"commission_loading"`
 	ProfitLoading                           float64 `json:"profit_loading" csv:"profit_loading"`
+	// Discount is a negative fraction (e.g. -0.05 for a 5% discount) added into
+	// SchemeTotalLoading so Final office premium = Risk / (1 - SchemeTotalLoading)
+	// shrinks once a discount is applied. Zero pre-discount.
+	Discount                                float64 `json:"discount" csv:"discount"`
 	BinderFeeRate                           float64 `json:"binder_fee_rate" csv:"binder_fee_rate"`
 	OutsourceFeeRate                        float64 `json:"outsource_fee_rate" csv:"outsource_fee_rate"`
 	AcceleratedBenefitDiscount              float64 `json:"accelerated_benefit_discount" csv:"accelerated_benefit_discount"`
@@ -1707,6 +1712,7 @@ type MemberRatingResultSummary struct {
 	ExpTotalPtdAnnualCommissionAmount                     float64 `json:"exp_total_ptd_annual_commission_amount" csv:"exp_total_ptd_annual_commission_amount"`
 	ExpTotalCiAnnualCommissionAmount                      float64 `json:"exp_total_ci_annual_commission_amount" csv:"exp_total_ci_annual_commission_amount"`
 	ExpTotalSglaAnnualCommissionAmount                    float64 `json:"exp_total_sgla_annual_commission_amount" csv:"exp_total_sgla_annual_commission_amount"`
+	ExpTotalTaxSaverAnnualCommissionAmount                float64 `json:"exp_total_tax_saver_annual_commission_amount" csv:"exp_total_tax_saver_annual_commission_amount"`
 	ExpTotalTtdAnnualCommissionAmount                     float64 `json:"exp_total_ttd_annual_commission_amount" csv:"exp_total_ttd_annual_commission_amount"`
 	ExpTotalPhiAnnualCommissionAmount                     float64 `json:"exp_total_phi_annual_commission_amount" csv:"exp_total_phi_annual_commission_amount"`
 	ExpTotalFunAnnualCommissionAmount                     float64 `json:"exp_total_fun_annual_commission_amount" csv:"exp_total_fun_annual_commission_amount"`
@@ -1719,23 +1725,121 @@ type MemberRatingResultSummary struct {
 	SchemeTotalCommission     float64 `json:"scheme_total_commission" csv:"scheme_total_commission"`
 	SchemeTotalCommissionRate float64 `json:"scheme_total_commission_rate" csv:"scheme_total_commission_rate"`
 
+	// Final*AnnualOfficePremium = Exp*AnnualRiskPremium / (1 - SchemeTotalLoading())
+	// where SchemeTotalLoading includes the Discount on this summary. Pre-discount
+	// these equal the corresponding Exp*Office values. Re-derived by
+	// recomputeFinalPremiumsAndCommission whenever Discount changes.
+	FinalGlaAnnualOfficePremium                     float64 `json:"final_gla_annual_office_premium" csv:"final_gla_annual_office_premium"`
+	FinalAdditionalAccidentalGlaAnnualOfficePremium float64 `json:"final_additional_accidental_gla_annual_office_premium" csv:"final_additional_accidental_gla_annual_office_premium" gorm:"column:final_add_acc_gla_annual_office_premium"`
+	FinalPtdAnnualOfficePremium                     float64 `json:"final_ptd_annual_office_premium" csv:"final_ptd_annual_office_premium"`
+	FinalCiAnnualOfficePremium                      float64 `json:"final_ci_annual_office_premium" csv:"final_ci_annual_office_premium"`
+	FinalSglaAnnualOfficePremium                    float64 `json:"final_sgla_annual_office_premium" csv:"final_sgla_annual_office_premium"`
+	FinalTaxSaverAnnualOfficePremium                float64 `json:"final_tax_saver_annual_office_premium" csv:"final_tax_saver_annual_office_premium"`
+	FinalTtdAnnualOfficePremium                     float64 `json:"final_ttd_annual_office_premium" csv:"final_ttd_annual_office_premium"`
+	FinalPhiAnnualOfficePremium                     float64 `json:"final_phi_annual_office_premium" csv:"final_phi_annual_office_premium"`
+	FinalFunAnnualOfficePremium                     float64 `json:"final_fun_annual_office_premium" csv:"final_fun_annual_office_premium"`
+	FinalGlaEducatorAnnualOfficePremium             float64 `json:"final_gla_educator_annual_office_premium" csv:"final_gla_educator_annual_office_premium"`
+	FinalPtdEducatorAnnualOfficePremium             float64 `json:"final_ptd_educator_annual_office_premium" csv:"final_ptd_educator_annual_office_premium"`
+
+	// Final*AnnualCommissionAmount mirrors the Exp* commission allocation but
+	// is computed against the Final premium total via ComputeProgressiveCommission.
+	// Pre-discount these equal the corresponding Exp* commission amounts.
+	FinalGlaAnnualCommissionAmount                     float64 `json:"final_gla_annual_commission_amount" csv:"final_gla_annual_commission_amount"`
+	FinalAdditionalAccidentalGlaAnnualCommissionAmount float64 `json:"final_additional_accidental_gla_annual_commission_amount" csv:"final_additional_accidental_gla_annual_commission_amount" gorm:"column:final_add_acc_gla_annual_comm_amount"`
+	FinalPtdAnnualCommissionAmount                     float64 `json:"final_ptd_annual_commission_amount" csv:"final_ptd_annual_commission_amount"`
+	FinalCiAnnualCommissionAmount                      float64 `json:"final_ci_annual_commission_amount" csv:"final_ci_annual_commission_amount"`
+	FinalSglaAnnualCommissionAmount                    float64 `json:"final_sgla_annual_commission_amount" csv:"final_sgla_annual_commission_amount"`
+	FinalTaxSaverAnnualCommissionAmount                float64 `json:"final_tax_saver_annual_commission_amount" csv:"final_tax_saver_annual_commission_amount"`
+	FinalTtdAnnualCommissionAmount                     float64 `json:"final_ttd_annual_commission_amount" csv:"final_ttd_annual_commission_amount"`
+	FinalPhiAnnualCommissionAmount                     float64 `json:"final_phi_annual_commission_amount" csv:"final_phi_annual_commission_amount"`
+	FinalFunAnnualCommissionAmount                     float64 `json:"final_fun_annual_commission_amount" csv:"final_fun_annual_commission_amount"`
+	FinalGlaEducatorAnnualCommissionAmount             float64 `json:"final_gla_educator_annual_commission_amount" csv:"final_gla_educator_annual_commission_amount" gorm:"column:final_gla_educator_annual_comm_amount"`
+	FinalPtdEducatorAnnualCommissionAmount             float64 `json:"final_ptd_educator_annual_commission_amount" csv:"final_ptd_educator_annual_commission_amount" gorm:"column:final_ptd_educator_annual_comm_amount"`
+
+	// Final*Annual{Binder,Outsourced}Amount = Final*AnnualOfficePremium *
+	// (BinderFeeRate | OutsourceFeeRate). Re-derived alongside the Final office
+	// premium and commission whenever Discount changes; pre-discount equal to
+	// the Exp* counterparts. On non-binder distribution channels both rates
+	// are 0 so these stay 0.
+	FinalGlaAnnualBinderAmount                     float64 `json:"final_gla_annual_binder_amount" csv:"final_gla_annual_binder_amount"`
+	FinalGlaAnnualOutsourcedAmount                 float64 `json:"final_gla_annual_outsourced_amount" csv:"final_gla_annual_outsourced_amount"`
+	FinalAdditionalAccidentalGlaAnnualBinderAmount float64 `json:"final_additional_accidental_gla_annual_binder_amount" csv:"final_additional_accidental_gla_annual_binder_amount" gorm:"column:final_add_acc_gla_annual_binder_amount"`
+	FinalAdditionalAccidentalGlaAnnualOutsourcedAmt float64 `json:"final_additional_accidental_gla_annual_outsourced_amount" csv:"final_additional_accidental_gla_annual_outsourced_amount" gorm:"column:final_add_acc_gla_annual_outsourced_amount"`
+	FinalPtdAnnualBinderAmount                     float64 `json:"final_ptd_annual_binder_amount" csv:"final_ptd_annual_binder_amount"`
+	FinalPtdAnnualOutsourcedAmount                 float64 `json:"final_ptd_annual_outsourced_amount" csv:"final_ptd_annual_outsourced_amount"`
+	FinalCiAnnualBinderAmount                      float64 `json:"final_ci_annual_binder_amount" csv:"final_ci_annual_binder_amount"`
+	FinalCiAnnualOutsourcedAmount                  float64 `json:"final_ci_annual_outsourced_amount" csv:"final_ci_annual_outsourced_amount"`
+	FinalSglaAnnualBinderAmount                    float64 `json:"final_sgla_annual_binder_amount" csv:"final_sgla_annual_binder_amount"`
+	FinalSglaAnnualOutsourcedAmount                float64 `json:"final_sgla_annual_outsourced_amount" csv:"final_sgla_annual_outsourced_amount"`
+	FinalTaxSaverAnnualBinderAmount                float64 `json:"final_tax_saver_annual_binder_amount" csv:"final_tax_saver_annual_binder_amount"`
+	FinalTaxSaverAnnualOutsourcedAmount            float64 `json:"final_tax_saver_annual_outsourced_amount" csv:"final_tax_saver_annual_outsourced_amount"`
+	FinalTtdAnnualBinderAmount                     float64 `json:"final_ttd_annual_binder_amount" csv:"final_ttd_annual_binder_amount"`
+	FinalTtdAnnualOutsourcedAmount                 float64 `json:"final_ttd_annual_outsourced_amount" csv:"final_ttd_annual_outsourced_amount"`
+	FinalPhiAnnualBinderAmount                     float64 `json:"final_phi_annual_binder_amount" csv:"final_phi_annual_binder_amount"`
+	FinalPhiAnnualOutsourcedAmount                 float64 `json:"final_phi_annual_outsourced_amount" csv:"final_phi_annual_outsourced_amount"`
+	FinalFunAnnualBinderAmount                     float64 `json:"final_fun_annual_binder_amount" csv:"final_fun_annual_binder_amount"`
+	FinalFunAnnualOutsourcedAmount                 float64 `json:"final_fun_annual_outsourced_amount" csv:"final_fun_annual_outsourced_amount"`
+	FinalGlaEducatorAnnualBinderAmount             float64 `json:"final_gla_educator_annual_binder_amount" csv:"final_gla_educator_annual_binder_amount"`
+	FinalGlaEducatorAnnualOutsourcedAmount         float64 `json:"final_gla_educator_annual_outsourced_amount" csv:"final_gla_educator_annual_outsourced_amount"`
+	FinalPtdEducatorAnnualBinderAmount             float64 `json:"final_ptd_educator_annual_binder_amount" csv:"final_ptd_educator_annual_binder_amount"`
+	FinalPtdEducatorAnnualOutsourcedAmount         float64 `json:"final_ptd_educator_annual_outsourced_amount" csv:"final_ptd_educator_annual_outsourced_amount"`
+
+	FinalTotalAnnualPremiumExclFuneral float64 `json:"final_total_annual_premium_excl_funeral" csv:"final_total_annual_premium_excl_funeral"`
+	FinalTotalAnnualPremium            float64 `json:"final_total_annual_premium" csv:"final_total_annual_premium"`
+	FinalSchemeTotalCommission         float64 `json:"final_scheme_total_commission" csv:"final_scheme_total_commission"`
+	FinalSchemeTotalCommissionRate     float64 `json:"final_scheme_total_commission_rate" csv:"final_scheme_total_commission_rate"`
+
 	CreationDate time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy    string    `json:"created_by" csv:"created_by"`
 }
 
-// SchemeTotalLoading returns the scheme-level office-premium loading fraction.
-// Office premium = risk premium / (1 - SchemeTotalLoading()).
+// SchemeTotalLoading returns the scheme-level office-premium loading fraction
+// used to derive the *pre-commission* office premium: ExpenseLoading +
+// ProfitLoading. CommissionLoading is intentionally excluded — commission is
+// added on top of the pre-comm office premium via the progressive commission
+// allocation in applySchemeWideCommission / recomputeFinalPremiumsAndCommission,
+// not baked into the gross-up denominator. Discount is also excluded so Exp*
+// values remain frozen at quote-calc time.
+// Office premium (pre-comm) = risk premium / (1 - SchemeTotalLoading()).
+// Gross premium (incl. commission) = office premium + commission slice.
 func (s *MemberRatingResultSummary) SchemeTotalLoading() float64 {
-	return s.ExpenseLoading + s.CommissionLoading + s.ProfitLoading
+	return s.ExpenseLoading + s.ProfitLoading
 }
 
-// ComputeOfficePremium derives an office premium from a risk premium and
-// the scheme-level loading on the summary. Guards against denom <= 0.
+// FinalSchemeTotalLoading is SchemeTotalLoading + Discount. Discount is stored
+// as a negative fraction (e.g. -0.05 for 5%), so adding it shrinks the loading,
+// which shrinks the denominator, which shrinks the Final pre-comm office
+// premium — the desired direction once a user applies a discount. Pre-discount
+// this equals SchemeTotalLoading() and pre-comm Final == Exp office premium.
+func (s *MemberRatingResultSummary) FinalSchemeTotalLoading() float64 {
+	return s.SchemeTotalLoading() + s.Discount
+}
+
+// ComputeOfficePremium derives the pre-commission office premium from a risk
+// premium and the scheme-level loading on the summary. Commission is NOT
+// included in the gross-up; it is added on top of this value via the
+// progressive commission allocation. Guards against denom <= 0.
 func ComputeOfficePremium(riskPremium float64, s *MemberRatingResultSummary) float64 {
 	if s == nil {
 		return 0
 	}
 	denom := 1.0 - s.SchemeTotalLoading()
+	if denom <= 0 {
+		return 0
+	}
+	return riskPremium / denom
+}
+
+// ComputeFinalOfficePremium derives the Final (post-discount) pre-commission
+// office premium from a risk premium and the discount-aware loading on the
+// summary. Commission is NOT included; it is added on top via the progressive
+// allocation in recomputeFinalPremiumsAndCommission. When Discount == 0 it
+// returns the same value as ComputeOfficePremium.
+func ComputeFinalOfficePremium(riskPremium float64, s *MemberRatingResultSummary) float64 {
+	if s == nil {
+		return 0
+	}
+	denom := 1.0 - s.FinalSchemeTotalLoading()
 	if denom <= 0 {
 		return 0
 	}

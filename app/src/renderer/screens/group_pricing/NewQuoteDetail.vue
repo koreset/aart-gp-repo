@@ -54,6 +54,11 @@
             {{ calcProgress.totalCategories }} categories
           </div>
         </v-card-text>
+        <v-card-actions class="justify-center">
+          <v-btn variant="text" size="small" @click="dismissCalcOverlay">
+            Dismiss
+          </v-btn>
+        </v-card-actions>
       </v-card>
     </v-overlay>
 
@@ -598,7 +603,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, computed } from 'vue'
+import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import BaseCard from '@/renderer/components/BaseCard.vue'
@@ -639,12 +644,78 @@ const {
 // Only show overlay and react to events when this component initiated the calculation.
 const awaitingCalculation = ref(false)
 
+// Watchdog: if the WebSocket connection drops mid-calculation (e.g. a long
+// debugger pause or a real-world network blip exceeds the server's pongWait)
+// the final `completed` event can be lost, leaving the overlay stuck. The
+// timer below polls the result summary after 30s of silence and dismisses
+// the overlay if results have landed. The Dismiss button is the universal
+// manual escape hatch.
+const SILENCE_THRESHOLD_MS = 30_000
+const WATCHDOG_TICK_MS = 5_000
+let lastProgressEventAt = 0
+let watchdogTimer: ReturnType<typeof setInterval> | null = null
+
+function startCalcWatchdog() {
+  lastProgressEventAt = Date.now()
+  if (watchdogTimer) clearInterval(watchdogTimer)
+  watchdogTimer = setInterval(async () => {
+    if (!awaitingCalculation.value) {
+      stopCalcWatchdog()
+      return
+    }
+    if (Date.now() - lastProgressEventAt < SILENCE_THRESHOLD_MS) return
+    // Only auto-recover when progress events indicated all categories were
+    // already finished — i.e. only the final `completed` event was missed.
+    // Earlier-phase silences fall through to the manual Dismiss button to
+    // avoid declaring success on a calculation that may still be running.
+    const p = calcProgress.value
+    const lookedDone =
+      !!p && p.totalCategories > 0 && p.completedCategories >= p.totalCategories
+    if (!lookedDone) {
+      lastProgressEventAt = Date.now()
+      return
+    }
+    try {
+      const resp = await GroupPricingService.getResultSummary(props.id)
+      const hasResults = resp?.status === 200 && resp.data != null
+      if (hasResults) {
+        snackbarText.value = 'Calculations Successful'
+        snackbar.value = true
+        awaitingCalculation.value = false
+        stopTracking()
+        await loadQuote()
+        stopCalcWatchdog()
+      } else {
+        lastProgressEventAt = Date.now()
+      }
+    } catch {
+      lastProgressEventAt = Date.now()
+    }
+  }, WATCHDOG_TICK_MS)
+}
+
+function stopCalcWatchdog() {
+  if (watchdogTimer) {
+    clearInterval(watchdogTimer)
+    watchdogTimer = null
+  }
+}
+
+async function dismissCalcOverlay() {
+  awaitingCalculation.value = false
+  stopTracking()
+  stopCalcWatchdog()
+  await loadQuote()
+}
+
 watch(calcProgress, (val) => {
   if (!awaitingCalculation.value) return
+  lastProgressEventAt = Date.now()
   if (val?.phase === 'completed') {
     snackbarText.value = 'Calculations Successful'
     snackbar.value = true
     awaitingCalculation.value = false
+    stopCalcWatchdog()
     loadQuote()
   }
   if (val?.phase === 'failed') {
@@ -652,7 +723,12 @@ watch(calcProgress, (val) => {
       'Calculations failed. Please contact your administrator.'
     snackbar.value = true
     awaitingCalculation.value = false
+    stopCalcWatchdog()
   }
+})
+
+onUnmounted(() => {
+  stopCalcWatchdog()
 })
 
 const props = defineProps({
@@ -878,6 +954,7 @@ const runQuoteCalculations = async () => {
     loading.value = true
     awaitingCalculation.value = true
     startTracking(String(quote.value.id))
+    startCalcWatchdog()
     try {
       const res = await GroupPricingService.runQuoteCalculations(
         quote.value.id,
@@ -892,6 +969,7 @@ const runQuoteCalculations = async () => {
     } catch (error: any) {
       console.error('Error:', error)
       stopTracking()
+      stopCalcWatchdog()
       awaitingCalculation.value = false
       const apiMessage = error?.response?.data?.message || error?.response?.data
       snackbarText.value =

@@ -67,25 +67,24 @@ export function dashIfEmpty(value: any): string {
 //
 // Office premium is no longer persisted on the rating result summary. It is
 // derived on the fly from the risk premium and the scheme-level loading
-// (expense + commission + profit).
+// (expense + profit). Commission is NOT included in the gross-up denominator;
+// it is added on top of the pre-comm office premium via the progressive
+// allocation persisted on the summary.
 
 /**
- * Sum of the three scheme-level loadings (expense, commission, profit) that
- * make up the office-premium denominator. Each loading is a fraction
- * (e.g. 0.05 for 5%).
+ * Sum of the scheme-level loadings (expense + profit) that make up the
+ * pre-commission office-premium denominator. Each loading is a fraction
+ * (e.g. 0.05 for 5%). Commission_loading is intentionally excluded — see the
+ * file-level comment above.
  */
 export function schemeTotalLoading(s: {
   expense_loading?: number
-  commission_loading?: number
   profit_loading?: number
 }): number {
   const e = Number(s?.expense_loading)
-  const c = Number(s?.commission_loading)
   const p = Number(s?.profit_loading)
   return (
-    (Number.isFinite(e) ? e : 0) +
-    (Number.isFinite(c) ? c : 0) +
-    (Number.isFinite(p) ? p : 0)
+    (Number.isFinite(e) ? e : 0) + (Number.isFinite(p) ? p : 0)
   )
 }
 
@@ -95,15 +94,16 @@ function asFiniteNumber(n: unknown): number {
 }
 
 /**
- * Derive the office premium from a risk premium and the scheme-level
- * loading on the summary row. Guards against denom <= 0 and against any
+ * Derive the *pre-commission* office premium from a risk premium and the
+ * scheme-level loading on the summary row. Commission is not included in the
+ * gross-up — it is added on top of this value via the persisted
+ * *_commission_amount slice. Guards against denom <= 0 and against any
  * non-finite numeric input (NaN/Infinity) propagating through the result.
  */
 export function computeOfficePremium(
   riskPremium: number,
   s: {
     expense_loading?: number
-    commission_loading?: number
     profit_loading?: number
   }
 ): number {
@@ -112,14 +112,13 @@ export function computeOfficePremium(
 }
 
 /**
- * Convert a risk-rate-per-1000-SA into the equivalent office rate by
- * scaling by 1 / (1 - schemeTotalLoading).
+ * Convert a risk-rate-per-1000-SA into the equivalent pre-commission office
+ * rate by scaling by 1 / (1 - schemeTotalLoading).
  */
 export function officeRateFromRiskRate(
   riskRatePer1000: number,
   s: {
     expense_loading?: number
-    commission_loading?: number
     profit_loading?: number
   }
 ): number {
@@ -128,18 +127,31 @@ export function officeRateFromRiskRate(
 }
 
 /**
- * Convert a risk-premium-proportion-of-salary into its office equivalent.
+ * Convert a risk-premium-proportion-of-salary into its pre-commission office
+ * equivalent.
  */
 export function officeProportionFromRiskProportion(
   riskProportion: number,
   s: {
     expense_loading?: number
-    commission_loading?: number
     profit_loading?: number
   }
 ): number {
   const denom = 1 - schemeTotalLoading(s)
   return denom <= 0 ? 0 : asFiniteNumber(riskProportion) / denom
+}
+
+/**
+ * Read a Final*OfficePremium or Final*CommissionAmount field that the backend
+ * persists on the result summary after applying the discount and adding the
+ * per-benefit commission slice. The persisted Final*OfficePremium values
+ * include their commission slice — they reconcile to
+ * final_total_annual_premium{,_excl_funeral} — while Exp* values remain
+ * pre-commission, so pre-discount Final - Exp == commission slice (no longer
+ * zero).
+ */
+export function finalFieldValue(s: any, field: string): number {
+  return asFiniteNumber(s?.[field])
 }
 
 // ---------------------------------------------------------------------------
