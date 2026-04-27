@@ -14,7 +14,11 @@ import {
   buildCategoryCommonBenefitRows,
   buildBenefitDefinitionRows,
   buildFuneralCoverageRows,
-  buildEducatorBenefitRows
+  buildEducatorBenefitRows,
+  schemeTotalLoading,
+  computeOfficePremium,
+  officeRateFromRiskRate,
+  officeProportionFromRiskProportion
 } from '../quoteDataHelpers'
 import type { BenefitTitles } from '@/renderer/types/docxQuote'
 
@@ -137,6 +141,104 @@ const mockSchemeCategory = {
 // ---------------------------------------------------------------------------
 // Utility function tests
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Office-premium derivation tests
+// ---------------------------------------------------------------------------
+
+describe('schemeTotalLoading', () => {
+  it('returns zero when no loadings are set', () => {
+    expect(schemeTotalLoading({})).toBe(0)
+  })
+
+  it('sums expense + profit + admin + other + binder + outsource', () => {
+    expect(
+      schemeTotalLoading({
+        expense_loading: 0.05,
+        profit_loading: 0.05,
+        admin_loading: 0.01,
+        other_loading: 0.01,
+        binder_fee_rate: 0.02,
+        outsource_fee_rate: 0.01
+      })
+    ).toBeCloseTo(0.15, 10)
+  })
+
+  it('ignores commission_loading even if present on the input shape', () => {
+    expect(
+      schemeTotalLoading({
+        expense_loading: 0.05,
+        profit_loading: 0.05,
+        // @ts-expect-error commission_loading is intentionally not in the type
+        commission_loading: 0.1
+      })
+    ).toBeCloseTo(0.1, 10)
+  })
+
+  it('treats non-finite values as zero', () => {
+    expect(
+      schemeTotalLoading({
+        expense_loading: NaN,
+        profit_loading: 0.05,
+        admin_loading: Infinity
+      })
+    ).toBeCloseTo(0.05, 10)
+  })
+})
+
+describe('computeOfficePremium', () => {
+  it('returns risk premium unchanged when all loadings are zero', () => {
+    expect(computeOfficePremium(100, {})).toBe(100)
+  })
+
+  it('grosses up by the full denominator (binder + outsource included)', () => {
+    expect(
+      computeOfficePremium(85, {
+        expense_loading: 0.05,
+        profit_loading: 0.05,
+        admin_loading: 0.01,
+        other_loading: 0.01,
+        binder_fee_rate: 0.02,
+        outsource_fee_rate: 0.01
+      })
+    ).toBeCloseTo(100, 10) // 85 / (1 - 0.15)
+  })
+
+  it('returns zero when denominator collapses to <= 0', () => {
+    expect(
+      computeOfficePremium(100, {
+        expense_loading: 0.6,
+        profit_loading: 0.5
+      })
+    ).toBe(0)
+  })
+})
+
+describe('officeRateFromRiskRate', () => {
+  it('scales risk-rate-per-1000 by 1 / (1 - schemeTotalLoading)', () => {
+    expect(
+      officeRateFromRiskRate(8.7, {
+        expense_loading: 0.05,
+        profit_loading: 0.05,
+        binder_fee_rate: 0.02,
+        outsource_fee_rate: 0.01
+      })
+    ).toBeCloseTo(10, 10) // 8.7 / (1 - 0.13)
+  })
+})
+
+describe('officeProportionFromRiskProportion', () => {
+  it('scales risk-proportion by 1 / (1 - schemeTotalLoading)', () => {
+    expect(
+      officeProportionFromRiskProportion(0.0087, {
+        expense_loading: 0.05,
+        profit_loading: 0.05,
+        binder_fee_rate: 0.02,
+        outsource_fee_rate: 0.01
+      })
+    ).toBeCloseTo(0.01, 10) // 0.0087 / (1 - 0.13)
+  })
+})
 
 describe('safeGetValue', () => {
   it('returns nested value from a valid path', () => {

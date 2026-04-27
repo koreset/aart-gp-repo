@@ -1296,6 +1296,8 @@ type MemberRatingResultSummary struct {
 	ExpenseLoading                          float64 `json:"expense_loading" csv:"expense_loading"`
 	CommissionLoading                       float64 `json:"commission_loading" csv:"commission_loading"`
 	ProfitLoading                           float64 `json:"profit_loading" csv:"profit_loading"`
+	AdminLoading                            float64 `json:"admin_loading" csv:"admin_loading"`
+	OtherLoading                            float64 `json:"other_loading" csv:"other_loading"`
 	// Discount is a negative fraction (e.g. -0.05 for a 5% discount) added into
 	// SchemeTotalLoading so Final office premium = Risk / (1 - SchemeTotalLoading)
 	// shrinks once a discount is applied. Zero pre-discount.
@@ -1725,10 +1727,20 @@ type MemberRatingResultSummary struct {
 	SchemeTotalCommission     float64 `json:"scheme_total_commission" csv:"scheme_total_commission"`
 	SchemeTotalCommissionRate float64 `json:"scheme_total_commission_rate" csv:"scheme_total_commission_rate"`
 
-	// Final*AnnualOfficePremium = Exp*AnnualRiskPremium / (1 - SchemeTotalLoading())
-	// where SchemeTotalLoading includes the Discount on this summary. Pre-discount
-	// these equal the corresponding Exp*Office values. Re-derived by
-	// recomputeFinalPremiumsAndCommission whenever Discount changes.
+	// Final*AnnualOfficePremium is the persisted *post-commission* gross
+	// premium per benefit, written by pass 3 of
+	// recomputeFinalPremiumsAndCommission as
+	//
+	//   finalOfficePreComm = Exp*AnnualRiskPremium / (1 - FinalSchemeTotalLoading())
+	//   Final*OfficePremium = finalOfficePreComm + Final*CommissionAmount
+	//
+	// where FinalSchemeTotalLoading() = SchemeTotalLoading() + Discount
+	// = expense + profit + admin + other + binder + outsource + discount.
+	// Discount is a negative fraction (e.g. -0.05 for 5%) so it shrinks the
+	// denominator and thus shrinks the gross-up. Pre-discount (Discount == 0)
+	// the pre-comm value equals the corresponding Exp*Office value, but the
+	// persisted Final* value still includes the commission slice. Re-derived
+	// by recomputeFinalPremiumsAndCommission whenever Discount changes.
 	FinalGlaAnnualOfficePremium                     float64 `json:"final_gla_annual_office_premium" csv:"final_gla_annual_office_premium"`
 	FinalAdditionalAccidentalGlaAnnualOfficePremium float64 `json:"final_additional_accidental_gla_annual_office_premium" csv:"final_additional_accidental_gla_annual_office_premium" gorm:"column:final_add_acc_gla_annual_office_premium"`
 	FinalPtdAnnualOfficePremium                     float64 `json:"final_ptd_annual_office_premium" csv:"final_ptd_annual_office_premium"`
@@ -1794,16 +1806,21 @@ type MemberRatingResultSummary struct {
 }
 
 // SchemeTotalLoading returns the scheme-level office-premium loading fraction
-// used to derive the *pre-commission* office premium: ExpenseLoading +
-// ProfitLoading. CommissionLoading is intentionally excluded — commission is
-// added on top of the pre-comm office premium via the progressive commission
-// allocation in applySchemeWideCommission / recomputeFinalPremiumsAndCommission,
-// not baked into the gross-up denominator. Discount is also excluded so Exp*
-// values remain frozen at quote-calc time.
+// used to derive the *pre-commission* office premium:
+// ExpenseLoading + ProfitLoading + AdminLoading + OtherLoading
+//   + BinderFeeRate + OutsourceFeeRate.
+// Mirrors the rating-phase TotalPremiumLoading sum so summary-level helpers
+// stay consistent with per-member calculation. CommissionLoading is
+// intentionally excluded — commission is added on top of the pre-comm office
+// premium via the progressive commission allocation in
+// applySchemeWideCommission / recomputeFinalPremiumsAndCommission, not baked
+// into the gross-up denominator. Discount is also excluded so Exp* values
+// remain frozen at quote-calc time.
 // Office premium (pre-comm) = risk premium / (1 - SchemeTotalLoading()).
 // Gross premium (incl. commission) = office premium + commission slice.
 func (s *MemberRatingResultSummary) SchemeTotalLoading() float64 {
-	return s.ExpenseLoading + s.ProfitLoading
+	return s.ExpenseLoading + s.ProfitLoading + s.AdminLoading + s.OtherLoading +
+		s.BinderFeeRate + s.OutsourceFeeRate
 }
 
 // FinalSchemeTotalLoading is SchemeTotalLoading + Discount. Discount is stored

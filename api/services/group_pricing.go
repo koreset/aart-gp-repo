@@ -2289,6 +2289,8 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	mdrs.ExpenseLoading = premiumLoading.ExpenseLoading
 	mdrs.CommissionLoading = premiumLoading.CommissionLoading
 	mdrs.ProfitLoading = premiumLoading.ProfitLoading
+	mdrs.AdminLoading = premiumLoading.AdminLoading
+	mdrs.OtherLoading = premiumLoading.OtherLoading
 	summaryBinderRate, summaryOutsourceRate := binderAndOutsourceRates(&groupQuote)
 	mdrs.BinderFeeRate = summaryBinderRate
 	mdrs.OutsourceFeeRate = summaryOutsourceRate
@@ -15792,7 +15794,10 @@ func schemeLoadingFromQuote(quote *models.GroupPricingQuote) float64 {
 	if quote == nil {
 		return 0
 	}
-	return (quote.Loadings.ExpenseLoading + quote.Loadings.ProfitLoading) / 100.0
+	binderRate, outsourceRate := binderAndOutsourceRates(quote)
+	return (quote.Loadings.ExpenseLoading+quote.Loadings.ProfitLoading+
+		quote.Loadings.AdminLoading+quote.Loadings.OtherLoading)/100.0 +
+		binderRate + outsourceRate
 }
 
 // computeMemberOfficePremium derives the *pre-commission* office premium for a

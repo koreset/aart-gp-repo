@@ -17,10 +17,11 @@ func TestSchemeTotalLoading(t *testing.T) {
 			want: 0,
 		},
 		{
-			// SchemeTotalLoading is now ExpenseLoading + ProfitLoading only —
-			// CommissionLoading is excluded because commission is added on top
-			// of the pre-comm office premium via the progressive allocation,
-			// not baked into the gross-up denominator.
+			// SchemeTotalLoading sums expense + profit + admin + other +
+			// binder + outsource. CommissionLoading is excluded because
+			// commission is added on top of the pre-comm office premium via
+			// the progressive allocation, not baked into the gross-up
+			// denominator.
 			name: "typical loading: expense + profit",
 			in: MemberRatingResultSummary{
 				ExpenseLoading:    0.05,
@@ -30,13 +31,27 @@ func TestSchemeTotalLoading(t *testing.T) {
 			want: 0.10,
 		},
 		{
-			name: "full loading sums expense + profit only",
+			name: "all six fields sum",
 			in: MemberRatingResultSummary{
-				ExpenseLoading:    0.10,
-				CommissionLoading: 0.20, // ignored
-				ProfitLoading:     0.15,
+				ExpenseLoading:    0.05,
+				CommissionLoading: 0.10, // ignored
+				ProfitLoading:     0.05,
+				AdminLoading:      0.01,
+				OtherLoading:      0.01,
+				BinderFeeRate:     0.02,
+				OutsourceFeeRate:  0.01,
 			},
-			want: 0.25,
+			want: 0.15,
+		},
+		{
+			name: "non-binder quote (binder/outsource zero)",
+			in: MemberRatingResultSummary{
+				ExpenseLoading: 0.10,
+				ProfitLoading:  0.15,
+				AdminLoading:   0.02,
+				OtherLoading:   0.03,
+			},
+			want: 0.30,
 		},
 	}
 	for _, tt := range tests {
@@ -79,6 +94,19 @@ func TestComputeOfficePremium(t *testing.T) {
 				ProfitLoading:     0.05,
 			},
 			want: 100, // 90 / (1 - 0.10)
+		},
+		{
+			name:        "binder + outsource included in denominator",
+			riskPremium: 85,
+			summary: &MemberRatingResultSummary{
+				ExpenseLoading:   0.05,
+				ProfitLoading:    0.05,
+				AdminLoading:     0.01,
+				OtherLoading:     0.01,
+				BinderFeeRate:    0.02,
+				OutsourceFeeRate: 0.01,
+			},
+			want: 100, // 85 / (1 - 0.15)
 		},
 		{
 			name:        "denom guard at 1.0 loading",

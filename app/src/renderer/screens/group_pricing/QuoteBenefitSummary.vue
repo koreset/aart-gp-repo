@@ -969,9 +969,9 @@ const convertExcelDataToGridData = () => {
       )
     })
 
-    // Tax Saver slice of GLA — already included in the GLA row above; this
-    // extra row makes the attributable portion explicit for the business.
-    // Not added to totals.
+    // Tax Saver — additive top-up on top of GLA. Salary/SA cells stay 0
+    // because Tax Saver rides on the GLA salary basis (showing them would
+    // double-count those columns).
     if (resultSummary.tax_saver_benefit) {
       const salary = resultSummary.total_annual_salary || 0
       const taxSaverPremium =
@@ -995,10 +995,35 @@ const convertExcelDataToGridData = () => {
       })
     }
 
-    // GLA Educator rider (only for categories with the benefit enabled).
     const schemeCategory = props.quote?.scheme_categories?.find(
       (cat: any) => cat.scheme_category === category
     )
+
+    // Additional Accidental GLA rider (per-category opt-in).
+    if (schemeCategory?.additional_accidental_gla_benefit === true) {
+      gridData.push({
+        category,
+        benefit: additionalAccidentalGlaBenefitTitle.value,
+        annualSalary: resultSummary.total_annual_salary,
+        totalSumAssured:
+          resultSummary.total_additional_accidental_gla_capped_sum_assured,
+        annualPremium: computeOfficePremium(
+          resultSummary.exp_total_additional_accidental_gla_annual_risk_premium,
+          resultSummary
+        ),
+        finalAnnualPremium:
+          resultSummary.final_additional_accidental_gla_annual_office_premium,
+        finalAnnualCommission:
+          resultSummary.final_additional_accidental_gla_annual_commission_amount,
+        percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_additional_accidental_gla_annual_risk_premium_salary, resultSummary) * 100)}%`,
+        ratePer1000SA: officeRateFromRiskRate(
+          resultSummary.exp_additional_accidental_gla_risk_rate_per_1000_sa,
+          resultSummary
+        )
+      })
+    }
+
+    // GLA Educator rider (per-category opt-in).
     if (schemeCategory?.gla_educator_benefit === 'Yes') {
       gridData.push({
         category,
@@ -1012,7 +1037,7 @@ const convertExcelDataToGridData = () => {
         finalAnnualPremium:
           resultSummary.final_gla_educator_annual_office_premium,
         finalAnnualCommission:
-          resultSummary.final_gla_educator_annual_comm_amount,
+          resultSummary.final_gla_educator_annual_commission_amount,
         percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_adj_proportion_gla_educator_risk_premium_salary, resultSummary) * 100)}%`,
         ratePer1000SA: officeRateFromRiskRate(
           resultSummary.exp_gla_educator_risk_rate_per_1000_sa,
@@ -1055,7 +1080,7 @@ const convertExcelDataToGridData = () => {
         finalAnnualPremium:
           resultSummary.final_ptd_educator_annual_office_premium,
         finalAnnualCommission:
-          resultSummary.final_ptd_educator_annual_comm_amount,
+          resultSummary.final_ptd_educator_annual_commission_amount,
         percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_adj_proportion_ptd_educator_risk_premium_salary, resultSummary) * 100)}%`,
         ratePer1000SA: officeRateFromRiskRate(
           resultSummary.exp_ptd_educator_risk_rate_per_1000_sa,
@@ -1386,15 +1411,15 @@ const convertExcelDataToGridData = () => {
           final_gla_educator_annual_office_premium:
             (acc.final_gla_educator_annual_office_premium || 0) +
             (resultSummary.final_gla_educator_annual_office_premium || 0),
-          final_gla_educator_annual_comm_amount:
-            (acc.final_gla_educator_annual_comm_amount || 0) +
-            (resultSummary.final_gla_educator_annual_comm_amount || 0),
+          final_gla_educator_annual_commission_amount:
+            (acc.final_gla_educator_annual_commission_amount || 0) +
+            (resultSummary.final_gla_educator_annual_commission_amount || 0),
           final_ptd_educator_annual_office_premium:
             (acc.final_ptd_educator_annual_office_premium || 0) +
             (resultSummary.final_ptd_educator_annual_office_premium || 0),
-          final_ptd_educator_annual_comm_amount:
-            (acc.final_ptd_educator_annual_comm_amount || 0) +
-            (resultSummary.final_ptd_educator_annual_comm_amount || 0),
+          final_ptd_educator_annual_commission_amount:
+            (acc.final_ptd_educator_annual_commission_amount || 0) +
+            (resultSummary.final_ptd_educator_annual_commission_amount || 0),
           final_total_annual_premium_excl_funeral:
             (acc.final_total_annual_premium_excl_funeral || 0) +
             (resultSummary.final_total_annual_premium_excl_funeral || 0)
@@ -1435,7 +1460,7 @@ const convertExcelDataToGridData = () => {
         totalSumAssured: totals.total_educator_sum_assured,
         annualPremium: totals.exp_adj_total_gla_educator_office_premium,
         finalAnnualPremium: totals.final_gla_educator_annual_office_premium,
-        finalAnnualCommission: totals.final_gla_educator_annual_comm_amount,
+        finalAnnualCommission: totals.final_gla_educator_annual_commission_amount,
         percentSalary: `${roundUpToTwoDecimalsAccounting(
           (totals.exp_adj_total_gla_educator_office_premium /
             totals.total_annual_salary || 0) * 100
@@ -1473,7 +1498,7 @@ const convertExcelDataToGridData = () => {
         totalSumAssured: totals.total_educator_sum_assured,
         annualPremium: totals.exp_adj_total_ptd_educator_office_premium,
         finalAnnualPremium: totals.final_ptd_educator_annual_office_premium,
-        finalAnnualCommission: totals.final_ptd_educator_annual_comm_amount,
+        finalAnnualCommission: totals.final_ptd_educator_annual_commission_amount,
         percentSalary: `${roundUpToTwoDecimalsAccounting(
           (totals.exp_adj_total_ptd_educator_office_premium /
             totals.total_annual_salary || 0) * 100
@@ -1805,19 +1830,32 @@ function convertResultSummariesToBreakdown(): any[] {
   // Build a row from the (binder, outsource, commission) triple plus the
   // pre/post office premium.
   //
-  // Pre side: expOffice is the *pre-commission* office premium
-  // (risk / (1 - (expense + profit))). Commission is added on top, so:
+  // Pre side: expOffice is the *pre-commission* office premium grossed up by
+  // the full scheme loading:
+  //   expOffice = risk / (1 - (expense + profit + admin + other + binder + outsourcing))
+  // Binder + outsource rates sit *inside* the denominator, so binder and
+  // outsource amounts (= expOffice * rate) are already embedded in expOffice.
+  // Commission is excluded from the gross-up and added on top:
   //   expBase  = expOffice - expBinder - expOutsource          (no commission subtraction)
   //   expGross = expOffice + expCommission                     = base + binder + outsource + commission
   // Invariants the user expects:
   //   gross - commission == ExpRiskPremium / (1 - SchemeTotal)
   //   base              == ExpRiskPremium / (1 - SchemeTotal) - binder - outsource
   //
-  // Final side: persisted finalOffice already includes its commission slice
-  // (Phase 1 gross-up in recomputeFinalPremiumsAndCommission). So commission
-  // *is* subtracted from finalOffice when carving out finalBase:
+  // Final side: same denominator structure as Pre side, plus discount:
+  //   schemeLoadingAfterDiscount = expense + profit + admin + other + binder + outsourcing + discount
+  //   finalOfficePreComm         = expRiskPremium / (1 - schemeLoadingAfterDiscount)
+  // Discount is stored as a negative fraction so adding it shrinks the
+  // denominator (and thus shrinks the office premium once a discount applies).
+  // Backend pass 3 of recomputeFinalPremiumsAndCommission re-derives
+  // finalCommission progressively against the new gross-up and persists
+  //   finalOffice = finalOfficePreComm + finalCommission
+  // i.e. the persisted finalOffice column already includes its commission
+  // slice. So commission *is* subtracted from finalOffice when carving out
+  // finalBase:
   //   finalBase    = finalOffice - finalBinder - finalOutsource - finalCommission
   //   finalPremium = finalOffice                                = finalBase + finalBinder + finalOutsource + finalCommission
+  //                = expRiskPremium / (1 - schemeLoadingAfterDiscount) + finalCommission
   const buildRow = (
     category: string,
     benefit: string,
@@ -1843,8 +1881,9 @@ function convertResultSummariesToBreakdown(): any[] {
       expBinderFee: expBinder,
       expOutsourcingFee: expOutsource,
       expCommission,
-      expGrossPremium:
-        expBase + expBinder + expOutsource + expCommission,
+      // Gross = ExpRiskPremium / (1 - schemeTotalLoading) + commission
+      // (binder + outsource are already inside expOffice and cancel out).
+      expGrossPremium: expOffice + expCommission,
       finalBasePremium: finalBase,
       finalBinderFee: finalBinder,
       finalOutsourcingFee: finalOutsource,
@@ -1946,9 +1985,8 @@ function convertResultSummariesToBreakdown(): any[] {
       )
     }
 
-    // Tax Saver — informational slice of GLA (already counted in GLA totals).
-    // No Exp* binder/outsource is persisted for tax saver, so those columns
-    // stay 0 on this row even on binder schemes.
+    // Tax Saver — additive top-up on top of GLA. No Exp* binder/outsource
+    // is persisted for tax saver, so those columns are 0 even on binder schemes.
     if (rs.tax_saver_benefit) {
       pushBenefit(
         `${glaBenefitTitle.value} — Tax Saver (of GLA)`,
@@ -1963,8 +2001,26 @@ function convertResultSummariesToBreakdown(): any[] {
         num(rs.final_tax_saver_annual_office_premium),
         num(rs.final_tax_saver_annual_binder_amount),
         num(rs.final_tax_saver_annual_outsourced_amount),
-        num(rs.final_tax_saver_annual_commission_amount),
-        false
+        num(rs.final_tax_saver_annual_commission_amount)
+      )
+    }
+
+    // Additional Accidental GLA rider (per-category opt-in).
+    if (schemeCategory?.additional_accidental_gla_benefit === true) {
+      pushBenefit(
+        additionalAccidentalGlaBenefitTitle.value,
+        num(rs.exp_total_additional_accidental_gla_annual_risk_premium),
+        computeOfficePremium(
+          num(rs.exp_total_additional_accidental_gla_annual_risk_premium),
+          rs
+        ),
+        num(rs.exp_total_additional_accidental_gla_annual_binder_amount),
+        num(rs.exp_total_additional_accidental_gla_annual_outsourced_amount),
+        num(rs.exp_total_additional_accidental_gla_annual_commission_amount),
+        num(rs.final_additional_accidental_gla_annual_office_premium),
+        num(rs.final_additional_accidental_gla_annual_binder_amount),
+        num(rs.final_additional_accidental_gla_annual_outsourced_amount),
+        num(rs.final_additional_accidental_gla_annual_commission_amount)
       )
     }
 
@@ -1983,7 +2039,7 @@ function convertResultSummariesToBreakdown(): any[] {
         num(rs.final_gla_educator_annual_office_premium),
         num(rs.final_gla_educator_annual_binder_amount),
         num(rs.final_gla_educator_annual_outsourced_amount),
-        num(rs.final_gla_educator_annual_comm_amount)
+        num(rs.final_gla_educator_annual_commission_amount)
       )
     }
 
@@ -2017,7 +2073,7 @@ function convertResultSummariesToBreakdown(): any[] {
         num(rs.final_ptd_educator_annual_office_premium),
         num(rs.final_ptd_educator_annual_binder_amount),
         num(rs.final_ptd_educator_annual_outsourced_amount),
-        num(rs.final_ptd_educator_annual_comm_amount)
+        num(rs.final_ptd_educator_annual_commission_amount)
       )
     }
 

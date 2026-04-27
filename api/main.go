@@ -276,6 +276,15 @@ func startApplication(initTables bool, s service.Service) {
 	log.Info("Running database migrations")
 	services.RunMigrationsOnStartup()
 
+	// One-shot backfill: scale persisted binder/outsource amounts and refresh
+	// Final*OfficePremium/Final*Commission to the new SchemeTotalLoading()
+	// denominator (now includes admin + other + binder + outsource on top of
+	// expense + profit). Idempotent — gated by a marker in the migrations
+	// table so it only runs once per install.
+	if err := services.BackfillOfficePremiumDenominator(); err != nil {
+		log.WithField("error", err.Error()).Warn("Office-premium denominator backfill failed")
+	}
+
 	// Ensure gp_table_stats exists and is seeded (idempotent, fast).
 	// (Table creation is handled by SetupTables above; this seeds the row counts.)
 	services.EnsureGPTableStats()

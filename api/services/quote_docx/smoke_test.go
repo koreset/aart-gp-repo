@@ -46,8 +46,10 @@ func TestSmokeAssembly(t *testing.T) {
 			TotalAnnualSalary:                         12_000_000,
 			TotalSumAssured:                           36_000_000,
 			TotalGlaCappedSumAssured:                  36_000_000,
-			// 0.2 scheme loading => office premium = risk / 0.8.
-			// 96_000 / 0.8 = 120_000 office premium.
+			// SchemeTotalLoading() = expense + profit + admin + other + binder
+			// + outsource = 0.10 here. Office premium derived = risk / 0.9.
+			// CommissionLoading is excluded from the denominator (it is added
+			// on top via the progressive allocation).
 			ExpenseLoading:                          0.05,
 			CommissionLoading:                       0.10,
 			ProfitLoading:                           0.05,

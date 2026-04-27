@@ -72,19 +72,29 @@ export function dashIfEmpty(value: any): string {
 // allocation persisted on the summary.
 
 /**
- * Sum of the scheme-level loadings (expense + profit) that make up the
- * pre-commission office-premium denominator. Each loading is a fraction
- * (e.g. 0.05 for 5%). Commission_loading is intentionally excluded — see the
- * file-level comment above.
+ * Sum of the scheme-level loadings that make up the pre-commission
+ * office-premium denominator: expense + profit + admin + other + binder +
+ * outsourcing. Each loading is a fraction (e.g. 0.05 for 5%). Mirrors the
+ * backend rating-phase TotalPremiumLoading and the model-level
+ * SchemeTotalLoading() so frontend-derived office premiums reconcile to
+ * persisted Final*OfficePremium values. Commission_loading is intentionally
+ * excluded — see the file-level comment above.
  */
 export function schemeTotalLoading(s: {
   expense_loading?: number
   profit_loading?: number
+  admin_loading?: number
+  other_loading?: number
+  binder_fee_rate?: number
+  outsource_fee_rate?: number
 }): number {
-  const e = Number(s?.expense_loading)
-  const p = Number(s?.profit_loading)
   return (
-    (Number.isFinite(e) ? e : 0) + (Number.isFinite(p) ? p : 0)
+    asFiniteNumber(s?.expense_loading) +
+    asFiniteNumber(s?.profit_loading) +
+    asFiniteNumber(s?.admin_loading) +
+    asFiniteNumber(s?.other_loading) +
+    asFiniteNumber(s?.binder_fee_rate) +
+    asFiniteNumber(s?.outsource_fee_rate)
   )
 }
 
@@ -105,6 +115,10 @@ export function computeOfficePremium(
   s: {
     expense_loading?: number
     profit_loading?: number
+    admin_loading?: number
+    other_loading?: number
+    binder_fee_rate?: number
+    outsource_fee_rate?: number
   }
 ): number {
   const denom = 1 - schemeTotalLoading(s)
@@ -120,6 +134,10 @@ export function officeRateFromRiskRate(
   s: {
     expense_loading?: number
     profit_loading?: number
+    admin_loading?: number
+    other_loading?: number
+    binder_fee_rate?: number
+    outsource_fee_rate?: number
   }
 ): number {
   const denom = 1 - schemeTotalLoading(s)
@@ -135,6 +153,10 @@ export function officeProportionFromRiskProportion(
   s: {
     expense_loading?: number
     profit_loading?: number
+    admin_loading?: number
+    other_loading?: number
+    binder_fee_rate?: number
+    outsource_fee_rate?: number
   }
 ): number {
   const denom = 1 - schemeTotalLoading(s)
