@@ -582,11 +582,14 @@ type AdditionalGlaCoverAgeBand struct {
 // snapshot (risk and office gross-up) along with the male proportion that
 // was used to blend the underlying gla_qx / gla_aids_qx.
 type AdditionalGlaCoverBandRate struct {
-	MinAge            int     `json:"min_age"`
-	MaxAge            int     `json:"max_age"`
-	RiskRatePer1000   float64 `json:"risk_rate_per1000"`
-	OfficeRatePer1000 float64 `json:"office_rate_per1000"`
-	MalePropUsed      float64 `json:"male_prop_used"`
+	MinAge              int     `json:"min_age"`
+	MaxAge              int     `json:"max_age"`
+	RiskRatePer1000     float64 `json:"risk_rate_per1000"`
+	BinderFeePer1000    float64 `json:"binder_fee_per1000"`
+	OutsourceFeePer1000 float64 `json:"outsource_fee_per1000"`
+	CommissionPer1000   float64 `json:"commission_per1000"`
+	OfficeRatePer1000   float64 `json:"office_rate_per1000"`
+	MalePropUsed        float64 `json:"male_prop_used"`
 }
 type Loadings struct {
 	CommissionLoading  float64 `json:"commission_loading"`
@@ -1607,11 +1610,9 @@ type MemberRatingResultSummary struct {
 	//TotalCiExperienceAdjustedAnnualPremium      float64 `json:"total_ci_experience_adjusted_annual_premium" csv:"total_ci_experience_adjusted_annual_premium"`
 	//TotalSpouseExperienceAdjustedAnnualPremium  float64 `json:"total_spouse_experience_adjusted_annual_premium" csv:"total_spouse_experience_adjusted_annual_premium"`
 	//TotalFuneralExperienceAdjustedAnnualPremium float64 `json:"total_funeral_experience_adjusted_annual_premium" csv:"total_funeral_experience_adjusted_annual_premium"`
-	TotalAnnualPremiumExcludingFuneral         float64 `json:"total_annual_premium_excluding_funeral" csv:"total_annual_premium_excluding_funeral"`
-	TotalSumAssured                            float64 `json:"total_sum_assured" csv:"total_sum_assured"`
-	TotalAnnualPremium                         float64 `json:"total_annual_premium" csv:"total_annual_premium" gorm:"default:0"`
-	ExpTotalAnnualPremiumExclFuneral           float64 `json:"exp_total_annual_premium_excl_funeral" csv:"exp_total_annual_premium_excl_funeral"`
-	ProportionExpTotalPremiumExclFuneralSalary float64 `json:"proportion_exp_total_premium_excl_funeral_salary" csv:"proportion_exp_total_premium_excl_funeral_salary"`
+	TotalSumAssured                  float64 `json:"total_sum_assured" csv:"total_sum_assured"`
+	TotalAnnualPremium               float64 `json:"total_annual_premium" csv:"total_annual_premium" gorm:"default:0"`
+	ExpTotalAnnualPremiumExclFuneral float64 `json:"exp_total_annual_premium_excl_funeral" csv:"exp_total_annual_premium_excl_funeral"`
 	TotalCommission                            float64 `json:"total_commission" csv:"total_commission"`
 	TotalExpenses                              float64 `json:"total_expenses" csv:"total_expenses"`
 	TotalExpectedClaims                        float64 `json:"total_expected_claims" csv:"total_expected_claims"`
@@ -1800,6 +1801,25 @@ type MemberRatingResultSummary struct {
 	FinalTotalAnnualPremium            float64 `json:"final_total_annual_premium" csv:"final_total_annual_premium"`
 	FinalSchemeTotalCommission         float64 `json:"final_scheme_total_commission" csv:"final_scheme_total_commission"`
 	FinalSchemeTotalCommissionRate     float64 `json:"final_scheme_total_commission_rate" csv:"final_scheme_total_commission_rate"`
+
+	// Total*CommissionAmount mirrors the Exp*/Final* commission allocation but
+	// is computed against the THEORETICAL (book-rate) scheme total rather than
+	// the experience-blended one. Used by the OutputSummary Theoretical column
+	// so its Annual Office Premium can show book risk + book-progressive
+	// commission, reconciling within the Theoretical column the same way the
+	// Experience and Discounted columns reconcile within themselves. Computed
+	// alongside the Exp* commission inside applySchemeWideCommission.
+	TotalGlaAnnualCommissionAmount                     float64 `json:"total_gla_annual_commission_amount" csv:"total_gla_annual_commission_amount"`
+	TotalAdditionalAccidentalGlaAnnualCommissionAmount float64 `json:"total_additional_accidental_gla_annual_commission_amount" csv:"total_additional_accidental_gla_annual_commission_amount" gorm:"column:total_add_acc_gla_annual_comm_amount"`
+	TotalPtdAnnualCommissionAmount                     float64 `json:"total_ptd_annual_commission_amount" csv:"total_ptd_annual_commission_amount"`
+	TotalCiAnnualCommissionAmount                      float64 `json:"total_ci_annual_commission_amount" csv:"total_ci_annual_commission_amount"`
+	TotalSglaAnnualCommissionAmount                    float64 `json:"total_sgla_annual_commission_amount" csv:"total_sgla_annual_commission_amount"`
+	TotalTaxSaverAnnualCommissionAmount                float64 `json:"total_tax_saver_annual_commission_amount" csv:"total_tax_saver_annual_commission_amount"`
+	TotalTtdAnnualCommissionAmount                     float64 `json:"total_ttd_annual_commission_amount" csv:"total_ttd_annual_commission_amount"`
+	TotalPhiAnnualCommissionAmount                     float64 `json:"total_phi_annual_commission_amount" csv:"total_phi_annual_commission_amount"`
+	TotalFunAnnualCommissionAmount                     float64 `json:"total_fun_annual_commission_amount" csv:"total_fun_annual_commission_amount"`
+	TotalGlaEducatorCommissionAmount                   float64 `json:"total_gla_educator_commission_amount" csv:"total_gla_educator_commission_amount"`
+	TotalPtdEducatorCommissionAmount                   float64 `json:"total_ptd_educator_commission_amount" csv:"total_ptd_educator_commission_amount"`
 
 	CreationDate time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy    string    `json:"created_by" csv:"created_by"`

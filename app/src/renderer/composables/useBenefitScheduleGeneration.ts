@@ -494,7 +494,13 @@ function buildPremiumSummarySection(
           roundUpToTwoDecimalsAccounting(
             item.exp_total_annual_premium_excl_funeral || 0
           ),
-          `${roundUpToTwoDecimalsAccounting((item.proportion_exp_total_premium_excl_funeral_salary || 0) * 100)}%`
+          `${roundUpToTwoDecimalsAccounting(
+            (item.total_annual_salary || 0) > 0
+              ? ((item.exp_total_annual_premium_excl_funeral || 0) /
+                  item.total_annual_salary) *
+                  100
+              : 0
+          )}%`
         ],
         colWidths,
         { bold: true, fillColor: COLORS.lightFill }
@@ -822,7 +828,13 @@ export function useBenefitScheduleGeneration() {
             styles: { halign: 'right', fontStyle: 'bold' }
           },
           {
-            content: `${roundUpToTwoDecimalsAccounting((item.proportion_exp_total_premium_excl_funeral_salary || 0) * 100)}%`,
+            content: `${roundUpToTwoDecimalsAccounting(
+              (item.total_annual_salary || 0) > 0
+                ? ((item.exp_total_annual_premium_excl_funeral || 0) /
+                    item.total_annual_salary) *
+                    100
+                : 0
+            )}%`,
             styles: { halign: 'right', fontStyle: 'bold' }
           }
         ])

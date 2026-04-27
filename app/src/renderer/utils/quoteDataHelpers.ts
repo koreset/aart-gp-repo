@@ -177,6 +177,147 @@ export function finalFieldValue(s: any, field: string): number {
 }
 
 // ---------------------------------------------------------------------------
+// Final (post-discount) office-premium derivation
+// ---------------------------------------------------------------------------
+//
+// The Discounted column in OutputSummary reads the persisted Final*OfficePremium
+// for the office-premium total but historically used the pre-discount
+// schemeTotalLoading() for the matching rate-per-1000 / %-of-salary cells. With
+// a non-zero discount that breaks reconciliation: premium / (SA / 1000) no
+// longer equals the rate. The helpers below mirror the office-side helpers but
+// fold Discount into the denominator so all three Final cells reconcile.
+
+type SummaryWithDiscount = Parameters<typeof schemeTotalLoading>[0] & {
+  discount?: number
+}
+
+/**
+ * Scheme-level loading inclusive of the (negative) Discount fraction. Mirrors
+ * the backend models.MemberRatingResultSummary.FinalSchemeTotalLoading().
+ */
+export function finalSchemeTotalLoading(s: SummaryWithDiscount): number {
+  return schemeTotalLoading(s) + asFiniteNumber(s?.discount)
+}
+
+/**
+ * Office premium INCLUDING a commission slice on top of the pre-commission
+ * gross-up. Used by:
+ *  - Experience-Rated cells: pass exp_*_annual_risk_premium + the persisted
+ *    exp_*_annual_commission_amount, so Experience reconciles to Final when
+ *    Discount == 0.
+ *  - Theoretical cells: pass total_*_annual_risk_premium + the same persisted
+ *    exp_*_annual_commission_amount as a "preexperience-rated commission"
+ *    proxy, since no separate book-rate commission is computed.
+ */
+export function officePremiumWithCommission(
+  riskPremium: number,
+  commissionAmount: number,
+  s: Parameters<typeof schemeTotalLoading>[0]
+): number {
+  return computeOfficePremium(riskPremium, s) + asFiniteNumber(commissionAmount)
+}
+
+/**
+ * Experience-Rated office RATE per 1,000 SA (or income) WITH the pre-discount
+ * commission slice baked in. Equals
+ *   officeRateFromRiskRate(riskRate, s) + commission * 1000 / cappedAmount
+ * which is algebraically expOfficePremium(...) * 1000 / cappedAmount, so the
+ * Experience rate, premium, and %-of-salary cells reconcile.
+ */
+export function expOfficeRateFromRiskRate(
+  riskRatePer1000: number,
+  commissionAmount: number,
+  cappedAmount: number,
+  s: Parameters<typeof schemeTotalLoading>[0]
+): number {
+  const baseRate = officeRateFromRiskRate(riskRatePer1000, s)
+  const denom = asFiniteNumber(cappedAmount)
+  if (denom <= 0) return baseRate
+  return baseRate + (asFiniteNumber(commissionAmount) * 1000) / denom
+}
+
+/**
+ * Experience-Rated office %-of-salary WITH the pre-discount commission slice
+ * baked in. Equals
+ *   officeProportionFromRiskProportion(riskProp, s) + commission / salary
+ * which is algebraically expOfficePremium(...) / salary.
+ */
+export function expOfficeProportionFromRiskProportion(
+  riskProportion: number,
+  commissionAmount: number,
+  totalAnnualSalary: number,
+  s: Parameters<typeof schemeTotalLoading>[0]
+): number {
+  const baseProp = officeProportionFromRiskProportion(riskProportion, s)
+  const salary = asFiniteNumber(totalAnnualSalary)
+  if (salary <= 0) return baseProp
+  return baseProp + asFiniteNumber(commissionAmount) / salary
+}
+
+/**
+ * Final (post-discount, pre-commission) office premium. Used as a fallback
+ * when the persisted Final*OfficePremium is unavailable (e.g. discount applied
+ * but the recompute hasn't yet repopulated the summary row).
+ */
+export function finalOfficePremium(
+  riskPremium: number,
+  s: SummaryWithDiscount
+): number {
+  const denom = 1 - finalSchemeTotalLoading(s)
+  return denom <= 0 ? 0 : asFiniteNumber(riskPremium) / denom
+}
+
+/**
+ * Generic rate-per-1000 derivation: officePremium * 1000 / cappedAmount.
+ * Used by the Discounted column to display the rate that reconciles to the
+ * persisted Final*OfficePremium (post-discount, post-commission), since the
+ * stored Final premium is the canonical post-commission figure that the rate
+ * must agree with: rate × cappedSA / 1000 == Final premium.
+ */
+export function ratePer1000(officePremium: number, cappedAmount: number): number {
+  const denom = asFiniteNumber(cappedAmount)
+  if (denom <= 0) return 0
+  return (asFiniteNumber(officePremium) * 1000) / denom
+}
+
+/**
+ * Generic %-of-salary derivation: officePremium / totalAnnualSalary. Mirrors
+ * ratePer1000() — used by the Discounted column to keep the displayed
+ * proportion reconciled to the persisted Final*OfficePremium.
+ */
+export function proportionOfSalary(
+  officePremium: number,
+  totalAnnualSalary: number
+): number {
+  const denom = asFiniteNumber(totalAnnualSalary)
+  if (denom <= 0) return 0
+  return asFiniteNumber(officePremium) / denom
+}
+
+/**
+ * Convert a risk-rate-per-1000-SA into the Final (post-discount) office rate.
+ */
+export function finalOfficeRateFromRiskRate(
+  riskRatePer1000: number,
+  s: SummaryWithDiscount
+): number {
+  const denom = 1 - finalSchemeTotalLoading(s)
+  return denom <= 0 ? 0 : asFiniteNumber(riskRatePer1000) / denom
+}
+
+/**
+ * Convert a risk-premium-proportion-of-salary into its Final (post-discount)
+ * office equivalent.
+ */
+export function finalOfficeProportionFromRiskProportion(
+  riskProportion: number,
+  s: SummaryWithDiscount
+): number {
+  const denom = 1 - finalSchemeTotalLoading(s)
+  return denom <= 0 ? 0 : asFiniteNumber(riskProportion) / denom
+}
+
+// ---------------------------------------------------------------------------
 // Aggregation helpers
 // ---------------------------------------------------------------------------
 
@@ -300,7 +441,11 @@ export function buildPremiumSummaryRows(
       annualPremium: roundUpToTwoDecimalsAccounting(
         item.exp_total_annual_premium_excl_funeral
       ),
-      percentSalary: `${roundUpToTwoDecimalsAccounting(item.proportion_exp_total_premium_excl_funeral_salary * 100)}%`
+      percentSalary: `${roundUpToTwoDecimalsAccounting(
+        item.total_annual_salary > 0
+          ? (item.exp_total_annual_premium_excl_funeral / item.total_annual_salary) * 100
+          : 0
+      )}%`
     })
   })
 

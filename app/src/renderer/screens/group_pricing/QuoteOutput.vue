@@ -540,7 +540,13 @@ const convertExcelDataToGridData = () => {
       benefit: 'Sub Total/Total Premiums',
       totalSumAssured: resultSummary.total_gla_capped_sum_assured,
       annualPremium: finalFieldValue(resultSummary, 'final_total_annual_premium_excl_funeral'),
-      percentSalary: `${roundUpToTwoDecimalsAccounting(resultSummary.proportion_exp_total_premium_excl_funeral_salary * 100)}%`,
+      percentSalary: `${roundUpToTwoDecimalsAccounting(
+        resultSummary.total_annual_salary > 0
+          ? (resultSummary.exp_total_annual_premium_excl_funeral /
+              resultSummary.total_annual_salary) *
+              100
+          : 0
+      )}%`,
       isSubtotal: true
     })
 
@@ -886,7 +892,11 @@ const exportBenefitDataToExcel = () => {
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            resultSummary.proportion_exp_total_premium_excl_funeral_salary * 100
+            resultSummary.total_annual_salary > 0
+              ? (resultSummary.exp_total_annual_premium_excl_funeral /
+                  resultSummary.total_annual_salary) *
+                  100
+              : 0
           ) + '%'
         )
       ],
@@ -1276,7 +1286,13 @@ const generatePDF = async () => {
           roundUpToTwoDecimalsAccounting(
             finalFieldValue(item, 'final_total_annual_premium_excl_funeral')
           ),
-          `${roundUpToTwoDecimalsAccounting(item.proportion_exp_total_premium_excl_funeral_salary * 100)}%`
+          `${roundUpToTwoDecimalsAccounting(
+            item.total_annual_salary > 0
+              ? (item.exp_total_annual_premium_excl_funeral /
+                  item.total_annual_salary) *
+                  100
+              : 0
+          )}%`
         ])
       }
     })

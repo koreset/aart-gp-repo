@@ -253,6 +253,9 @@
                 <tr>
                   <th>Age Band</th>
                   <th class="text-right">Risk Rate / 1,000</th>
+                  <th class="text-right">Binder Fee / 1,000</th>
+                  <th class="text-right">Outsource Fee / 1,000</th>
+                  <th class="text-right">Commission / 1,000</th>
                   <th class="text-right">Office Rate / 1,000</th>
                 </tr>
               </thead>
@@ -264,6 +267,23 @@
                   <td>{{ formatBandLabel(r) }}</td>
                   <td class="text-right">
                     {{ roundUpToTwoDecimalsAccounting(r.risk_rate_per1000) }}
+                  </td>
+                  <td class="text-right">
+                    {{
+                      roundUpToTwoDecimalsAccounting(r.binder_fee_per1000 ?? 0)
+                    }}
+                  </td>
+                  <td class="text-right">
+                    {{
+                      roundUpToTwoDecimalsAccounting(
+                        r.outsource_fee_per1000 ?? 0
+                      )
+                    }}
+                  </td>
+                  <td class="text-right">
+                    {{
+                      roundUpToTwoDecimalsAccounting(r.commission_per1000 ?? 0)
+                    }}
                   </td>
                   <td class="text-right">
                     {{ roundUpToTwoDecimalsAccounting(r.office_rate_per1000) }}
@@ -827,16 +847,33 @@ const exportAdditionalGlaCoverToExcel = () => {
       aoa.push([headerBits.join('  ·  ')])
     }
     aoa.push([])
-    aoa.push(['Age Band', 'Risk Rate / 1,000', 'Office Rate / 1,000'])
+    aoa.push([
+      'Age Band',
+      'Risk Rate / 1,000',
+      'Binder Fee / 1,000',
+      'Outsource Fee / 1,000',
+      'Commission / 1,000',
+      'Office Rate / 1,000'
+    ])
     ;(rs.additional_gla_cover_band_rates ?? []).forEach((r: any) => {
       aoa.push([
         formatBandLabel(r),
         Number(r.risk_rate_per1000 ?? 0),
+        Number(r.binder_fee_per1000 ?? 0),
+        Number(r.outsource_fee_per1000 ?? 0),
+        Number(r.commission_per1000 ?? 0),
         Number(r.office_rate_per1000 ?? 0)
       ])
     })
     const ws = XLSX.utils.aoa_to_sheet(aoa)
-    ws['!cols'] = [{ wch: 18 }, { wch: 20 }, { wch: 20 }]
+    ws['!cols'] = [
+      { wch: 18 },
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 22 },
+      { wch: 20 },
+      { wch: 20 }
+    ]
     // Excel sheet names are capped at 31 chars and cannot contain : \ / ? * [ ]
     const sheetName = String(rs.category ?? 'Category')
       .replace(/[:\\/?*[\]]/g, '_')
@@ -915,6 +952,20 @@ const convertExcelDataToGridData = () => {
   if (!props.resultSummaries || props.resultSummaries.length === 0) return []
 
   const gridData: any = []
+
+  // Sums the 10 final commission amounts that compose the Excl. Funeral total —
+  // mirrors benefitAccessors() with includeInExclFun: true on the API side.
+  const sumFinalCommissionExclFuneral = (src: any): number =>
+    (src?.final_gla_annual_commission_amount || 0) +
+    (src?.final_additional_accidental_gla_annual_commission_amount || 0) +
+    (src?.final_ptd_annual_commission_amount || 0) +
+    (src?.final_ci_annual_commission_amount || 0) +
+    (src?.final_sgla_annual_commission_amount || 0) +
+    (src?.final_tax_saver_annual_commission_amount || 0) +
+    (src?.final_ttd_annual_commission_amount || 0) +
+    (src?.final_phi_annual_commission_amount || 0) +
+    (src?.final_gla_educator_annual_commission_amount || 0) +
+    (src?.final_ptd_educator_annual_commission_amount || 0)
 
   // Helper function to check if a benefit is enabled
   const isBenefitEnabled = (benefitCode: string, categoryName: string) => {
@@ -1183,8 +1234,14 @@ const convertExcelDataToGridData = () => {
       annualPremium: resultSummary.exp_total_annual_premium_excl_funeral,
       finalAnnualPremium:
         resultSummary.final_total_annual_premium_excl_funeral,
-      finalAnnualCommission: '',
-      percentSalary: `${roundUpToTwoDecimalsAccounting(resultSummary.proportion_exp_total_premium_excl_funeral_salary * 100)}%`,
+      finalAnnualCommission: sumFinalCommissionExclFuneral(resultSummary),
+      percentSalary: `${roundUpToTwoDecimalsAccounting(
+        resultSummary.total_annual_salary > 0
+          ? (resultSummary.exp_total_annual_premium_excl_funeral /
+              resultSummary.total_annual_salary) *
+              100
+          : 0
+      )}%`,
       ratePer1000SA: '',
       isSubtotal: true
     })
@@ -1325,10 +1382,6 @@ const convertExcelDataToGridData = () => {
           exp_total_annual_premium_excl_funeral:
             (acc.exp_total_annual_premium_excl_funeral || 0) +
             (resultSummary.exp_total_annual_premium_excl_funeral || 0),
-          proportion_exp_total_premium_excl_funeral_salary:
-            (acc.proportion_exp_total_premium_excl_funeral_salary || 0) +
-            (resultSummary.proportion_exp_total_premium_excl_funeral_salary ||
-              0),
 
           exp_total_fun_monthly_premium_per_member:
             (acc.exp_total_fun_monthly_premium_per_member || 0) +
@@ -1372,6 +1425,14 @@ const convertExcelDataToGridData = () => {
           final_gla_annual_commission_amount:
             (acc.final_gla_annual_commission_amount || 0) +
             (resultSummary.final_gla_annual_commission_amount || 0),
+          final_tax_saver_annual_commission_amount:
+            (acc.final_tax_saver_annual_commission_amount || 0) +
+            (resultSummary.final_tax_saver_annual_commission_amount || 0),
+          final_additional_accidental_gla_annual_commission_amount:
+            (acc.final_additional_accidental_gla_annual_commission_amount ||
+              0) +
+            (resultSummary.final_additional_accidental_gla_annual_commission_amount ||
+              0),
           final_ptd_annual_office_premium:
             (acc.final_ptd_annual_office_premium || 0) +
             (resultSummary.final_ptd_annual_office_premium || 0),
@@ -1611,7 +1672,7 @@ const convertExcelDataToGridData = () => {
       totalSumAssured: totals.total_gla_capped_sum_assured,
       annualPremium: totals.exp_total_annual_premium_excl_funeral,
       finalAnnualPremium: totals.final_total_annual_premium_excl_funeral,
-      finalAnnualCommission: '',
+      finalAnnualCommission: sumFinalCommissionExclFuneral(totals),
       percentSalary: `${roundUpToTwoDecimalsAccounting(
         (totals.exp_total_annual_premium_excl_funeral /
           totalAnnualSalaryForEnabledBenefits || 0) * 100

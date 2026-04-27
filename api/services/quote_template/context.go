@@ -111,6 +111,16 @@ func salaryMultiple(useGlobal bool, multiple float64) string {
 	return fmt.Sprintf("%g", multiple)
 }
 
+// proportionOfSalary returns amount / salary, guarding the zero-salary case
+// so an empty fixture (or a category with no recorded salary) renders 0
+// instead of NaN.
+func proportionOfSalary(amount, salary float64) float64 {
+	if salary <= 0 {
+		return 0
+	}
+	return amount / salary
+}
+
 // orDash returns "-" when the input is empty, otherwise the input unchanged.
 func orDash(s string) string {
 	if s == "" {

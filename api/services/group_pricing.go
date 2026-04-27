@@ -1464,14 +1464,11 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 			if groupQuote.DistributionChannel == models.ChannelDirect {
 				effectiveCommissionAgla = 0
 			}
-			aglaTotalLoading := math.Max(
-				premiumLoading.ExpenseLoading+
-					premiumLoading.AdminLoading+
-					effectiveCommissionAgla+
-					premiumLoading.ProfitLoading+
-					premiumLoading.OtherLoading,
-				premiumLoading.MinimumPremiumLoading,
-			)
+			aglaBinderRate, aglaOutsourceRate := binderAndOutsourceRates(&groupQuote)
+			aglaOtherLoadings := premiumLoading.ExpenseLoading +
+				premiumLoading.AdminLoading +
+				premiumLoading.ProfitLoading +
+				premiumLoading.OtherLoading
 			aglaBandRates, aglaErr := CalculateAdditionalGlaCoverBandRates(
 				groupParameter.RiskRateCode,
 				category.GlaBenefitType,
@@ -1481,7 +1478,11 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 				groupQuote.OccupationClass,
 				maleProp,
 				aglaBands,
-				aglaTotalLoading,
+				effectiveCommissionAgla,
+				aglaBinderRate,
+				aglaOutsourceRate,
+				aglaOtherLoadings,
+				premiumLoading.MinimumPremiumLoading,
 			)
 			if aglaErr != nil {
 				logger.WithFields(map[string]interface{}{
@@ -2154,8 +2155,6 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.ExpAdjProportionGlaEducatorRiskPremiumSalary = mdrs.ExpAdjTotalGlaEducatorRiskPremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
 		mdrs.ProportionPtdEducatorRiskPremiumSalary = mdrs.TotalPtdEducatorRiskPremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
 		mdrs.ExpAdjProportionPtdEducatorRiskPremiumSalary = mdrs.ExpAdjTotalPtdEducatorRiskPremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
-
-		mdrs.ProportionExpTotalPremiumExclFuneralSalary = mdrs.ExpTotalAnnualPremiumExclFuneral / (mdrs.TotalAnnualSalary * indicativeRatesCount)
 
 	}
 
@@ -7055,9 +7054,11 @@ func GetGeneralLoading(riskRateCode string, age int, gender string) models.Gener
 // FinalTotalAnnualPremium) is a single-row change here.
 type benefitAccessor struct {
 	name              string
+	bookRiskPremium   func(*models.MemberRatingResultSummary) float64
 	expRiskPremium    func(*models.MemberRatingResultSummary) float64
 	expBinder         func(*models.MemberRatingResultSummary) float64
 	expOutsource      func(*models.MemberRatingResultSummary) float64
+	setBookComm       func(*models.MemberRatingResultSummary, float64)
 	setExpComm        func(*models.MemberRatingResultSummary, float64)
 	setFinalPremium   func(*models.MemberRatingResultSummary, float64)
 	setFinalComm      func(*models.MemberRatingResultSummary, float64)
@@ -7073,9 +7074,11 @@ func benefitAccessors() []benefitAccessor {
 	return []benefitAccessor{
 		{
 			name:              "gla",
+			bookRiskPremium:   func(s *models.MemberRatingResultSummary) float64 { return s.TotalGlaAnnualRiskPremium },
 			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalGlaAnnualRiskPremium },
 			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalGlaAnnualBinderAmount },
 			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalGlaAnnualOutsourcedAmount },
+			setBookComm:       func(s *models.MemberRatingResultSummary, v float64) { s.TotalGlaAnnualCommissionAmount = v },
 			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalGlaAnnualCommissionAmount = v },
 			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalGlaAnnualOfficePremium = v },
 			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalGlaAnnualCommissionAmount = v },
@@ -7085,9 +7088,11 @@ func benefitAccessors() []benefitAccessor {
 		},
 		{
 			name:              "add_acc_gla",
+			bookRiskPremium:   func(s *models.MemberRatingResultSummary) float64 { return s.TotalAdditionalAccidentalGlaAnnualRiskPremium },
 			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium },
 			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalAdditionalAccidentalGlaAnnualBinderAmount },
 			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalAdditionalAccidentalGlaAnnualOutsourcedAmt },
+			setBookComm:       func(s *models.MemberRatingResultSummary, v float64) { s.TotalAdditionalAccidentalGlaAnnualCommissionAmount = v },
 			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalAdditionalAccidentalGlaAnnualCommissionAmount = v },
 			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalAdditionalAccidentalGlaAnnualOfficePremium = v },
 			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalAdditionalAccidentalGlaAnnualCommissionAmount = v },
@@ -7097,9 +7102,11 @@ func benefitAccessors() []benefitAccessor {
 		},
 		{
 			name:              "ptd",
+			bookRiskPremium:   func(s *models.MemberRatingResultSummary) float64 { return s.TotalPtdAnnualRiskPremium },
 			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalPtdAnnualRiskPremium },
 			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalPtdAnnualBinderAmount },
 			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalPtdAnnualOutsourcedAmount },
+			setBookComm:       func(s *models.MemberRatingResultSummary, v float64) { s.TotalPtdAnnualCommissionAmount = v },
 			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalPtdAnnualCommissionAmount = v },
 			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalPtdAnnualOfficePremium = v },
 			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalPtdAnnualCommissionAmount = v },
@@ -7109,9 +7116,11 @@ func benefitAccessors() []benefitAccessor {
 		},
 		{
 			name:              "ci",
+			bookRiskPremium:   func(s *models.MemberRatingResultSummary) float64 { return s.TotalCiAnnualRiskPremium },
 			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalCiAnnualRiskPremium },
 			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalCiAnnualBinderAmount },
 			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalCiAnnualOutsourcedAmount },
+			setBookComm:       func(s *models.MemberRatingResultSummary, v float64) { s.TotalCiAnnualCommissionAmount = v },
 			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalCiAnnualCommissionAmount = v },
 			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalCiAnnualOfficePremium = v },
 			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalCiAnnualCommissionAmount = v },
@@ -7121,9 +7130,11 @@ func benefitAccessors() []benefitAccessor {
 		},
 		{
 			name:              "sgla",
+			bookRiskPremium:   func(s *models.MemberRatingResultSummary) float64 { return s.TotalSglaAnnualRiskPremium },
 			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalSglaAnnualRiskPremium },
 			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalSglaAnnualBinderAmount },
 			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalSglaAnnualOutsourcedAmount },
+			setBookComm:       func(s *models.MemberRatingResultSummary, v float64) { s.TotalSglaAnnualCommissionAmount = v },
 			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalSglaAnnualCommissionAmount = v },
 			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalSglaAnnualOfficePremium = v },
 			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalSglaAnnualCommissionAmount = v },
@@ -7137,9 +7148,11 @@ func benefitAccessors() []benefitAccessor {
 			// getters return 0 — finalBinder/finalOutsource scale to 0
 			// for this benefit, matching the calc-time behaviour.
 			name:              "tax_saver",
+			bookRiskPremium:   func(s *models.MemberRatingResultSummary) float64 { return s.TotalTaxSaverAnnualRiskPremium },
 			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalTaxSaverAnnualRiskPremium },
 			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return 0 },
 			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return 0 },
+			setBookComm:       func(s *models.MemberRatingResultSummary, v float64) { s.TotalTaxSaverAnnualCommissionAmount = v },
 			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalTaxSaverAnnualCommissionAmount = v },
 			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalTaxSaverAnnualOfficePremium = v },
 			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalTaxSaverAnnualCommissionAmount = v },
@@ -7149,9 +7162,11 @@ func benefitAccessors() []benefitAccessor {
 		},
 		{
 			name:              "ttd",
+			bookRiskPremium:   func(s *models.MemberRatingResultSummary) float64 { return s.TotalTtdAnnualRiskPremium },
 			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalTtdAnnualRiskPremium },
 			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalTtdAnnualBinderAmount },
 			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalTtdAnnualOutsourcedAmount },
+			setBookComm:       func(s *models.MemberRatingResultSummary, v float64) { s.TotalTtdAnnualCommissionAmount = v },
 			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalTtdAnnualCommissionAmount = v },
 			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalTtdAnnualOfficePremium = v },
 			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalTtdAnnualCommissionAmount = v },
@@ -7161,9 +7176,11 @@ func benefitAccessors() []benefitAccessor {
 		},
 		{
 			name:              "phi",
+			bookRiskPremium:   func(s *models.MemberRatingResultSummary) float64 { return s.TotalPhiAnnualRiskPremium },
 			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalPhiAnnualRiskPremium },
 			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalPhiAnnualBinderAmount },
 			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalPhiAnnualOutsourcedAmount },
+			setBookComm:       func(s *models.MemberRatingResultSummary, v float64) { s.TotalPhiAnnualCommissionAmount = v },
 			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalPhiAnnualCommissionAmount = v },
 			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalPhiAnnualOfficePremium = v },
 			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalPhiAnnualCommissionAmount = v },
@@ -7173,9 +7190,11 @@ func benefitAccessors() []benefitAccessor {
 		},
 		{
 			name:              "fun",
+			bookRiskPremium:   func(s *models.MemberRatingResultSummary) float64 { return s.TotalFunAnnualRiskPremium },
 			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalFunAnnualRiskPremium },
 			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalFunAnnualBinderAmount },
 			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalFunAnnualOutsourcedAmount },
+			setBookComm:       func(s *models.MemberRatingResultSummary, v float64) { s.TotalFunAnnualCommissionAmount = v },
 			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalFunAnnualCommissionAmount = v },
 			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalFunAnnualOfficePremium = v },
 			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalFunAnnualCommissionAmount = v },
@@ -7185,9 +7204,11 @@ func benefitAccessors() []benefitAccessor {
 		},
 		{
 			name:              "gla_educator",
+			bookRiskPremium:   func(s *models.MemberRatingResultSummary) float64 { return s.TotalGlaEducatorRiskPremium },
 			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpAdjTotalGlaEducatorRiskPremium },
 			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpAdjTotalGlaEducatorBinderAmount },
 			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpAdjTotalGlaEducatorOutsourcedAmount },
+			setBookComm:       func(s *models.MemberRatingResultSummary, v float64) { s.TotalGlaEducatorCommissionAmount = v },
 			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpAdjTotalGlaEducatorCommissionAmount = v },
 			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalGlaEducatorAnnualOfficePremium = v },
 			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalGlaEducatorAnnualCommissionAmount = v },
@@ -7197,9 +7218,11 @@ func benefitAccessors() []benefitAccessor {
 		},
 		{
 			name:              "ptd_educator",
+			bookRiskPremium:   func(s *models.MemberRatingResultSummary) float64 { return s.TotalPtdEducatorRiskPremium },
 			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpAdjTotalPtdEducatorRiskPremium },
 			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpAdjTotalPtdEducatorBinderAmount },
 			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpAdjTotalPtdEducatorOutsourcedAmount },
+			setBookComm:       func(s *models.MemberRatingResultSummary, v float64) { s.TotalPtdEducatorCommissionAmount = v },
 			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpAdjTotalPtdEducatorCommissionAmount = v },
 			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalPtdEducatorAnnualOfficePremium = v },
 			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalPtdEducatorAnnualCommissionAmount = v },
@@ -7341,6 +7364,36 @@ func recomputeFinalPremiumsAndCommission(quoteID int, groupQuote models.GroupPri
 		s.FinalTotalAnnualPremiumExclFuneral = newExclFun
 		s.FinalSchemeTotalCommission = overallCommission
 		s.FinalSchemeTotalCommissionRate = rate
+	}
+
+	// 5. Back-patch Additional GLA Cover band rates so commission_per1000
+	//    reflects the actual progressive commission rate rather than the
+	//    configured commission loading used at initial band-rate compute
+	//    time. SchemeTotalLoading() covers expense + admin + profit + other +
+	//    binder + outsource (no commission); progressive commission is added
+	//    on top via `rate`. Office, binder, outsource, and commission are
+	//    recomputed together so the columns reconcile to office_rate_per1000.
+	for i := range summaries {
+		s := &summaries[i]
+		if len(s.AdditionalGlaCoverBandRates) == 0 {
+			continue
+		}
+		divisor := 1.0 - (s.SchemeTotalLoading() + rate)
+		if divisor <= 0 {
+			divisor = 1.0
+		}
+		for j := range s.AdditionalGlaCoverBandRates {
+			b := &s.AdditionalGlaCoverBandRates[j]
+			if b.RiskRatePer1000 == 0 {
+				continue
+			}
+			risk := b.RiskRatePer1000 / 1000.0
+			officePer1000 := (risk / divisor) * 1000.0
+			b.OfficeRatePer1000 = officePer1000
+			b.BinderFeePer1000 = officePer1000 * s.BinderFeeRate
+			b.OutsourceFeePer1000 = officePer1000 * s.OutsourceFeeRate
+			b.CommissionPer1000 = officePer1000 * rate
+		}
 	}
 
 	for i := range summaries {
@@ -7487,6 +7540,61 @@ func applySchemeWideCommission(quoteID int, groupQuote models.GroupPricingQuote,
 			models.ComputeOfficePremium(s.ExpAdjTotalGlaEducatorRiskPremium, s) +
 			models.ComputeOfficePremium(s.ExpAdjTotalPtdEducatorRiskPremium, s)
 		s.TotalAnnualPremium = s.ExpTotalAnnualPremiumExclFuneral + models.ComputeOfficePremium(s.ExpTotalFunAnnualRiskPremium, s)
+	}
+
+	// Theoretical (book-rate) commission allocation. Mirrors the Exp* allocation
+	// above but uses bookRiskPremium (TotalAnnualRiskPremium / pre-credibility
+	// book rates) so the OutputSummary Theoretical column has a commission slice
+	// that reconciles to a book-rate progressive band rather than the experience-
+	// blended one. Independent from the Exp* allocation: a scheme whose book
+	// premium falls in a different commission band than its experience-blended
+	// premium will get a different theoretical rate.
+	bookOfficePremium := func(s *models.MemberRatingResultSummary, acc benefitAccessor) float64 {
+		return models.ComputeOfficePremium(acc.bookRiskPremium(s), s)
+	}
+	bookCategoryTotals := make([]float64, len(summaries))
+	bookSchemeTotal := 0.0
+	for i := range summaries {
+		s := &summaries[i]
+		for _, acc := range accessors {
+			bookCategoryTotals[i] += bookOfficePremium(s, acc)
+		}
+		bookSchemeTotal += bookCategoryTotals[i]
+	}
+	bookRate := 0.0
+	if bookSchemeTotal > 0 {
+		r, err := ComputeProgressiveCommission(channel, holderName, bookSchemeTotal)
+		if err != nil {
+			return fmt.Errorf("compute book progressive commission: %w", err)
+		}
+		bookRate = r
+	}
+	bookOverallCommission := bookSchemeTotal * bookRate
+	bookCategoryCommissions := make([]float64, len(summaries))
+	remainingBookScheme := bookOverallCommission
+	for i := range summaries {
+		if i == lastCatIdx {
+			bookCategoryCommissions[i] = remainingBookScheme
+		} else if bookSchemeTotal > 0 {
+			bookCategoryCommissions[i] = bookOverallCommission * (bookCategoryTotals[i] / bookSchemeTotal)
+			remainingBookScheme -= bookCategoryCommissions[i]
+		}
+	}
+	for catIdx := range summaries {
+		s := &summaries[catIdx]
+		bookCategoryCommission := bookCategoryCommissions[catIdx]
+		bookCategoryTotal := bookCategoryTotals[catIdx]
+		remainingCat := bookCategoryCommission
+		for benIdx, acc := range accessors {
+			var slice float64
+			if benIdx == lastBenIdx {
+				slice = remainingCat
+			} else if bookCategoryTotal > 0 {
+				slice = bookCategoryCommission * (bookOfficePremium(s, acc) / bookCategoryTotal)
+				remainingCat -= slice
+			}
+			acc.setBookComm(s, slice)
+		}
 	}
 
 	for i := range summaries {
@@ -8867,8 +8975,12 @@ func CalculateAdditionalGlaCoverBandRates(
 	waitingPeriod, incomeLevel, occupationClass int,
 	maleProp float64,
 	bands []models.AdditionalGlaCoverAgeBand,
-	totalPremiumLoading float64,
+	commissionLoading, binderFeeRate, outsourceFeeRate, otherLoadingsSum, minimumPremiumLoading float64,
 ) ([]models.AdditionalGlaCoverBandRate, error) {
+	totalPremiumLoading := math.Max(
+		commissionLoading+binderFeeRate+outsourceFeeRate+otherLoadingsSum,
+		minimumPremiumLoading,
+	)
 	if len(bands) == 0 {
 		return nil, nil
 	}
@@ -9148,12 +9260,16 @@ func CalculateAdditionalGlaCoverBandRates(
 			avg = sum / float64(count)
 		}
 		officeRate := avg / loadingDivisor
+		officeRatePer1000 := officeRate * 1000.0
 		results = append(results, models.AdditionalGlaCoverBandRate{
-			MinAge:            b.MinAge,
-			MaxAge:            b.MaxAge,
-			RiskRatePer1000:   avg * 1000.0,
-			OfficeRatePer1000: officeRate * 1000.0,
-			MalePropUsed:      maleProp,
+			MinAge:              b.MinAge,
+			MaxAge:              b.MaxAge,
+			RiskRatePer1000:     avg * 1000.0,
+			BinderFeePer1000:    officeRatePer1000 * binderFeeRate,
+			OutsourceFeePer1000: officeRatePer1000 * outsourceFeeRate,
+			CommissionPer1000:   officeRatePer1000 * commissionLoading,
+			OfficeRatePer1000:   officeRatePer1000,
+			MalePropUsed:        maleProp,
 		})
 	}
 	return results, nil
@@ -15176,9 +15292,13 @@ func GetMemberBenefitSummaryInForce(memberID int) (MemberBenefitSummaryDTO, erro
 	dto.MemberName = m.MemberName
 	dto.SchemeCategory = m.SchemeCategory
 	dto.AnnualSalary = m.AnnualSalary
-	dto.AnnualPremium = utils.FloatPrecision(m.AnnualSalary*memberRatingResultSummary.ProportionExpTotalPremiumExclFuneralSalary, AccountingPrecision)
+	premiumSalaryProp := 0.0
+	if memberRatingResultSummary.TotalAnnualSalary > 0 {
+		premiumSalaryProp = memberRatingResultSummary.ExpTotalAnnualPremiumExclFuneral / memberRatingResultSummary.TotalAnnualSalary
+	}
+	dto.AnnualPremium = utils.FloatPrecision(m.AnnualSalary*premiumSalaryProp, AccountingPrecision)
 	dto.MonthlyPremium = utils.FloatPrecision(dto.AnnualPremium/12.0, AccountingPrecision)
-	dto.PremiumSalaryProp = memberRatingResultSummary.ProportionExpTotalPremiumExclFuneralSalary
+	dto.PremiumSalaryProp = premiumSalaryProp
 	dto.FuneralAnnualPremium = utils.FloatPrecision(memberRatingResultSummary.ExpTotalFunAnnualPremiumPerMember, AccountingPrecision)
 	dto.FuneralMonthlyPremium = utils.FloatPrecision(memberRatingResultSummary.ExpTotalFunMonthlyPremiumPerMember, AccountingPrecision)
 	dto.SchemeName = m.SchemeName

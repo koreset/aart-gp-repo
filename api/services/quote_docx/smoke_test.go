@@ -56,11 +56,10 @@ func TestSmokeAssembly(t *testing.T) {
 			ExpTotalGlaAnnualRiskPremium:            96_000,
 			ExpProportionGlaAnnualRiskPremiumSalary: 0.008,
 			ExpTotalAnnualPremiumExclFuneral:        120_000,
-			ProportionExpTotalPremiumExclFuneralSalary: 0.01,
-			ExpTotalFunAnnualRiskPremium:               7_200,
-			ExpTotalFunAnnualPremiumPerMember:          180,
-			ExpTotalFunMonthlyPremiumPerMember:         15,
-			TotalAnnualPremium:                         129_000,
+			ExpTotalFunAnnualRiskPremium:            7_200,
+			ExpTotalFunAnnualPremiumPerMember:       180,
+			ExpTotalFunMonthlyPremiumPerMember:      15,
+			TotalAnnualPremium:                      129_000,
 		},
 	}
 	insurer := models.GroupPricingInsurerDetail{

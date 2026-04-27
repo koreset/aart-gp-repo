@@ -119,13 +119,17 @@ func BuildPremiumSummaryRows(summaries []models.MemberRatingResultSummary) []Pre
 			continue
 		}
 
+		percentSalary := 0.0
+		if item.TotalAnnualSalary > 0 {
+			percentSalary = item.ExpTotalAnnualPremiumExclFuneral / item.TotalAnnualSalary
+		}
 		rows = append(rows, PremiumSummaryRow{
 			Category:        item.Category,
 			MemberCount:     fmt.Sprintf("%.0f", item.MemberCount),
 			TotalSalary:     RoundUpToTwoDecimalsAccounting(item.TotalAnnualSalary),
 			TotalSumAssured: RoundUpToTwoDecimalsAccounting(item.TotalSumAssured),
 			AnnualPremium:   RoundUpToTwoDecimalsAccounting(item.ExpTotalAnnualPremiumExclFuneral),
-			PercentSalary:   fmt.Sprintf("%s%%", RoundUpToTwoDecimalsAccounting(item.ProportionExpTotalPremiumExclFuneralSalary*100)),
+			PercentSalary:   fmt.Sprintf("%s%%", RoundUpToTwoDecimalsAccounting(percentSalary*100)),
 		})
 	}
 
