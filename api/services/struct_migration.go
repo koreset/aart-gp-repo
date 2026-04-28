@@ -371,6 +371,8 @@ func getStructType(structName string) (reflect.Type, error) {
 		return reflect.TypeOf(models.GroupSchemeClaim{}), nil
 	case "GroupPricingInsurerDetail":
 		return reflect.TypeOf(models.GroupPricingInsurerDetail{}), nil
+	case "GroupPricingSetting":
+		return reflect.TypeOf(models.GroupPricingSetting{}), nil
 	case "Loadings":
 		return reflect.TypeOf(models.Loadings{}), nil
 	case "PhiRunParameters":

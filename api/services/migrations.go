@@ -462,11 +462,24 @@ func MigrateGroupPricingTables() error {
 		&models.EmailSettings{},
 		&models.EmailTemplate{},
 		&models.EmailOutbox{},
+		&models.GroupPricingSetting{},
 	)
 
 	if err != nil {
 		appLog.WithField("error", err.Error()).Error("Failed to migrate group pricing tables")
 		return err
+	}
+
+	// Seed the singleton GroupPricingSetting row with the default discount
+	// method so existing quotes recompute identically to historical behaviour
+	// until the user explicitly switches to prorata via MetaData.
+	var settingCount int64
+	DB.Model(&models.GroupPricingSetting{}).Count(&settingCount)
+	if settingCount == 0 {
+		DB.Create(&models.GroupPricingSetting{
+			ID:             1,
+			DiscountMethod: models.DiscountMethodLoadingAdjustment,
+		})
 	}
 
 	// Ensure Beneficiary columns exist on the member_beneficiaries table.

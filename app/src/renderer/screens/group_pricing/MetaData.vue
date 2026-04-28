@@ -67,6 +67,16 @@
 
               <v-expansion-panel>
                 <v-expansion-panel-title>
+                  <v-icon icon="mdi-percent-outline" class="mr-2" />
+                  Discount Calculation Method
+                </v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  <discount-method-settings />
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+
+              <v-expansion-panel>
+                <v-expansion-panel-title>
                   <v-icon icon="mdi-file-word-outline" class="mr-2" />
                   Quote Template
                 </v-expansion-panel-title>
@@ -108,6 +118,7 @@ import BrokerManagement from '@/renderer/components/grouppricing/BrokerManagemen
 import ReinsurerManagement from '@/renderer/components/grouppricing/ReinsurerManagement.vue'
 import SchemeCategoryManagement from '@/renderer/components/grouppricing/SchemeCategoryManagement.vue'
 import BenefitsCustomization from '@/renderer/components/grouppricing/BenefitsCustomization.vue'
+import DiscountMethodSettings from '@/renderer/components/grouppricing/DiscountMethodSettings.vue'
 import QuoteTemplateManagement from '@/renderer/components/grouppricing/QuoteTemplateManagement.vue'
 import OnRiskLetterTemplateManagement from '@/renderer/components/grouppricing/OnRiskLetterTemplateManagement.vue'
 import { useNotifications } from '@/renderer/composables/useNotifications'

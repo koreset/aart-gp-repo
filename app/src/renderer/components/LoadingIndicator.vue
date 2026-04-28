@@ -1,7 +1,7 @@
 <template>
   <v-row v-if="props.loadingData">
     <v-col>
-      <p class="mt-3">Loading data...</p>
+      <p class="mt-3">{{ props.label || 'Loading data...' }}</p>
       <v-progress-linear
         buffer-value="20"
         color="primary"
@@ -17,6 +17,10 @@ const props = defineProps({
   loadingData: {
     type: Boolean,
     default: false
+  },
+  label: {
+    type: String,
+    default: ''
   }
 })
 </script>

@@ -30,6 +30,7 @@ import (
 	"github.com/jszwec/csvutil"
 	"github.com/montanaflynn/stats"
 	"github.com/sirupsen/logrus"
+	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )
 
@@ -736,13 +737,16 @@ func GetGroupPricingQuote(id string) (models.GroupPricingQuote, error) {
 		}
 
 		var counts Counts
+		// bordereaux_count tracks the number of rows that would be projected
+		// for the quote's Bordereaux preview/download. Each MemberRatingResult
+		// projects to exactly one bordereaux row, so we count that table.
 		countQuery := DB.WithContext(ctx).Raw(`
 			SELECT
 				(SELECT COUNT(*) FROM g_pricing_member_data WHERE quote_id = ?) as member_data_count,
 				(SELECT COUNT(*) FROM group_pricing_claims_experiences WHERE quote_id = ?) as claims_experience_count,
 				(SELECT COUNT(*) FROM member_rating_results WHERE quote_id = ?) as member_rating_result_count,
 				(SELECT COUNT(*) FROM member_premium_schedules WHERE quote_id = ?) as member_premium_schedule_count,
-				(SELECT COUNT(*) FROM bordereauxes WHERE quote_id = ?) as bordereaux_count
+				(SELECT COUNT(*) FROM member_rating_results WHERE quote_id = ?) as bordereaux_count
 		`, id, id, id, id, id)
 
 		if err = countQuery.Scan(&counts).Error; err != nil {
@@ -754,7 +758,9 @@ func GetGroupPricingQuote(id string) (models.GroupPricingQuote, error) {
 			DB.WithContext(ctx).Model(&models.GroupPricingClaimsExperience{}).Where("quote_id = ?", id).Count(&counts.ClaimsExperienceCount)
 			DB.WithContext(ctx).Model(&models.MemberRatingResult{}).Where("quote_id = ?", id).Count(&counts.MemberRatingResultCount)
 			DB.WithContext(ctx).Model(&models.MemberPremiumSchedule{}).Where("quote_id = ?", id).Count(&counts.MemberPremiumScheduleCount)
-			DB.WithContext(ctx).Model(&models.Bordereaux{}).Where("quote_id = ?", id).Count(&counts.BordereauxCount)
+			// Bordereaux is projected from MemberRatingResult on-the-fly, so
+			// the bordereaux row count tracks the rating-result row count.
+			DB.WithContext(ctx).Model(&models.MemberRatingResult{}).Where("quote_id = ?", id).Count(&counts.BordereauxCount)
 		}
 
 		// Update the quote with the counts
@@ -2042,32 +2048,12 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		}).Info("Successfully saved member premium schedule")
 	}
 
-	// Save member bordereaux — atomically delete old rows and insert new ones
-	logger.Debug("Saving member bordereaux to database")
-	dbStartTime = time.Now()
-	txErr := DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("quote_id = ? AND category = ?", quoteId, selectedSchemeCategory).Delete(&models.Bordereaux{}).Error; err != nil {
-			return err
-		}
-		if len(bordereaux) > 0 {
-			if err := tx.CreateInBatches(bordereaux, 100).Error; err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	dbElapsed = time.Since(dbStartTime)
-	if txErr != nil {
-		logger.WithFields(map[string]interface{}{
-			"error":      txErr.Error(),
-			"elapsed_ms": dbElapsed.Milliseconds(),
-		}).Error("Failed to save member bordereaux — transaction rolled back")
-		return txErr
-	}
-	logger.WithFields(map[string]interface{}{
-		"record_count": len(bordereaux),
-		"elapsed_ms":   dbElapsed.Milliseconds(),
-	}).Info("Successfully saved member bordereaux")
+	// Bordereaux rows are no longer persisted — they are projected from
+	// MemberRatingResult on-the-fly via BuildBordereauxRowsForQuote. The
+	// in-memory `bordereaux` slice is still built during member iteration
+	// because GroupPricingReinsurance writes the cession back into each
+	// MemberRatingResult; the slice itself is now discarded.
+	_ = bordereaux
 
 	// Do averages for the member rating result summary
 	mdrs.CredibilityRate = credibilityRate
@@ -4258,6 +4244,345 @@ func GroupPricingReinsurance(memberDataPointResult *models.MemberRatingResult, b
 	bordereaux.ChildRetainedSumAssured = math.Max(schemeCategory.FamilyFuneralChildrenFuneralSumAssured-bordereaux.ChildCededSumAssured, 0)
 	bordereaux.ParentRetainedSumAssured = math.Max(schemeCategory.FamilyFuneralParentFuneralSumAssured-bordereaux.ParentCededSumAssured, 0)
 	bordereaux.DependantRetainedSumAssured = math.Max(schemeCategory.FamilyFuneralAdultDependantSumAssured-bordereaux.DependantCededSumAssured, 0)
+}
+
+// BuildBordereauxFromRatingResult projects a Bordereaux row from a persisted
+// MemberRatingResult plus the quote/category/reinsurance context. It is the
+// single source of truth for the field-mapping from rating outputs to
+// bordereaux columns and is used by both quote-stage previews and on-the-fly
+// downloads — replacing the previously persisted `bordereauxes` table.
+func BuildBordereauxFromRatingResult(
+	mrr models.MemberRatingResult,
+	schemeCategory models.SchemeCategory,
+	groupQuote models.GroupPricingQuote,
+	reinsStructure models.GroupPricingReinsuranceStructure,
+	groupParameter models.GroupPricingParameters,
+) models.Bordereaux {
+	var b models.Bordereaux
+
+	// Identity / spine fields.
+	b.Category = mrr.Category
+	b.IsOriginalMember = mrr.IsOriginalMember
+	b.MemberName = mrr.MemberName
+	b.SchemeId = mrr.SchemeId
+	b.QuoteId = mrr.QuoteId
+	b.Gender = mrr.Gender
+	b.AgeNextBirthday = float64(mrr.AgeNextBirthday)
+	b.AnnualSalary = mrr.AnnualSalary
+	if !mrr.DateOfBirth.IsZero() {
+		dob := mrr.DateOfBirth
+		b.DateOfBirth = &dob
+	}
+	b.RenewalDate = ""
+	b.Currency = groupQuote.Currency
+	b.Industry = groupQuote.Industry
+	b.IndustryClass = groupQuote.Industry
+
+	// Reinsurance splits — populates retained/ceded sums assured on `b`.
+	GroupPricingReinsurance(&mrr, &b, groupQuote, schemeCategory, reinsStructure, groupParameter)
+
+	// GLA
+	b.GlaMultiple = schemeCategory.GlaSalaryMultiple
+	b.GlaCoveredSumAssured = mrr.GlaCappedSumAssured
+	b.LoadedGlaRiskRate = mrr.LoadedGlaRate
+	b.ExpAdjLoadedGlaRiskRate = mrr.ExpAdjLoadedGlaRate
+	b.GlaRetainedRiskPremium = b.GlaRetainedSumAssured * mrr.LoadedGlaRate
+	b.GlaCededRiskPremium = b.GlaCededSumAssured * mrr.LoadedReinsGlaRate
+	b.GlaAnnualPremium = models.ComputeOfficePremium(b.GlaRetainedRiskPremium, mrrSummaryShim(&mrr))
+
+	// PTD
+	b.PtdMultiple = schemeCategory.PtdSalaryMultiple
+	b.PtdCoveredSumAssured = mrr.PtdCappedSumAssured
+	b.LoadedPtdRiskRate = mrr.LoadedPtdRate
+	b.ExpAdjLoadedPtdRiskRate = mrr.ExpAdjLoadedPtdRate
+	b.PtdRetainedRiskPremium = b.PtdRetainedSumAssured * mrr.LoadedPtdRate
+	b.PtdCededRiskPremium = b.PtdCededSumAssured * mrr.LoadedReinsPtdRate
+	b.PtdAnnualPremium = models.ComputeOfficePremium(b.PtdRetainedRiskPremium, mrrSummaryShim(&mrr))
+
+	// CI
+	b.CiMultiple = schemeCategory.CiCriticalIllnessSalaryMultiple
+	b.CiCoveredSumAssured = mrr.CiCappedSumAssured
+	b.LoadedCiRiskRate = mrr.LoadedCiRate
+	b.ExpAdjLoadedCiRiskRate = mrr.ExpAdjLoadedCiRate
+	b.CiRetainedRiskPremium = b.CiRetainedSumAssured * mrr.LoadedCiRate
+	b.CiCededRiskPremium = b.CiCededSumAssured * mrr.LoadedReinsCiRate
+	b.CiAnnualPremium = models.ComputeOfficePremium(b.CiRetainedRiskPremium, mrrSummaryShim(&mrr))
+
+	// SGLA (Spouse GLA)
+	b.SglaMultiple = schemeCategory.SglaSalaryMultiple
+	b.SglaCoveredSumAssured = mrr.SpouseGlaCappedSumAssured
+	b.LoadedSglaRiskRate = mrr.LoadedSpouseGlaRate
+	b.ExpAdjLoadedSglaRiskRate = mrr.ExpAdjLoadedSpouseGlaRate
+	b.SglaRetainedRiskPremium = b.SglaRetainedSumAssured * mrr.LoadedSpouseGlaRate
+	b.SglaCededRiskPremium = b.SglaCededSumAssured * mrr.LoadedReinsSpouseGlaRate
+	b.SglaAnnualPremium = models.ComputeOfficePremium(b.SglaRetainedRiskPremium, mrrSummaryShim(&mrr))
+
+	// TTD
+	b.TtdReplacementMultiple = schemeCategory.TtdIncomeReplacementPercentage
+	b.TtdMonthlyBenefit = mrr.TtdCappedIncome
+	b.LoadedTtdRiskRate = mrr.LoadedTtdRate
+	b.ExpAdjLoadedTtdRiskRate = mrr.ExpAdjLoadedTtdRate
+	b.TtdRetainedRiskPremium = b.TtdRetainedMonthlyBenefit * mrr.LoadedTtdRate * groupParameter.TtdNumberMonthlyPayments
+	b.TtdCededRiskPremium = b.TtdCededMonthlyBenefit * mrr.LoadedReinsTtdRate * groupParameter.TtdNumberMonthlyPayments
+
+	// PHI
+	b.PhiReplacementMultiple = schemeCategory.PhiIncomeReplacementPercentage
+	b.PhiMonthlyBenefit = mrr.PhiCappedIncome
+	b.LoadedPhiRiskRate = mrr.LoadedPhiRate
+	b.ExpAdjLoadedPhiRiskRate = mrr.ExpAdjLoadedPhiRate
+	b.PhiRetainedRiskPremium = b.PhiRetainedMonthlyBenefit * mrr.LoadedPhiRate
+	b.PhiCededRiskPremium = b.PhiCededMonthlyBenefit * mrr.LoadedReinsPhiRate
+
+	// Family funeral lives — sums assured come from scheme category, rates
+	// come from member rating result (per-life rates on the member).
+	b.MainMemberFuneralSumAssured = schemeCategory.FamilyFuneralMainMemberFuneralSumAssured
+	b.MainMemberRiskRate = mrr.LoadedGlaRate
+	b.MainMemberRetainedRiskPremium = b.MainMemberRetainedSumAssured * mrr.LoadedGlaRate
+	b.MainMemberCededRiskPremium = b.MainMemberCededSumAssured * mrr.MainMemberReinsuranceRate
+
+	b.SpouseFuneralSumAssured = schemeCategory.FamilyFuneralSpouseFuneralSumAssured
+	b.SpouseRiskRate = mrr.LoadedSpouseGlaRate
+	b.SpouseRetainedRiskPremium = b.SpouseRetainedSumAssured * mrr.LoadedSpouseGlaRate
+	b.SpouseCededRiskPremium = b.SpouseCededSumAssured * mrr.SpouseReinsuranceRate
+
+	b.ChildFuneralSumAssured = schemeCategory.FamilyFuneralChildrenFuneralSumAssured
+	b.ChildRiskRate = mrr.ChildFuneralBaseRate
+	b.ChildRetainedRiskPremium = b.ChildRetainedSumAssured * mrr.ChildFuneralBaseRate
+	b.ChildCededRiskPremium = b.ChildCededSumAssured * mrr.ChildReinsuranceRate
+
+	b.ParentFuneralSumAssured = schemeCategory.FamilyFuneralParentFuneralSumAssured
+	b.ParentRiskRate = mrr.ParentFuneralBaseRate
+	b.ParentRetainedRiskPremium = b.ParentRetainedSumAssured * mrr.ParentFuneralBaseRate
+	b.ParentCededRiskPremium = b.ParentCededSumAssured * mrr.ParentReinsuranceRate
+
+	b.DependantFuneralSumAssured = schemeCategory.FamilyFuneralAdultDependantSumAssured
+	b.DependantRiskRate = mrr.ParentFuneralBaseRate
+	b.DependantRetainedRiskPremium = b.DependantRetainedSumAssured * mrr.ParentFuneralBaseRate
+	b.DependantCededRiskPremium = b.DependantCededSumAssured * mrr.DependantReinsuranceRate
+
+	return b
+}
+
+// mrrSummaryShim adapts a MemberRatingResult into the loadings-bearing struct
+// expected by ComputeOfficePremium. The member's per-row loadings are an
+// authoritative snapshot of what was used to produce the persisted premiums,
+// so the gross-up matches the calculation engine without requiring an extra
+// summary lookup at projection time.
+func mrrSummaryShim(m *models.MemberRatingResult) *models.MemberRatingResultSummary {
+	return &models.MemberRatingResultSummary{
+		ExpenseLoading:    m.ExpenseLoading,
+		AdminLoading:      m.AdminLoading,
+		CommissionLoading: m.CommissionLoading,
+		ProfitLoading:     m.ProfitLoading,
+		OtherLoading:      m.OtherLoading,
+		BinderFeeRate:     m.BinderFeeRate,
+		OutsourceFeeRate:  m.OutsourceFeeRate,
+		Discount:          m.Discount,
+	}
+}
+
+// BuildBordereauxRowsForQuote projects bordereaux rows for a quote on-the-fly
+// from persisted MemberRatingResult rows. It loads the quote's reinsurance
+// structure and group parameters once and applies them to every row, so the
+// returned bordereaux always reflects the latest loadings/cession structure.
+//
+// Pagination matches the previous DB-backed read path: pass limit=0 to fetch
+// all rows.
+func BuildBordereauxRowsForQuote(quoteId int, offset, limit int) ([]models.Bordereaux, error) {
+	var quote models.GroupPricingQuote
+	if err := DB.Preload("SchemeCategories").Where("id = ?", quoteId).First(&quote).Error; err != nil {
+		return nil, fmt.Errorf("load quote %d: %w", quoteId, err)
+	}
+
+	var groupParameter models.GroupPricingParameters
+	if err := DB.Where("basis = ? and risk_rate_code = ?", quote.Basis, quote.RiskRateCode).
+		First(&groupParameter).Error; err != nil {
+		// A missing group parameter only zeroes out parameter-dependent fields;
+		// it should not block the projection.
+		appLog.WithField("quote_id", quoteId).
+			WithField("error", err.Error()).
+			Warn("BuildBordereauxRowsForQuote: group parameter not found; continuing with zero values")
+	}
+
+	var reinsStructure models.GroupPricingReinsuranceStructure
+	if IsTableRequired("gpReinsuranceStructure") {
+		if err := DB.Where("risk_rate_code = ? and basis = ?", quote.RiskRateCode, quote.Basis).
+			First(&reinsStructure).Error; err != nil {
+			appLog.WithField("quote_id", quoteId).
+				WithField("error", err.Error()).
+				Warn("BuildBordereauxRowsForQuote: reinsurance structure not found; cession will be zero")
+		}
+	}
+
+	categoryByName := make(map[string]models.SchemeCategory, len(quote.SchemeCategories))
+	for _, sc := range quote.SchemeCategories {
+		categoryByName[sc.SchemeCategory] = sc
+	}
+
+	// MemberRatingResult has no auto-increment primary key, so we follow the
+	// same pattern as the existing case "member_rating_results" reader and
+	// rely on insertion order for stable pagination within a single quote.
+	q := DB.Where("quote_id = ?", quoteId)
+	if limit > 0 {
+		q = q.Offset(offset).Limit(limit)
+	}
+	var ratings []models.MemberRatingResult
+	if err := q.Find(&ratings).Error; err != nil {
+		return nil, fmt.Errorf("load member rating results for quote %d: %w", quoteId, err)
+	}
+
+	out := make([]models.Bordereaux, 0, len(ratings))
+	for _, r := range ratings {
+		sc := categoryByName[r.Category]
+		out = append(out, BuildBordereauxFromRatingResult(r, sc, quote, reinsStructure, groupParameter))
+	}
+	return out, nil
+}
+
+// quoteBordereauxHiddenColumns lists json tags that are populated on the
+// projected Bordereaux row but intentionally suppressed from the quote-stage
+// preview and xlsx export. The data still drives downstream calculations
+// (e.g. annual office premiums grossed up via ComputeOfficePremium); it just
+// adds clutter for the user reviewing per-member sums assured and ceded
+// premiums during pricing.
+var quoteBordereauxHiddenColumns = map[string]struct{}{
+	"gla_annual_premium":             {},
+	"ptd_annual_premium":             {},
+	"gla_retained_risk_premium":      {},
+	"loaded_gla_risk_rate":           {},
+	"exp_adj_loaded_gla_risk_rate":   {},
+	"loaded_ptd_risk_rate":           {},
+	"exp_adj_loaded_ptd_risk_rate":   {},
+	"ptd_retained_risk_premium":      {},
+	"loaded_ci_risk_rate":            {},
+	"exp_adj_loaded_ci_risk_rate":    {},
+	"ci_retained_risk_premium":       {},
+	"ci_annual_premium":              {},
+	"loaded_sgla_risk_rate":          {},
+	"exp_adj_loaded_sgla_risk_rate":  {},
+	"sgla_retained_risk_premium":     {},
+	"sgla_annual_premium":            {},
+	"loaded_ttd_risk_rate":           {},
+	"exp_adj_loaded_ttd_risk_rate":   {},
+	"ttd_retained_risk_premium":      {},
+	"loaded_phi_risk_rate":           {},
+	"exp_adj_loaded_phi_risk_rate":   {},
+	"phi_retained_risk_premium":      {},
+	"main_member_risk_rate":          {},
+	"main_member_retained_risk_premium": {},
+	"spouse_risk_rate":               {},
+	"spouse_retained_risk_premium":   {},
+	"child_risk_rate":                {},
+	"child_retained_risk_premium":    {},
+	"parent_risk_rate":               {},
+	"parent_retained_risk_premium":   {},
+}
+
+// QuoteBordereauxJSONTags returns the json tag list for a quote-stage
+// bordereaux row, with hidden columns filtered out. The shared list is used
+// by the JSON preview path (so the grid hides the columns) and the xlsx
+// export (so headers and values stay aligned).
+func QuoteBordereauxJSONTags() []string {
+	all := getJSONTags(models.Bordereaux{})
+	out := make([]string, 0, len(all))
+	for _, t := range all {
+		if _, hide := quoteBordereauxHiddenColumns[t]; hide {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
+}
+
+// ExportQuoteBordereauxXLSX projects all bordereaux rows for a quote and
+// streams them to an xlsx workbook. Column headers come from the Bordereaux
+// struct's json tags so the export matches the on-screen preview shape.
+func ExportQuoteBordereauxXLSX(quoteId int) ([]byte, error) {
+	rows, err := BuildBordereauxRowsForQuote(quoteId, 0, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	headers := QuoteBordereauxJSONTags()
+
+	f := excelize.NewFile()
+	sheetName := f.GetSheetName(f.GetActiveSheetIndex())
+	sw, err := f.NewStreamWriter(sheetName)
+	if err != nil {
+		return nil, err
+	}
+
+	headerRow := make([]interface{}, len(headers))
+	for i, h := range headers {
+		headerRow[i] = h
+	}
+	if err := sw.SetRow("A1", headerRow); err != nil {
+		return nil, err
+	}
+
+	for idx, r := range rows {
+		values := bordereauxValuesForJSONTags(r, headers)
+		axis, _ := excelize.CoordinatesToCellName(1, idx+2)
+		if err := sw.SetRow(axis, values); err != nil {
+			return nil, err
+		}
+	}
+	if err := sw.Flush(); err != nil {
+		return nil, err
+	}
+
+	buf, err := f.WriteToBuffer()
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// bordereauxValuesForJSONTags returns the values of a Bordereaux row in the
+// same order as the supplied json tags, so the row aligns with the header
+// row written by ExportQuoteBordereauxXLSX.
+func bordereauxValuesForJSONTags(b models.Bordereaux, jsonTags []string) []interface{} {
+	v := reflect.ValueOf(b)
+	t := v.Type()
+	indexByTag := make(map[string]int, t.NumField())
+	for i := 0; i < t.NumField(); i++ {
+		tag := t.Field(i).Tag.Get("json")
+		if tag == "" || tag == "-" {
+			continue
+		}
+		if comma := strings.IndexByte(tag, ','); comma >= 0 {
+			tag = tag[:comma]
+		}
+		indexByTag[tag] = i
+	}
+	out := make([]interface{}, len(jsonTags))
+	for i, tag := range jsonTags {
+		fieldIdx, ok := indexByTag[tag]
+		if !ok {
+			out[i] = ""
+			continue
+		}
+		fv := v.Field(fieldIdx)
+		switch fv.Kind() {
+		case reflect.Ptr:
+			if fv.IsNil() {
+				out[i] = ""
+			} else {
+				out[i] = fmt.Sprintf("%v", fv.Elem().Interface())
+			}
+		case reflect.Float64, reflect.Float32:
+			out[i] = fv.Float()
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			out[i] = fv.Int()
+		case reflect.Bool:
+			out[i] = fv.Bool()
+		case reflect.String:
+			out[i] = fv.String()
+		default:
+			out[i] = fmt.Sprintf("%v", fv.Interface())
+		}
+	}
+	return out
 }
 
 func saveFileToDB(file *multipart.FileHeader, table string, groupQuote models.GroupPricingQuote) error {
@@ -7257,6 +7582,7 @@ func recomputeFinalPremiumsAndCommission(quoteID int, groupQuote models.GroupPri
 	}
 
 	accessors := benefitAccessors()
+	discountMethod := GetDiscountMethod()
 
 	// 1. Seed pre-comm Final*OfficePremium for every benefit on every summary
 	//    and the FinalTotalAnnualPremium{ExclFuneral,} rollups derived from
@@ -7278,7 +7604,13 @@ func recomputeFinalPremiumsAndCommission(quoteID int, groupQuote models.GroupPri
 		for _, acc := range accessors {
 			risk := acc.expRiskPremium(s)
 			expOffice := models.ComputeOfficePremium(risk, s)
-			finalOfficePreComm := models.ComputeFinalOfficePremium(risk, s)
+			var finalOfficePreComm float64
+			switch discountMethod {
+			case models.DiscountMethodProrata:
+				finalOfficePreComm = models.ComputeProrataFinalOfficePremium(risk, s)
+			default:
+				finalOfficePreComm = models.ComputeFinalOfficePremium(risk, s)
+			}
 			acc.setFinalPremium(s, finalOfficePreComm)
 
 			scale := 0.0
@@ -7342,7 +7674,14 @@ func recomputeFinalPremiumsAndCommission(quoteID int, groupQuote models.GroupPri
 
 		var newTotal, newExclFun float64
 		for benIdx, acc := range accessors {
-			benefitPremium := models.ComputeFinalOfficePremium(acc.expRiskPremium(s), s)
+			risk := acc.expRiskPremium(s)
+			var benefitPremium float64
+			switch discountMethod {
+			case models.DiscountMethodProrata:
+				benefitPremium = models.ComputeProrataFinalOfficePremium(risk, s)
+			default:
+				benefitPremium = models.ComputeFinalOfficePremium(risk, s)
+			}
 
 			var slice float64
 			if benIdx == lastBenIdx {
@@ -7382,13 +7721,21 @@ func recomputeFinalPremiumsAndCommission(quoteID int, groupQuote models.GroupPri
 		if divisor <= 0 {
 			divisor = 1.0
 		}
+		// In prorata mode every component (including AGLA per-1000 rates)
+		// shrinks by (1 - d), so multiply the post-divisor rate by
+		// (1 + s.Discount). At Discount == 0 prorataMul == 1 and behaviour is
+		// identical to loading_adjustment.
+		prorataMul := 1.0
+		if discountMethod == models.DiscountMethodProrata {
+			prorataMul = 1.0 + s.Discount
+		}
 		for j := range s.AdditionalGlaCoverBandRates {
 			b := &s.AdditionalGlaCoverBandRates[j]
 			if b.RiskRatePer1000 == 0 {
 				continue
 			}
 			risk := b.RiskRatePer1000 / 1000.0
-			officePer1000 := (risk / divisor) * 1000.0
+			officePer1000 := (risk / divisor) * 1000.0 * prorataMul
 			b.OfficeRatePer1000 = officePer1000
 			b.BinderFeePer1000 = officePer1000 * s.BinderFeeRate
 			b.OutsourceFeePer1000 = officePer1000 * s.OutsourceFeeRate
@@ -7401,7 +7748,232 @@ func recomputeFinalPremiumsAndCommission(quoteID int, groupQuote models.GroupPri
 			return fmt.Errorf("save summary %d: %w", summaries[i].ID, err)
 		}
 	}
+
+	if err := refreshMemberPremiumSchedules(quoteID); err != nil {
+		return fmt.Errorf("refresh member premium schedules: %w", err)
+	}
 	return nil
+}
+
+// refreshMemberPremiumSchedules updates each MemberPremiumSchedule row for the
+// quote so its per-benefit annual premiums and TotalAnnualPremiumPayable
+// reflect the post-commission, post-discount Final*OfficePremium totals on
+// MemberRatingResultSummary. Each member's pre-update premium share within a
+// (category, benefit) bucket is used as the apportioning weight; the last
+// member in each bucket absorbs rounding residual so per-category sums match
+// the summary exactly. Funeral is consolidated on the summary as
+// FinalFunAnnualOfficePremium, so we apportion the per-member funeral total
+// first and then split each member's new total back across the four funeral
+// sub-types in the same ratio they had before the refresh.
+//
+// Called at the tail of recomputeFinalPremiumsAndCommission, which is the
+// single sink for both ApplyDiscountToQuote and applySchemeWideCommission.
+func refreshMemberPremiumSchedules(quoteID int) error {
+	var schedules []models.MemberPremiumSchedule
+	if err := DB.Where("quote_id = ?", quoteID).
+		Order("category ASC, member_name ASC").
+		Find(&schedules).Error; err != nil {
+		return fmt.Errorf("load member premium schedules: %w", err)
+	}
+	if len(schedules) == 0 {
+		return nil
+	}
+
+	var summaries []models.MemberRatingResultSummary
+	if err := DB.Where("quote_id = ?", quoteID).Find(&summaries).Error; err != nil {
+		return fmt.Errorf("load summaries for schedule refresh: %w", err)
+	}
+	summaryByCategory := make(map[string]*models.MemberRatingResultSummary, len(summaries))
+	for i := range summaries {
+		summaryByCategory[summaries[i].Category] = &summaries[i]
+	}
+
+	categoryRows := make(map[string][]int)
+	categoriesInOrder := make([]string, 0)
+	for i := range schedules {
+		cat := schedules[i].Category
+		if _, ok := categoryRows[cat]; !ok {
+			categoriesInOrder = append(categoriesInOrder, cat)
+		}
+		categoryRows[cat] = append(categoryRows[cat], i)
+	}
+
+	for _, cat := range categoriesInOrder {
+		idxs := categoryRows[cat]
+		sum, ok := summaryByCategory[cat]
+		if !ok {
+			continue
+		}
+
+		gla := make([]float64, len(idxs))
+		ptd := make([]float64, len(idxs))
+		ci := make([]float64, len(idxs))
+		ttd := make([]float64, len(idxs))
+		phi := make([]float64, len(idxs))
+		sgla := make([]float64, len(idxs))
+		funMember := make([]float64, len(idxs))
+		funSplit := make([][4]float64, len(idxs))
+		for k, idx := range idxs {
+			r := &schedules[idx]
+			gla[k] = r.GlaAnnualPremium
+			ptd[k] = r.PtdAnnualPremium
+			ci[k] = r.CiAnnualPremium
+			ttd[k] = r.TtdAnnualPremium
+			phi[k] = r.PhiAnnualPremium
+			sgla[k] = r.SpouseGlaAnnualPremium
+			funSplit[k] = [4]float64{
+				r.MainMemberFuneralAnnualPremium,
+				r.SpouseFuneralAnnualPremium,
+				r.ChildrenFuneralAnnualPremium,
+				r.DependantsFuneralAnnualPremium,
+			}
+			funMember[k] = funSplit[k][0] + funSplit[k][1] + funSplit[k][2] + funSplit[k][3]
+		}
+
+		newGla := apportionByWeight(gla, sum.FinalGlaAnnualOfficePremium)
+		newPtd := apportionByWeight(ptd, sum.FinalPtdAnnualOfficePremium)
+		newCi := apportionByWeight(ci, sum.FinalCiAnnualOfficePremium)
+		newTtd := apportionByWeight(ttd, sum.FinalTtdAnnualOfficePremium)
+		newPhi := apportionByWeight(phi, sum.FinalPhiAnnualOfficePremium)
+		newSgla := apportionByWeight(sgla, sum.FinalSglaAnnualOfficePremium)
+		newFunMember := apportionByWeight(funMember, sum.FinalFunAnnualOfficePremium)
+
+		for k, idx := range idxs {
+			r := &schedules[idx]
+			r.GlaAnnualPremium = newGla[k]
+			r.PtdAnnualPremium = newPtd[k]
+			r.CiAnnualPremium = newCi[k]
+			r.TtdAnnualPremium = newTtd[k]
+			r.PhiAnnualPremium = newPhi[k]
+			r.SpouseGlaAnnualPremium = newSgla[k]
+
+			oldFun := funMember[k]
+			if oldFun > 0 {
+				scale := newFunMember[k] / oldFun
+				r.MainMemberFuneralAnnualPremium = funSplit[k][0] * scale
+				r.SpouseFuneralAnnualPremium = funSplit[k][1] * scale
+				r.ChildrenFuneralAnnualPremium = funSplit[k][2] * scale
+				r.DependantsFuneralAnnualPremium = funSplit[k][3] * scale
+			} else {
+				// Member had no funeral cover before; if the category total is
+				// non-zero (defensive — shouldn't happen) drop the apportioned
+				// share onto the main-member field so the category sum still
+				// matches FinalFunAnnualOfficePremium.
+				r.MainMemberFuneralAnnualPremium = newFunMember[k]
+				r.SpouseFuneralAnnualPremium = 0
+				r.ChildrenFuneralAnnualPremium = 0
+				r.DependantsFuneralAnnualPremium = 0
+			}
+
+			r.TotalAnnualPremiumPayable = r.GlaAnnualPremium + r.PtdAnnualPremium +
+				r.CiAnnualPremium + r.TtdAnnualPremium + r.PhiAnnualPremium +
+				r.SpouseGlaAnnualPremium + r.MainMemberFuneralAnnualPremium +
+				r.SpouseFuneralAnnualPremium + r.ChildrenFuneralAnnualPremium +
+				r.DependantsFuneralAnnualPremium
+		}
+	}
+
+	// MemberPremiumSchedule has no struct-level primary key. A naive
+	// Updates(...) keyed on (quote_id, category, member_name) silently writes
+	// the same value to every matching row, which corrupts schedule totals
+	// when a member has multiple rows from movements (each with a different
+	// entry_date). Delete the whole quote's slice and re-insert from the
+	// modified in-memory slice so every row gets its own apportioned value
+	// and ancillary columns (member name, dates, sums assured) are preserved
+	// verbatim. Pattern mirrors ApplyDiscountToQuote's MemberRatingResult
+	// delete-then-CreateInBatches at line ~7826.
+	if err := DB.Where("quote_id = ?", quoteID).
+		Delete(&models.MemberPremiumSchedule{}).Error; err != nil {
+		return fmt.Errorf("delete stale member premium schedules: %w", err)
+	}
+	if err := DB.CreateInBatches(&schedules, 100).Error; err != nil {
+		return fmt.Errorf("recreate member premium schedules: %w", err)
+	}
+
+	// Sanity log: for each benefit, the per-quote sum across schedule rows
+	// should equal the summary roll-up. A non-trivial gap means apportionment
+	// drifted (or some other writer touched the schedule between recompute
+	// and now). Warn rather than fail so we don't break ApplyDiscountToQuote.
+	const eps = 0.05
+	check := func(name string, got, want float64) {
+		if math.Abs(got-want) > eps {
+			appLog.WithFields(map[string]interface{}{
+				"quote_id":      quoteID,
+				"benefit":       name,
+				"schedule_sum":  got,
+				"summary_total": want,
+				"diff":          got - want,
+			}).Warn("MemberPremiumSchedule apportionment drift")
+		}
+	}
+	var schedGla, schedPtd, schedCi, schedTtd, schedPhi, schedSgla, schedFun float64
+	for i := range schedules {
+		r := &schedules[i]
+		schedGla += r.GlaAnnualPremium
+		schedPtd += r.PtdAnnualPremium
+		schedCi += r.CiAnnualPremium
+		schedTtd += r.TtdAnnualPremium
+		schedPhi += r.PhiAnnualPremium
+		schedSgla += r.SpouseGlaAnnualPremium
+		schedFun += r.MainMemberFuneralAnnualPremium + r.SpouseFuneralAnnualPremium +
+			r.ChildrenFuneralAnnualPremium + r.DependantsFuneralAnnualPremium
+	}
+	var sumGla, sumPtd, sumCi, sumTtd, sumPhi, sumSgla, sumFun float64
+	for i := range summaries {
+		s := &summaries[i]
+		sumGla += s.FinalGlaAnnualOfficePremium
+		sumPtd += s.FinalPtdAnnualOfficePremium
+		sumCi += s.FinalCiAnnualOfficePremium
+		sumTtd += s.FinalTtdAnnualOfficePremium
+		sumPhi += s.FinalPhiAnnualOfficePremium
+		sumSgla += s.FinalSglaAnnualOfficePremium
+		sumFun += s.FinalFunAnnualOfficePremium
+	}
+	check("gla", schedGla, sumGla)
+	check("ptd", schedPtd, sumPtd)
+	check("ci", schedCi, sumCi)
+	check("ttd", schedTtd, sumTtd)
+	check("phi", schedPhi, sumPhi)
+	check("sgla", schedSgla, sumSgla)
+	check("fun", schedFun, sumFun)
+	return nil
+}
+
+// apportionByWeight distributes newTotal across len(weights) buckets in
+// proportion to weights, with the last bucket absorbing any rounding residual
+// so the returned slice sums to newTotal exactly. When all weights are zero
+// the total is split evenly (defensive — should not happen in practice since
+// the same pre-state weights drive the per-benefit Final* allocation upstream).
+func apportionByWeight(weights []float64, newTotal float64) []float64 {
+	out := make([]float64, len(weights))
+	if len(weights) == 0 {
+		return out
+	}
+	last := len(weights) - 1
+	oldTotal := 0.0
+	for _, w := range weights {
+		oldTotal += w
+	}
+	if oldTotal == 0 {
+		if newTotal == 0 {
+			return out
+		}
+		even := newTotal / float64(len(weights))
+		remaining := newTotal
+		for i := 0; i < last; i++ {
+			out[i] = even
+			remaining -= even
+		}
+		out[last] = remaining
+		return out
+	}
+	remaining := newTotal
+	for i := 0; i < last; i++ {
+		out[i] = weights[i] * (newTotal / oldTotal)
+		remaining -= out[i]
+	}
+	out[last] = remaining
+	return out
 }
 
 // applySchemeWideCommission computes the total commission for the quote by
@@ -7754,6 +8326,22 @@ func GetDiscountAuthorityForUser(userEmail string, riskRateCode string) (models.
 	return da, nil
 }
 
+// GetDiscountMethod returns the globally configured discount calculation
+// method from the GroupPricingSetting singleton row. Defaults to
+// loading_adjustment if the row is missing or the column is empty so that
+// quotes computed before the setting was introduced behave identically to
+// historical output.
+func GetDiscountMethod() string {
+	var s models.GroupPricingSetting
+	if err := DB.First(&s, 1).Error; err != nil {
+		return models.DiscountMethodLoadingAdjustment
+	}
+	if s.DiscountMethod == "" {
+		return models.DiscountMethodLoadingAdjustment
+	}
+	return s.DiscountMethod
+}
+
 // ApplyDiscountToQuote applies a discount (in percentage, e.g. 5.0 for 5%) to a
 // quote: persists the percentage on the quote loadings, mirrors it onto every
 // MemberRatingResultSummary as a negative fraction so SchemeTotalLoading +
@@ -7795,6 +8383,7 @@ func ApplyDiscountToQuote(quoteId string, discountPct float64, user models.AppUs
 	premiumLoading := GetPremiumLoading(groupParam, schemeSizeLevel, string(quote.DistributionChannel))
 
 	binderFeeRate, outsourceFeeRate := binderAndOutsourceRates(&quote)
+	discountMethod := GetDiscountMethod()
 
 	for i := range results {
 		r := &results[i]
@@ -7810,15 +8399,24 @@ func ApplyDiscountToQuote(quoteId string, discountPct float64, user models.AppUs
 		}
 		r.TotalFuneralOfficePremium = r.TotalFuneralRiskPremium / divisor
 		r.ExpAdjTotalFuneralOfficePremium = r.ExpAdjTotalFuneralRiskPremium / divisor
-		// Final = Risk / (1 - (TotalPremiumLoading + discount)). discount is
-		// negative for a positive percentage, so the denominator grows and
-		// Final shrinks below ExpAdj — same direction as the summary-level
-		// FinalFunAnnualOfficePremium derived via ComputeFinalOfficePremium.
-		finalDivisor := 1.0 - (r.TotalPremiumLoading + discount)
-		if finalDivisor == 0 {
-			finalDivisor = 1.0
+		// Final office premium under either discount method:
+		//  - loading_adjustment: Risk / (1 - (TotalPremiumLoading + discount)).
+		//    discount is the negative fraction so the denominator grows and
+		//    Final shrinks below ExpAdj.
+		//  - prorata: ExpAdj * (1 + discount) — i.e. the un-discounted office
+		//    premium multiplied by (1 - d), proportionally reducing risk +
+		//    every loading component by the same fraction.
+		var finalFunOffice float64
+		if discountMethod == models.DiscountMethodProrata {
+			finalFunOffice = r.ExpAdjTotalFuneralOfficePremium * (1.0 + discount)
+		} else {
+			finalDivisor := 1.0 - (r.TotalPremiumLoading + discount)
+			if finalDivisor == 0 {
+				finalDivisor = 1.0
+			}
+			finalFunOffice = r.ExpAdjTotalFuneralRiskPremium / finalDivisor
 		}
-		r.FinalTotalFuneralOfficePremium = r.ExpAdjTotalFuneralRiskPremium / finalDivisor
+		r.FinalTotalFuneralOfficePremium = finalFunOffice
 		applyBinderOutsourceAmounts(r, &quote, binderFeeRate, outsourceFeeRate)
 	}
 
@@ -10492,18 +11090,22 @@ func GetGroupPricingQuoteTableData(quoteId int, tableType string, offset int, li
 		}
 		jsonTags = getJSONTags(models.GroupPricingParameters{})
 	case "bordereaux":
-		var bordereuax []models.Bordereaux
-		db := DB.Where("quote_id = ?", quoteId)
-		if limit > 0 {
-			db = db.Offset(offset).Limit(limit)
-		}
-		db.Find(&bordereuax)
-		b, _ := json.Marshal(&bordereuax)
-		err := json.Unmarshal(b, &results)
+		// Bordereaux rows are projected on-the-fly from MemberRatingResult so
+		// the latest loadings and reinsurance structure flow through without
+		// requiring a recalculation.
+		bordereaux, err := BuildBordereauxRowsForQuote(quoteId, offset, limit)
 		if err != nil {
 			return nil, err
 		}
-		jsonTags = getJSONTags(models.Bordereaux{})
+		b, _ := json.Marshal(&bordereaux)
+		if err := json.Unmarshal(b, &results); err != nil {
+			return nil, err
+		}
+		// jsonTags drives which columns the frontend renders. The shared
+		// QuoteBordereauxJSONTags list omits columns the user asked to hide
+		// (loaded/retained rates and annual premiums) so the grid matches
+		// the xlsx export shape.
+		jsonTags = QuoteBordereauxJSONTags()
 	}
 
 	resultData["data"] = results
@@ -15130,8 +15732,9 @@ func GetQuoteTableDataExcel(quoteId int, tableType string) ([]byte, error) {
 		tableName = "member_rating_results"
 		columns = getStructDBColumns(models.MemberRatingResult{})
 	case "bordereaux":
-		tableName = "bordereauxes"
-		columns = getStructDBColumns(models.Bordereaux{})
+		// Bordereaux is no longer persisted — project rows on-the-fly and
+		// stream them to xlsx in struct-field order.
+		return ExportQuoteBordereauxXLSX(quoteId)
 	case "member_premium_schedules":
 		tableName = "member_premium_schedules"
 		columns = getStructDBColumns(models.MemberPremiumSchedule{})

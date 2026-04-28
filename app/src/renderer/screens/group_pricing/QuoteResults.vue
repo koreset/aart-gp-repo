@@ -36,7 +36,8 @@
               class="mr-2"
               variant="outlined"
               size="small"
-              :disabled="!item.populated"
+              :disabled="!item.populated || loadingItem === item.value"
+              :loading="loadingItem === item.value"
               @click="viewTable(item)"
             >
               <v-icon left color="primary">mdi-information</v-icon>
@@ -46,7 +47,10 @@
         </v-list-item>
       </v-list>
 
-      <loading-indicator :loadingData="loadingData" />
+      <loading-indicator
+        :loadingData="loadingData"
+        :label="loadingLabel"
+      />
 
       <v-row
         v-if="
@@ -289,6 +293,19 @@ const selectedBasis: any = ref('')
 const parameterBases = ref([])
 const manualCredibilityFormValid = ref(false)
 const calculatingManualCredibility = ref(false)
+
+// Tracks which list item the user is currently loading so the View button
+// for that row shows a spinner. Bordereaux is computed on-the-fly from
+// MemberRatingResult, which can take longer than a plain DB read — the
+// per-row spinner plus the contextual loadingLabel (below) make it clear
+// the wait is due to live computation, not a stalled fetch.
+const loadingItem = ref<string | null>(null)
+const loadingLabel = computed(() => {
+  if (loadingItem.value === 'bordereaux') {
+    return 'Computing bordereaux from latest pricing inputs…'
+  }
+  return 'Loading data…'
+})
 
 const {
   progress: calcProgress,
@@ -576,6 +593,7 @@ const relatedResultTables = computed(() => {
 const viewTable = async (item: any) => {
   // special case for output summary
   loadingData.value = true
+  loadingItem.value = item.value
 
   try {
     currentTableType.value = item.value
@@ -685,6 +703,8 @@ const viewTable = async (item: any) => {
   } catch (error) {
     console.log('Error:', error)
     loadingData.value = false
+  } finally {
+    loadingItem.value = null
   }
 }
 

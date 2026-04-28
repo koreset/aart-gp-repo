@@ -3009,6 +3009,7 @@ func GetTableDataCsvExport(c *gin.Context) {
 
 }
 
+
 // GetGroupSchemeStatusAudit returns the audit trail for a given group scheme
 func GetGroupSchemeStatusAudit(c *gin.Context) {
 	schemeId := c.Param("id")
@@ -3465,6 +3466,47 @@ func ApplyDiscountToQuote(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, nil)
+}
+
+// GetGroupPricingSettings returns the singleton GroupPricingSetting row, which
+// today holds the global discount calculation method. The row is created with
+// defaults on first read so the endpoint always returns a usable payload.
+func GetGroupPricingSettings(c *gin.Context) {
+	var s models.GroupPricingSetting
+	if err := services.DB.First(&s, 1).Error; err != nil {
+		s = models.GroupPricingSetting{ID: 1, DiscountMethod: models.DiscountMethodLoadingAdjustment}
+		services.DB.Create(&s)
+	}
+	c.JSON(http.StatusOK, s)
+}
+
+// UpdateGroupPricingSettings writes the singleton GroupPricingSetting row.
+// The discount method only takes effect on the next ApplyDiscountToQuote /
+// recompute call — existing quotes are not retroactively recomputed.
+func UpdateGroupPricingSettings(c *gin.Context) {
+	var payload models.GroupPricingSetting
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
+	if payload.DiscountMethod != models.DiscountMethodLoadingAdjustment &&
+		payload.DiscountMethod != models.DiscountMethodProrata {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid discount_method"})
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+
+	var s models.GroupPricingSetting
+	if err := services.DB.First(&s, 1).Error; err != nil {
+		s = models.GroupPricingSetting{ID: 1}
+	}
+	s.DiscountMethod = payload.DiscountMethod
+	s.UpdatedBy = user.UserEmail
+	if err := services.DB.Save(&s).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, s)
 }
 
 // GetQuoteWinProbability returns the win probability score for a single quote.

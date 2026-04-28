@@ -1883,6 +1883,18 @@ func ComputeFinalOfficePremium(riskPremium float64, s *MemberRatingResultSummary
 	return riskPremium / denom
 }
 
+// ComputeProrataFinalOfficePremium returns the prorata-discounted, pre-
+// commission office premium: ComputeOfficePremium(risk) * (1 + Discount).
+// s.Discount is stored as a negative fraction (e.g. -0.05 for 5%), so
+// (1 + Discount) IS (1 - d). At Discount == 0 this equals ComputeOfficePremium
+// exactly, mirroring the no-op-at-zero invariant of ComputeFinalOfficePremium.
+func ComputeProrataFinalOfficePremium(riskPremium float64, s *MemberRatingResultSummary) float64 {
+	if s == nil {
+		return 0
+	}
+	return ComputeOfficePremium(riskPremium, s) * (1.0 + s.Discount)
+}
+
 type MovementMemberRatingResult struct {
 	FinancialYear                       int     `json:"financial_year" csv:"financial_year"`
 	SchemeName                          string  `json:"-" csv:"scheme_name"`
@@ -2293,6 +2305,21 @@ type GroupPricingInsurerDetail struct {
 	IntroductoryText      string    `json:"introductory_text" csv:"introductory_text"`
 	GeneralProvisionsText string    `json:"general_provisions_text" csv:"general_provisions_text"`
 	OnRiskLetterText      string    `json:"on_risk_letter_text" csv:"on_risk_letter_text"`
+}
+
+const (
+	DiscountMethodLoadingAdjustment = "loading_adjustment"
+	DiscountMethodProrata           = "prorata"
+)
+
+// GroupPricingSetting is a singleton table (one row, ID=1) holding global
+// group-pricing configuration toggles. Today it carries the discount
+// calculation method; future system-wide flags can be added here.
+type GroupPricingSetting struct {
+	ID             int       `json:"id" gorm:"primaryKey"`
+	DiscountMethod string    `json:"discount_method" gorm:"size:32;not null;default:loading_adjustment"`
+	UpdatedAt      time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+	UpdatedBy      string    `json:"updated_by"`
 }
 
 // InsurerQuoteTemplate represents a custom DOCX template uploaded by an insurer

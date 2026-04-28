@@ -34,6 +34,19 @@ export default {
       `/group-pricing/quotes/${quoteId}/apply-discount/${discountPct}`
     )
   },
+  getGroupPricingSettings() {
+    return Api.get('/group-pricing/settings')
+  },
+  updateGroupPricingSettings(payload: {
+    discount_method: 'loading_adjustment' | 'prorata'
+  }) {
+    return Api.put('/group-pricing/settings', payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      }
+    })
+  },
   getTableMetaData() {
     return Api.get('/group-pricing/rate-tables')
   },
