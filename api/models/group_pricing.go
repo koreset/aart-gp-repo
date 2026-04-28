@@ -1754,6 +1754,35 @@ type MemberRatingResultSummary struct {
 	FinalGlaEducatorAnnualOfficePremium             float64 `json:"final_gla_educator_annual_office_premium" csv:"final_gla_educator_annual_office_premium"`
 	FinalPtdEducatorAnnualOfficePremium             float64 `json:"final_ptd_educator_annual_office_premium" csv:"final_ptd_educator_annual_office_premium"`
 
+	// Final*OfficePremium for conversion / continuity slices. Sliced from
+	// the parent benefit's ExpAdjTotal*RiskPremium via FinalSchemeTotalLoading()
+	// — same gross-up that ComputeFinalOfficePremium applies for the parent
+	// benefit. Pre-discount these collapse to the ComputeOfficePremium values;
+	// post-discount they re-derive against the discounted loading denominator.
+	// Re-populated by recomputeFinalPremiumsAndCommission whenever Discount
+	// changes. Doc-template tokens read these directly instead of grossing up
+	// risk premiums on the fly.
+	FinalGlaConversionOnWithdrawalOfficePremium             float64 `json:"final_gla_conv_on_wdr_office_prem" csv:"final_gla_conv_on_wdr_office_prem" gorm:"column:final_gla_conv_on_wdr_office_prem"`
+	FinalGlaConversionOnRetirementOfficePremium             float64 `json:"final_gla_conv_on_ret_office_prem" csv:"final_gla_conv_on_ret_office_prem" gorm:"column:final_gla_conv_on_ret_office_prem"`
+	FinalGlaContinuityDuringDisabilityOfficePremium         float64 `json:"final_gla_cont_dur_dis_office_prem" csv:"final_gla_cont_dur_dis_office_prem" gorm:"column:final_gla_cont_dur_dis_office_prem"`
+	FinalGlaEducatorConversionOnWithdrawalOfficePremium     float64 `json:"final_gla_ed_conv_on_wdr_office_prem" csv:"final_gla_ed_conv_on_wdr_office_prem" gorm:"column:final_gla_ed_conv_on_wdr_office_prem"`
+	FinalGlaEducatorConversionOnRetirementOfficePremium     float64 `json:"final_gla_ed_conv_on_ret_office_prem" csv:"final_gla_ed_conv_on_ret_office_prem" gorm:"column:final_gla_ed_conv_on_ret_office_prem"`
+	FinalGlaEducatorContinuityDuringDisabilityOfficePremium float64 `json:"final_gla_ed_cont_dur_dis_office_prem" csv:"final_gla_ed_cont_dur_dis_office_prem" gorm:"column:final_gla_ed_cont_dur_dis_office_prem"`
+	FinalPtdConversionOnWithdrawalOfficePremium             float64 `json:"final_ptd_conv_on_wdr_office_prem" csv:"final_ptd_conv_on_wdr_office_prem" gorm:"column:final_ptd_conv_on_wdr_office_prem"`
+	FinalPtdEducatorConversionOnWithdrawalOfficePremium     float64 `json:"final_ptd_ed_conv_on_wdr_office_prem" csv:"final_ptd_ed_conv_on_wdr_office_prem" gorm:"column:final_ptd_ed_conv_on_wdr_office_prem"`
+	FinalPtdEducatorConversionOnRetirementOfficePremium     float64 `json:"final_ptd_ed_conv_on_ret_office_prem" csv:"final_ptd_ed_conv_on_ret_office_prem" gorm:"column:final_ptd_ed_conv_on_ret_office_prem"`
+	FinalPhiConversionOnWithdrawalOfficePremium             float64 `json:"final_phi_conv_on_wdr_office_prem" csv:"final_phi_conv_on_wdr_office_prem" gorm:"column:final_phi_conv_on_wdr_office_prem"`
+	FinalTtdConversionOnWithdrawalOfficePremium             float64 `json:"final_ttd_conv_on_wdr_office_prem" csv:"final_ttd_conv_on_wdr_office_prem" gorm:"column:final_ttd_conv_on_wdr_office_prem"`
+	FinalCiConversionOnWithdrawalOfficePremium              float64 `json:"final_ci_conv_on_wdr_office_prem" csv:"final_ci_conv_on_wdr_office_prem" gorm:"column:final_ci_conv_on_wdr_office_prem"`
+	FinalSglaConversionOnWithdrawalOfficePremium            float64 `json:"final_sgla_conv_on_wdr_office_prem" csv:"final_sgla_conv_on_wdr_office_prem" gorm:"column:final_sgla_conv_on_wdr_office_prem"`
+	FinalFunConversionOnWithdrawalOfficePremium             float64 `json:"final_fun_conv_on_wdr_office_prem" csv:"final_fun_conv_on_wdr_office_prem" gorm:"column:final_fun_conv_on_wdr_office_prem"`
+
+	// IndicativeRatesCount is the per-summary rate-multiplicity used at
+	// proportion-of-salary calculation time — captured from the rating loop
+	// so doc-template helpers can derive office-side prop-of-salary directly
+	// from a persisted Final office premium and the annual salary.
+	IndicativeRatesCount float64 `json:"indicative_rates_count" csv:"indicative_rates_count"`
+
 	// Final*AnnualCommissionAmount mirrors the Exp* commission allocation but
 	// is computed against the Final premium total via ComputeProgressiveCommission.
 	// Pre-discount these equal the corresponding Exp* commission amounts.

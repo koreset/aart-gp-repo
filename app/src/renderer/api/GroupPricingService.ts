@@ -77,6 +77,11 @@ export default {
       responseType: 'blob'
     })
   },
+  getQuotePdf(id: number) {
+    return Api.get(`/group-pricing/get-quote/${id}/document.pdf`, {
+      responseType: 'blob'
+    })
+  },
   // ----- Per-insurer quote templates -----
   uploadInsurerQuoteTemplate(insurerId: number, file: File) {
     const formData = new FormData()

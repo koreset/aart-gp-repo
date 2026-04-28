@@ -2080,6 +2080,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.ExpTotalFunMonthlyPremiumPerMember = mdrs.ExpTotalFunAnnualPremiumPerMember / 12.0
 
 	}
+	mdrs.IndicativeRatesCount = indicativeRatesCount
 	if mdrs.TotalAnnualSalary > 0 {
 		mdrs.ProportionGlaAnnualRiskPremiumSalary = mdrs.TotalGlaAnnualRiskPremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
 		mdrs.ExpProportionGlaAnnualRiskPremiumSalary = mdrs.ExpTotalGlaAnnualRiskPremium / (mdrs.TotalAnnualSalary * indicativeRatesCount)
@@ -7741,6 +7742,38 @@ func recomputeFinalPremiumsAndCommission(quoteID int, groupQuote models.GroupPri
 			b.OutsourceFeePer1000 = officePer1000 * s.OutsourceFeeRate
 			b.CommissionPer1000 = officePer1000 * rate
 		}
+	}
+
+	// 6. Conversion / continuity slice office premiums. Sliced from each
+	//    parent benefit's exp-adj risk premium via the same discount method as
+	//    the parent benefit. Pre-discount these collapse to the
+	//    ComputeOfficePremium values; post-discount they re-derive against
+	//    the discounted loading denominator. Doc-template tokens read these
+	//    directly so render-time math doesn't have to gross up risk values.
+	finalSliceOffice := func(s *models.MemberRatingResultSummary, risk float64) float64 {
+		switch discountMethod {
+		case models.DiscountMethodProrata:
+			return models.ComputeProrataFinalOfficePremium(risk, s)
+		default:
+			return models.ComputeFinalOfficePremium(risk, s)
+		}
+	}
+	for i := range summaries {
+		s := &summaries[i]
+		s.FinalGlaConversionOnWithdrawalOfficePremium = finalSliceOffice(s, s.ExpAdjTotalGlaConversionOnWithdrawalAnnualRiskPremium)
+		s.FinalGlaConversionOnRetirementOfficePremium = finalSliceOffice(s, s.ExpAdjTotalGlaConversionOnRetirementAnnualRiskPremium)
+		s.FinalGlaContinuityDuringDisabilityOfficePremium = finalSliceOffice(s, s.ExpAdjTotalGlaContinuityDuringDisabilityAnnualRiskPremium)
+		s.FinalGlaEducatorConversionOnWithdrawalOfficePremium = finalSliceOffice(s, s.ExpAdjTotalGlaEducatorConversionOnWithdrawalAnnualRiskPremium)
+		s.FinalGlaEducatorConversionOnRetirementOfficePremium = finalSliceOffice(s, s.ExpAdjTotalGlaEducatorConversionOnRetirementAnnualRiskPremium)
+		s.FinalGlaEducatorContinuityDuringDisabilityOfficePremium = finalSliceOffice(s, s.ExpAdjTotalGlaEducatorContinuityDuringDisabilityAnnualRiskPremium)
+		s.FinalPtdConversionOnWithdrawalOfficePremium = finalSliceOffice(s, s.ExpAdjTotalPtdConversionOnWithdrawalAnnualRiskPremium)
+		s.FinalPtdEducatorConversionOnWithdrawalOfficePremium = finalSliceOffice(s, s.ExpAdjTotalPtdEducatorConversionOnWithdrawalAnnualRiskPremium)
+		s.FinalPtdEducatorConversionOnRetirementOfficePremium = finalSliceOffice(s, s.ExpAdjTotalPtdEducatorConversionOnRetirementAnnualRiskPremium)
+		s.FinalPhiConversionOnWithdrawalOfficePremium = finalSliceOffice(s, s.ExpAdjTotalPhiConversionOnWithdrawalAnnualRiskPremium)
+		s.FinalTtdConversionOnWithdrawalOfficePremium = finalSliceOffice(s, s.ExpAdjTotalTtdConversionOnWithdrawalAnnualRiskPremium)
+		s.FinalCiConversionOnWithdrawalOfficePremium = finalSliceOffice(s, s.ExpAdjTotalCiConversionOnWithdrawalAnnualRiskPremium)
+		s.FinalSglaConversionOnWithdrawalOfficePremium = finalSliceOffice(s, s.ExpAdjTotalSglaConversionOnWithdrawalAnnualRiskPremium)
+		s.FinalFunConversionOnWithdrawalOfficePremium = finalSliceOffice(s, s.ExpAdjTotalFunConversionOnWithdrawalAnnualRiskPremium)
 	}
 
 	for i := range summaries {

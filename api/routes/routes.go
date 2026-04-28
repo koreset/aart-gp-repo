@@ -182,6 +182,7 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.GET("get-quote/:id/custom-tir-status", controllers.GetCustomTirTableStatus)
 			groupPricing.GET("get-quote/:id/categories/educator-benefits", controllers.GetGroupPricingQuoteEducatorBenefits)
 			groupPricing.GET("get-quote/:id/document.docx", controllers.GenerateGroupPricingQuoteDocx)
+			groupPricing.GET("get-quote/:id/document.pdf", controllers.GenerateGroupPricingQuotePdf)
 			groupPricing.POST("insurers", controllers.SaveInsurerDetails)
 			groupPricing.GET("insurers", controllers.GetInsurerDetails)
 			groupPricing.POST("insurers/:id/quote-template", controllers.UploadInsurerQuoteTemplate)
