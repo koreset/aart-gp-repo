@@ -3,10 +3,14 @@
 package main
 
 import (
+	"api/globals"
 	"api/services"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -25,6 +29,11 @@ func main() {
 		fmt.Println("  • Output goes to migrations/<dialect>/<timestamp>_<message>.sql.")
 		fmt.Println("  • Run against a database that is still on the previous schema —")
 		fmt.Println("    typically a shadow/staging copy — so the diff captures the new fields.")
+		os.Exit(1)
+	}
+
+	if err := loadConfig(); err != nil {
+		fmt.Printf("Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -63,4 +72,27 @@ func main() {
 	}
 
 	fmt.Printf("Generated migration: %s\n", path)
+}
+
+// loadConfig reads config.json into globals.AppConfig, mirroring the path
+// resolution in main.startApplication so tools see the same config the API
+// does. On non-Windows it reads ./config.json from the working directory; on
+// Windows it sits next to the executable.
+func loadConfig() error {
+	path := "config.json"
+	if runtime.GOOS == "windows" {
+		if exec, err := os.Executable(); err == nil {
+			dir, _ := filepath.Split(exec)
+			path = filepath.Join(dir, "config.json")
+		}
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	if err := json.Unmarshal(data, &globals.AppConfig); err != nil {
+		return fmt.Errorf("parse %s: %w", path, err)
+	}
+	return nil
 }
