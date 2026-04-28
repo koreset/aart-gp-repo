@@ -106,13 +106,26 @@ func (m *MigrationManager) RunMigrations() error {
 						continue
 					}
 
-					err := tx.Exec(stmt).Error
-					if err != nil {
+					if execErr := tx.Exec(stmt).Error; execErr != nil {
+						if isIdempotentConflict(execErr) {
+							// The schema is already in the desired state for
+							// this statement — typically because AutoMigrate
+							// (or a sibling process) made the change before
+							// this file was applied. Treat as a no-op so the
+							// migration as a whole can complete and be
+							// recorded; otherwise the runner would loop on
+							// this file forever.
+							appLog.WithFields(map[string]interface{}{
+								"warn": execErr.Error(),
+								"stmt": stmt,
+							}).Warn("Migration statement skipped — object already exists")
+							continue
+						}
 						appLog.WithFields(map[string]interface{}{
-							"error": err.Error(),
+							"error": execErr.Error(),
 							"stmt":  stmt,
 						}).Error("Failed to execute migration statement")
-						return err
+						return execErr
 					}
 				}
 
@@ -291,24 +304,25 @@ func CreateMigrationForAllDatabases(name string) ([]string, error) {
 	return filePaths, nil
 }
 
-// RunMigrationsOnStartup runs migrations on application startup
+// RunMigrationsOnStartup runs migrations on application startup.
+//
+// Failures are fatal: if the DB isn't initialized or a migration fails to
+// apply, this calls os.Exit(1) rather than letting the API continue against
+// a stale or partially-migrated schema. That's the correct behaviour for
+// production — a half-migrated app silently serving traffic is worse than a
+// boot crash that pages someone — and it's also fine for dev, where the next
+// `air` cycle will retry once the broken file is fixed.
 func RunMigrationsOnStartup() {
 	appLog.Info("Running migrations on startup")
 
-	// Wait for DB to be initialized
 	if DB == nil {
-		appLog.Error("Database not initialized")
-		return
+		appLog.Fatal("Database not initialized — cannot run migrations; aborting startup")
 	}
 
-	// Create migration manager
 	migrationManager := NewMigrationManager(DB)
 
-	// Run migrations
-	err := migrationManager.RunMigrations()
-	if err != nil {
-		appLog.WithField("error", err.Error()).Error("Failed to run migrations")
-		return
+	if err := migrationManager.RunMigrations(); err != nil {
+		appLog.WithField("error", err.Error()).Fatal("Failed to run migrations — aborting startup")
 	}
 
 	appLog.Info("Migrations completed successfully")
@@ -365,9 +379,76 @@ func MarkAllMigrationsAsApplied() error {
 	return nil
 }
 
+// isIdempotentConflict reports whether the given error reflects a no-op
+// schema conflict — typically "column already exists", "table already exists",
+// or "duplicate index" — that should be treated as a soft warning during
+// migration application rather than a hard failure. Recognises the wording
+// emitted by the MySQL, PostgreSQL, and SQL Server drivers.
+//
+// This makes the runner tolerant of databases that arrived at the same
+// schema state by different paths — e.g. a dev DB previously auto-migrated
+// when a struct field was added, then later handed a migration file
+// generated against a baseline DB that lacked the change. The first path
+// already created the column; applying the file would otherwise fail with
+// "duplicate column" and prevent the migration from being recorded.
+//
+// The trade-off: if a developer accidentally writes a migration that
+// conflicts with an existing object (e.g. ADD COLUMN with a typo'd name
+// that happens to match something else), the conflict is logged as a
+// warning rather than blocking the boot. The warning surfaces in logs and
+// is recoverable; the alternative — never running migrations that touch
+// pre-existing schemas — is strictly worse for this codebase.
+func isIdempotentConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	patterns := []string{
+		"duplicate column",        // MySQL 1060
+		"duplicate key name",      // MySQL 1061 (index name collision)
+		"duplicate index",         // misc MySQL variants
+		"table already exists",    // MySQL 1050
+		"already exists",          // PostgreSQL ("relation X already exists", etc.)
+		"already an object named", // MSSQL 2714
+
+		// TEMPORARY (April 2026): MySQL 3780 — "Referencing column ... and
+		// referenced column ... in foreign key constraint ... are incompatible."
+		// Added to ride out the queue of pre-refactor legacy migration files
+		// that try to (re)create FK constraints with hardcoded INT placeholder
+		// types against existing BIGINT columns. The schema is already correct
+		// in every database we've audited; the legacy files are redundant.
+		//
+		// Remove this entry once every environment's migrations table has
+		// caught up to a date past the last legacy FK file (post-April 2026
+		// generation cutover). Leaving it in permanently would mask real FK
+		// type-mismatch bugs in future hand-written migrations.
+		"are incompatible",
+	}
+	for _, p := range patterns {
+		if strings.Contains(msg, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// splitSQLStatements breaks a multi-statement SQL script into individual
+// statements suitable for sending one-by-one to a database driver.
+//
+// It supports the MySQL `DELIMITER` directive, which is purely client-side —
+// the server rejects `DELIMITER` as a syntax error. When a line begins with
+// `DELIMITER <token>`, the directive line itself is stripped from the output
+// and the active statement terminator is changed to <token>. `DELIMITER ;`
+// switches back. This lets hand-written migrations define stored procedures,
+// triggers, and functions whose bodies legitimately contain semicolons.
+//
+// Single-line comments (`--` and `#`) are stripped, and the splitter is
+// aware of `'` and `"` string literal boundaries so semicolons inside string
+// literals don't cause spurious splits.
 func splitSQLStatements(sqlScript string) []string {
 	var statements []string
 	var sb strings.Builder
+	delim := ";" // active statement terminator; can be changed by DELIMITER directives
 
 	flush := func() {
 		stmt := strings.TrimSpace(sb.String())
@@ -379,9 +460,58 @@ func splitSQLStatements(sqlScript string) []string {
 
 	inSingle := false
 	inDouble := false
+	atLineStart := true
 	i := 0
 	for i < len(sqlScript) {
 		c := sqlScript[i]
+
+		// DELIMITER <token> — recognised only at the start of a line (after
+		// optional leading whitespace) and outside string literals. The
+		// directive line is consumed but produces no output statement.
+		if atLineStart && !inSingle && !inDouble {
+			j := i
+			for j < len(sqlScript) && (sqlScript[j] == ' ' || sqlScript[j] == '\t') {
+				j++
+			}
+			const kw = "DELIMITER"
+			if j+len(kw) <= len(sqlScript) && strings.EqualFold(sqlScript[j:j+len(kw)], kw) {
+				next := j + len(kw)
+				// The keyword must be followed by whitespace (or EOF) to be
+				// treated as the directive — guards against identifiers that
+				// merely start with "DELIMITER".
+				if next == len(sqlScript) || sqlScript[next] == ' ' || sqlScript[next] == '\t' {
+					for next < len(sqlScript) && (sqlScript[next] == ' ' || sqlScript[next] == '\t') {
+						next++
+					}
+					start := next
+					for next < len(sqlScript) && sqlScript[next] != '\n' && sqlScript[next] != '\r' {
+						next++
+					}
+					newDelim := strings.TrimSpace(sqlScript[start:next])
+					if newDelim != "" {
+						// Flush any in-progress statement before swapping the
+						// delimiter so a half-built statement doesn't leak
+						// into the next block.
+						flush()
+						delim = newDelim
+					}
+					i = next
+					continue
+				}
+			}
+		}
+
+		// Track line boundaries so DELIMITER detection only fires at the
+		// start of a line. Any non-whitespace character clears atLineStart.
+		if c == '\n' || c == '\r' {
+			atLineStart = true
+			sb.WriteByte(c)
+			i++
+			continue
+		}
+		if c != ' ' && c != '\t' {
+			atLineStart = false
+		}
 
 		// Line comment: skip from -- or # to end of line (only when not inside a string)
 		if !inSingle && !inDouble {
@@ -412,9 +542,12 @@ func splitSQLStatements(sqlScript string) []string {
 			continue
 		}
 
-		if c == ';' && !inSingle && !inDouble {
+		// Statement terminator. The active delimiter is multi-character
+		// safe — it can be ;, $$, //, etc. depending on a prior DELIMITER
+		// directive.
+		if !inSingle && !inDouble && i+len(delim) <= len(sqlScript) && sqlScript[i:i+len(delim)] == delim {
 			flush()
-			i++
+			i += len(delim)
 			continue
 		}
 

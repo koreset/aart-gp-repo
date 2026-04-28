@@ -10,8 +10,9 @@
 // recorded as already applied for that database, so the runner won't try to
 // re-apply them on the next boot.
 //
-// Usage (from the api/ directory, with config.json present):
-//   go run tools/baseline_migrations.go
+// Usage (from the api/ directory):
+//   go run tools/baseline_migrations.go                       # uses ./config.json
+//   go run tools/baseline_migrations.go -config=prod.json     # uses a different config
 //
 // Safe to run repeatedly — files already recorded are skipped.
 package main
@@ -21,6 +22,7 @@ import (
 	"api/globals"
 	"api/services"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -28,7 +30,10 @@ import (
 )
 
 func main() {
-	if err := loadConfig(); err != nil {
+	configPathPtr := flag.String("config", "", "Path to config.json. Defaults to ./config.json on Unix, alongside the executable on Windows.")
+	flag.Parse()
+
+	if err := loadConfig(*configPathPtr); err != nil {
 		fmt.Printf("Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
@@ -48,16 +53,19 @@ func main() {
 	fmt.Println("after this point.")
 }
 
-// loadConfig reads config.json into globals.AppConfig, mirroring the path
-// resolution in main.startApplication so tools see the same config the API
-// does. On non-Windows it reads ./config.json from the working directory; on
-// Windows it sits next to the executable.
-func loadConfig() error {
-	path := "config.json"
-	if runtime.GOOS == "windows" {
-		if exec, err := os.Executable(); err == nil {
-			dir, _ := filepath.Split(exec)
-			path = filepath.Join(dir, "config.json")
+// loadConfig reads a config file into globals.AppConfig. If override is empty,
+// it falls back to the same path resolution main.startApplication uses:
+// ./config.json on non-Windows, or alongside the executable on Windows. Pass
+// an explicit path to point at a different environment (e.g. prod).
+func loadConfig(override string) error {
+	path := override
+	if path == "" {
+		path = "config.json"
+		if runtime.GOOS == "windows" {
+			if exec, err := os.Executable(); err == nil {
+				dir, _ := filepath.Split(exec)
+				path = filepath.Join(dir, "config.json")
+			}
 		}
 	}
 

@@ -19,10 +19,11 @@ func main() {
 	messagePtr := flag.String("message", "", "Short message used in the generated filename (e.g., add_nickname)")
 	allowTypeChangesPtr := flag.Bool("allow-type-changes", false, "Emit ALTER COLUMN TYPE when types differ. Off by default — comparison is fuzzy.")
 	allowDestructivePtr := flag.Bool("allow-destructive", false, "Emit DROP COLUMN/DROP INDEX for objects absent from the struct. Off by default.")
+	configPathPtr := flag.String("config", "", "Path to config.json. Defaults to ./config.json on Unix, alongside the executable on Windows.")
 	flag.Parse()
 
 	if *structNamesPtr == "" {
-		fmt.Println("Usage: go run tools/generate_migration.go -struct=<Name>[,<Name>...] [-message=<text>] [-allow-type-changes] [-allow-destructive]")
+		fmt.Println("Usage: go run tools/generate_migration.go -struct=<Name>[,<Name>...] [-message=<text>] [-allow-type-changes] [-allow-destructive] [-config=<path>]")
 		fmt.Println()
 		fmt.Println("Notes:")
 		fmt.Println("  • Dialect is auto-detected from the connected database.")
@@ -32,7 +33,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := loadConfig(); err != nil {
+	if err := loadConfig(*configPathPtr); err != nil {
 		fmt.Printf("Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
@@ -74,16 +75,19 @@ func main() {
 	fmt.Printf("Generated migration: %s\n", path)
 }
 
-// loadConfig reads config.json into globals.AppConfig, mirroring the path
-// resolution in main.startApplication so tools see the same config the API
-// does. On non-Windows it reads ./config.json from the working directory; on
-// Windows it sits next to the executable.
-func loadConfig() error {
-	path := "config.json"
-	if runtime.GOOS == "windows" {
-		if exec, err := os.Executable(); err == nil {
-			dir, _ := filepath.Split(exec)
-			path = filepath.Join(dir, "config.json")
+// loadConfig reads a config file into globals.AppConfig. If override is empty,
+// it falls back to the same path resolution main.startApplication uses:
+// ./config.json on non-Windows, or alongside the executable on Windows. Pass
+// an explicit path to point at a different environment (e.g. prod).
+func loadConfig(override string) error {
+	path := override
+	if path == "" {
+		path = "config.json"
+		if runtime.GOOS == "windows" {
+			if exec, err := os.Executable(); err == nil {
+				dir, _ := filepath.Split(exec)
+				path = filepath.Join(dir, "config.json")
+			}
 		}
 	}
 

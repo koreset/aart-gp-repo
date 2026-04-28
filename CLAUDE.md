@@ -62,7 +62,7 @@ yarn test                    # e2e (builds first, then playwright)
 - **Controllers:** `api/controllers/` — request handlers, one file per domain
 - **Services:** `api/services/` — business logic layer
 - **Models:** `api/models/` — GORM model definitions
-- **Migrations:** `api/migrations/` — database migration files
+- **Migrations:** `api/migrations/<dialect>/` — generated SQL migration files. Schema changes are diff-based: `tools/generate_migration.go` produces a delta against the connected DB; `services.RunMigrationsOnStartup` applies pending files on every boot, recording versions in the `migrations` table. See `api/MIGRATIONS.md` for the full system, dev workflow, and remote-DB usage.
 - **Config:** `api/config/config.go` — DB config via env vars (`DB_HOST`, `DB_USER`, `DB_PORT`, `DB_PWD`, `DB_NAME`)
 - **Auth:** JWT-based authentication; protected routes use `GetActiveUser()` middleware
 - **WebSocket:** endpoint at `/ws` with query-param auth

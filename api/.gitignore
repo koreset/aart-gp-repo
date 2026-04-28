@@ -29,3 +29,4 @@ go_build_main_go
 *.log
 api/logs
 api/logs/*
+config_afrihost.json
