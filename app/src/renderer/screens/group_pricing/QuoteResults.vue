@@ -47,10 +47,7 @@
         </v-list-item>
       </v-list>
 
-      <loading-indicator
-        :loadingData="loadingData"
-        :label="loadingLabel"
-      />
+      <loading-indicator :loadingData="loadingData" :label="loadingLabel" />
 
       <v-row
         v-if="

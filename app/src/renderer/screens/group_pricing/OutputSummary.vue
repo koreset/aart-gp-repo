@@ -3696,7 +3696,13 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
   // (exp risk + exp commission). The helper itself is tier-neutral; the
   // caller picks which risk and commission fields to feed it.
   const withC = (riskField: string, commissionField: string) =>
-    fmtNum(officePremiumWithCommission(rs[riskField] ?? 0, rs[commissionField] ?? 0, rs))
+    fmtNum(
+      officePremiumWithCommission(
+        rs[riskField] ?? 0,
+        rs[commissionField] ?? 0,
+        rs
+      )
+    )
   const exCRate = (
     riskRateField: string,
     commissionField: string,
@@ -4056,7 +4062,10 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
           'exp_total_sgla_annual_commission_amount',
           'total_sgla_capped_sum_assured'
         ),
-        fRate('final_sgla_annual_office_premium', 'total_sgla_capped_sum_assured')
+        fRate(
+          'final_sgla_annual_office_premium',
+          'total_sgla_capped_sum_assured'
+        )
       )
       row(
         'Office Premium as % of Annual Salary',

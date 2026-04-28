@@ -539,7 +539,10 @@ const convertExcelDataToGridData = () => {
       category,
       benefit: 'Sub Total/Total Premiums',
       totalSumAssured: resultSummary.total_gla_capped_sum_assured,
-      annualPremium: finalFieldValue(resultSummary, 'final_total_annual_premium_excl_funeral'),
+      annualPremium: finalFieldValue(
+        resultSummary,
+        'final_total_annual_premium_excl_funeral'
+      ),
       percentSalary: `${roundUpToTwoDecimalsAccounting(
         resultSummary.total_annual_salary > 0
           ? (resultSummary.exp_total_annual_premium_excl_funeral /
@@ -586,10 +589,7 @@ const convertExcelDataToGridData = () => {
       benefit: 'Total Annual Premium',
       totalSumAssured: '',
       annualPremium: roundUpToTwoDecimalsAccounting(
-        finalFieldValue(
-          resultSummary,
-          'final_fun_annual_office_premium'
-        )
+        finalFieldValue(resultSummary, 'final_fun_annual_office_premium')
       ),
       percentSalary: ''
     })
@@ -747,10 +747,7 @@ const exportBenefitDataToExcel = () => {
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            finalFieldValue(
-              resultSummary,
-              'final_gla_annual_office_premium'
-            )
+            finalFieldValue(resultSummary, 'final_gla_annual_office_premium')
           )
         ),
         dashIfEmpty(
@@ -771,10 +768,7 @@ const exportBenefitDataToExcel = () => {
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            finalFieldValue(
-              resultSummary,
-              'final_ptd_annual_office_premium'
-            )
+            finalFieldValue(resultSummary, 'final_ptd_annual_office_premium')
           )
         ),
         dashIfEmpty(
@@ -795,10 +789,7 @@ const exportBenefitDataToExcel = () => {
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            finalFieldValue(
-              resultSummary,
-              'final_ci_annual_office_premium'
-            )
+            finalFieldValue(resultSummary, 'final_ci_annual_office_premium')
           )
         ),
         dashIfEmpty(
@@ -819,10 +810,7 @@ const exportBenefitDataToExcel = () => {
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            finalFieldValue(
-              resultSummary,
-              'final_sgla_annual_office_premium'
-            )
+            finalFieldValue(resultSummary, 'final_sgla_annual_office_premium')
           )
         ),
         dashIfEmpty(
@@ -841,10 +829,7 @@ const exportBenefitDataToExcel = () => {
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            finalFieldValue(
-              resultSummary,
-              'final_phi_annual_office_premium'
-            )
+            finalFieldValue(resultSummary, 'final_phi_annual_office_premium')
           )
         ),
         dashIfEmpty(
@@ -863,10 +848,7 @@ const exportBenefitDataToExcel = () => {
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            finalFieldValue(
-              resultSummary,
-              'final_ttd_annual_office_premium'
-            )
+            finalFieldValue(resultSummary, 'final_ttd_annual_office_premium')
           )
         ),
         dashIfEmpty(
@@ -887,7 +869,10 @@ const exportBenefitDataToExcel = () => {
         ),
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            finalFieldValue(resultSummary, 'final_total_annual_premium_excl_funeral')
+            finalFieldValue(
+              resultSummary,
+              'final_total_annual_premium_excl_funeral'
+            )
           )
         ),
         dashIfEmpty(
@@ -923,10 +908,7 @@ const exportBenefitDataToExcel = () => {
         'Total Annual Premium',
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            finalFieldValue(
-              resultSummary,
-              'final_fun_annual_office_premium'
-            )
+            finalFieldValue(resultSummary, 'final_fun_annual_office_premium')
           )
         )
       ]
@@ -1314,13 +1296,17 @@ const generatePDF = async () => {
       ),
       roundUpToTwoDecimalsAccounting(
         resultSummaries.value.reduce(
-          (sum, item) => sum + finalFieldValue(item, 'final_total_annual_premium_excl_funeral'),
+          (sum, item) =>
+            sum +
+            finalFieldValue(item, 'final_total_annual_premium_excl_funeral'),
           0
         )
       ),
       `${roundUpToTwoDecimalsAccounting(
         (resultSummaries.value.reduce(
-          (sum, item) => sum + finalFieldValue(item, 'final_total_annual_premium_excl_funeral'),
+          (sum, item) =>
+            sum +
+            finalFieldValue(item, 'final_total_annual_premium_excl_funeral'),
           0
         ) /
           resultSummaries.value.reduce(
@@ -1435,8 +1421,7 @@ const generatePDF = async () => {
     roundUpToTwoDecimalsAccounting(
       resultSummaries.value.reduce(
         (sum, item) =>
-          sum +
-          finalFieldValue(item, 'final_fun_annual_office_premium'),
+          sum + finalFieldValue(item, 'final_fun_annual_office_premium'),
         0
       )
     )

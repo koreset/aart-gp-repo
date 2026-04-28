@@ -274,7 +274,10 @@ export function finalOfficePremium(
  * stored Final premium is the canonical post-commission figure that the rate
  * must agree with: rate × cappedSA / 1000 == Final premium.
  */
-export function ratePer1000(officePremium: number, cappedAmount: number): number {
+export function ratePer1000(
+  officePremium: number,
+  cappedAmount: number
+): number {
   const denom = asFiniteNumber(cappedAmount)
   if (denom <= 0) return 0
   return (asFiniteNumber(officePremium) * 1000) / denom
@@ -443,7 +446,9 @@ export function buildPremiumSummaryRows(
       ),
       percentSalary: `${roundUpToTwoDecimalsAccounting(
         item.total_annual_salary > 0
-          ? (item.exp_total_annual_premium_excl_funeral / item.total_annual_salary) * 100
+          ? (item.exp_total_annual_premium_excl_funeral /
+              item.total_annual_salary) *
+              100
           : 0
       )}%`
     })

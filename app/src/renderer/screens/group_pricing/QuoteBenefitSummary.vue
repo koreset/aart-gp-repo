@@ -1232,8 +1232,7 @@ const convertExcelDataToGridData = () => {
       annualSalary: anyBenefitEnabled ? resultSummary.total_annual_salary : 0,
       totalSumAssured: resultSummary.total_gla_capped_sum_assured,
       annualPremium: resultSummary.exp_total_annual_premium_excl_funeral,
-      finalAnnualPremium:
-        resultSummary.final_total_annual_premium_excl_funeral,
+      finalAnnualPremium: resultSummary.final_total_annual_premium_excl_funeral,
       finalAnnualCommission: sumFinalCommissionExclFuneral(resultSummary),
       percentSalary: `${roundUpToTwoDecimalsAccounting(
         resultSummary.total_annual_salary > 0
@@ -1521,7 +1520,8 @@ const convertExcelDataToGridData = () => {
         totalSumAssured: totals.total_educator_sum_assured,
         annualPremium: totals.exp_adj_total_gla_educator_office_premium,
         finalAnnualPremium: totals.final_gla_educator_annual_office_premium,
-        finalAnnualCommission: totals.final_gla_educator_annual_commission_amount,
+        finalAnnualCommission:
+          totals.final_gla_educator_annual_commission_amount,
         percentSalary: `${roundUpToTwoDecimalsAccounting(
           (totals.exp_adj_total_gla_educator_office_premium /
             totals.total_annual_salary || 0) * 100
@@ -1559,7 +1559,8 @@ const convertExcelDataToGridData = () => {
         totalSumAssured: totals.total_educator_sum_assured,
         annualPremium: totals.exp_adj_total_ptd_educator_office_premium,
         finalAnnualPremium: totals.final_ptd_educator_annual_office_premium,
-        finalAnnualCommission: totals.final_ptd_educator_annual_commission_amount,
+        finalAnnualCommission:
+          totals.final_ptd_educator_annual_commission_amount,
         percentSalary: `${roundUpToTwoDecimalsAccounting(
           (totals.exp_adj_total_ptd_educator_office_premium /
             totals.total_annual_salary || 0) * 100
@@ -1949,8 +1950,7 @@ function convertResultSummariesToBreakdown(): any[] {
       finalBinderFee: finalBinder,
       finalOutsourcingFee: finalOutsource,
       finalCommission,
-      finalPremium:
-        finalBase + finalBinder + finalOutsource + finalCommission,
+      finalPremium: finalBase + finalBinder + finalOutsource + finalCommission,
       ...extra
     }
   }
@@ -2287,10 +2287,10 @@ function convertResultSummariesToBreakdown(): any[] {
   border-right: 1px solid rgba(255, 255, 255, 0.25);
 }
 :deep(
-    .ag-theme-balham
-      .ag-header-group-cell.breakdown-group-header
-      .ag-header-group-cell-label
-  ) {
+  .ag-theme-balham
+    .ag-header-group-cell.breakdown-group-header
+    .ag-header-group-cell-label
+) {
   justify-content: center;
 }
 /* Subtle divider between the two bands so the boundary reads clearly
