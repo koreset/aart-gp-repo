@@ -168,6 +168,10 @@ const props = defineProps({
   quote: {
     type: Object,
     required: true
+  },
+  resultSummaries: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -218,14 +222,71 @@ const quoteData = ref({
   experienceRating: props.quote.experience_rating || 'No',
   basis: props.quote.basis || 'Not Provided',
   globalSalaryMultiple: props.quote.use_global_salary_multiple ? 'Yes' : 'No',
-  currency: props.quote.currency || 'ZAR',
-  commissionRate: props.quote.loadings?.commission_loading || 0,
-  expenseLoading: props.quote.loadings?.expense_loading || 0,
-  profitLoading: props.quote.loadings?.profit_loading || 0,
-  adminLoading: props.quote.loadings?.admin_loading || 0,
-  contingencyLoading: props.quote.loadings?.contingency_loading || 0,
-  otherLoading: props.quote.loadings?.other_loading || 0,
-  overallDiscount: props.quote.loadings?.discount || 0
+  currency: props.quote.currency || 'ZAR'
+})
+
+// Loading rates displayed in the "Financials & Loadings" panel are taken
+// from the MemberRatingResultSummary rows so they reflect what the rating
+// engine actually applied. Loading fractions and final_scheme_total_commission
+// are scheme-level totals mirrored onto every category, so the first row is
+// sufficient for those. final_total_annual_premium is PER-CATEGORY, so the
+// scheme premium is the sum across all summaries — this is the denominator
+// for the implied commission rate. The summary stores loadings as fractions
+// (0.05 == 5%) and discount as a negative fraction; quote.loadings.* (the
+// input form) stores percentages (5 == 5%), which is why the fallback path
+// skips the *100.
+const round2 = (n: number) => Math.round(n * 100) / 100
+const firstSummary = computed<any>(
+  () => (props.resultSummaries as any[])?.[0] ?? null
+)
+const schemeFinalTotalAnnualPremium = computed(() =>
+  (props.resultSummaries as any[]).reduce(
+    (acc, s) => acc + (s?.final_total_annual_premium || 0),
+    0
+  )
+)
+
+const impliedCommission = computed(() => {
+  const s = firstSummary.value
+  const denom = schemeFinalTotalAnnualPremium.value
+  if (s && denom > 0) {
+    return round2((s.final_scheme_total_commission / denom) * 100)
+  }
+  return props.quote.loadings?.commission_loading ?? 0
+})
+
+const expenseLoading = computed(() => {
+  const s = firstSummary.value
+  return s
+    ? round2(s.expense_loading * 100)
+    : (props.quote.loadings?.expense_loading ?? 0)
+})
+
+const adminLoading = computed(() => {
+  const s = firstSummary.value
+  return s
+    ? round2(s.admin_loading * 100)
+    : (props.quote.loadings?.admin_loading ?? 0)
+})
+
+const otherLoading = computed(() => {
+  const s = firstSummary.value
+  return s
+    ? round2(s.other_loading * 100)
+    : (props.quote.loadings?.other_loading ?? 0)
+})
+
+const profitLoading = computed(() => {
+  const s = firstSummary.value
+  return s
+    ? round2(s.profit_loading * 100)
+    : (props.quote.loadings?.profit_loading ?? 0)
+})
+
+const overallDiscount = computed(() => {
+  const s = firstSummary.value
+  // Summary stores discount as a negative fraction; flip sign for display.
+  return s ? round2(-s.discount * 100) : (props.quote.loadings?.discount ?? 0)
 })
 
 const benefits: any = ref([])
@@ -306,19 +367,12 @@ const configuration = computed(() => [
 
 const financials = computed(() => [
   { label: 'Currency', value: quoteData.value.currency },
-  { label: 'Commission Rate', value: `${quoteData.value.commissionRate}%` },
-  { label: 'Expense Loading', value: `${quoteData.value.expenseLoading}%` },
-  { label: 'Admin Loading', value: `${quoteData.value.adminLoading}%` },
-  {
-    label: 'Contingency Loading',
-    value: `${quoteData.value.contingencyLoading}%`
-  },
-  { label: 'Other Loading', value: `${quoteData.value.otherLoading}%` },
-  { label: 'Profit Loading', value: `${quoteData.value.profitLoading}%` },
-  {
-    label: 'Overall Premium Discount',
-    value: `${quoteData.value.overallDiscount}%`
-  }
+  { label: 'Implied Commission', value: `${impliedCommission.value}%` },
+  { label: 'Expense Loading', value: `${expenseLoading.value}%` },
+  { label: 'Admin Loading', value: `${adminLoading.value}%` },
+  { label: 'Other Loading', value: `${otherLoading.value}%` },
+  { label: 'Profit Loading', value: `${profitLoading.value}%` },
+  { label: 'Overall Premium Discount', value: `${overallDiscount.value}%` }
 ])
 
 const categoryItems = computed(() => {

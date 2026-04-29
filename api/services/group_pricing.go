@@ -729,11 +729,12 @@ func GetGroupPricingQuote(id string) (models.GroupPricingQuote, error) {
 
 		// Use a single query with subqueries to get all counts in one database call
 		type Counts struct {
-			MemberDataCount            int64
-			ClaimsExperienceCount      int64
-			MemberRatingResultCount    int64
-			MemberPremiumScheduleCount int64
-			BordereauxCount            int64
+			MemberDataCount              int64
+			ClaimsExperienceCount        int64
+			ExperienceRateOverridesCount int64
+			MemberRatingResultCount      int64
+			MemberPremiumScheduleCount   int64
+			BordereauxCount              int64
 		}
 
 		var counts Counts
@@ -744,10 +745,11 @@ func GetGroupPricingQuote(id string) (models.GroupPricingQuote, error) {
 			SELECT
 				(SELECT COUNT(*) FROM g_pricing_member_data WHERE quote_id = ?) as member_data_count,
 				(SELECT COUNT(*) FROM group_pricing_claims_experiences WHERE quote_id = ?) as claims_experience_count,
+				(SELECT COUNT(*) FROM group_pricing_experience_rate_overrides WHERE quote_id = ?) as experience_rate_overrides_count,
 				(SELECT COUNT(*) FROM member_rating_results WHERE quote_id = ?) as member_rating_result_count,
 				(SELECT COUNT(*) FROM member_premium_schedules WHERE quote_id = ?) as member_premium_schedule_count,
 				(SELECT COUNT(*) FROM member_rating_results WHERE quote_id = ?) as bordereaux_count
-		`, id, id, id, id, id)
+		`, id, id, id, id, id, id)
 
 		if err = countQuery.Scan(&counts).Error; err != nil {
 			// If the optimized query fails, fall back to individual counts
@@ -756,6 +758,7 @@ func GetGroupPricingQuote(id string) (models.GroupPricingQuote, error) {
 			// Get counts individually but still using the context
 			DB.WithContext(ctx).Model(&models.GPricingMemberData{}).Where("quote_id = ?", id).Count(&counts.MemberDataCount)
 			DB.WithContext(ctx).Model(&models.GroupPricingClaimsExperience{}).Where("quote_id = ?", id).Count(&counts.ClaimsExperienceCount)
+			DB.WithContext(ctx).Model(&models.GroupPricingExperienceRateOverride{}).Where("quote_id = ?", id).Count(&counts.ExperienceRateOverridesCount)
 			DB.WithContext(ctx).Model(&models.MemberRatingResult{}).Where("quote_id = ?", id).Count(&counts.MemberRatingResultCount)
 			DB.WithContext(ctx).Model(&models.MemberPremiumSchedule{}).Where("quote_id = ?", id).Count(&counts.MemberPremiumScheduleCount)
 			// Bordereaux is projected from MemberRatingResult on-the-fly, so
@@ -774,6 +777,7 @@ func GetGroupPricingQuote(id string) (models.GroupPricingQuote, error) {
 		}
 
 		quote.ClaimsExperienceCount = int(counts.ClaimsExperienceCount)
+		quote.ExperienceRateOverridesCount = int(counts.ExperienceRateOverridesCount)
 		quote.MemberRatingResultCount = int(counts.MemberRatingResultCount)
 		quote.MemberPremiumScheduleCount = int(counts.MemberPremiumScheduleCount)
 		quote.BordereauxCount = int(counts.BordereauxCount)
@@ -1109,6 +1113,8 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	var incomeLevels []models.IncomeLevel
 	var ageBands []models.GroupPricingAgeBands
 	var experienceClaimsData []models.GroupPricingClaimsExperience
+	var experienceRateOverrides []models.GroupPricingExperienceRateOverride
+	var experienceRateOverrideLookup map[string]map[string]models.GroupPricingExperienceRateOverride
 	var educatorBenefitStructure models.EducatorBenefitStructure
 	var annualGlaExperienceWeightedRate, credibilityRate float64
 	var annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate float64
@@ -1273,6 +1279,12 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		})
 	}
 
+	if groupQuote.ExperienceRating == "Override" {
+		eg.Go(func() error {
+			return DB.Where("quote_id=?", groupQuote.ID).Find(&experienceRateOverrides).Error
+		})
+	}
+
 	// Member data loading (runs concurrently with the above)
 	eg.Go(func() error {
 		if groupQuote.MemberIndicativeData {
@@ -1311,6 +1323,10 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	}
 	logger.WithField("elapsed_ms", time.Since(dbParallelStart).Milliseconds()).Debug("Loaded all reference data in parallel")
 	emitProgress(selectedSchemeCategory, "loading_data")
+
+	if groupQuote.ExperienceRating == "Override" {
+		experienceRateOverrideLookup = buildExperienceRateOverrideLookup(experienceRateOverrides)
+	}
 
 	if memberDataErr != nil {
 		logger.WithField("error", memberDataErr.Error()).Error("Failed to retrieve member data")
@@ -1682,22 +1698,63 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		calculatedFreeCoverLimit = groupQuote.FreeCoverLimit
 	}
 
+	var scalingTerm, statisticalOutlierThreshold, maximumSumAssured float64
+	maxAllowedFCL := restriction.MaximumAllowedFCL
+	fclOverrideTolerance := GetFCLOverrideTolerance()
+
 	if !groupQuote.MemberIndicativeData {
-		if groupParameter.FreeCoverLimitNearestMultiple > 0 {
-			calculatedFreeCoverLimit = float64(math.Ceil(float64(math.Min(groupParameter.FreeCoverLimitScalingFactor*math.Sqrt(float64(memberCount))*meanSalary, nthPercentileSalary)/groupParameter.FreeCoverLimitNearestMultiple)) * groupParameter.FreeCoverLimitNearestMultiple)
+		scalingTerm = groupParameter.FreeCoverLimitScalingFactor * math.Sqrt(float64(memberCount)) * meanSalary
+
+		var rawFCL float64
+		switch GetFCLMethod() {
+		case models.FCLMethodOutlier:
+			// Log-normal +3σ upper bound on sum assured, plus a max-SA-scaled cap.
+			// Skip non-positive entries before LN.
+			lnSalaryData := make([]float64, 0, len(salaryData))
+			for _, v := range salaryData {
+				if v > 0 {
+					lnSalaryData = append(lnSalaryData, math.Log(v))
+				}
+			}
+			lnMean, _ := stats.Mean(lnSalaryData)
+			lnStdevP, _ := stats.StandardDeviationPopulation(lnSalaryData)
+			statisticalOutlierThreshold = math.Exp(lnMean + 3*lnStdevP)
+			maximumSumAssured, _ = stats.Max(salaryData)
+
+			rawFCL = math.Min(scalingTerm, statisticalOutlierThreshold)
+			if groupParameter.FCLMaximumCoverScalingFactor > 0 {
+				rawFCL = math.Min(rawFCL, maximumSumAssured*groupParameter.FCLMaximumCoverScalingFactor)
+			}
+		default:
+			// Percentile method (existing behaviour, default).
+			rawFCL = math.Min(scalingTerm, nthPercentileSalary)
 		}
-		if groupParameter.FreeCoverLimitNearestMultiple <= 0 {
-			calculatedFreeCoverLimit = math.Min(groupParameter.FreeCoverLimitScalingFactor*math.Sqrt(float64(memberCount))*meanSalary, nthPercentileSalary)
+
+		if groupParameter.FreeCoverLimitNearestMultiple > 0 {
+			calculatedFreeCoverLimit = math.Ceil(rawFCL/groupParameter.FreeCoverLimitNearestMultiple) * groupParameter.FreeCoverLimitNearestMultiple
+		} else {
+			calculatedFreeCoverLimit = rawFCL
 		}
 	}
 
 	if category != nil {
 		category.Basis = basis
 		if groupQuote.FreeCoverLimit > 0 {
-			category.FreeCoverLimit = math.Min(calculatedFreeCoverLimit, groupQuote.FreeCoverLimit)
-		}
-		if groupQuote.FreeCoverLimit == 0 {
-			category.FreeCoverLimit = calculatedFreeCoverLimit
+			switch GetFCLMethod() {
+			case models.FCLMethodOutlier:
+				maxthreshold1 := math.Max(statisticalOutlierThreshold, maximumSumAssured*groupParameter.FCLMaximumCoverScalingFactor)
+				maxthrehold2 := math.Max(scalingTerm, maxthreshold1)
+
+				if groupQuote.FreeCoverLimit > (1+fclOverrideTolerance)*maxthrehold2 {
+					category.FreeCoverLimit = math.Min(maxthrehold2, maxAllowedFCL)
+				} else {
+					category.FreeCoverLimit = math.Min(groupQuote.FreeCoverLimit, maxAllowedFCL)
+				}
+			default:
+				category.FreeCoverLimit = math.Min(groupQuote.FreeCoverLimit, maxAllowedFCL)
+			}
+		} else {
+			category.FreeCoverLimit = math.Min(calculatedFreeCoverLimit, maxAllowedFCL)
 		}
 		DB.Save(category)
 	} else {
@@ -1738,10 +1795,11 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	// Collect-then-reduce: each goroutine writes to its own pre-allocated slot — no mutex needed
 	rateResults := make([]MemberRateResult, len(memberMps))
 	rateWorkerPool := workerpool.New(min(runtime.NumCPU(), 8))
+	categoryExperienceOverrides := experienceRateOverrideLookup[selectedSchemeCategory]
 	for idx, mp := range memberMps {
 		idx, mp := idx, mp
 		rateWorkerPool.Submit(func() {
-			rateResults[idx] = PopulateRatesPerMember(categoryIndex, indicativeRatesCount, indicativeMemberMps, selectedSchemeCategory, mp, groupQuote, groupParameter, groupPricingReinsuranceStructure, incomeLevels, ageBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit, educatorBenefitStructure, credibility, glaTheoreticalRate, insurerYearEndMonth, user, restriction, taxTable, taxRetirementBands, tieredIncomeTiers, customTieredIncomeTiers, premiumLoading, regionLoadingByGender, industryLoadingByGender, reinsRegionLoadingByGender)
+			rateResults[idx] = PopulateRatesPerMember(categoryIndex, indicativeRatesCount, indicativeMemberMps, selectedSchemeCategory, mp, groupQuote, groupParameter, groupPricingReinsuranceStructure, incomeLevels, ageBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit, educatorBenefitStructure, credibility, glaTheoreticalRate, insurerYearEndMonth, user, restriction, taxTable, taxRetirementBands, tieredIncomeTiers, customTieredIncomeTiers, premiumLoading, regionLoadingByGender, industryLoadingByGender, reinsRegionLoadingByGender, categoryExperienceOverrides)
 		})
 	}
 	rateWorkerPool.StopWait()
@@ -2007,7 +2065,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	DB.Where("quote_id = ? and category = ?", quoteId, selectedSchemeCategory).Delete(&models.MemberRatingResult{})
 	DB.Where("quote_id = ? and category = ?", quoteId, selectedSchemeCategory).Delete(&models.MemberPremiumSchedule{})
 	DB.Where("quote_id = ? and category = ?", quoteId, selectedSchemeCategory).Delete(&models.MemberRatingResultSummary{})
-	if groupQuote.ExperienceRating == "Yes" {
+	if groupQuote.ExperienceRating == "Yes" || groupQuote.ExperienceRating == "Override" {
 		DB.Where("quote_id = ?", quoteId).Delete(&models.HistoricalCredibilityData{})
 	}
 	dbElapsed = time.Since(dbStartTime)
@@ -2319,11 +2377,65 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		}).Info("Successfully saved member rating result summary")
 	}
 
-	if groupQuote.ExperienceRating == "Yes" {
+	if groupQuote.ExperienceRating == "Yes" || groupQuote.ExperienceRating == "Override" {
 		logger.Debug("Saving credibility data")
 		dbStartTime = time.Now()
 		historicalCredibilityData.Basis = basis
 		historicalCredibilityData.CreationDate = time.Now()
+
+		// Override mode has no claims-based weighted rate to blend; record the
+		// actuary's manually-entered credibility so it surfaces in the
+		// historical credibility table for future reference. Calculated and
+		// claims-derived fields stay zero (meaningful: nothing was claims-
+		// weighted).
+		if groupQuote.ExperienceRating == "Override" {
+			historicalCredibilityData.QuoteID = groupQuote.ID
+			historicalCredibilityData.QuoteType = groupQuote.QuoteType
+			historicalCredibilityData.SchemeName = groupQuote.SchemeName
+			historicalCredibilityData.SchemeID = groupQuote.SchemeID
+			historicalCredibilityData.ManuallyAddedCredibility = groupQuote.ExperienceOverrideCredibility
+			// Wipe claims-derived fields so the row clearly reflects an
+			// override-mode entry, not a stale Yes-mode one.
+			historicalCredibilityData.CalculatedCredibility = 0
+			historicalCredibilityData.AnnualGlaExperienceRate = 0
+			historicalCredibilityData.AnnualPtdExperienceRate = 0
+			historicalCredibilityData.AnnualCiExperienceRate = 0
+			historicalCredibilityData.ClaimCount = 0
+			historicalCredibilityData.ExperiencePeriod = 0
+			historicalCredibilityData.WeightedLifeYears = 0
+
+			// Per-benefit credibility = simple average of the per-(category)
+			// credibility values for that benefit across every override row.
+			avgs := averageOverrideCredibilityByBenefit(experienceRateOverrides)
+			historicalCredibilityData.GlaCredibility = avgs[models.ExperienceRateOverrideBenefitGla]
+			historicalCredibilityData.AaglaCredibility = avgs[models.ExperienceRateOverrideBenefitAagla]
+			historicalCredibilityData.SglaCredibility = avgs[models.ExperienceRateOverrideBenefitSgla]
+			historicalCredibilityData.PtdCredibility = avgs[models.ExperienceRateOverrideBenefitPtd]
+			historicalCredibilityData.TtdCredibility = avgs[models.ExperienceRateOverrideBenefitTtd]
+			historicalCredibilityData.PhiCredibility = avgs[models.ExperienceRateOverrideBenefitPhi]
+			historicalCredibilityData.CiCredibility = avgs[models.ExperienceRateOverrideBenefitCi]
+			historicalCredibilityData.FunCredibility = avgs[models.ExperienceRateOverrideBenefitFun]
+
+			// Replace any prior rows for this quote so we don't accumulate.
+			DB.Where("quote_id = ?", groupQuote.ID).Delete(&models.HistoricalCredibilityData{})
+		} else {
+			// Yes mode: claims-based credibility is a single quote-wide
+			// number. Stamp it onto every per-benefit column so the audit
+			// row is internally consistent (per-benefit credibility now
+			// always populated, regardless of mode).
+			c := historicalCredibilityData.ManuallyAddedCredibility
+			if c == 0 {
+				c = historicalCredibilityData.CalculatedCredibility
+			}
+			historicalCredibilityData.GlaCredibility = c
+			historicalCredibilityData.AaglaCredibility = c
+			historicalCredibilityData.SglaCredibility = c
+			historicalCredibilityData.PtdCredibility = c
+			historicalCredibilityData.TtdCredibility = c
+			historicalCredibilityData.PhiCredibility = c
+			historicalCredibilityData.CiCredibility = c
+			historicalCredibilityData.FunCredibility = c
+		}
 
 		err = DB.Create(&historicalCredibilityData).Error
 		dbElapsed = time.Since(dbStartTime)
@@ -2507,6 +2619,107 @@ func computeEducatorSlicePremiums(m *models.MemberRatingResult, riskWeightedSA f
 	// Slice 11: PTD Educator conversion on retirement
 	m.PtdEducatorConversionOnRetirementRiskPremium = riskWeightedSA * m.LoadedPtdEducatorRate * m.PtdEducatorConversionOnRetirementLoading
 	m.ExpAdjPtdEducatorConversionOnRetirementRiskPremium = riskWeightedSA * m.ExpAdjLoadedPtdEducatorRate * m.PtdEducatorConversionOnRetirementLoading
+}
+
+// applyExperienceRateOverridesToMember mutates the per-benefit
+// ExpAdjLoaded{Benefit}Rate fields based on the user-supplied per-(category,
+// benefit) overrides. Must run after the LoadedRate × ExperienceAdjustment
+// assignments and before the educator/conversion cascade reads those values.
+//
+// Mode == experience_rated → ExpAdjLoaded{Benefit}Rate is replaced by
+//	OverrideRate (a direct annual-fraction substitution).
+// Mode == theoretical (or row missing) → ExpAdjLoaded{Benefit}Rate is reset to
+//	Loaded{Benefit}Rate so the rest of the pipeline behaves as if no
+//	experience adjustment applied for that benefit.
+//
+// FUN is intentionally not handled here — funeral has no ExpAdjLoaded fun
+// rate field; see applyFuneralExperienceRateOverride.
+func applyExperienceRateOverridesToMember(m *models.MemberRatingResult, overrides map[string]models.GroupPricingExperienceRateOverride) {
+	if len(overrides) == 0 {
+		return
+	}
+	if row, ok := overrides[models.ExperienceRateOverrideBenefitGla]; ok {
+		if row.Mode == models.ExperienceRateOverrideModeExperienceRated {
+			m.ExpAdjLoadedGlaRate = row.OverrideRate
+		} else {
+			m.ExpAdjLoadedGlaRate = m.LoadedGlaRate
+		}
+	}
+	if row, ok := overrides[models.ExperienceRateOverrideBenefitAagla]; ok {
+		if row.Mode == models.ExperienceRateOverrideModeExperienceRated {
+			m.ExpAdjLoadedAdditionalAccidentalGlaRate = row.OverrideRate
+		} else {
+			m.ExpAdjLoadedAdditionalAccidentalGlaRate = m.LoadedAdditionalAccidentalGlaRate
+		}
+	}
+	if row, ok := overrides[models.ExperienceRateOverrideBenefitSgla]; ok {
+		if row.Mode == models.ExperienceRateOverrideModeExperienceRated {
+			m.ExpAdjLoadedSpouseGlaRate = row.OverrideRate
+		} else {
+			m.ExpAdjLoadedSpouseGlaRate = m.LoadedSpouseGlaRate
+		}
+	}
+	if row, ok := overrides[models.ExperienceRateOverrideBenefitPtd]; ok {
+		if row.Mode == models.ExperienceRateOverrideModeExperienceRated {
+			m.ExpAdjLoadedPtdRate = row.OverrideRate
+		} else {
+			m.ExpAdjLoadedPtdRate = m.LoadedPtdRate
+		}
+	}
+	if row, ok := overrides[models.ExperienceRateOverrideBenefitTtd]; ok {
+		if row.Mode == models.ExperienceRateOverrideModeExperienceRated {
+			m.ExpAdjLoadedTtdRate = row.OverrideRate
+		} else {
+			m.ExpAdjLoadedTtdRate = m.LoadedTtdRate
+		}
+	}
+	if row, ok := overrides[models.ExperienceRateOverrideBenefitPhi]; ok {
+		if row.Mode == models.ExperienceRateOverrideModeExperienceRated {
+			m.ExpAdjLoadedPhiRate = row.OverrideRate
+		} else {
+			m.ExpAdjLoadedPhiRate = m.LoadedPhiRate
+		}
+	}
+	if row, ok := overrides[models.ExperienceRateOverrideBenefitCi]; ok {
+		if row.Mode == models.ExperienceRateOverrideModeExperienceRated {
+			m.ExpAdjLoadedCiRate = row.OverrideRate
+		} else {
+			m.ExpAdjLoadedCiRate = m.LoadedCiRate
+		}
+	}
+}
+
+// applyFuneralExperienceRateOverride overrides the experience-adjusted
+// funeral risk premium for a member when an FUN override row is present, and
+// re-derives the dependent office and final office premiums. Theoretical
+// mode collapses ExpAdjTotalFuneralRiskPremium to the unadjusted
+// TotalFuneralRiskPremium; experience-rated mode applies the supplied
+// override rate to the total funeral sum-assured for the member-category.
+func applyFuneralExperienceRateOverride(
+	m *models.MemberRatingResult,
+	overrides map[string]models.GroupPricingExperienceRateOverride,
+	schemeCategory models.SchemeCategory,
+	discountFraction float64,
+) {
+	row, ok := overrides[models.ExperienceRateOverrideBenefitFun]
+	if !ok {
+		return
+	}
+	if row.Mode == models.ExperienceRateOverrideModeTheoretical {
+		m.ExpAdjTotalFuneralRiskPremium = m.TotalFuneralRiskPremium
+	} else {
+		funeralSA := schemeCategory.FamilyFuneralMainMemberFuneralSumAssured +
+			schemeCategory.FamilyFuneralSpouseFuneralSumAssured +
+			schemeCategory.FamilyFuneralChildrenFuneralSumAssured*math.Min(m.AverageNumberChildren, float64(schemeCategory.FamilyFuneralMaxNumberChildren)) +
+			schemeCategory.FamilyFuneralAdultDependantSumAssured*m.AverageNumberDependants
+		m.ExpAdjTotalFuneralRiskPremium = row.OverrideRate * funeralSA * (1 + m.FunConversionOnWithdrawalLoading)
+	}
+	if denom := 1.0 - m.TotalPremiumLoading; denom != 0 {
+		m.ExpAdjTotalFuneralOfficePremium = m.ExpAdjTotalFuneralRiskPremium / denom
+	}
+	if denom := 1.0 - (m.TotalPremiumLoading + discountFraction); denom != 0 {
+		m.FinalTotalFuneralOfficePremium = m.ExpAdjTotalFuneralRiskPremium / denom
+	}
 }
 
 func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingResult, bordereauxDatapoint models.Bordereaux, memberPremiumScheduleDatapoint *models.MemberPremiumSchedule, addedMemberInForce models.GPricingMemberDataInForce, groupQuote models.GroupPricingQuote,
@@ -3402,7 +3615,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	}
 }
 
-func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMemberMps []models.MemberIndicativeDataSet, selectedSchemeCategory string, mp models.GPricingMemberData, groupQuote models.GroupPricingQuote, groupParameter models.GroupPricingParameters, groupPricingReinsuranceStructure models.GroupPricingReinsuranceStructure, incomeLevels []models.IncomeLevel, ageBands []models.GroupPricingAgeBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit float64, educatorBenefitStructure models.EducatorBenefitStructure, credibility, glatheoreticalRate float64, insurerYearEndMonth int, user models.AppUser, restriction models.Restriction, taxTable []models.TaxTable, taxRetirementBands []models.TaxRetirementTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, premiumLoading models.PremiumLoading, regionLoadingByGender map[string]models.RegionLoading, industryLoadingByGender map[string]models.IndustryLoading, reinsRegionLoadingByGender map[string]models.ReinsuranceRegionLoading) MemberRateResult {
+func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMemberMps []models.MemberIndicativeDataSet, selectedSchemeCategory string, mp models.GPricingMemberData, groupQuote models.GroupPricingQuote, groupParameter models.GroupPricingParameters, groupPricingReinsuranceStructure models.GroupPricingReinsuranceStructure, incomeLevels []models.IncomeLevel, ageBands []models.GroupPricingAgeBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit float64, educatorBenefitStructure models.EducatorBenefitStructure, credibility, glatheoreticalRate float64, insurerYearEndMonth int, user models.AppUser, restriction models.Restriction, taxTable []models.TaxTable, taxRetirementBands []models.TaxRetirementTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, premiumLoading models.PremiumLoading, regionLoadingByGender map[string]models.RegionLoading, industryLoadingByGender map[string]models.IndustryLoading, reinsRegionLoadingByGender map[string]models.ReinsuranceRegionLoading, experienceRateOverrides map[string]models.GroupPricingExperienceRateOverride) MemberRateResult {
 
 	var memberDataPointResult models.MemberRatingResult
 	var memberPremiumScheduleDatapoint models.MemberPremiumSchedule
@@ -3955,6 +4168,14 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	if groupQuote.SchemeCategories[i].SglaBenefit {
 		memberDataPointResult.ExpAdjLoadedSpouseGlaRate = memberDataPointResult.LoadedSpouseGlaRate * memberDataPointResult.GlaExperienceAdjustment
 	}
+
+	// Override mode: replace ExpAdjLoaded{Benefit}Rate with the user-supplied
+	// per-(category, benefit) overrides before downstream risk-premium and
+	// educator cascade reads them. Funeral is handled separately below.
+	if groupQuote.ExperienceRating == "Override" {
+		applyExperienceRateOverridesToMember(&memberDataPointResult, experienceRateOverrides)
+	}
+
 	memberDataPointResult.ExpAdjGlaRiskPremium = memberDataPointResult.ExpAdjLoadedGlaRate * memberDataPointResult.GlaCappedSumAssured
 	memberDataPointResult.ExpAdjTaxSaverRiskPremium = memberDataPointResult.ExpAdjLoadedGlaRate * memberDataPointResult.TaxSaverSumAssured
 	memberDataPointResult.ExpAdjPtdRiskPremium = memberDataPointResult.ExpAdjLoadedPtdRate * memberDataPointResult.PtdCappedSumAssured
@@ -3966,6 +4187,14 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.ExpAdjTotalFuneralRiskPremium = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
 	memberDataPointResult.ExpAdjTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
 	memberDataPointResult.FinalTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - (memberDataPointResult.TotalPremiumLoading + discountFraction))
+
+	// FUN override (replaces ExpAdjTotalFuneralRiskPremium and re-derives
+	// the office/final-office premiums). Sits here so it runs after the
+	// initial ExpAdj funeral computation but before the educator and
+	// conversion cascades read these values.
+	if groupQuote.ExperienceRating == "Override" {
+		applyFuneralExperienceRateOverride(&memberDataPointResult, experienceRateOverrides, groupQuote.SchemeCategories[i], discountFraction)
+	}
 
 	// Re-derive the educator loaded rates now that ExpAdjLoaded*Rate values
 	// are set so the ExpAdjLoadedGla/PtdEducatorRate fields are accurate.
@@ -4447,36 +4676,36 @@ func BuildBordereauxRowsForQuote(quoteId int, offset, limit int) ([]models.Borde
 // adds clutter for the user reviewing per-member sums assured and ceded
 // premiums during pricing.
 var quoteBordereauxHiddenColumns = map[string]struct{}{
-	"gla_annual_premium":             {},
-	"ptd_annual_premium":             {},
-	"gla_retained_risk_premium":      {},
-	"loaded_gla_risk_rate":           {},
-	"exp_adj_loaded_gla_risk_rate":   {},
-	"loaded_ptd_risk_rate":           {},
-	"exp_adj_loaded_ptd_risk_rate":   {},
-	"ptd_retained_risk_premium":      {},
-	"loaded_ci_risk_rate":            {},
-	"exp_adj_loaded_ci_risk_rate":    {},
-	"ci_retained_risk_premium":       {},
-	"ci_annual_premium":              {},
-	"loaded_sgla_risk_rate":          {},
-	"exp_adj_loaded_sgla_risk_rate":  {},
-	"sgla_retained_risk_premium":     {},
-	"sgla_annual_premium":            {},
-	"loaded_ttd_risk_rate":           {},
-	"exp_adj_loaded_ttd_risk_rate":   {},
-	"ttd_retained_risk_premium":      {},
-	"loaded_phi_risk_rate":           {},
-	"exp_adj_loaded_phi_risk_rate":   {},
-	"phi_retained_risk_premium":      {},
-	"main_member_risk_rate":          {},
+	"gla_annual_premium":                {},
+	"ptd_annual_premium":                {},
+	"gla_retained_risk_premium":         {},
+	"loaded_gla_risk_rate":              {},
+	"exp_adj_loaded_gla_risk_rate":      {},
+	"loaded_ptd_risk_rate":              {},
+	"exp_adj_loaded_ptd_risk_rate":      {},
+	"ptd_retained_risk_premium":         {},
+	"loaded_ci_risk_rate":               {},
+	"exp_adj_loaded_ci_risk_rate":       {},
+	"ci_retained_risk_premium":          {},
+	"ci_annual_premium":                 {},
+	"loaded_sgla_risk_rate":             {},
+	"exp_adj_loaded_sgla_risk_rate":     {},
+	"sgla_retained_risk_premium":        {},
+	"sgla_annual_premium":               {},
+	"loaded_ttd_risk_rate":              {},
+	"exp_adj_loaded_ttd_risk_rate":      {},
+	"ttd_retained_risk_premium":         {},
+	"loaded_phi_risk_rate":              {},
+	"exp_adj_loaded_phi_risk_rate":      {},
+	"phi_retained_risk_premium":         {},
+	"main_member_risk_rate":             {},
 	"main_member_retained_risk_premium": {},
-	"spouse_risk_rate":               {},
-	"spouse_retained_risk_premium":   {},
-	"child_risk_rate":                {},
-	"child_retained_risk_premium":    {},
-	"parent_risk_rate":               {},
-	"parent_retained_risk_premium":   {},
+	"spouse_risk_rate":                  {},
+	"spouse_retained_risk_premium":      {},
+	"child_risk_rate":                   {},
+	"child_retained_risk_premium":       {},
+	"parent_risk_rate":                  {},
+	"parent_retained_risk_premium":      {},
 }
 
 // QuoteBordereauxJSONTags returns the json tag list for a quote-stage
@@ -7413,18 +7642,38 @@ func benefitAccessors() []benefitAccessor {
 			includeInExclFun:  true,
 		},
 		{
-			name:              "add_acc_gla",
-			bookRiskPremium:   func(s *models.MemberRatingResultSummary) float64 { return s.TotalAdditionalAccidentalGlaAnnualRiskPremium },
-			expRiskPremium:    func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium },
-			expBinder:         func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalAdditionalAccidentalGlaAnnualBinderAmount },
-			expOutsource:      func(s *models.MemberRatingResultSummary) float64 { return s.ExpTotalAdditionalAccidentalGlaAnnualOutsourcedAmt },
-			setBookComm:       func(s *models.MemberRatingResultSummary, v float64) { s.TotalAdditionalAccidentalGlaAnnualCommissionAmount = v },
-			setExpComm:        func(s *models.MemberRatingResultSummary, v float64) { s.ExpTotalAdditionalAccidentalGlaAnnualCommissionAmount = v },
-			setFinalPremium:   func(s *models.MemberRatingResultSummary, v float64) { s.FinalAdditionalAccidentalGlaAnnualOfficePremium = v },
-			setFinalComm:      func(s *models.MemberRatingResultSummary, v float64) { s.FinalAdditionalAccidentalGlaAnnualCommissionAmount = v },
-			setFinalBinder:    func(s *models.MemberRatingResultSummary, v float64) { s.FinalAdditionalAccidentalGlaAnnualBinderAmount = v },
-			setFinalOutsource: func(s *models.MemberRatingResultSummary, v float64) { s.FinalAdditionalAccidentalGlaAnnualOutsourcedAmt = v },
-			includeInExclFun:  true,
+			name: "add_acc_gla",
+			bookRiskPremium: func(s *models.MemberRatingResultSummary) float64 {
+				return s.TotalAdditionalAccidentalGlaAnnualRiskPremium
+			},
+			expRiskPremium: func(s *models.MemberRatingResultSummary) float64 {
+				return s.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium
+			},
+			expBinder: func(s *models.MemberRatingResultSummary) float64 {
+				return s.ExpTotalAdditionalAccidentalGlaAnnualBinderAmount
+			},
+			expOutsource: func(s *models.MemberRatingResultSummary) float64 {
+				return s.ExpTotalAdditionalAccidentalGlaAnnualOutsourcedAmt
+			},
+			setBookComm: func(s *models.MemberRatingResultSummary, v float64) {
+				s.TotalAdditionalAccidentalGlaAnnualCommissionAmount = v
+			},
+			setExpComm: func(s *models.MemberRatingResultSummary, v float64) {
+				s.ExpTotalAdditionalAccidentalGlaAnnualCommissionAmount = v
+			},
+			setFinalPremium: func(s *models.MemberRatingResultSummary, v float64) {
+				s.FinalAdditionalAccidentalGlaAnnualOfficePremium = v
+			},
+			setFinalComm: func(s *models.MemberRatingResultSummary, v float64) {
+				s.FinalAdditionalAccidentalGlaAnnualCommissionAmount = v
+			},
+			setFinalBinder: func(s *models.MemberRatingResultSummary, v float64) {
+				s.FinalAdditionalAccidentalGlaAnnualBinderAmount = v
+			},
+			setFinalOutsource: func(s *models.MemberRatingResultSummary, v float64) {
+				s.FinalAdditionalAccidentalGlaAnnualOutsourcedAmt = v
+			},
+			includeInExclFun: true,
 		},
 		{
 			name:              "ptd",
@@ -8373,6 +8622,42 @@ func GetDiscountMethod() string {
 		return models.DiscountMethodLoadingAdjustment
 	}
 	return s.DiscountMethod
+}
+
+// GetFCLMethod returns the globally configured Free Cover Limit calculation
+// method from the GroupPricingSetting singleton row. Defaults to the
+// percentile method (existing behaviour) when the row is missing or the
+// column is empty so quotes computed before the setting was introduced
+// behave identically to historical output.
+func GetFCLMethod() string {
+	var s models.GroupPricingSetting
+	if err := DB.First(&s, 1).Error; err != nil {
+		return models.FCLMethodPercentile
+	}
+	if s.FCLMethod == "" {
+		return models.FCLMethodPercentile
+	}
+	return s.FCLMethod
+}
+
+// FCLOverrideToleranceDefault is the headroom (as a fraction) allowed above
+// Restriction.MaximumAllowedFCL before a quote-level FCL override is clamped.
+// 0.2 means a 20% allowance.
+const FCLOverrideToleranceDefault = 0.2
+
+// GetFCLOverrideTolerance returns the configured headroom above
+// Restriction.MaximumAllowedFCL that a quote-level FCL override is allowed
+// to claim before being clamped. Falls back to FCLOverrideToleranceDefault
+// when the singleton row is missing or the value is non-positive.
+func GetFCLOverrideTolerance() float64 {
+	var s models.GroupPricingSetting
+	if err := DB.First(&s, 1).Error; err != nil {
+		return FCLOverrideToleranceDefault
+	}
+	if s.FCLOverrideTolerance <= 0 {
+		return FCLOverrideToleranceDefault
+	}
+	return s.FCLOverrideTolerance
 }
 
 // ApplyDiscountToQuote applies a discount (in percentage, e.g. 5.0 for 5%) to a
@@ -15531,6 +15816,72 @@ func DeleteIndicativeData(quoteId int, user models.AppUser) error {
 		}
 		return nil
 	})
+}
+
+// SaveExperienceRateOverrides replaces the full set of experience-rate
+// override rows for a quote. The frontend submits the in-memory list verbatim
+// after each Save, so the simplest and least error-prone strategy is
+// delete-then-insert inside one transaction. CreatedBy is stamped from the
+// caller; UpdatedBy is set on every save so it always reflects the most
+// recent author.
+func SaveExperienceRateOverrides(quoteId int, rows []models.GroupPricingExperienceRateOverride, user models.AppUser) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("quote_id = ?", quoteId).
+			Delete(&models.GroupPricingExperienceRateOverride{}).Error; err != nil {
+			return err
+		}
+		now := time.Now()
+		for i := range rows {
+			rows[i].QuoteId = quoteId
+			rows[i].ID = 0
+			rows[i].CreatedAt = now
+			rows[i].UpdatedAt = now
+			if rows[i].CreatedBy == "" {
+				rows[i].CreatedBy = user.UserEmail
+			}
+			rows[i].UpdatedBy = user.UserEmail
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		return tx.Create(&rows).Error
+	})
+}
+
+// buildExperienceRateOverrideLookup converts a flat slice of override rows
+// into a category -> benefit -> row map for O(1) lookup during member rating.
+// The two-level map is keyed exactly as the rate-population code references
+// (member.Category for the outer key, the benefit constant for the inner).
+func buildExperienceRateOverrideLookup(rows []models.GroupPricingExperienceRateOverride) map[string]map[string]models.GroupPricingExperienceRateOverride {
+	lookup := make(map[string]map[string]models.GroupPricingExperienceRateOverride, len(rows))
+	for _, r := range rows {
+		if _, ok := lookup[r.SchemeCategory]; !ok {
+			lookup[r.SchemeCategory] = make(map[string]models.GroupPricingExperienceRateOverride, 7)
+		}
+		lookup[r.SchemeCategory][r.Benefit] = r
+	}
+	return lookup
+}
+
+// averageOverrideCredibilityByBenefit collapses the per-(category, benefit)
+// override rows to one credibility per benefit by simple average across
+// categories. Used to populate the per-benefit credibility columns on
+// HistoricalCredibilityData (one row per quote) when ExperienceRating ==
+// "Override". Benefits with no override rows are absent from the result map.
+func averageOverrideCredibilityByBenefit(rows []models.GroupPricingExperienceRateOverride) map[string]float64 {
+	sums := map[string]float64{}
+	counts := map[string]int{}
+	for _, r := range rows {
+		sums[r.Benefit] += r.Credibility
+		counts[r.Benefit]++
+	}
+	out := make(map[string]float64, len(sums))
+	for b, s := range sums {
+		if counts[b] > 0 {
+			out[b] = s / float64(counts[b])
+		}
+	}
+	return out
 }
 
 // UpdateMemberInForce updates a member's details and writes an audit trail with before/after differences

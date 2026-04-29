@@ -110,7 +110,10 @@
               :text="
                 customTirMissing
                   ? 'Custom tiered income replacement table is missing. The administrator must upload the table before calculations can be run.'
-                  : 'Requires member data and claims experience (if experience rating is enabled) to be uploaded.'
+                  : quote.experience_rating === 'Override' &&
+                    (quote.experience_rate_overrides_count || 0) === 0
+                  ? 'Run with no overrides to see the baseline loaded rates per benefit, then add overrides and re-run.'
+                  : 'Requires member data and (if Yes) a claims-experience upload.'
               "
             >
               <template #activator="{ props: tooltipProps }">
@@ -298,7 +301,10 @@
         </v-tabs>
         <v-window v-model="tab">
           <v-window-item value="summary" eager>
-            <QuoteSummaryData :quote="quote" />
+            <QuoteSummaryData
+              :quote="quote"
+              :result-summaries="resultSummaries || []"
+            />
           </v-window-item>
           <v-window-item value="benefits" eager>
             <QuoteBenefitsConfiguration
@@ -309,6 +315,7 @@
           <v-window-item value="data" eager>
             <QuoteDataTableManager
               :quote="quote"
+              :result-summaries="resultSummaries || []"
               @quote-updated="loadQuote"
               @indicative-data-updated="handleIndicativeDataUpdate"
             />

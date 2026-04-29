@@ -3474,7 +3474,12 @@ func ApplyDiscountToQuote(c *gin.Context) {
 func GetGroupPricingSettings(c *gin.Context) {
 	var s models.GroupPricingSetting
 	if err := services.DB.First(&s, 1).Error; err != nil {
-		s = models.GroupPricingSetting{ID: 1, DiscountMethod: models.DiscountMethodLoadingAdjustment}
+		s = models.GroupPricingSetting{
+			ID:                   1,
+			DiscountMethod:       models.DiscountMethodLoadingAdjustment,
+			FCLMethod:            models.FCLMethodPercentile,
+			FCLOverrideTolerance: services.FCLOverrideToleranceDefault,
+		}
 		services.DB.Create(&s)
 	}
 	c.JSON(http.StatusOK, s)
@@ -3484,23 +3489,60 @@ func GetGroupPricingSettings(c *gin.Context) {
 // The discount method only takes effect on the next ApplyDiscountToQuote /
 // recompute call — existing quotes are not retroactively recomputed.
 func UpdateGroupPricingSettings(c *gin.Context) {
-	var payload models.GroupPricingSetting
+	// Pointer-typed fields so we can distinguish "field omitted" from
+	// "explicitly set to zero" — relevant for FCLOverrideTolerance, where 0
+	// is a meaningful (strict) value.
+	var payload struct {
+		DiscountMethod       *string  `json:"discount_method"`
+		FCLMethod            *string  `json:"fcl_method"`
+		FCLOverrideTolerance *float64 `json:"fcl_override_tolerance"`
+	}
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 		return
 	}
-	if payload.DiscountMethod != models.DiscountMethodLoadingAdjustment &&
-		payload.DiscountMethod != models.DiscountMethodProrata {
+	if payload.DiscountMethod != nil &&
+		*payload.DiscountMethod != models.DiscountMethodLoadingAdjustment &&
+		*payload.DiscountMethod != models.DiscountMethodProrata {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid discount_method"})
+		return
+	}
+	if payload.FCLMethod != nil &&
+		*payload.FCLMethod != models.FCLMethodPercentile &&
+		*payload.FCLMethod != models.FCLMethodOutlier {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid fcl_method"})
+		return
+	}
+	if payload.FCLOverrideTolerance != nil &&
+		(*payload.FCLOverrideTolerance < 0 || *payload.FCLOverrideTolerance > 1) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "fcl_override_tolerance must be between 0 and 1"})
 		return
 	}
 	user := c.MustGet("user").(models.AppUser)
 
 	var s models.GroupPricingSetting
 	if err := services.DB.First(&s, 1).Error; err != nil {
-		s = models.GroupPricingSetting{ID: 1}
+		s = models.GroupPricingSetting{
+			ID:                   1,
+			DiscountMethod:       models.DiscountMethodLoadingAdjustment,
+			FCLMethod:            models.FCLMethodPercentile,
+			FCLOverrideTolerance: services.FCLOverrideToleranceDefault,
+		}
 	}
-	s.DiscountMethod = payload.DiscountMethod
+	now := time.Now()
+	if payload.DiscountMethod != nil {
+		s.DiscountMethod = *payload.DiscountMethod
+		s.DiscountMethodUpdatedAt = &now
+		s.DiscountMethodUpdatedBy = user.UserEmail
+	}
+	if payload.FCLMethod != nil {
+		s.FCLMethod = *payload.FCLMethod
+		s.FCLMethodUpdatedAt = &now
+		s.FCLMethodUpdatedBy = user.UserEmail
+	}
+	if payload.FCLOverrideTolerance != nil {
+		s.FCLOverrideTolerance = *payload.FCLOverrideTolerance
+	}
 	s.UpdatedBy = user.UserEmail
 	if err := services.DB.Save(&s).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
@@ -3574,4 +3616,195 @@ func RequestCustomTieredTable(c *gin.Context) {
 	}
 	go services.NotifyCustomTieredTableRequested(req.SchemeName, req.SchemeID, req.RiskRateCode, user)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Custom tiered income replacement table request sent to system administrators"})
+}
+
+// validExperienceRateOverrideBenefit returns true when the supplied benefit
+// code is one of the seven supported per-benefit override slots.
+func validExperienceRateOverrideBenefit(b string) bool {
+	switch b {
+	case models.ExperienceRateOverrideBenefitGla,
+		models.ExperienceRateOverrideBenefitAagla,
+		models.ExperienceRateOverrideBenefitSgla,
+		models.ExperienceRateOverrideBenefitPtd,
+		models.ExperienceRateOverrideBenefitTtd,
+		models.ExperienceRateOverrideBenefitPhi,
+		models.ExperienceRateOverrideBenefitCi,
+		models.ExperienceRateOverrideBenefitFun:
+		return true
+	}
+	return false
+}
+
+// quoteOverridesLocked returns true when the quote's status forbids edits
+// to its experience-rate overrides. Approved, accepted, and in-force quotes
+// represent settled commercial commitments; mutating overrides on them
+// would silently change the priced premium without a fresh approval cycle.
+func quoteOverridesLocked(quoteID int) (bool, models.Status, error) {
+	var quote models.GroupPricingQuote
+	if err := services.DB.Select("status").
+		Where("id = ?", quoteID).
+		First(&quote).Error; err != nil {
+		return false, "", err
+	}
+	switch quote.Status {
+	case models.StatusApproved, models.StatusAccepted, models.StatusInForce:
+		return true, quote.Status, nil
+	}
+	return false, quote.Status, nil
+}
+
+// GetExperienceRateOverrides returns every per-(category, benefit) override
+// row stored against a quote. An empty array is returned when the quote has
+// no overrides yet — the frontend treats this as "show empty state".
+func GetExperienceRateOverrides(c *gin.Context) {
+	quoteID, err := strconv.Atoi(c.Param("quote_id"))
+	if err != nil || quoteID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid quote id"})
+		return
+	}
+	rows := []models.GroupPricingExperienceRateOverride{}
+	if err := services.DB.Where("quote_id = ?", quoteID).
+		Order("scheme_category, benefit").
+		Find(&rows).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, rows)
+}
+
+// SaveExperienceRateOverrides upserts an array of (quote, category, benefit)
+// override rows. The endpoint replaces the entire set for the quote (delete +
+// insert) so the frontend can submit the in-memory list verbatim.
+func SaveExperienceRateOverrides(c *gin.Context) {
+	var rows []models.GroupPricingExperienceRateOverride
+	if err := c.ShouldBindJSON(&rows); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(rows) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one override row is required"})
+		return
+	}
+	quoteID := rows[0].QuoteId
+	if quoteID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "quote_id is required on every row"})
+		return
+	}
+	if locked, status, err := quoteOverridesLocked(quoteID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	} else if locked {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "experience-rate overrides cannot be edited while the quote is " + string(status),
+		})
+		return
+	}
+	for i := range rows {
+		if rows[i].QuoteId != quoteID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "all rows must share the same quote_id"})
+			return
+		}
+		if rows[i].SchemeCategory == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "scheme_category is required"})
+			return
+		}
+		if !validExperienceRateOverrideBenefit(rows[i].Benefit) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid benefit: " + rows[i].Benefit})
+			return
+		}
+		if rows[i].Mode != models.ExperienceRateOverrideModeTheoretical &&
+			rows[i].Mode != models.ExperienceRateOverrideModeExperienceRated {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mode: " + rows[i].Mode})
+			return
+		}
+		if rows[i].Mode == models.ExperienceRateOverrideModeTheoretical {
+			rows[i].OverrideRate = 0
+		}
+		if rows[i].OverrideRate < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "override_rate must be >= 0"})
+			return
+		}
+		if rows[i].Credibility < 0 || rows[i].Credibility > 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "credibility must be between 0 and 1"})
+			return
+		}
+	}
+	user := c.MustGet("user").(models.AppUser)
+	if err := services.SaveExperienceRateOverrides(quoteID, rows, user); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	persisted := []models.GroupPricingExperienceRateOverride{}
+	services.DB.Where("quote_id = ?", quoteID).
+		Order("scheme_category, benefit").
+		Find(&persisted)
+	c.JSON(http.StatusOK, persisted)
+}
+
+// UpdateExperienceOverrideCredibility persists the manually-entered
+// credibility (0-1) the actuary supplies alongside experience-rate overrides.
+// Locked quotes (approved / accepted / in_force) reject the change.
+func UpdateExperienceOverrideCredibility(c *gin.Context) {
+	quoteID, err := strconv.Atoi(c.Param("quote_id"))
+	if err != nil || quoteID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid quote id"})
+		return
+	}
+	var payload struct {
+		Credibility float64 `json:"credibility"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if payload.Credibility < 0 || payload.Credibility > 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "credibility must be between 0 and 1"})
+		return
+	}
+	if locked, status, err := quoteOverridesLocked(quoteID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	} else if locked {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "credibility cannot be changed while the quote is " + string(status),
+		})
+		return
+	}
+	if err := services.DB.Model(&models.GroupPricingQuote{}).
+		Where("id = ?", quoteID).
+		Update("experience_override_credibility", payload.Credibility).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success":                         true,
+		"quote_id":                        quoteID,
+		"experience_override_credibility": payload.Credibility,
+	})
+}
+
+// DeleteExperienceRateOverrides removes every override row for a quote,
+// reverting the quote to "no override entries yet". Used by the Delete-All
+// button in the UI.
+func DeleteExperienceRateOverrides(c *gin.Context) {
+	quoteID, err := strconv.Atoi(c.Param("quote_id"))
+	if err != nil || quoteID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid quote id"})
+		return
+	}
+	if locked, status, err := quoteOverridesLocked(quoteID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	} else if locked {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "experience-rate overrides cannot be deleted while the quote is " + string(status),
+		})
+		return
+	}
+	if err := services.DB.Where("quote_id = ?", quoteID).
+		Delete(&models.GroupPricingExperienceRateOverride{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }

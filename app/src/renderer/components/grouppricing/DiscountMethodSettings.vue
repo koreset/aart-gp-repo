@@ -20,6 +20,12 @@
         system-wide. It only takes effect on the next time a discount is applied
         to a quote — existing quotes are not retroactively recomputed.
       </p>
+      <p
+        v-if="lastUpdatedLabel"
+        class="text-caption text-medium-emphasis mb-4"
+      >
+        {{ lastUpdatedLabel }}
+      </p>
       <v-radio-group
         v-model="discountMethod"
         :disabled="loading"
@@ -46,7 +52,7 @@
         <v-btn
           color="primary"
           :loading="saving"
-          :disabled="!isDirty || loading"
+          :disabled="loading"
           @click="save"
         >
           Save
@@ -60,34 +66,44 @@
 import { ref, computed, onMounted } from 'vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import BaseCard from '@/renderer/components/BaseCard.vue'
-import { useNotifications } from '@/renderer/composables/useNotifications'
+import { useFlashStore } from '@/renderer/store/flash'
 
 type DiscountMethod = 'loading_adjustment' | 'prorata'
 
-const { showSuccess, showError } = useNotifications()
+const flash = useFlashStore()
 
 const discountMethod = ref<DiscountMethod>('loading_adjustment')
-const initialMethod = ref<DiscountMethod>('loading_adjustment')
+const updatedAt = ref<string | null>(null)
+const updatedBy = ref<string>('')
 const loading = ref(false)
 const saving = ref(false)
-
-const isDirty = computed(() => discountMethod.value !== initialMethod.value)
 
 const chipLabel = computed(() =>
   discountMethod.value === 'prorata' ? 'Prorata' : 'Loading Adjustment'
 )
 
+const lastUpdatedLabel = computed(() => {
+  if (!updatedAt.value) return ''
+  const ts = new Date(updatedAt.value)
+  if (Number.isNaN(ts.getTime())) return ''
+  const formatted = ts.toLocaleString()
+  return updatedBy.value
+    ? `Last updated ${formatted} by ${updatedBy.value}`
+    : `Last updated ${formatted}`
+})
+
 async function load() {
   loading.value = true
   try {
     const { data } = await GroupPricingService.getGroupPricingSettings()
-    const method: DiscountMethod =
+    discountMethod.value =
       data?.discount_method === 'prorata' ? 'prorata' : 'loading_adjustment'
-    discountMethod.value = method
-    initialMethod.value = method
+    updatedAt.value = data?.discount_method_updated_at ?? null
+    updatedBy.value = data?.discount_method_updated_by ?? ''
   } catch (err: any) {
-    showError(
-      'Failed to load discount method: ' + (err?.message ?? 'unknown error')
+    flash.show(
+      'Failed to load discount method: ' + (err?.message ?? 'unknown error'),
+      'error'
     )
   } finally {
     loading.value = false
@@ -97,14 +113,16 @@ async function load() {
 async function save() {
   saving.value = true
   try {
-    await GroupPricingService.updateGroupPricingSettings({
+    const { data } = await GroupPricingService.updateGroupPricingSettings({
       discount_method: discountMethod.value
     })
-    initialMethod.value = discountMethod.value
-    showSuccess('Discount method saved')
+    updatedAt.value = data?.discount_method_updated_at ?? updatedAt.value
+    updatedBy.value = data?.discount_method_updated_by ?? updatedBy.value
+    flash.show('Discount method saved', 'success')
   } catch (err: any) {
-    showError(
-      'Failed to save discount method: ' + (err?.message ?? 'unknown error')
+    flash.show(
+      'Failed to save discount method: ' + (err?.message ?? 'unknown error'),
+      'error'
     )
   } finally {
     saving.value = false

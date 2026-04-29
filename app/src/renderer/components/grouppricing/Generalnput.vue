@@ -246,6 +246,8 @@
             :error-messages="errors.experience_rating"
             :items="groupStore.claimsExperiences"
             :disabled="!canSetExperienceRating"
+            hint="Choose Override to set experience-rated rates per category × benefit instead of uploading claims data."
+            persistent-hint
           ></v-select>
         </v-col>
         <v-col

@@ -7,7 +7,7 @@ export const useGroupPricingStore = defineStore('groupPricing', {
     currencies: ['USD', 'ZAR'],
     terminalIllnessBenefits: ['Yes', 'No'],
     yesNoItems: ['Yes', 'No'],
-    claimsExperiences: ['Yes', 'No'],
+    claimsExperiences: ['Yes', 'No', 'Override'],
     riskTypes: ['All Causes', 'Accidental'],
     benefitTypes: ['Standalone', 'Accelerated'],
     disabilityDefinitions: ['Own Occupation', 'Any Occupation'],

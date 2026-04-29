@@ -1,4 +1,11 @@
 <template>
+  <experience-rate-overrides
+    v-if="quote && quote.experience_rating === 'Override'"
+    :quote="quote"
+    :result-summaries="resultSummaries"
+    class="mb-4"
+    @overrides-updated="handleOverridesUpdated"
+  />
   <base-card :show-actions="false">
     <template #header>
       <span class="headline">Input Data Tables</span>
@@ -294,6 +301,7 @@ import _ from 'lodash'
 import FileUploadDialog from '@/renderer/components/FileUploadDialog.vue'
 import LoadingIndicator from '@/renderer/components/LoadingIndicator.vue'
 import GroupPricingDataGrid from '@/renderer/components/tables/GroupPricingDataGrid.vue'
+import ExperienceRateOverrides from '@/renderer/components/grouppricing/ExperienceRateOverrides.vue'
 
 // Import necessary components like BaseCard, DataGrid, FileUploadDialog
 
@@ -306,6 +314,10 @@ const props = defineProps({
   quote: {
     type: Object,
     required: true
+  },
+  resultSummaries: {
+    type: Array as () => any[],
+    default: () => []
   }
 })
 
@@ -389,6 +401,15 @@ const toggleIndicativeProp = () => {
   emit('indicative-data-updated', {
     tableType: 'Member Data',
     indicativeData: indicativeDataEnabled.value
+  })
+}
+
+const handleOverridesUpdated = (count: number) => {
+  // Re-fetch the quote so experience_rate_overrides_count flows into the
+  // Run Calculations gate without requiring a full page reload.
+  emit('quote-updated', {
+    tableType: 'Experience Rate Overrides',
+    experienceRateOverridesCount: count
   })
 }
 

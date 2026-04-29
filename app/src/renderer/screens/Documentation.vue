@@ -208,6 +208,7 @@ const SECTION_DEFS = [
       'free_cover_limit_scaling_factor',
       'free_cover_limit_percentile',
       'free_cover_limit_nearest_multiple',
+      'fcl_maximum_cover_scaling_factor',
       'free_cover_limit'
     ]
   },
@@ -270,6 +271,43 @@ const SECTION_DEFS = [
       'gla_experience_adjustment',
       'gla_theoretical_rate',
       'mannually_added_credibility'
+    ]
+  },
+  {
+    id: 'rates-premiums',
+    label: 'Rates & Premiums',
+    variables: [
+      'base_rate',
+      'loaded_rate',
+      'experience_adjusted_rate',
+      'risk_premium',
+      'basic_premium',
+      'office_premium',
+      'discounted_rate',
+      'final_rate'
+    ]
+  },
+  {
+    id: 'loadings-fees',
+    label: 'Scheme Loadings & Fees',
+    variables: [
+      'region_loading',
+      'industry_loading',
+      'contingency_loading',
+      'voluntary_loading',
+      'continuity_during_disability_loading',
+      'conversion_on_withdrawal_loading',
+      'conversion_on_retirement_loading',
+      'expense_loading',
+      'profit_loading',
+      'admin_loading',
+      'other_loading',
+      'scheme_loading',
+      'scheme_loading_after_discount',
+      'binder_fee',
+      'outsourcing_fee',
+      'commission',
+      'tax_saver'
     ]
   }
 ]

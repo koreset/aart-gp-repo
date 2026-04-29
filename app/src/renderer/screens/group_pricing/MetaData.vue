@@ -77,6 +77,16 @@
 
               <v-expansion-panel>
                 <v-expansion-panel-title>
+                  <v-icon icon="mdi-shield-check-outline" class="mr-2" />
+                  Free Cover Limit Calculation Method
+                </v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  <free-cover-limit-method-settings />
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+
+              <v-expansion-panel>
+                <v-expansion-panel-title>
                   <v-icon icon="mdi-file-word-outline" class="mr-2" />
                   Quote Template
                 </v-expansion-panel-title>
@@ -119,6 +129,7 @@ import ReinsurerManagement from '@/renderer/components/grouppricing/ReinsurerMan
 import SchemeCategoryManagement from '@/renderer/components/grouppricing/SchemeCategoryManagement.vue'
 import BenefitsCustomization from '@/renderer/components/grouppricing/BenefitsCustomization.vue'
 import DiscountMethodSettings from '@/renderer/components/grouppricing/DiscountMethodSettings.vue'
+import FreeCoverLimitMethodSettings from '@/renderer/components/grouppricing/FreeCoverLimitMethodSettings.vue'
 import QuoteTemplateManagement from '@/renderer/components/grouppricing/QuoteTemplateManagement.vue'
 import OnRiskLetterTemplateManagement from '@/renderer/components/grouppricing/OnRiskLetterTemplateManagement.vue'
 import { useNotifications } from '@/renderer/composables/useNotifications'

@@ -38,7 +38,9 @@ export default {
     return Api.get('/group-pricing/settings')
   },
   updateGroupPricingSettings(payload: {
-    discount_method: 'loading_adjustment' | 'prorata'
+    discount_method?: 'loading_adjustment' | 'prorata'
+    fcl_method?: 'percentile' | 'outlier'
+    fcl_override_tolerance?: number
   }) {
     return Api.put('/group-pricing/settings', payload, {
       headers: {
@@ -800,6 +802,36 @@ export default {
   deleteIndicativeMemberData(quoteId) {
     return Api.delete(
       '/group-pricing/quotes/' + quoteId + '/indicative-member-data'
+    )
+  },
+  getExperienceRateOverrides(quoteId) {
+    return Api.get('/group-pricing/experience-rate-overrides/' + quoteId)
+  },
+  saveExperienceRateOverrides(rows) {
+    return Api.post(
+      '/group-pricing/experience-rate-overrides',
+      JSON.stringify(rows),
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        }
+      }
+    )
+  },
+  deleteExperienceRateOverrides(quoteId) {
+    return Api.delete('/group-pricing/experience-rate-overrides/' + quoteId)
+  },
+  updateExperienceOverrideCredibility(quoteId, credibility) {
+    return Api.put(
+      '/group-pricing/experience-rate-overrides/' + quoteId + '/credibility',
+      JSON.stringify({ credibility }),
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        }
+      }
     )
   },
   updateIndicativeDataFlag(quoteId, indicativeDataEnabled) {

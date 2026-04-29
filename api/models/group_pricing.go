@@ -77,6 +77,11 @@ type GroupPricingQuote struct {
 	ExchangeRate                 int                       `json:"exchangeRate"`
 	NormalRetirementAge          int                       `json:"normal_retirement_age"`
 	ExperienceRating             string                    `json:"experience_rating"`
+	// ExperienceOverrideCredibility is the manually-entered credibility (0-1)
+	// the actuary supplies alongside experience-rate overrides. Saved to
+	// HistoricalCredibilityData as ManuallyAddedCredibility for future
+	// reference. Only meaningful when ExperienceRating == "Override".
+	ExperienceOverrideCredibility float64                  `json:"experience_override_credibility" gorm:"not null;default:0"`
 	CreatedBy                    string                    `json:"created_by"`
 	Reviewer                     string                    `json:"reviewer"`
 	ApprovedBy                   string                    `json:"approved_by"`
@@ -86,6 +91,7 @@ type GroupPricingQuote struct {
 	Status                       Status                    `json:"status"`
 	MemberDataCount              int                       `json:"member_data_count"`
 	ClaimsExperienceCount        int                       `json:"claims_experience_count"`
+	ExperienceRateOverridesCount int                       `json:"experience_rate_overrides_count" gorm:"-"`
 	MemberRatingResultCount      int                       `json:"member_rating_result_count"`
 	MemberPremiumScheduleCount   int                       `json:"member_premium_schedule_count"`
 	BordereauxCount              int                       `json:"bordereaux_count"`
@@ -846,6 +852,43 @@ type GroupPricingClaimsExperience struct {
 	CreationDate       time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy          string    `json:"created_by" csv:"created_by"`
 	QuoteId            int       `json:"quote_id" csv:"-"`
+}
+
+const (
+	ExperienceRateOverrideModeTheoretical     = "theoretical"
+	ExperienceRateOverrideModeExperienceRated = "experience_rated"
+
+	ExperienceRateOverrideBenefitGla   = "GLA"
+	ExperienceRateOverrideBenefitAagla = "AAGLA"
+	ExperienceRateOverrideBenefitSgla  = "SGLA"
+	ExperienceRateOverrideBenefitPtd   = "PTD"
+	ExperienceRateOverrideBenefitTtd   = "TTD"
+	ExperienceRateOverrideBenefitPhi   = "PHI"
+	ExperienceRateOverrideBenefitCi    = "CI"
+	ExperienceRateOverrideBenefitFun   = "FUN"
+)
+
+// GroupPricingExperienceRateOverride captures a per-(quote, scheme_category, benefit)
+// instruction the actuary supplies when ExperienceRating == "Override". For each
+// row, Mode == "experience_rated" means OverrideRate replaces the computed
+// ExpAdjLoaded{Benefit}Rate; Mode == "theoretical" leaves ExpAdjLoaded equal to
+// the loaded rate (no experience adjustment).
+type GroupPricingExperienceRateOverride struct {
+	ID             int       `json:"id" gorm:"primary_key"`
+	QuoteId        int       `json:"quote_id" gorm:"index;uniqueIndex:ux_quote_cat_benefit,priority:1"`
+	SchemeCategory string    `json:"scheme_category" gorm:"size:128;uniqueIndex:ux_quote_cat_benefit,priority:2"`
+	Benefit        string    `json:"benefit" gorm:"size:8;uniqueIndex:ux_quote_cat_benefit,priority:3"`
+	Mode           string    `json:"mode" gorm:"size:24;not null;default:theoretical"`
+	OverrideRate   float64   `json:"override_rate" gorm:"not null;default:0"`
+	// Credibility (0-1) the actuary records for this (category, benefit)
+	// override row. Recorded on every calc run into HistoricalCredibilityData
+	// so different benefits can carry different credibility weights even on
+	// the same quote.
+	Credibility    float64   `json:"credibility" gorm:"not null;default:0"`
+	CreatedAt      time.Time `json:"created_at" gorm:"autoCreateTime"`
+	CreatedBy      string    `json:"created_by" gorm:"size:128"`
+	UpdatedAt      time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+	UpdatedBy      string    `json:"updated_by" gorm:"size:128"`
 }
 
 type MemberRatingResult struct {
@@ -2237,6 +2280,7 @@ type GroupPricingParameters struct {
 	FreeCoverLimitScalingFactor        float64 `json:"free_cover_limit_scaling_factor" csv:"free_cover_limit_scaling_factor"`
 	FreeCoverLimitPercentile           float64 `json:"free_cover_limit_percentile" csv:"free_cover_limit_percentile"`
 	FreeCoverLimitNearestMultiple      float64 `json:"free_cover_limit_nearest_multiple" csv:"free_cover_limit_nearest_multiple"`
+	FCLMaximumCoverScalingFactor       float64 `json:"fcl_maximum_cover_scaling_factor" csv:"fcl_maximum_cover_scaling_factor"`
 	GlobalGlaExperienceRate            float64 `json:"global_gla_experience_rate" csv:"global_gla_experience_rate"`
 	GlobalPtdExperienceRate            float64 `json:"global_ptd_experience_rate" csv:"global_ptd_experience_rate"`
 	GlobalCiExperienceRate             float64 `json:"global_ci_experience_rate" csv:"global_ci_experience_rate"`
@@ -2341,14 +2385,25 @@ const (
 	DiscountMethodProrata           = "prorata"
 )
 
+const (
+	FCLMethodPercentile = "percentile"
+	FCLMethodOutlier    = "outlier"
+)
+
 // GroupPricingSetting is a singleton table (one row, ID=1) holding global
 // group-pricing configuration toggles. Today it carries the discount
 // calculation method; future system-wide flags can be added here.
 type GroupPricingSetting struct {
-	ID             int       `json:"id" gorm:"primaryKey"`
-	DiscountMethod string    `json:"discount_method" gorm:"size:32;not null;default:loading_adjustment"`
-	UpdatedAt      time.Time `json:"updated_at" gorm:"autoUpdateTime"`
-	UpdatedBy      string    `json:"updated_by"`
+	ID                      int        `json:"id" gorm:"primaryKey"`
+	DiscountMethod          string     `json:"discount_method" gorm:"size:32;not null;default:loading_adjustment"`
+	DiscountMethodUpdatedAt *time.Time `json:"discount_method_updated_at"`
+	DiscountMethodUpdatedBy string     `json:"discount_method_updated_by"`
+	FCLMethod               string     `json:"fcl_method" gorm:"size:32;not null;default:percentile"`
+	FCLMethodUpdatedAt      *time.Time `json:"fcl_method_updated_at"`
+	FCLMethodUpdatedBy      string     `json:"fcl_method_updated_by"`
+	FCLOverrideTolerance    float64    `json:"fcl_override_tolerance" gorm:"not null;default:0.2"`
+	UpdatedAt               time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
+	UpdatedBy               string     `json:"updated_by"`
 }
 
 // InsurerQuoteTemplate represents a custom DOCX template uploaded by an insurer
@@ -2672,6 +2727,7 @@ type Restriction struct {
 	PhiMaximumMonthlyContributionWaiver float64   `json:"phi_maximum_monthly_contribution_waiver" csv:"phi_maximum_monthly_contribution_waiver"`
 	TtdMaximumMonthlyBenefit            float64   `json:"ttd_maximum_monthly_benefit" csv:"ttd_maximum_monthly_benefit"`
 	MaxMedicalAidWaiver                 float64   `json:"max_medical_aid_waiver" csv:"max_medical_aid_waiver"`
+	MaximumAllowedFCL                   float64   `json:"maximum_allowed_fcl" csv:"maximum_allowed_fcl"`
 	MinEntryAge                         int       `json:"min_entry_age" csv:"min_entry_age"`
 	MaxEntryAge                         int       `json:"max_entry_age" csv:"max_entry_age"`
 	GlaMaxCoverAge                      int       `json:"gla_max_cover_age" csv:"gla_max_cover_age"`
@@ -3485,6 +3541,18 @@ type HistoricalCredibilityData struct {
 	AnnualGlaExperienceRate  float64   `json:"annual_gla_experience_rate"`
 	AnnualPtdExperienceRate  float64   `json:"annual_ptd_experience_rate"`
 	AnnualCiExperienceRate   float64   `json:"annual_ci_experience_rate"`
+	// Per-benefit credibility recorded on every calc run. In Yes mode all
+	// eight columns share the same value (claims-based credibility is
+	// quote-wide); in Override mode each is the simple average of that
+	// benefit's per-(category) credibility values across the override rows.
+	GlaCredibility           float64   `json:"gla_credibility" gorm:"not null;default:0"`
+	AaglaCredibility         float64   `json:"aagla_credibility" gorm:"not null;default:0"`
+	SglaCredibility          float64   `json:"sgla_credibility" gorm:"not null;default:0"`
+	PtdCredibility           float64   `json:"ptd_credibility" gorm:"not null;default:0"`
+	TtdCredibility           float64   `json:"ttd_credibility" gorm:"not null;default:0"`
+	PhiCredibility           float64   `json:"phi_credibility" gorm:"not null;default:0"`
+	CiCredibility            float64   `json:"ci_credibility" gorm:"not null;default:0"`
+	FunCredibility           float64   `json:"fun_credibility" gorm:"not null;default:0"`
 }
 
 type MemberIndicativeDataSet struct {

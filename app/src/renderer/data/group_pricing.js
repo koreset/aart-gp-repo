@@ -33,11 +33,36 @@ export const groupPricing = [
     data_source_type: 'User Input'
   },
   {
+    data_variable: 'fcl_maximum_cover_scaling_factor',
+    data_type: 'number',
+    data_description:
+      'Multiplier applied to the largest member sum assured to derive an upper bound on the free cover limit when the Statistical Outlier method is in use. The final free cover limit is then capped at this product, alongside the scaled mean salary and the log-normal upper bound on sum assured. Only consulted when the system-wide free cover limit method is set to Statistical Outlier; ignored under the Percentile method.',
+    data_source: 'Group Pricing Parameter Table',
+    data_source_type: 'User Input'
+  },
+  {
+    data_variable: 'maximum_allowed_fcl',
+    data_type: 'number',
+    data_description:
+      'Underwriting ceiling for user-set free cover limits, configured per risk rate. When a quote-level free cover limit is enforced, the system uses it as-is unless it exceeds this ceiling by more than the configured override tolerance, in which case the ceiling is used. A value of 0 means no ceiling is configured and quote-level overrides pass through unchanged. Applies under both the Percentile and Statistical Outlier calculation methods.',
+    data_source: 'Restrictions Table',
+    data_source_type: 'User Input'
+  },
+  {
+    data_variable: 'fcl_override_tolerance',
+    data_type: 'number',
+    data_description:
+      'Fractional headroom (0–1) allowed above the maximum allowed free cover limit before a quote-level override is clamped. Configured system-wide alongside the free cover limit calculation method on the metadata configuration screen. A value of 0.2 means quote-level overrides up to 20% above the ceiling are honoured as-is; anything beyond is clamped to the ceiling.',
+    data_source: 'Group Pricing Settings (singleton metadata)',
+    data_source_type: 'User Input'
+  },
+  {
     data_variable: 'free_cover_limit',
     data_type: 'number',
     data_description:
-      'Similar to the MemberDistributionFreeCoverLimit, this limit is calculated based on the statistical distribution of members sums assured within the scheme. It is subject to the lesser of the scheme’s overall free cover limit or a predefined floor, which may be applied to maintain pricing competitiveness and manage underwriting risk.',
-    data_source: 'Max (MemberDistributionFreeCoverLimit, MaxFreeCoverLimit )',
+      'The free cover limit applied to the scheme category. If no quote-level free cover limit is enforced, equals the member-distribution-derived value. If enforced, equals the quote-level value, clamped to the maximum allowed free cover limit when the quote-level value exceeds it by more than the configured override tolerance.',
+    data_source:
+      'If quote-level FreeCoverLimit = 0: MemberDistributionFreeCoverLimit.\nIf quote-level FreeCoverLimit > 0 and MaximumAllowedFCL > 0 and FreeCoverLimit > (1 + OverrideTolerance) * MaximumAllowedFCL: MaximumAllowedFCL.\nOtherwise: quote-level FreeCoverLimit.',
     data_source_type: 'Calculation Engine'
   },
   {
@@ -308,6 +333,211 @@ export const groupPricing = [
     data_description:
       'A manually added credibility factor. It is based on actuarial judgement, taking into account the calculated credibility as well as credibility levels historically applied to similar schemes with comparable exposure and experience characteristics',
     data_source: 'manual input within member rating results',
+    data_source_type: 'Calculation Engine'
+  },
+  {
+    data_variable: 'base_rate',
+    data_type: 'number',
+    data_description:
+      'The starting rate per benefit, derived by grossing up the underlying mortality / morbidity rate (Qx, read from the basis table by age, gender, occupational class) for industry and region risk. Applies per benefit (GLA, PTD, CI, TTD, PHI, Funeral, etc.).',
+    data_source: 'Qx * (1 + IndustryLoading + RegionLoading)',
+    data_source_type: 'Calculation Engine'
+  },
+  {
+    data_variable: 'loaded_rate',
+    data_type: 'number',
+    data_description:
+      'The Base Rate after the per-member loadings on top of base risk are added. Loadings are summed (not compounded). SpecialLoadings sums the benefit-specific extras such as Terminal Illness, Continuity During Disability, Conversion On Withdrawal, and Conversion On Retirement. Applies per benefit.',
+    data_source:
+      'BaseRate * (1 + ContingencyLoading + VoluntaryLoading + SpecialLoadings)',
+    data_source_type: 'Calculation Engine'
+  },
+  {
+    data_variable: 'experience_adjusted_rate',
+    data_type: 'number',
+    data_description:
+      'The Loaded Rate scaled by the scheme`s Experience Adjustment factor — the credibility-weighted blend of theoretical and observed claims experience. See gla_experience_adjustment and blended_gla_rate for the GLA-specific instance of the blend. Applies per benefit.',
+    data_source: 'LoadedRate * ExperienceAdjustment',
+    data_source_type: 'Calculation Engine'
+  },
+  {
+    data_variable: 'risk_premium',
+    data_type: 'number',
+    data_description:
+      'The premium driven purely by risk: the experience-adjusted rate applied to the member`s sum assured (or annual income, for income-based benefits like TTD and PHI). Pre-loadings, pre-fees, pre-commission, pre-discount. Applies per benefit.',
+    data_source: 'ExperienceAdjustedRate * SumAssured',
+    data_source_type: 'Calculation Engine'
+  },
+  {
+    data_variable: 'basic_premium',
+    data_type: 'number',
+    data_description:
+      'The residual portion of the final premium after the components that are presented explicitly on the premium breakdown (e.g. tax saver, binder, outsourcing, commission) have been separated out. It bundles together everything not surfaced on its own line — risk premium, expense loadings, profit margin, and any other components not shown separately. All explicit breakdown lines plus basic premium sum to the final premium.',
+    data_source: 'FinalPremium - sum(explicit breakdown lines)',
+    data_source_type: 'Calculation Engine'
+  },
+  {
+    data_variable: 'office_premium',
+    data_type: 'number',
+    data_description:
+      'The pre-discount, pre-commission premium charged to the scheme — the Risk Premium grossed up for the scheme-level loadings (expense, profit, admin, other, binder, outsourcing). Applies per benefit; rolls up to a scheme total.',
+    data_source: 'RiskPremium / (1 - SchemeLoading)',
+    data_source_type: 'Calculation Engine'
+  },
+  {
+    data_variable: 'discounted_rate',
+    data_type: 'number',
+    data_description:
+      'The post-discount office premium expressed as a rate. Identical to office_premium when no discount is applied; otherwise computed under the discount method selected on the quote.',
+    data_source:
+      'Two methods, depending on the discount method chosen on the quote:\n\n  (1) Default (gross-up):\n      RiskPremium / (1 - (SchemeLoading + Discount))\n      — discount is folded into the loading denominator.\n\n  (2) Prorata:\n      RiskPremium * (1 - Discount) / (1 - SchemeLoading)\n      — discount is applied as a multiplicative factor on top of the standard office premium.\n\nBoth methods give the same result when the discount is zero.',
+    data_source_type: 'Calculation Engine'
+  },
+  {
+    data_variable: 'final_rate',
+    data_type: 'number',
+    data_description:
+      'The full rate actually charged to the scheme: the office premium (discounted if a discount applies, otherwise standard) plus commission. Commission is calculated progressively from the scheme-wide office premium before commission is added, then allocated back across members — it is not folded into the gross-up denominator.',
+    data_source: 'OfficePremium (with or without discount) + Commission',
+    data_source_type: 'Calculation Engine'
+  },
+  {
+    data_variable: 'region_loading',
+    data_type: 'number',
+    data_description:
+      'Per-member rate adjustment reflecting geographic risk, resolved per member by region. Applied at the Base Rate stage. Applies per benefit.',
+    data_source: 'Region Loading Table',
+    data_source_type: 'User Input'
+  },
+  {
+    data_variable: 'industry_loading',
+    data_type: 'number',
+    data_description:
+      'Per-member rate adjustment reflecting occupational / industry risk, resolved per member by industry. Applied at the Base Rate stage. Applies per benefit.',
+    data_source: 'Industry Loading Table',
+    data_source_type: 'User Input'
+  },
+  {
+    data_variable: 'contingency_loading',
+    data_type: 'number',
+    data_description:
+      'Margin for adverse experience and parameter uncertainty. Applied at the Loaded Rate stage. Applies per benefit.',
+    data_source: 'General Loadings Table',
+    data_source_type: 'User Input'
+  },
+  {
+    data_variable: 'voluntary_loading',
+    data_type: 'number',
+    data_description:
+      'Anti-selection loading applied where members elect voluntary cover. Applied at the Loaded Rate stage. Applies per benefit.',
+    data_source: 'General Loadings Table',
+    data_source_type: 'User Input'
+  },
+  {
+    data_variable: 'continuity_during_disability_loading',
+    data_type: 'number',
+    data_description:
+      'Loading covering continued GLA cover while a member is disabled. Applied at the Loaded Rate stage.',
+    data_source: 'General Loadings Table',
+    data_source_type: 'User Input'
+  },
+  {
+    data_variable: 'conversion_on_withdrawal_loading',
+    data_type: 'number',
+    data_description:
+      'Loading for the option to convert group cover to individual cover when a member withdraws from the scheme. Applies to GLA, PTD, and CI.',
+    data_source: 'General Loadings Table',
+    data_source_type: 'User Input'
+  },
+  {
+    data_variable: 'conversion_on_retirement_loading',
+    data_type: 'number',
+    data_description:
+      'Loading for the option to convert GLA cover to individual cover at retirement.',
+    data_source: 'General Loadings Table',
+    data_source_type: 'User Input'
+  },
+  {
+    data_variable: 'expense_loading',
+    data_type: 'number',
+    data_description:
+      'Insurer`s operating expenses expressed as a fraction of office premium. Component of scheme_loading.',
+    data_source: 'Premium Loading Table',
+    data_source_type: 'User Input'
+  },
+  {
+    data_variable: 'profit_loading',
+    data_type: 'number',
+    data_description:
+      'Insurer`s required profit margin expressed as a fraction of office premium. Component of scheme_loading.',
+    data_source: 'Premium Loading Table',
+    data_source_type: 'User Input'
+  },
+  {
+    data_variable: 'admin_loading',
+    data_type: 'number',
+    data_description:
+      'Scheme administration cost as a fraction of office premium. Component of scheme_loading.',
+    data_source: 'Premium Loading Table',
+    data_source_type: 'User Input'
+  },
+  {
+    data_variable: 'other_loading',
+    data_type: 'number',
+    data_description:
+      'Catch-all for any additional scheme-level loadings not covered by the named components. Component of scheme_loading.',
+    data_source: 'Premium Loading Table',
+    data_source_type: 'User Input'
+  },
+  {
+    data_variable: 'scheme_loading',
+    data_type: 'number',
+    data_description:
+      'Total scheme-level loading used to gross up Risk Premium into Office Premium. Commission is not included — it is added on top of the office premium separately.',
+    data_source:
+      'ExpenseLoading + ProfitLoading + AdminLoading + OtherLoading + BinderFee + OutsourcingFee',
+    data_source_type: 'Calculation Engine'
+  },
+  {
+    data_variable: 'scheme_loading_after_discount',
+    data_type: 'number',
+    data_description:
+      'The scheme loading adjusted for the discount applied to the quote. Discount is stored as a negative fraction (e.g. -0.05 for a 5% discount), so adding it shrinks the loading and therefore reduces the Discounted Rate.',
+    data_source: 'SchemeLoading + Discount',
+    data_source_type: 'Calculation Engine'
+  },
+  {
+    data_variable: 'binder_fee',
+    data_type: 'number',
+    data_description:
+      'Fee paid to the binder holder for managing the scheme on behalf of the insurer. Included in the scheme loading denominator.',
+    data_source: 'Binder Fees Table',
+    data_source_type: 'User Input'
+  },
+  {
+    data_variable: 'outsourcing_fee',
+    data_type: 'number',
+    data_description:
+      'Fee paid to an outsourced claims / administration provider. Included in the scheme loading denominator.',
+    data_source: 'Binder Fees Table',
+    data_source_type: 'User Input'
+  },
+  {
+    data_variable: 'commission',
+    data_type: 'number',
+    data_description:
+      'The amount payable to the intermediary (broker / agent). Calculated scheme-wide first from the office premium before commission is added, then allocated back to members so the gross-up is fair. Not folded into the scheme-loading denominator.',
+    data_source:
+      'Intermediary commission, applied progressively on top of the office premium based on the scheme-wide office premium before commission is added, then allocated back across members. Rate driven by the commission structure tiers configured on the quote.',
+    data_source_type: 'Calculation Engine'
+  },
+  {
+    data_variable: 'tax_saver',
+    data_type: 'number',
+    data_description:
+      'An optional rider that adds a tax-adjusted retirement benefit on top of GLA. The loading is folded into the GLA Loaded Rate, but the resulting premium component is broken out separately on the breakdown so the GLA and Tax Saver lines do not double-count.',
+    data_source:
+      'Optional GLA rider for a tax-adjusted retirement benefit. Loaded into the GLA Loaded Rate via the Tax Saver loading; reported separately on the quote and not double-counted in GLA totals.',
     data_source_type: 'Calculation Engine'
   }
 ]

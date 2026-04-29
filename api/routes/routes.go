@@ -447,6 +447,10 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.PATCH("quotes/:id/indicative-member-data", controllers.UpdateGroupPricingQuoteIndicativeFlag)
 			groupPricing.GET("export-csv/:quote_id/table-type/:table_type", controllers.GetTableDataCsvExport)
 			groupPricing.DELETE("quotes/:id/indicative-member-data", controllers.DeleteIndicativeData)
+			groupPricing.GET("experience-rate-overrides/:quote_id", controllers.GetExperienceRateOverrides)
+			groupPricing.POST("experience-rate-overrides", controllers.SaveExperienceRateOverrides)
+			groupPricing.DELETE("experience-rate-overrides/:quote_id", controllers.DeleteExperienceRateOverrides)
+			groupPricing.PUT("experience-rate-overrides/:quote_id/credibility", controllers.UpdateExperienceOverrideCredibility)
 			// Benefit document types CRUD
 			groupPricing.POST("benefit-document-types", controllers.CreateBenefitDocumentType)
 			groupPricing.GET("benefit-document-types", controllers.GetBenefitDocumentTypes)

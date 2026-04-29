@@ -5,6 +5,9 @@ import (
 	"api/models"
 	"fmt"
 	"strings"
+	"time"
+
+	"gorm.io/gorm"
 )
 
 // MigrateBaseTables migrates the base tables
@@ -368,6 +371,7 @@ func MigrateGroupPricingTables() error {
 		&models.GPricingMemberData{},
 		&models.GPricingMemberDataInForce{},
 		&models.GroupPricingClaimsExperience{},
+		&models.GroupPricingExperienceRateOverride{},
 		&models.MemberRatingResult{},
 		&models.MemberRatingResultSummary{},
 		&models.MovementMemberRatingResult{},
@@ -476,10 +480,35 @@ func MigrateGroupPricingTables() error {
 	var settingCount int64
 	DB.Model(&models.GroupPricingSetting{}).Count(&settingCount)
 	if settingCount == 0 {
+		now := time.Now()
 		DB.Create(&models.GroupPricingSetting{
-			ID:             1,
-			DiscountMethod: models.DiscountMethodLoadingAdjustment,
+			ID:                      1,
+			DiscountMethod:          models.DiscountMethodLoadingAdjustment,
+			DiscountMethodUpdatedAt: &now,
+			DiscountMethodUpdatedBy: "system",
+			FCLMethod:               models.FCLMethodPercentile,
+			FCLMethodUpdatedAt:      &now,
+			FCLMethodUpdatedBy:      "system",
+			FCLOverrideTolerance:    FCLOverrideToleranceDefault,
 		})
+	} else {
+		// Backfill audit timestamps on the existing singleton so the
+		// "Last updated" caption renders even before the user touches the
+		// panel. Use updated_at as a best-effort stand-in for the historical
+		// touch time and tag the actor as "system" so it's clear the row
+		// was not explicitly set by a person.
+		DB.Model(&models.GroupPricingSetting{}).
+			Where("id = ? AND discount_method_updated_at IS NULL", 1).
+			Updates(map[string]interface{}{
+				"discount_method_updated_at": gorm.Expr("updated_at"),
+				"discount_method_updated_by": "system",
+			})
+		DB.Model(&models.GroupPricingSetting{}).
+			Where("id = ? AND fcl_method_updated_at IS NULL", 1).
+			Updates(map[string]interface{}{
+				"fcl_method_updated_at": gorm.Expr("updated_at"),
+				"fcl_method_updated_by": "system",
+			})
 	}
 
 	// Ensure Beneficiary columns exist on the member_beneficiaries table.

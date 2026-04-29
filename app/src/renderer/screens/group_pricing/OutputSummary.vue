@@ -226,7 +226,7 @@
                       <v-col cols="3"></v-col>
                       <v-col cols="3"
                         ><p class="text-center content-bg"
-                          >Theoretical Rate</p
+                          >Technical Rate</p
                         ></v-col
                       >
                       <v-col cols="3"
@@ -602,8 +602,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              officeRateFromRiskRate(
+                              expOfficeRateFromRiskRate(
                                 resultSummary.gla_risk_rate_per_1000_sa,
+                                resultSummary.total_gla_annual_commission_amount,
+                                resultSummary.total_gla_capped_sum_assured,
                                 resultSummary
                               )
                             )
@@ -647,8 +649,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              officeProportionFromRiskProportion(
+                              expOfficeProportionFromRiskProportion(
                                 resultSummary.proportion_gla_annual_risk_premium_salary,
+                                resultSummary.total_gla_annual_commission_amount,
+                                resultSummary.total_annual_salary,
                                 resultSummary
                               ) * 100
                             )
@@ -742,7 +746,7 @@
                       <v-col cols="3"></v-col>
                       <v-col cols="3"
                         ><p class="text-center content-bg"
-                          >Theoretical Rate</p
+                          >Technical Rate</p
                         ></v-col
                       >
                       <v-col cols="3"
@@ -1118,8 +1122,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              officeRateFromRiskRate(
+                              expOfficeRateFromRiskRate(
                                 resultSummary.ptd_risk_rate_per_1000_sa,
+                                resultSummary.total_ptd_annual_commission_amount,
+                                resultSummary.total_ptd_capped_sum_assured,
                                 resultSummary
                               )
                             )
@@ -1163,8 +1169,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              officeProportionFromRiskProportion(
+                              expOfficeProportionFromRiskProportion(
                                 resultSummary.proportion_ptd_annual_risk_premium_salary,
+                                resultSummary.total_ptd_annual_commission_amount,
+                                resultSummary.total_annual_salary,
                                 resultSummary
                               ) * 100
                             )
@@ -1256,7 +1264,7 @@
                       <v-col cols="3"></v-col>
                       <v-col cols="3"
                         ><p class="text-center content-bg"
-                          >Theoretical Rate</p
+                          >Technical Rate</p
                         ></v-col
                       >
                       <v-col cols="3"
@@ -1632,8 +1640,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              officeRateFromRiskRate(
+                              expOfficeRateFromRiskRate(
                                 resultSummary.ci_risk_rate_per_1000_sa,
+                                resultSummary.total_ci_annual_commission_amount,
+                                resultSummary.total_ci_capped_sum_assured,
                                 resultSummary
                               )
                             )
@@ -1677,8 +1687,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              officeProportionFromRiskProportion(
+                              expOfficeProportionFromRiskProportion(
                                 resultSummary.proportion_ci_annual_risk_premium_salary,
+                                resultSummary.total_ci_annual_commission_amount,
+                                resultSummary.total_annual_salary,
                                 resultSummary
                               ) * 100
                             )
@@ -1772,7 +1784,7 @@
                       <v-col cols="3"></v-col>
                       <v-col cols="3"
                         ><p class="text-center content-bg"
-                          >Theoretical Rate</p
+                          >Technical Rate</p
                         ></v-col
                       >
                       <v-col cols="3"
@@ -2150,8 +2162,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              officeProportionFromRiskProportion(
+                              expOfficeProportionFromRiskProportion(
                                 resultSummary.proportion_phi_annual_risk_premium_salary,
+                                resultSummary.total_phi_annual_commission_amount,
+                                resultSummary.total_annual_salary,
                                 resultSummary
                               ) * 100
                             )
@@ -2245,7 +2259,7 @@
                       <v-col cols="3"></v-col>
                       <v-col cols="3"
                         ><p class="text-center content-bg"
-                          >Theoretical Rate</p
+                          >Technical Rate</p
                         ></v-col
                       >
                       <v-col cols="3"
@@ -2623,8 +2637,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              officeProportionFromRiskProportion(
+                              expOfficeProportionFromRiskProportion(
                                 resultSummary.proportion_ttd_annual_risk_premium_salary,
+                                resultSummary.total_ttd_annual_commission_amount,
+                                resultSummary.total_annual_salary,
                                 resultSummary
                               ) * 100
                             )
@@ -2720,7 +2736,7 @@
                       <v-col cols="3"></v-col>
                       <v-col cols="3"
                         ><p class="text-center content-bg"
-                          >Theoretical Rate</p
+                          >Technical Rate</p
                         ></v-col
                       >
                       <v-col cols="3"
@@ -3096,8 +3112,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              officeRateFromRiskRate(
+                              expOfficeRateFromRiskRate(
                                 resultSummary.sgla_risk_rate_per_1000_sa,
+                                resultSummary.total_sgla_annual_commission_amount,
+                                resultSummary.total_sgla_capped_sum_assured,
                                 resultSummary
                               )
                             )
@@ -3141,8 +3159,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              officeProportionFromRiskProportion(
+                              expOfficeProportionFromRiskProportion(
                                 resultSummary.proportion_sgla_annual_risk_premium_salary,
+                                resultSummary.total_sgla_annual_commission_amount,
+                                resultSummary.total_annual_salary,
                                 resultSummary
                               ) * 100
                             )
@@ -3240,7 +3260,7 @@
                       <v-col cols="3"></v-col>
                       <v-col cols="3"
                         ><p class="text-center content-bg"
-                          >Theoretical Rate</p
+                          >Technical Rate</p
                         ></v-col
                       >
                       <v-col cols="3"
@@ -3462,8 +3482,10 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              officeProportionFromRiskProportion(
+                              expOfficeProportionFromRiskProportion(
                                 resultSummary.proportion_fun_annual_risk_premium_salary,
+                                resultSummary.total_fun_annual_commission_amount,
+                                resultSummary.total_annual_salary,
                                 resultSummary
                               ) * 100
                             )
@@ -3541,14 +3563,14 @@ const selectedCategory: any = ref(null)
 // Tooltip text for the OFFICE PREMIUM section info icon. Explains progressive
 // commission and how experience rating propagates through the scheme total —
 // notably why a benefit with experience adjustment == 1 can still see a
-// Theoretical vs Experience commission gap (other benefits' experience shifts
+// Technical vs Experience commission gap (other benefits' experience shifts
 // the scheme total, which moves the progressive band, which changes EVERY
 // benefit's commission slice).
 const commissionExplanation = `Progressive Commission & Experience Rating
 
 Commission is allocated using a progressive rate table on the SCHEME total premium (not per benefit):
 
-• Theoretical: book risk / (1 − loadings) + commission slice from the BOOK scheme total band.
+• Technical: book risk / (1 − loadings) + commission slice from the BOOK scheme total band.
 
 • Experience-Rated: experience-blended risk / (1 − loadings) + commission slice from the EXPERIENCE scheme total band.
 
@@ -3691,7 +3713,7 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
   const thP = (field: string) => fmtNum(resolve(field), true)
   const exP = (field: string) => fmtNum(resolve(field), true)
   const f = (field: string) => fmtNum(finalFieldValue(rs, field))
-  // Office premium WITH commission slice. Used for both the Theoretical
+  // Office premium WITH commission slice. Used for both the Technical
   // column (book risk + book commission) and the Experience-Rated column
   // (exp risk + exp commission). The helper itself is tier-neutral; the
   // caller picks which risk and commission fields to feed it.
@@ -3810,7 +3832,11 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       )
       row(
         'Unit Office Premium Rate per 1000 Covered Sum Assured',
-        th('gla_office_rate_per_1000_sa'),
+        exCRate(
+          'gla_risk_rate_per_1000_sa',
+          'total_gla_annual_commission_amount',
+          'total_gla_capped_sum_assured'
+        ),
         exCRate(
           'exp_gla_risk_rate_per_1000_sa',
           'exp_total_gla_annual_commission_amount',
@@ -3820,7 +3846,11 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       )
       row(
         'Office Premium as % of Annual Salary',
-        thP('proportion_gla_office_premium_salary'),
+        exCProp(
+          'proportion_gla_annual_risk_premium_salary',
+          'total_gla_annual_commission_amount',
+          'total_annual_salary'
+        ),
         exCProp(
           'exp_proportion_gla_annual_risk_premium_salary',
           'exp_total_gla_annual_commission_amount',
@@ -3892,7 +3922,11 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       )
       row(
         'Unit Office Premium Rate per 1000 Covered Sum Assured',
-        th('ptd_office_rate_per_1000_sa'),
+        exCRate(
+          'ptd_risk_rate_per_1000_sa',
+          'total_ptd_annual_commission_amount',
+          'total_ptd_capped_sum_assured'
+        ),
         exCRate(
           'exp_ptd_risk_rate_per_1000_sa',
           'exp_total_ptd_annual_commission_amount',
@@ -3902,7 +3936,11 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       )
       row(
         'Office Premium as % of Annual Salary',
-        thP('proportion_ptd_office_premium_salary'),
+        exCProp(
+          'proportion_ptd_annual_risk_premium_salary',
+          'total_ptd_annual_commission_amount',
+          'total_annual_salary'
+        ),
         exCProp(
           'exp_proportion_ptd_annual_risk_premium_salary',
           'exp_total_ptd_annual_commission_amount',
@@ -3974,7 +4012,11 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       )
       row(
         'Unit Office Premium Rate per 1000 Covered Sum Assured',
-        th('ci_office_rate_per_1000_sa'),
+        exCRate(
+          'ci_risk_rate_per_1000_sa',
+          'total_ci_annual_commission_amount',
+          'total_ci_capped_sum_assured'
+        ),
         exCRate(
           'exp_ci_risk_rate_per_1000_sa',
           'exp_total_ci_annual_commission_amount',
@@ -3984,7 +4026,11 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       )
       row(
         'Office Premium as % of Annual Salary',
-        thP('proportion_ci_office_premium_salary'),
+        exCProp(
+          'proportion_ci_annual_risk_premium_salary',
+          'total_ci_annual_commission_amount',
+          'total_annual_salary'
+        ),
         exCProp(
           'exp_proportion_ci_annual_risk_premium_salary',
           'exp_total_ci_annual_commission_amount',
@@ -4056,7 +4102,11 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       )
       row(
         'Unit Office Premium Rate per 1000 Covered Sum Assured',
-        th('sgla_office_rate_per_1000_sa'),
+        exCRate(
+          'sgla_risk_rate_per_1000_sa',
+          'total_sgla_annual_commission_amount',
+          'total_sgla_capped_sum_assured'
+        ),
         exCRate(
           'exp_sgla_risk_rate_per_1000_sa',
           'exp_total_sgla_annual_commission_amount',
@@ -4069,7 +4119,11 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       )
       row(
         'Office Premium as % of Annual Salary',
-        thP('proportion_sgla_office_premium_salary'),
+        exCProp(
+          'proportion_sgla_annual_risk_premium_salary',
+          'total_sgla_annual_commission_amount',
+          'total_annual_salary'
+        ),
         exCProp(
           'exp_proportion_sgla_annual_risk_premium_salary',
           'exp_total_sgla_annual_commission_amount',
@@ -4139,7 +4193,11 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       )
       row(
         'Office Premium as % of Annual Salary',
-        thP('proportion_phi_office_premium_salary'),
+        exCProp(
+          'proportion_phi_annual_risk_premium_salary',
+          'total_phi_annual_commission_amount',
+          'total_annual_salary'
+        ),
         exCProp(
           'exp_proportion_phi_annual_risk_premium_salary',
           'exp_total_phi_annual_commission_amount',
@@ -4209,7 +4267,11 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       )
       row(
         'Office Premium as % of Annual Salary',
-        thP('proportion_ttd_office_premium_salary'),
+        exCProp(
+          'proportion_ttd_annual_risk_premium_salary',
+          'total_ttd_annual_commission_amount',
+          'total_annual_salary'
+        ),
         exCProp(
           'exp_proportion_ttd_annual_risk_premium_salary',
           'exp_total_ttd_annual_commission_amount',
@@ -4256,7 +4318,11 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       )
       row(
         'Office Premium as % of Annual Salary',
-        thP('proportion_fun_office_premium_salary'),
+        exCProp(
+          'proportion_fun_annual_risk_premium_salary',
+          'total_fun_annual_commission_amount',
+          'total_annual_salary'
+        ),
         exCProp(
           'exp_proportion_fun_annual_risk_premium_salary',
           'exp_total_fun_annual_commission_amount',
@@ -4306,7 +4372,7 @@ const buildExcelSheet = (
   const wsData: string[][] = []
   wsData.push([`${props.quote.scheme_name} — ${title}`, '', '', ''])
   wsData.push(['', '', '', ''])
-  wsData.push(['Metric', 'Theoretical Rate', 'Experience Rated', 'Discounted'])
+  wsData.push(['Metric', 'Technical Rate', 'Experience Rated', 'Discounted'])
   summaries.forEach((rs: any) => {
     if (summaries.length > 1)
       wsData.push([`Category: ${rs.category}`, '', '', ''])
@@ -4342,7 +4408,7 @@ const buildPDFSection = (
     const body = getBenefitRows(rs, code)
     doc.autoTable({
       startY: y,
-      head: [['Metric', 'Theoretical Rate', 'Experience Rated', 'Discounted']],
+      head: [['Metric', 'Technical Rate', 'Experience Rated', 'Discounted']],
       body,
       theme: 'striped',
       styles: { fontSize: 7.5, cellPadding: 1.5 },
