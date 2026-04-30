@@ -841,7 +841,10 @@ const handleMemberSave = async (memberData: any) => {
     closeAddMemberDialog()
   } catch (error: any) {
     console.error('Error saving member:', error)
-    showSnackbar(error?.response?.data || error?.message || 'Failed to save member', 'error')
+    showSnackbar(
+      error?.response?.data || error?.message || 'Failed to save member',
+      'error'
+    )
   }
 }
 

@@ -481,9 +481,7 @@
                               density="compact"
                               hide-details
                               :loading="loadingFields"
-                              :disabled="
-                                !editingTemplate.type || loadingFields
-                              "
+                              :disabled="!editingTemplate.type || loadingFields"
                               clearable
                             />
                           </div>
