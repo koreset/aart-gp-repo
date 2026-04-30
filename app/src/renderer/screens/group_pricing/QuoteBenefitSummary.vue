@@ -248,49 +248,177 @@
                 }}%
               </span>
             </div>
-            <v-table density="compact">
-              <thead>
-                <tr>
-                  <th>Age Band</th>
-                  <th class="text-right">Risk Rate / 1,000</th>
-                  <th class="text-right">Binder Fee / 1,000</th>
-                  <th class="text-right">Outsource Fee / 1,000</th>
-                  <th class="text-right">Commission / 1,000</th>
-                  <th class="text-right">Office Rate / 1,000</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(r, j) in (rs as any).additional_gla_cover_band_rates"
-                  :key="'agla-row-' + i + '-' + j"
-                >
-                  <td>{{ formatBandLabel(r) }}</td>
-                  <td class="text-right">
-                    {{ roundUpToTwoDecimalsAccounting(r.risk_rate_per1000) }}
-                  </td>
-                  <td class="text-right">
-                    {{
-                      roundUpToTwoDecimalsAccounting(r.binder_fee_per1000 ?? 0)
-                    }}
-                  </td>
-                  <td class="text-right">
-                    {{
-                      roundUpToTwoDecimalsAccounting(
-                        r.outsource_fee_per1000 ?? 0
-                      )
-                    }}
-                  </td>
-                  <td class="text-right">
-                    {{
-                      roundUpToTwoDecimalsAccounting(r.commission_per1000 ?? 0)
-                    }}
-                  </td>
-                  <td class="text-right">
-                    {{ roundUpToTwoDecimalsAccounting(r.office_rate_per1000) }}
-                  </td>
-                </tr>
-              </tbody>
-            </v-table>
+            <div style="overflow-x: auto">
+              <v-table density="compact" class="agla-summary-table">
+                <thead>
+                  <tr>
+                    <th rowspan="2" class="agla-age-band">Age Band</th>
+                    <th colspan="3" class="text-center agla-group-divider">
+                      Risk Rate / 1,000
+                    </th>
+                    <th colspan="3" class="text-center agla-group-divider">
+                      Binder Fee / 1,000
+                    </th>
+                    <th colspan="3" class="text-center agla-group-divider">
+                      Outsource Fee / 1,000
+                    </th>
+                    <th colspan="3" class="text-center agla-group-divider">
+                      Commission / 1,000
+                    </th>
+                    <th colspan="3" class="text-center">Office Rate / 1,000</th>
+                  </tr>
+                  <tr>
+                    <th class="text-right agla-mf-cell">M</th>
+                    <th class="text-right agla-mf-cell">F</th>
+                    <th
+                      class="text-right agla-combined-cell agla-group-divider"
+                    >
+                      Combined
+                    </th>
+                    <th class="text-right agla-mf-cell">M</th>
+                    <th class="text-right agla-mf-cell">F</th>
+                    <th
+                      class="text-right agla-combined-cell agla-group-divider"
+                    >
+                      Combined
+                    </th>
+                    <th class="text-right agla-mf-cell">M</th>
+                    <th class="text-right agla-mf-cell">F</th>
+                    <th
+                      class="text-right agla-combined-cell agla-group-divider"
+                    >
+                      Combined
+                    </th>
+                    <th class="text-right agla-mf-cell">M</th>
+                    <th class="text-right agla-mf-cell">F</th>
+                    <th
+                      class="text-right agla-combined-cell agla-group-divider"
+                    >
+                      Combined
+                    </th>
+                    <th class="text-right agla-mf-cell">M</th>
+                    <th class="text-right agla-mf-cell">F</th>
+                    <th class="text-right agla-combined-cell">Combined</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(r, j) in (rs as any)
+                      .additional_gla_cover_band_rates"
+                    :key="'agla-row-' + i + '-' + j"
+                  >
+                    <td class="agla-age-band">{{ formatBandLabel(r) }}</td>
+                    <td class="text-right agla-mf-cell">
+                      {{
+                        roundUpToTwoDecimalsAccounting(
+                          r.risk_rate_per1000_male ?? 0
+                        )
+                      }}
+                    </td>
+                    <td class="text-right agla-mf-cell">
+                      {{
+                        roundUpToTwoDecimalsAccounting(
+                          r.risk_rate_per1000_female ?? 0
+                        )
+                      }}
+                    </td>
+                    <td
+                      class="text-right agla-combined-cell agla-group-divider"
+                    >
+                      {{ roundUpToTwoDecimalsAccounting(r.risk_rate_per1000) }}
+                    </td>
+                    <td class="text-right agla-mf-cell">
+                      {{
+                        roundUpToTwoDecimalsAccounting(
+                          r.binder_fee_per1000_male ?? 0
+                        )
+                      }}
+                    </td>
+                    <td class="text-right agla-mf-cell">
+                      {{
+                        roundUpToTwoDecimalsAccounting(
+                          r.binder_fee_per1000_female ?? 0
+                        )
+                      }}
+                    </td>
+                    <td
+                      class="text-right agla-combined-cell agla-group-divider"
+                    >
+                      {{
+                        roundUpToTwoDecimalsAccounting(
+                          r.binder_fee_per1000 ?? 0
+                        )
+                      }}
+                    </td>
+                    <td class="text-right agla-mf-cell">
+                      {{
+                        roundUpToTwoDecimalsAccounting(
+                          r.outsource_fee_per1000_male ?? 0
+                        )
+                      }}
+                    </td>
+                    <td class="text-right agla-mf-cell">
+                      {{
+                        roundUpToTwoDecimalsAccounting(
+                          r.outsource_fee_per1000_female ?? 0
+                        )
+                      }}
+                    </td>
+                    <td
+                      class="text-right agla-combined-cell agla-group-divider"
+                    >
+                      {{
+                        roundUpToTwoDecimalsAccounting(
+                          r.outsource_fee_per1000 ?? 0
+                        )
+                      }}
+                    </td>
+                    <td class="text-right agla-mf-cell">
+                      {{
+                        roundUpToTwoDecimalsAccounting(
+                          r.commission_per1000_male ?? 0
+                        )
+                      }}
+                    </td>
+                    <td class="text-right agla-mf-cell">
+                      {{
+                        roundUpToTwoDecimalsAccounting(
+                          r.commission_per1000_female ?? 0
+                        )
+                      }}
+                    </td>
+                    <td
+                      class="text-right agla-combined-cell agla-group-divider"
+                    >
+                      {{
+                        roundUpToTwoDecimalsAccounting(
+                          r.commission_per1000 ?? 0
+                        )
+                      }}
+                    </td>
+                    <td class="text-right agla-mf-cell">
+                      {{
+                        roundUpToTwoDecimalsAccounting(
+                          r.office_rate_per1000_male ?? 0
+                        )
+                      }}
+                    </td>
+                    <td class="text-right agla-mf-cell">
+                      {{
+                        roundUpToTwoDecimalsAccounting(
+                          r.office_rate_per1000_female ?? 0
+                        )
+                      }}
+                    </td>
+                    <td class="text-right agla-combined-cell">
+                      {{
+                        roundUpToTwoDecimalsAccounting(r.office_rate_per1000)
+                      }}
+                    </td>
+                  </tr>
+                </tbody>
+              </v-table>
+            </div>
           </template>
           <v-alert v-else type="warning" density="compact" variant="tonal">
             {{ additionalGlaCoverBenefitTitle }} is enabled for
@@ -847,32 +975,100 @@ const exportAdditionalGlaCoverToExcel = () => {
       aoa.push([headerBits.join('  ·  ')])
     }
     aoa.push([])
+    const groupHeaderRowIdx = aoa.length
     aoa.push([
       'Age Band',
       'Risk Rate / 1,000',
+      '',
+      '',
       'Binder Fee / 1,000',
+      '',
+      '',
       'Outsource Fee / 1,000',
+      '',
+      '',
       'Commission / 1,000',
-      'Office Rate / 1,000'
+      '',
+      '',
+      'Office Rate / 1,000',
+      '',
+      ''
+    ])
+    aoa.push([
+      '',
+      'M',
+      'F',
+      'Combined',
+      'M',
+      'F',
+      'Combined',
+      'M',
+      'F',
+      'Combined',
+      'M',
+      'F',
+      'Combined',
+      'M',
+      'F',
+      'Combined'
     ])
     ;(rs.additional_gla_cover_band_rates ?? []).forEach((r: any) => {
       aoa.push([
         formatBandLabel(r),
+        Number(r.risk_rate_per1000_male ?? 0),
+        Number(r.risk_rate_per1000_female ?? 0),
         Number(r.risk_rate_per1000 ?? 0),
+        Number(r.binder_fee_per1000_male ?? 0),
+        Number(r.binder_fee_per1000_female ?? 0),
         Number(r.binder_fee_per1000 ?? 0),
+        Number(r.outsource_fee_per1000_male ?? 0),
+        Number(r.outsource_fee_per1000_female ?? 0),
         Number(r.outsource_fee_per1000 ?? 0),
+        Number(r.commission_per1000_male ?? 0),
+        Number(r.commission_per1000_female ?? 0),
         Number(r.commission_per1000 ?? 0),
+        Number(r.office_rate_per1000_male ?? 0),
+        Number(r.office_rate_per1000_female ?? 0),
         Number(r.office_rate_per1000 ?? 0)
       ])
     })
     const ws = XLSX.utils.aoa_to_sheet(aoa)
+    ws['!merges'] = [
+      // Age Band cell spans both header rows.
+      {
+        s: { r: groupHeaderRowIdx, c: 0 },
+        e: { r: groupHeaderRowIdx + 1, c: 0 }
+      },
+      // Each fee group label spans its three sub-columns.
+      { s: { r: groupHeaderRowIdx, c: 1 }, e: { r: groupHeaderRowIdx, c: 3 } },
+      { s: { r: groupHeaderRowIdx, c: 4 }, e: { r: groupHeaderRowIdx, c: 6 } },
+      { s: { r: groupHeaderRowIdx, c: 7 }, e: { r: groupHeaderRowIdx, c: 9 } },
+      {
+        s: { r: groupHeaderRowIdx, c: 10 },
+        e: { r: groupHeaderRowIdx, c: 12 }
+      },
+      {
+        s: { r: groupHeaderRowIdx, c: 13 },
+        e: { r: groupHeaderRowIdx, c: 15 }
+      }
+    ]
     ws['!cols'] = [
       { wch: 18 },
-      { wch: 20 },
-      { wch: 20 },
-      { wch: 22 },
-      { wch: 20 },
-      { wch: 20 }
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 12 }
     ]
     // Excel sheet names are capped at 31 chars and cannot contain : \ / ? * [ ]
     const sheetName = String(rs.category ?? 'Category')
@@ -2297,5 +2493,48 @@ function convertResultSummariesToBreakdown(): any[] {
  * without colour-coding each side. */
 :deep(.ag-theme-balham .ag-header-group-cell.breakdown-group-pre) {
   border-right: 2px solid #fff;
+}
+
+/*
+ * Additional GLA Cover Summary table — visual demarcation across the
+ * five fee groups (Risk / Binder / Outsource / Commission / Office). Each
+ * group spans M, F, Combined sub-columns, so the eye needs help finding
+ * group boundaries and the headline (Combined) value within each block.
+ *
+ * v-table renders headers/cells outside the scoped boundary on Vuetify 3,
+ * so :deep() is needed to pierce into the rendered <th>/<td>.
+ */
+
+/* Sticky Age Band column so horizontal scroll keeps the row label in view. */
+:deep(.agla-summary-table th.agla-age-band),
+:deep(.agla-summary-table td.agla-age-band) {
+  position: sticky;
+  left: 0;
+  background-color: rgb(var(--v-theme-surface));
+  border-right: 2px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  z-index: 1;
+}
+:deep(.agla-summary-table thead th.agla-age-band) {
+  z-index: 3;
+}
+
+/* M/F sub-columns sit at slightly lower visual weight than Combined. */
+:deep(.agla-summary-table .agla-mf-cell) {
+  background-color: rgba(0, 63, 88, 0.04);
+  color: rgba(var(--v-theme-on-surface), 0.78);
+}
+
+/* Combined column is the headline value — bold and brand-tinted. */
+:deep(.agla-summary-table .agla-combined-cell) {
+  font-weight: 600;
+  background-color: rgba(0, 63, 88, 0.08);
+}
+:deep(.agla-summary-table thead th.agla-combined-cell) {
+  color: #003f58;
+}
+
+/* Strong divider on the right edge of every group except the last. */
+:deep(.agla-summary-table .agla-group-divider) {
+  border-right: 2px solid rgba(0, 63, 88, 0.35);
 }
 </style>

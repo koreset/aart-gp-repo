@@ -449,61 +449,71 @@
                     class="pa-0"
                     style="max-height: 400px; overflow-y: auto"
                   >
-                    <v-list>
-                      <v-list-item
-                        v-for="(
-                          mapping, index
-                        ) in editingTemplate.field_mappings"
-                        :key="index"
-                        :value="index"
-                      >
-                        <div class="w-100">
-                          <v-row class="mt-1">
-                            <v-col cols="5">
-                              <v-select
-                                v-model="mapping.source_field"
-                                :items="availableSourceFieldsFor(index)"
-                                item-title="display_name"
-                                item-value="field_name"
-                                label="Source Field"
-                                variant="outlined"
-                                density="compact"
-                                hide-details
-                                :loading="loadingFields"
-                                :disabled="
-                                  !editingTemplate.type || loadingFields
-                                "
-                                clearable
-                              />
-                            </v-col>
-                            <v-col cols="5">
-                              <v-text-field
-                                v-model="mapping.target_field"
-                                label="Target Field"
-                                variant="outlined"
-                                density="compact"
-                                hide-details
-                              />
-                            </v-col>
-                            <v-col cols="2" class="d-flex align-center">
-                              <v-checkbox
-                                v-model="mapping.required"
-                                label="*"
-                                density="compact"
-                                hide-details
-                              />
-                              <v-btn
-                                size="small"
-                                color="error"
-                                variant="text"
-                                icon="mdi-delete"
-                                @click="removeFieldMapping(index)"
-                              />
-                            </v-col>
-                          </v-row>
+                    <draggable
+                      v-model="editingTemplate.field_mappings"
+                      handle=".drag-handle"
+                      :item-key="
+                        (el) => editingTemplate.field_mappings.indexOf(el)
+                      "
+                      :animation="150"
+                      ghost-class="field-mapping-ghost"
+                      tag="div"
+                    >
+                      <template #item="{ element: mapping, index }">
+                        <div
+                          class="field-mapping-row d-flex align-center flex-nowrap ga-2 px-4 py-1"
+                        >
+                          <v-icon
+                            class="drag-handle flex-shrink-0"
+                            style="cursor: grab"
+                            title="Drag to reorder"
+                          >
+                            mdi-drag-vertical
+                          </v-icon>
+                          <div class="flex-grow-1" style="min-width: 0">
+                            <v-select
+                              v-model="mapping.source_field"
+                              :items="availableSourceFieldsFor(index)"
+                              item-title="display_name"
+                              item-value="field_name"
+                              label="Source Field"
+                              variant="outlined"
+                              density="compact"
+                              hide-details
+                              :loading="loadingFields"
+                              :disabled="
+                                !editingTemplate.type || loadingFields
+                              "
+                              clearable
+                            />
+                          </div>
+                          <div class="flex-grow-1" style="min-width: 0">
+                            <v-text-field
+                              v-model="mapping.target_field"
+                              label="Target Field"
+                              variant="outlined"
+                              density="compact"
+                              hide-details
+                            />
+                          </div>
+                          <v-checkbox
+                            v-model="mapping.required"
+                            label="*"
+                            density="compact"
+                            hide-details
+                            class="flex-shrink-0"
+                          />
+                          <v-btn
+                            size="small"
+                            color="error"
+                            variant="text"
+                            icon="mdi-delete"
+                            class="flex-shrink-0"
+                            @click="removeFieldMapping(index)"
+                          />
                         </div>
-                      </v-list-item>
-                    </v-list>
+                      </template>
+                    </draggable>
                   </v-card-text>
                 </v-card>
               </v-col>
@@ -773,6 +783,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import draggable from 'vuedraggable'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import ConfirmDialog from '@/renderer/components/ConfirmDialog.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
@@ -1506,5 +1517,12 @@ onMounted(() => {
 <style scoped>
 .w-100 {
   width: 100%;
+}
+.field-mapping-ghost {
+  opacity: 0.5;
+  background: rgb(var(--v-theme-surface-variant));
+}
+.drag-handle:active {
+  cursor: grabbing;
 }
 </style>

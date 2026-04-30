@@ -12,15 +12,17 @@
       </v-col>
 
       <v-col cols="12">
-        <v-select
+        <v-autocomplete
           v-model="selectedScheme"
-          :items="schemes"
+          :items="inForceSchemes"
           item-title="name"
           item-value="id"
           label="Target Scheme *"
           variant="outlined"
           density="compact"
           :rules="[rules.required]"
+          clearable
+          auto-select-first
           required
         />
       </v-col>
@@ -425,7 +427,7 @@ interface Emits {
   (e: 'cancel'): void
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 // Interfaces
@@ -449,6 +451,10 @@ const selectedScheme = ref<number | null>(null)
 const uploadFile = ref<File | null>(null)
 const validateOnly = ref(false)
 const skipDuplicates = ref(true)
+
+const inForceSchemes = computed(() =>
+  props.schemes.filter((s) => s?.status === 'in_force')
+)
 
 const uploadProgress = ref<UploadProgress>({
   show: false,
@@ -596,6 +602,11 @@ const validateCSVData = (data: any[]) => {
     'entry_date'
   ]
 
+  const scheme = props.schemes.find((s) => s.id === selectedScheme.value)
+  const schemeCommencement = scheme?.commencement_date
+    ? new Date(scheme.commencement_date)
+    : null
+
   data.forEach((row, index) => {
     const rowNumber = index + 2 // +2 because CSV header is row 1, data starts at row 2
 
@@ -656,6 +667,14 @@ const validateCSVData = (data: any[]) => {
       errors.push({
         row: rowNumber,
         message: 'Invalid date format for entry_date (use YYYY-MM-DD)'
+      })
+      return
+    }
+
+    if (schemeCommencement && new Date(row.entry_date) < schemeCommencement) {
+      errors.push({
+        row: rowNumber,
+        message: `Entry date (${row.entry_date}) cannot be before scheme commencement date (${schemeCommencement.toISOString().slice(0, 10)})`
       })
       return
     }
@@ -771,7 +790,7 @@ const processMemberUploads = async (validMembers: any[]) => {
       results.failed++
       results.errors.push({
         row: member.rowNumber,
-        message: `Failed to add member: ${error?.data || 'Unknown error'}`
+        message: `Failed to add member: ${error?.response?.data || error?.message || 'Unknown error'}`
       })
     }
   }

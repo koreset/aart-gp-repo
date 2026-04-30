@@ -4,6 +4,7 @@ import (
 	"api/models"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -26,8 +27,34 @@ func validateBordereauxFieldMappings(mappings []models.BordereauxFieldMapping) e
 	return nil
 }
 
+// ensureUniqueTemplateName rejects names that collide (case-insensitive) with
+// an existing template. excludeID skips the row being updated so a template
+// can keep its own name on save.
+func ensureUniqueTemplateName(name string, excludeID int) error {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return nil
+	}
+	var existing models.BordereauxTemplate
+	q := DB.Where("LOWER(name) = ?", strings.ToLower(trimmed))
+	if excludeID > 0 {
+		q = q.Where("id <> ?", excludeID)
+	}
+	err := q.First(&existing).Error
+	if err == nil {
+		return fmt.Errorf("a template named %q already exists", existing.Name)
+	}
+	if err != gorm.ErrRecordNotFound {
+		return err
+	}
+	return nil
+}
+
 func CreateBordereauxTemplate(t *models.BordereauxTemplate, user models.AppUser) error {
 	if err := validateBordereauxFieldMappings(t.FieldMappings); err != nil {
+		return err
+	}
+	if err := ensureUniqueTemplateName(t.Name, 0); err != nil {
 		return err
 	}
 	t.CreatedAt = time.Now()
@@ -58,6 +85,9 @@ func GetBordereauxTemplateByID(id int) (models.BordereauxTemplate, error) {
 
 func UpdateBordereauxTemplate(id int, payload models.BordereauxTemplate, user models.AppUser) (models.BordereauxTemplate, error) {
 	if err := validateBordereauxFieldMappings(payload.FieldMappings); err != nil {
+		return payload, err
+	}
+	if err := ensureUniqueTemplateName(payload.Name, id); err != nil {
 		return payload, err
 	}
 	before, _ := GetBordereauxTemplateByID(id)

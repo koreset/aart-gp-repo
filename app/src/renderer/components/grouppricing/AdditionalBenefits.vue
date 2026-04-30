@@ -1657,7 +1657,22 @@ function onSchemeTypeChange(schemeType) {
           min_age: Number(b.min_age),
           max_age: Number(b.max_age),
           risk_rate_per1000: Number(b.risk_rate_per1000),
+          risk_rate_per1000_male: Number(b.risk_rate_per1000_male ?? 0),
+          risk_rate_per1000_female: Number(b.risk_rate_per1000_female ?? 0),
+          binder_fee_per1000: Number(b.binder_fee_per1000 ?? 0),
+          binder_fee_per1000_male: Number(b.binder_fee_per1000_male ?? 0),
+          binder_fee_per1000_female: Number(b.binder_fee_per1000_female ?? 0),
+          outsource_fee_per1000: Number(b.outsource_fee_per1000 ?? 0),
+          outsource_fee_per1000_male: Number(b.outsource_fee_per1000_male ?? 0),
+          outsource_fee_per1000_female: Number(
+            b.outsource_fee_per1000_female ?? 0
+          ),
+          commission_per1000: Number(b.commission_per1000 ?? 0),
+          commission_per1000_male: Number(b.commission_per1000_male ?? 0),
+          commission_per1000_female: Number(b.commission_per1000_female ?? 0),
           office_rate_per1000: Number(b.office_rate_per1000),
+          office_rate_per1000_male: Number(b.office_rate_per1000_male ?? 0),
+          office_rate_per1000_female: Number(b.office_rate_per1000_female ?? 0),
           male_prop_used: Number(b.male_prop_used)
         }))
       : []
@@ -2396,7 +2411,11 @@ const validationSchema = yup.object({
       then: (schema) =>
         schema
           .required('Spouse funeral sum assured is required')
-          .min(0, 'Spouse funeral sum assured must be at least 0'),
+          .min(0, 'Spouse funeral sum assured must be at least 0')
+          .max(
+            yup.ref('family_funeral_main_member_funeral_sum_assured'),
+            "Spouse funeral sum assured cannot exceed main member's sum assured"
+          ),
 
       otherwise: (schema) => schema.nullable()
     }),
@@ -2407,7 +2426,11 @@ const validationSchema = yup.object({
       then: (schema) =>
         schema
           .required('Children funeral sum assured is required')
-          .min(0, 'Children funeral sum assured must be at least 0'),
+          .min(0, 'Children funeral sum assured must be at least 0')
+          .max(
+            yup.ref('family_funeral_main_member_funeral_sum_assured'),
+            "Children funeral sum assured cannot exceed main member's sum assured"
+          ),
 
       otherwise: (schema) => schema.nullable()
     }),
@@ -2418,7 +2441,11 @@ const validationSchema = yup.object({
       then: (schema) =>
         schema
           .required('Adult dependant sum assured is required')
-          .min(0, 'Adult dependant sum assured must be at least 0'),
+          .min(0, 'Adult dependant sum assured must be at least 0')
+          .max(
+            yup.ref('family_funeral_main_member_funeral_sum_assured'),
+            "Adult dependant sum assured cannot exceed main member's sum assured"
+          ),
       otherwise: (schema) => schema.nullable()
     }),
   family_funeral_parent_funeral_sum_assured: yup
@@ -2428,7 +2455,11 @@ const validationSchema = yup.object({
       then: (schema) =>
         schema
           .required('Parent funeral sum assured is required')
-          .min(0, 'Parent funeral sum assured must be at least 0'),
+          .min(0, 'Parent funeral sum assured must be at least 0')
+          .max(
+            yup.ref('family_funeral_main_member_funeral_sum_assured'),
+            "Parent funeral sum assured cannot exceed main member's sum assured"
+          ),
       otherwise: (schema) => schema.nullable()
     }),
   family_funeral_max_number_children: yup
@@ -2860,7 +2891,20 @@ interface AglaBandRate {
   min_age: number
   max_age: number
   risk_rate_per1000: number
+  risk_rate_per1000_male: number
+  risk_rate_per1000_female: number
+  binder_fee_per1000: number
+  binder_fee_per1000_male: number
+  binder_fee_per1000_female: number
+  outsource_fee_per1000: number
+  outsource_fee_per1000_male: number
+  outsource_fee_per1000_female: number
+  commission_per1000: number
+  commission_per1000_male: number
+  commission_per1000_female: number
   office_rate_per1000: number
+  office_rate_per1000_male: number
+  office_rate_per1000_female: number
   male_prop_used: number
 }
 

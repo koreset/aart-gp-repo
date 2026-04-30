@@ -10,8 +10,39 @@
     <template #header>
       <span class="headline">Input Data Tables</span>
     </template>
-    <v-row v-if="indicativeDataEnabled" class="mt-2">
-      <v-col cols="12" md="4">
+    <p
+      v-if="indicativeDataEnabled"
+      class="text-body-2 text-medium-emphasis mt-2 mb-2"
+    >
+      Indicative data lets you price a quote without uploading a member file by
+      entering category-level summary statistics. Premiums are then derived from
+      category salary multiples rather than per-member salaries.
+    </p>
+    <v-alert
+      v-if="indicativeDataEnabled && !props.quote.use_global_salary_multiple"
+      type="info"
+      variant="tonal"
+      density="compact"
+      prepend-icon="mdi-information-outline"
+      class="mb-3"
+    >
+      To use indicative data, enable <strong>Global Salary Multiple</strong> on
+      this quote. Without it, benefit amounts cannot be computed from
+      category-level averages.
+      <template #append>
+        <v-btn
+          size="small"
+          variant="text"
+          color="primary"
+          append-icon="mdi-arrow-right"
+          @click="goToGeneralInput"
+        >
+          Open General Input
+        </v-btn>
+      </template>
+    </v-alert>
+    <v-row v-if="indicativeDataEnabled" class="mt-1" align="start" no-gutters>
+      <v-col cols="12" md="4" class="pe-md-2 pb-2">
         <v-select
           v-model="selectedCategory"
           variant="outlined"
@@ -21,7 +52,7 @@
           :items="availableCategories"
         ></v-select>
       </v-col>
-      <v-col cols="12" md="4">
+      <v-col cols="12" md="4" class="pe-md-2 pb-2">
         <v-text-field
           v-model="memberAverageAge"
           label="Average Age"
@@ -31,17 +62,19 @@
           hide-details
         ></v-text-field>
       </v-col>
-      <v-col cols="12" md="4">
+      <v-col cols="12" md="4" class="pe-md-2 pb-2">
         <v-text-field
           v-model="memberAverageIncome"
-          label="Average Income"
+          label="Average Annual Salary"
           type="number"
           density="compact"
           variant="outlined"
-          hide-details
+          hide-details="auto"
+          hint="Annual gross salary, averaged across members in the category"
+          persistent-hint
         ></v-text-field>
       </v-col>
-      <v-col cols="12" md="4">
+      <v-col cols="12" md="4" class="pe-md-2 pb-2">
         <v-text-field
           v-model="memberDataCount"
           label="Member Count"
@@ -51,17 +84,23 @@
           hide-details
         ></v-text-field>
       </v-col>
-      <v-col cols="12" md="4">
+      <v-col cols="12" md="4" class="pe-md-2 pb-2">
         <v-text-field
           v-model="memberMaleFemaleDistribution"
-          label="Male/Female Distribution"
+          label="Male Proportion (%)"
           density="compact"
           type="number"
           variant="outlined"
-          hide-details
+          hide-details="auto"
+          hint="Percentage of male members (0–100). Female proportion is the remainder."
+          persistent-hint
+          :rules="[malePropRule]"
+          min="0"
+          max="100"
+          suffix="%"
         ></v-text-field>
       </v-col>
-      <v-col cols="12" md="4">
+      <v-col cols="12" md="4" class="pe-md-2 pb-2">
         <v-btn rounded color="primary" size="small" @click="addToDataSet"
           >Add / Update</v-btn
         >
@@ -74,9 +113,9 @@
             <tr>
               <th class="text-left">Category</th>
               <th class="text-left">Average Age</th>
-              <th class="text-left">Average Income</th>
+              <th class="text-left">Average Annual Salary</th>
               <th class="text-left">Member Count</th>
-              <th class="text-left">Male/Female Distribution</th>
+              <th class="text-left">Male Proportion (%)</th>
               <th class="text-left">Actions</th>
             </tr>
           </thead>
@@ -321,7 +360,11 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['quote-updated', 'indicative-data-updated'])
+const emit = defineEmits([
+  'quote-updated',
+  'indicative-data-updated',
+  'navigate-to-general-input'
+])
 const confirmationDialog: any = ref(null)
 const tableData = ref([])
 const columnDefs: any = ref([])
@@ -350,6 +393,14 @@ const memberAverageAge = ref<number | null>(null)
 const memberAverageIncome = ref<number | null>(null)
 const memberDataCount = ref<number | null>(null)
 const memberMaleFemaleDistribution = ref<number | null>(null)
+const malePropRule = (v: number | string | null) => {
+  if (v === null || v === '') return true
+  const n = Number(v)
+  return (n >= 0 && n <= 100) || 'Enter a value between 0 and 100'
+}
+const goToGeneralInput = () => {
+  emit('navigate-to-general-input')
+}
 const memberGenderSplit = ref<{
   male_count: number
   female_count: number

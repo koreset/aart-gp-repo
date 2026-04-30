@@ -72,7 +72,20 @@ export const useGroupPricingStore = defineStore('groupPricing', {
         min_age: number
         max_age: number
         risk_rate_per1000: number
+        risk_rate_per1000_male: number
+        risk_rate_per1000_female: number
+        binder_fee_per1000: number
+        binder_fee_per1000_male: number
+        binder_fee_per1000_female: number
+        outsource_fee_per1000: number
+        outsource_fee_per1000_male: number
+        outsource_fee_per1000_female: number
+        commission_per1000: number
+        commission_per1000_male: number
+        commission_per1000_female: number
         office_rate_per1000: number
+        office_rate_per1000_male: number
+        office_rate_per1000_female: number
         male_prop_used: number
       }>,
       ptd_risk_type: null,

@@ -34,6 +34,29 @@ import (
 	"gorm.io/gorm"
 )
 
+func validateFamilyFuneralSumAssureds(quote models.GroupPricingQuote) error {
+	for _, sc := range quote.SchemeCategories {
+		if !sc.FamilyFuneralBenefit {
+			continue
+		}
+		main := sc.FamilyFuneralMainMemberFuneralSumAssured
+		label := sc.SchemeCategory
+		if sc.FamilyFuneralSpouseFuneralSumAssured > main {
+			return fmt.Errorf("scheme category '%s': spouse funeral sum assured cannot exceed main member's sum assured", label)
+		}
+		if sc.FamilyFuneralChildrenFuneralSumAssured > main {
+			return fmt.Errorf("scheme category '%s': children funeral sum assured cannot exceed main member's sum assured", label)
+		}
+		if sc.FamilyFuneralAdultDependantSumAssured > main {
+			return fmt.Errorf("scheme category '%s': adult dependant sum assured cannot exceed main member's sum assured", label)
+		}
+		if sc.FamilyFuneralParentFuneralSumAssured > main {
+			return fmt.Errorf("scheme category '%s': parent funeral sum assured cannot exceed main member's sum assured", label)
+		}
+	}
+	return nil
+}
+
 func GenerateGroupPricingQuote(quote models.GroupPricingQuote, user models.AppUser) error {
 	logger := appLog.WithFields(map[string]interface{}{
 		"user_email": user.UserEmail,
@@ -42,6 +65,10 @@ func GenerateGroupPricingQuote(quote models.GroupPricingQuote, user models.AppUs
 	})
 
 	logger.Info("Starting group pricing quote generation")
+
+	if err := validateFamilyFuneralSumAssureds(quote); err != nil {
+		return err
+	}
 
 	// Capture before state if this is an update (quote.ID > 0)
 	var __gpqBefore models.GroupPricingQuote
@@ -211,6 +238,10 @@ func GenerateGroupPricingQuote(quote models.GroupPricingQuote, user models.AppUs
 }
 
 func UpdateGroupPricingQuote(quote models.GroupPricingQuote, user models.AppUser) error {
+	if err := validateFamilyFuneralSumAssureds(quote); err != nil {
+		return err
+	}
+
 	// Capture incoming status before transaction so we can fire notifications after commit.
 	incomingStatus := quote.Status
 
@@ -9932,7 +9963,31 @@ func CalculateAdditionalGlaCoverBandRates(
 		femaleSum   float64
 		femaleCount int
 	}
+	// pickMFC reduces a per-age male/female aggregation to (male-only,
+	// female-only, blended) rates. When one side is missing the other side
+	// stands in for it, so the male-only / female-only columns degrade to
+	// the available data instead of falling to zero.
+	pickMFC := func(a *genderAgg) (m, f, c float64, ok bool) {
+		hasM := a.maleCount > 0
+		hasF := a.femaleCount > 0
+		switch {
+		case hasM && hasF:
+			m = a.maleSum / float64(a.maleCount)
+			f = a.femaleSum / float64(a.femaleCount)
+			c = maleProp*m + femaleProp*f
+			return m, f, c, true
+		case hasM:
+			m = a.maleSum / float64(a.maleCount)
+			return m, m, m, true
+		case hasF:
+			f = a.femaleSum / float64(a.femaleCount)
+			return f, f, f, true
+		}
+		return 0, 0, 0, false
+	}
 	ageToQx := make(map[int]float64)
+	ageToQxMale := make(map[int]float64)
+	ageToQxFemale := make(map[int]float64)
 	{
 		agg := make(map[int]*genderAgg)
 		for _, r := range glaRows {
@@ -9958,17 +10013,10 @@ func CalculateAdditionalGlaCoverBandRates(
 			}
 		}
 		for age, a := range agg {
-			hasMale := a.maleCount > 0
-			hasFemale := a.femaleCount > 0
-			switch {
-			case hasMale && hasFemale:
-				maleQx := a.maleSum / float64(a.maleCount)
-				femaleQx := a.femaleSum / float64(a.femaleCount)
-				ageToQx[age] = maleProp*maleQx + femaleProp*femaleQx
-			case hasMale:
-				ageToQx[age] = a.maleSum / float64(a.maleCount)
-			case hasFemale:
-				ageToQx[age] = a.femaleSum / float64(a.femaleCount)
+			if m, f, c, ok := pickMFC(a); ok {
+				ageToQxMale[age] = m
+				ageToQxFemale[age] = f
+				ageToQx[age] = c
 			}
 		}
 	}
@@ -10002,6 +10050,8 @@ func CalculateAdditionalGlaCoverBandRates(
 		return nil, err
 	}
 	ageToAidsQx := make(map[int]float64)
+	ageToAidsQxMale := make(map[int]float64)
+	ageToAidsQxFemale := make(map[int]float64)
 	{
 		agg := make(map[int]*genderAgg)
 		for _, r := range aidsRows {
@@ -10025,17 +10075,10 @@ func CalculateAdditionalGlaCoverBandRates(
 			}
 		}
 		for age, a := range agg {
-			hasMale := a.maleCount > 0
-			hasFemale := a.femaleCount > 0
-			switch {
-			case hasMale && hasFemale:
-				m := a.maleSum / float64(a.maleCount)
-				f := a.femaleSum / float64(a.femaleCount)
-				ageToAidsQx[age] = maleProp*m + femaleProp*f
-			case hasMale:
-				ageToAidsQx[age] = a.maleSum / float64(a.maleCount)
-			case hasFemale:
-				ageToAidsQx[age] = a.femaleSum / float64(a.femaleCount)
+			if m, f, c, ok := pickMFC(a); ok {
+				ageToAidsQxMale[age] = m
+				ageToAidsQxFemale[age] = f
+				ageToAidsQx[age] = c
 			}
 		}
 	}
@@ -10051,6 +10094,8 @@ func CalculateAdditionalGlaCoverBandRates(
 		}
 	}
 	var regionLoading, aidsRegionLoading float64
+	var regionLoadingMale, regionLoadingFemale float64
+	var aidsRegionLoadingMale, aidsRegionLoadingFemale float64
 	{
 		var rm, rf, rmAids, rfAids float64
 		var hasM, hasF bool
@@ -10068,12 +10113,18 @@ func CalculateAdditionalGlaCoverBandRates(
 		}
 		switch {
 		case hasM && hasF:
+			regionLoadingMale, regionLoadingFemale = rm, rf
+			aidsRegionLoadingMale, aidsRegionLoadingFemale = rmAids, rfAids
 			regionLoading = maleProp*rm + femaleProp*rf
 			aidsRegionLoading = maleProp*rmAids + femaleProp*rfAids
 		case hasM:
+			regionLoadingMale, regionLoadingFemale = rm, rm
+			aidsRegionLoadingMale, aidsRegionLoadingFemale = rmAids, rmAids
 			regionLoading = rm
 			aidsRegionLoading = rmAids
 		case hasF:
+			regionLoadingMale, regionLoadingFemale = rf, rf
+			aidsRegionLoadingMale, aidsRegionLoadingFemale = rfAids, rfAids
 			regionLoading = rf
 			aidsRegionLoading = rfAids
 		}
@@ -10087,7 +10138,7 @@ func CalculateAdditionalGlaCoverBandRates(
 		Find(&industryRows).Error; err != nil {
 		return nil, err
 	}
-	var industryLoading float64
+	var industryLoading, industryLoadingMale, industryLoadingFemale float64
 	{
 		var im, iFem float64
 		var hasM, hasF bool
@@ -10103,31 +10154,50 @@ func CalculateAdditionalGlaCoverBandRates(
 		}
 		switch {
 		case hasM && hasF:
+			industryLoadingMale, industryLoadingFemale = im, iFem
 			industryLoading = maleProp*im + femaleProp*iFem
 		case hasM:
+			industryLoadingMale, industryLoadingFemale = im, im
 			industryLoading = im
 		case hasF:
+			industryLoadingMale, industryLoadingFemale = iFem, iFem
 			industryLoading = iFem
 		}
 	}
 
 	// 5) Per-age contingency loading from general_loadings (varies by age
-	// and gender) — blend the male/female rates with male prop so the
-	// result matches the gender mix assumed for the qx blend above.
+	// and gender) — keep the male and female rates separately and blend
+	// the Combined value with male prop so it matches the qx blend above.
 	ageToContingency := make(map[int]float64, len(ageToQx))
+	ageToContingencyMale := make(map[int]float64, len(ageToQx))
+	ageToContingencyFemale := make(map[int]float64, len(ageToQx))
 	for age := range ageToQx {
 		m := GetGeneralLoading(riskRateCode, age, "M").GlaContigencyLoadingRate
 		f := GetGeneralLoading(riskRateCode, age, "F").GlaContigencyLoadingRate
+		ageToContingencyMale[age] = m
+		ageToContingencyFemale[age] = f
 		ageToContingency[age] = maleProp*m + femaleProp*f
 	}
 
-	// 6) Build per-age loaded rate.
-	//    baseRate = qx * (1 + industry + region) + aidsQx * (1 + aidsRegion)
-	//    loadedRate = baseRate * (1 + contingency)
+	// 6) Build per-age loaded rates for the male, female and blended cohorts.
+	//    For each cohort:
+	//        baseRate   = qx * (1 + industry + region) + aidsQx * (1 + aidsRegion)
+	//        loadedRate = baseRate * (1 + contingency)
 	loadedRate := make(map[int]float64, len(ageToQx))
-	for age, qx := range ageToQx {
-		base := qx*(1+industryLoading+regionLoading) + ageToAidsQx[age]*(1+aidsRegionLoading)
-		loadedRate[age] = base * (1 + ageToContingency[age])
+	loadedRateMale := make(map[int]float64, len(ageToQx))
+	loadedRateFemale := make(map[int]float64, len(ageToQx))
+	for age, qxC := range ageToQx {
+		qxM, qxF := ageToQxMale[age], ageToQxFemale[age]
+		aC, aM, aF := ageToAidsQx[age], ageToAidsQxMale[age], ageToAidsQxFemale[age]
+		cC, cM, cF := ageToContingency[age], ageToContingencyMale[age], ageToContingencyFemale[age]
+
+		baseC := qxC*(1+industryLoading+regionLoading) + aC*(1+aidsRegionLoading)
+		baseM := qxM*(1+industryLoadingMale+regionLoadingMale) + aM*(1+aidsRegionLoadingMale)
+		baseF := qxF*(1+industryLoadingFemale+regionLoadingFemale) + aF*(1+aidsRegionLoadingFemale)
+
+		loadedRate[age] = baseC * (1 + cC)
+		loadedRateMale[age] = baseM * (1 + cM)
+		loadedRateFemale[age] = baseF * (1 + cF)
 	}
 
 	// 7) Office-rate gross-up divisor. Out-of-range totalPremiumLoading
@@ -10138,8 +10208,26 @@ func CalculateAdditionalGlaCoverBandRates(
 		loadingDivisor = 1.0
 	}
 
-	// 8) Straight-average loadedRate across the integer ages in each band,
-	// clipped to the range the gla_rates table actually covers.
+	// 8) Straight-average each cohort's loaded rate across the integer ages
+	// in each band, clipped to the range the gla_rates table actually
+	// covers, then gross up to the office rate and derive the per-1,000
+	// fee splits. The Combined column is blended at maleProp; the Male
+	// and Female columns are computed as if the population were 100% male
+	// or 100% female.
+	avgBand := func(m map[int]float64, lo, hi int) float64 {
+		var sum float64
+		var count int
+		for age := lo; age <= hi; age++ {
+			if r, ok := m[age]; ok {
+				sum += r
+				count++
+			}
+		}
+		if count == 0 {
+			return 0
+		}
+		return sum / float64(count)
+	}
 	results := make([]models.AdditionalGlaCoverBandRate, 0, len(bands))
 	for _, b := range bands {
 		lo := b.MinAge
@@ -10163,29 +10251,33 @@ func CalculateAdditionalGlaCoverBandRates(
 			})
 			continue
 		}
-		var sum float64
-		var count int
-		for age := lo; age <= hi; age++ {
-			if r, ok := loadedRate[age]; ok {
-				sum += r
-				count++
-			}
-		}
-		var avg float64
-		if count > 0 {
-			avg = sum / float64(count)
-		}
-		officeRate := avg / loadingDivisor
-		officeRatePer1000 := officeRate * 1000.0
+		avgC := avgBand(loadedRate, lo, hi)
+		avgM := avgBand(loadedRateMale, lo, hi)
+		avgF := avgBand(loadedRateFemale, lo, hi)
+
+		officeC := (avgC / loadingDivisor) * 1000.0
+		officeM := (avgM / loadingDivisor) * 1000.0
+		officeF := (avgF / loadingDivisor) * 1000.0
+
 		results = append(results, models.AdditionalGlaCoverBandRate{
-			MinAge:              b.MinAge,
-			MaxAge:              b.MaxAge,
-			RiskRatePer1000:     avg * 1000.0,
-			BinderFeePer1000:    officeRatePer1000 * binderFeeRate,
-			OutsourceFeePer1000: officeRatePer1000 * outsourceFeeRate,
-			CommissionPer1000:   officeRatePer1000 * commissionLoading,
-			OfficeRatePer1000:   officeRatePer1000,
-			MalePropUsed:        maleProp,
+			MinAge:                    b.MinAge,
+			MaxAge:                    b.MaxAge,
+			RiskRatePer1000:           avgC * 1000.0,
+			RiskRatePer1000Male:       avgM * 1000.0,
+			RiskRatePer1000Female:     avgF * 1000.0,
+			BinderFeePer1000:          officeC * binderFeeRate,
+			BinderFeePer1000Male:      officeM * binderFeeRate,
+			BinderFeePer1000Female:    officeF * binderFeeRate,
+			OutsourceFeePer1000:       officeC * outsourceFeeRate,
+			OutsourceFeePer1000Male:   officeM * outsourceFeeRate,
+			OutsourceFeePer1000Female: officeF * outsourceFeeRate,
+			CommissionPer1000:         officeC * commissionLoading,
+			CommissionPer1000Male:     officeM * commissionLoading,
+			CommissionPer1000Female:   officeF * commissionLoading,
+			OfficeRatePer1000:         officeC,
+			OfficeRatePer1000Male:     officeM,
+			OfficeRatePer1000Female:   officeF,
+			MalePropUsed:              maleProp,
 		})
 	}
 	return results, nil

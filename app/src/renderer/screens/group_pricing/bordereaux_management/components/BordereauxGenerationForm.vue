@@ -268,15 +268,14 @@
                             required
                           >
                             <template #item="{ props, item }">
-                              <v-list-item v-bind="props">
-                                <v-list-item-title>{{
-                                  item.raw.name
-                                }}</v-list-item-title>
-                                <v-list-item-subtitle
-                                  >{{ item.raw.insurer_name }} -
-                                  {{ item.raw.format }}</v-list-item-subtitle
-                                >
-                              </v-list-item>
+                              <v-list-item
+                                v-bind="props"
+                                :subtitle="
+                                  [item.raw.insurer_name, item.raw.format]
+                                    .filter(Boolean)
+                                    .join(' - ')
+                                "
+                              />
                             </template>
                           </v-select>
                         </v-col>

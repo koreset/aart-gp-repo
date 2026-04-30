@@ -22,7 +22,7 @@ func CreateBordereauxTemplate(c *gin.Context) {
         return
     }
     if err := services.CreateBordereauxTemplate(&payload, user); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
         return
     }
     c.JSON(http.StatusCreated, payload)
@@ -68,7 +68,7 @@ func UpdateBordereauxTemplate(c *gin.Context) {
     }
     updated, err := services.UpdateBordereauxTemplate(id, payload, user)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
         return
     }
     c.JSON(http.StatusOK, updated)

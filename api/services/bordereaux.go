@@ -978,11 +978,22 @@ func GetBordereauxFieldsByType(bType string) ([]map[string]string, error) {
 		add("SGLA Covered Sum Assured", "spouse_gla_capped_sum_assured")
 		add("TTD Covered Sum Assured", "ttd_capped_income")
 		add("PHI Covered Sum Assured", "phi_capped_income")
+		add("GLA Ceded Sum Assured", "gla_ceded_sum_assured")
+		add("PTD Ceded Sum Assured", "ptd_ceded_sum_assured")
+		add("CI Ceded Sum Assured", "ci_ceded_sum_assured")
+		add("SGLA Ceded Sum Assured", "spouse_gla_ceded_sum_assured")
+		add("TTD Ceded Income", "ttd_ceded_income")
+		add("PHI Ceded Income", "phi_ceded_income")
 		add("Member Funeral Sum Assured", "member_funeral_sum_assured")
 		add("Spouse Funeral Sum Assured", "spouse_funeral_sum_assured")
 		add("Child Funeral Sum Assured", "child_funeral_sum_assured")
 		add("Dependant Funeral Sum Assured", "dependant_funeral_sum_assured")
 		add("Parent Funeral Sum Assured", "parent_funeral_sum_assured")
+		add("Member Funeral Ceded Sum Assured", "member_funeral_ceded_sum_assured")
+		add("Spouse Funeral Ceded Sum Assured", "spouse_funeral_ceded_sum_assured")
+		add("Child Funeral Ceded Sum Assured", "child_funeral_ceded_sum_assured")
+		add("Dependant Funeral Ceded Sum Assured", "dependant_funeral_ceded_sum_assured")
+		add("Parent Funeral Ceded Sum Assured", "parent_funeral_ceded_sum_assured")
 
 		// extend with additional member fields as needed
 	// Premium / claim / reinsurance field catalogues temporarily disabled — only
@@ -2107,6 +2118,18 @@ func resolveSourceField(path string, b models.Bordereaux) (any, bool) {
 		return b.TtdMonthlyBenefit, true
 	case "phi_capped_income":
 		return b.PhiMonthlyBenefit, true
+	case "gla_ceded_sum_assured":
+		return b.GlaCededSumAssured, true
+	case "ptd_ceded_sum_assured":
+		return b.PtdCededSumAssured, true
+	case "ci_ceded_sum_assured":
+		return b.CiCededSumAssured, true
+	case "spouse_gla_ceded_sum_assured":
+		return b.SglaCededSumAssured, true
+	case "ttd_ceded_income":
+		return b.TtdCededMonthlyBenefit, true
+	case "phi_ceded_income":
+		return b.PhiCededMonthlyBenefit, true
 	case "member_funeral_sum_assured":
 		return b.MainMemberFuneralSumAssured, true
 	case "spouse_funeral_sum_assured":
@@ -2117,6 +2140,16 @@ func resolveSourceField(path string, b models.Bordereaux) (any, bool) {
 		return b.DependantFuneralSumAssured, true
 	case "parent_funeral_sum_assured":
 		return b.ParentFuneralSumAssured, true
+	case "member_funeral_ceded_sum_assured":
+		return b.MainMemberCededSumAssured, true
+	case "spouse_funeral_ceded_sum_assured":
+		return b.SpouseCededSumAssured, true
+	case "child_funeral_ceded_sum_assured":
+		return b.ChildCededSumAssured, true
+	case "dependant_funeral_ceded_sum_assured":
+		return b.DependantCededSumAssured, true
+	case "parent_funeral_ceded_sum_assured":
+		return b.ParentCededSumAssured, true
 	case "gla.rate_per_1000", "loaded_gla_risk_rate":
 		return b.LoadedGlaRiskRate, true
 	default:

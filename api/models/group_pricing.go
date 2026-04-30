@@ -586,16 +586,29 @@ type AdditionalGlaCoverAgeBand struct {
 
 // AdditionalGlaCoverBandRate carries the computed per-band rate-per-1000
 // snapshot (risk and office gross-up) along with the male proportion that
-// was used to blend the underlying gla_qx / gla_aids_qx.
+// was used to blend the underlying gla_qx / gla_aids_qx. Each fee column is
+// reported three ways: the *Male and *Female fields are computed as if the
+// population were 100% male or 100% female; the unsuffixed fields hold the
+// blended ("Combined") rate at the supplied male proportion.
 type AdditionalGlaCoverBandRate struct {
-	MinAge              int     `json:"min_age"`
-	MaxAge              int     `json:"max_age"`
-	RiskRatePer1000     float64 `json:"risk_rate_per1000"`
-	BinderFeePer1000    float64 `json:"binder_fee_per1000"`
-	OutsourceFeePer1000 float64 `json:"outsource_fee_per1000"`
-	CommissionPer1000   float64 `json:"commission_per1000"`
-	OfficeRatePer1000   float64 `json:"office_rate_per1000"`
-	MalePropUsed        float64 `json:"male_prop_used"`
+	MinAge                    int     `json:"min_age"`
+	MaxAge                    int     `json:"max_age"`
+	RiskRatePer1000           float64 `json:"risk_rate_per1000"`
+	RiskRatePer1000Male       float64 `json:"risk_rate_per1000_male"`
+	RiskRatePer1000Female     float64 `json:"risk_rate_per1000_female"`
+	BinderFeePer1000          float64 `json:"binder_fee_per1000"`
+	BinderFeePer1000Male      float64 `json:"binder_fee_per1000_male"`
+	BinderFeePer1000Female    float64 `json:"binder_fee_per1000_female"`
+	OutsourceFeePer1000       float64 `json:"outsource_fee_per1000"`
+	OutsourceFeePer1000Male   float64 `json:"outsource_fee_per1000_male"`
+	OutsourceFeePer1000Female float64 `json:"outsource_fee_per1000_female"`
+	CommissionPer1000         float64 `json:"commission_per1000"`
+	CommissionPer1000Male     float64 `json:"commission_per1000_male"`
+	CommissionPer1000Female   float64 `json:"commission_per1000_female"`
+	OfficeRatePer1000         float64 `json:"office_rate_per1000"`
+	OfficeRatePer1000Male     float64 `json:"office_rate_per1000_male"`
+	OfficeRatePer1000Female   float64 `json:"office_rate_per1000_female"`
+	MalePropUsed              float64 `json:"male_prop_used"`
 }
 type Loadings struct {
 	CommissionLoading  float64 `json:"commission_loading"`

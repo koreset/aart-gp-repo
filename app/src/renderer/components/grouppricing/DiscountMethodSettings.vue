@@ -20,10 +20,7 @@
         system-wide. It only takes effect on the next time a discount is applied
         to a quote — existing quotes are not retroactively recomputed.
       </p>
-      <p
-        v-if="lastUpdatedLabel"
-        class="text-caption text-medium-emphasis mb-4"
-      >
+      <p v-if="lastUpdatedLabel" class="text-caption text-medium-emphasis mb-4">
         {{ lastUpdatedLabel }}
       </p>
       <v-radio-group

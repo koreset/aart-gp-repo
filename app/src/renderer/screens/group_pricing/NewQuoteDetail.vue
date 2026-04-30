@@ -111,9 +111,9 @@
                 customTirMissing
                   ? 'Custom tiered income replacement table is missing. The administrator must upload the table before calculations can be run.'
                   : quote.experience_rating === 'Override' &&
-                    (quote.experience_rate_overrides_count || 0) === 0
-                  ? 'Run with no overrides to see the baseline loaded rates per benefit, then add overrides and re-run.'
-                  : 'Requires member data and (if Yes) a claims-experience upload.'
+                      (quote.experience_rate_overrides_count || 0) === 0
+                    ? 'Run with no overrides to see the baseline loaded rates per benefit, then add overrides and re-run.'
+                    : 'Requires member data and (if Yes) a claims-experience upload.'
               "
             >
               <template #activator="{ props: tooltipProps }">
@@ -318,6 +318,7 @@
               :result-summaries="resultSummaries || []"
               @quote-updated="loadQuote"
               @indicative-data-updated="handleIndicativeDataUpdate"
+              @navigate-to-general-input="editQuote(quote.id)"
             />
           </v-window-item>
           <v-window-item
