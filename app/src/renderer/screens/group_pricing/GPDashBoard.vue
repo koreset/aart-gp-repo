@@ -1149,6 +1149,11 @@ const roundUpToTwoDecimals = (num) => {
 
 const addFormat = (card: any) => {
   if (card.data_type === 'currency') {
+    const n = Number(card.value) || 0
+    if (Math.abs(n) >= 1_000_000_000) {
+      const sign = n < 0 ? '-' : ''
+      return `${sign}R${(Math.abs(n) / 1_000_000_000).toFixed(2)}B`
+    }
     return `R${formatWithCommas(card.value)}`
   }
   return card.value
@@ -2434,6 +2439,10 @@ const refreshDashboard = async () => {
 .dash-card {
   border-radius: 10px;
   border: 1px solid #b2cbe1;
+}
+
+.dash-card h2 {
+  font-size: 1.1rem;
 }
 
 .broker-table thead th {
