@@ -10,11 +10,13 @@ import StatusBar from './StatusBar.vue'
 import NotificationBell from '@/renderer/components/NotificationBell.vue'
 import { useAppStore } from '@/renderer/store/app'
 import { useGroupUserPermissionsStore } from '@/renderer/store/group_user'
+import { useUpdaterStore } from '@/renderer/store/updater'
 
 const drawer = ref(true)
 const confirmationDialog = ref()
 const appStore = useAppStore()
 const permissionsStore = useGroupUserPermissionsStore()
+const updaterStore = useUpdaterStore()
 const router = useRouter()
 const expiryDismissed = ref(false)
 
@@ -82,8 +84,12 @@ window.mainApi?.on('update_available', async () => {
   }
 })
 
-window.mainApi?.on('update_downloaded', async () => {
+window.mainApi?.on('update_downloaded', async (_event: any, info: any) => {
   log.info('Update Downloaded')
+  // Drive the status-bar indicator into "ready" state so it stays visible
+  // even if the user dismisses the restart dialog below — they can come
+  // back to it later and the indicator will remind them.
+  updaterStore.setDownloaded(info?.version || '')
   const res = await confirmationDialog.value?.open(
     'Update Downloaded',
     'The update has been downloaded. Do you want to restart the application now?'
@@ -93,8 +99,13 @@ window.mainApi?.on('update_downloaded', async () => {
   }
 })
 
-window.mainApi?.on('download_progress', (event: any, progress: any) => {
-  log.info('Download Progress:', progress)
+window.mainApi?.on('download_progress', (_event: any, progress: any) => {
+  // Push every tick into the updater store; the store rounds to integer
+  // percent so re-renders are bounded to ~100 over a full download.
+  updaterStore.setProgress(
+    progress?.percent ?? 0,
+    progress?.bytesPerSecond ?? 0
+  )
 })
 
 window.mainApi?.on('update_error', async (event: any, error: any) => {
@@ -104,6 +115,7 @@ window.mainApi?.on('update_error', async (event: any, error: any) => {
     (error && (error.message || error.stack)) || String(error) || 'Unknown'
   log.error('Update Error Event:', event)
   log.error('Update Error:', message)
+  updaterStore.setError(message)
   // Surface to the user — silent failure is what made this bug hard to
   // spot in the first place. A simple system alert is enough; if/when
   // we add a global toast component this should move to that.

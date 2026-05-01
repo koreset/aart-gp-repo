@@ -2,10 +2,20 @@
 import { ref, onMounted, computed } from 'vue'
 import { useStatusBarStore } from '@/renderer/store/statusBar'
 import { useNetworkStatusStore } from '@/renderer/store/network_status'
+import { useUpdaterStore } from '@/renderer/store/updater'
 
 const displayName = ref<string>('')
 const statusBarStore = useStatusBarStore()
 const networkStore = useNetworkStatusStore()
+const updaterStore = useUpdaterStore()
+
+// Human-readable transfer speed for the downloading-phase tooltip,
+// e.g. "4.2 MB/s". Hidden when not downloading.
+const updaterSpeedLabel = computed(() => {
+  if (!updaterStore.bytesPerSecond) return ''
+  const mbps = updaterStore.bytesPerSecond / (1024 * 1024)
+  return `${mbps.toFixed(1)} MB/s`
+})
 
 const apiDotColor = computed(() =>
   networkStore.isServiceAvailable ? '#4CAF50' : '#F44336'
@@ -60,6 +70,46 @@ onMounted(() => {
     </template>
 
     <span class="status-spacer" />
+
+    <!--
+      Auto-update indicator. Renders nothing in `idle` / `error` phases —
+      `error` is handled loudly by the alert dialog, so we keep the bar
+      quiet to avoid double-noise. During download we show a percent;
+      after download completes we leave a persistent "ready" pill so a
+      user who dismissed the restart confirmation can find their way
+      back to it.
+    -->
+    <template v-if="updaterStore.phase === 'downloading'">
+      <v-icon
+        size="13"
+        class="mr-1"
+        color="rgba(255,255,255,0.75)"
+        :title="`Downloading update${updaterSpeedLabel ? ' at ' + updaterSpeedLabel : ''}`"
+        >mdi-download</v-icon
+      >
+      <span
+        class="status-text mr-3"
+        :title="`Downloading update${updaterSpeedLabel ? ' at ' + updaterSpeedLabel : ''}`"
+        >Updating · {{ updaterStore.percent }}%</span
+      >
+    </template>
+    <template v-else-if="updaterStore.phase === 'downloaded'">
+      <v-icon
+        size="13"
+        class="mr-1"
+        color="#4CAF50"
+        title="Update downloaded — restart the application to install"
+        >mdi-download-circle</v-icon
+      >
+      <span
+        class="status-text mr-3"
+        title="Update downloaded — restart the application to install"
+        >Update{{
+          updaterStore.version ? ' ' + updaterStore.version : ''
+        }}
+        ready</span
+      >
+    </template>
 
     <!-- Logged-in user -->
     <v-icon size="13" class="mr-1">mdi-account</v-icon>
