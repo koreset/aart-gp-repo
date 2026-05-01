@@ -331,7 +331,22 @@ export default class IPCs {
         event.returnValue = 'success'
 
         if (updateIndicator) {
-          autoUpdater.quitAndInstall()
+          // Diagnostics: `quitAndInstall()` can fail silently on macOS
+          // (Squirrel.Mac rejects the install before quitting if the
+          // bundle ID or signature don't match), in which case the user
+          // sees "click Yes, nothing happens." Log entry and any sync
+          // throw so we can tell from the log which leg failed.
+          log.info(
+            '[updater] msgRestartApplication received with updateIndicator=true; calling quitAndInstall()'
+          )
+          try {
+            // (isSilent=false, isForceRunAfter=true) — ensure the app
+            // relaunches into the new version after Squirrel finishes,
+            // rather than just quitting.
+            autoUpdater.quitAndInstall(false, true)
+          } catch (err) {
+            log.error('[updater] quitAndInstall() threw synchronously:', err)
+          }
         } else {
           app.relaunch()
           app.exit()

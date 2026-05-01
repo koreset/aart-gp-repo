@@ -22,7 +22,7 @@ const baseConfig = {
   },
   mac: {
     bundleVersion: '1.0',
-    identity: 'Actuaries and Digital Solutions (Pty) Ltd',
+    identity: 'AART Local Dev',
     hardenedRuntime: true,
     gatekeeperAssess: false,
     notarize: false,
@@ -30,16 +30,16 @@ const baseConfig = {
     type: 'distribution',
     target: [
       // {
-      //   target: 'zip',
+      //   target: 'dmg',
       //   arch: ['arm64']
       // },
-      {
-        target: 'dmg',
-        arch: ['x64', 'arm64', 'universal']
-      },
+      // {
+      //   target: 'dmg',
+      //   arch: ['x64', 'arm64', 'universal']
+      // },
       {
         target: 'zip',
-        arch: ['x64', 'arm64', 'universal']
+        arch: ['arm64']
       }
     ]
   },
@@ -61,7 +61,7 @@ const baseConfig = {
   },
   win: {
     icon: 'buildAssets/icons/icon.ico',
-    //certificateSubjectName: 'Actuaries and Digital Solutions (Pty) Ltd',
+    certificateSubjectName: 'Actuaries and Digital Solutions (Pty) Ltd',
     target: [
       {
         target: 'nsis',

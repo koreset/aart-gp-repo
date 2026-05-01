@@ -382,11 +382,22 @@ export const createMainWindow = async (
   })
 
   autoUpdater.on('update-downloaded', (info) => {
+    log.info('[updater] update-downloaded:', info?.version, info?.releaseDate)
     mainWindow.webContents.send('update_downloaded', info)
   })
 
   autoUpdater.on('error', (error) => {
+    log.error('[updater] error event:', error)
     mainWindow.webContents.send('update_error', error)
+  })
+
+  // Fires the moment Squirrel commits to the install path — i.e. it has
+  // located the update bundle, validated it, and is about to quit so the
+  // swap can happen. If quitAndInstall() is called but this never logs,
+  // Squirrel rejected the install (most commonly: bundle ID mismatch in
+  // dev mode, or signature mismatch in an unsigned local build).
+  app.on('before-quit-for-update', () => {
+    log.info('[updater] before-quit-for-update — Squirrel is staging install')
   })
 
   autoUpdater.checkForUpdatesAndNotify()

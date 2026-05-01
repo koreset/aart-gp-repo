@@ -98,8 +98,18 @@ window.mainApi?.on('download_progress', (event: any, progress: any) => {
 })
 
 window.mainApi?.on('update_error', async (event: any, error: any) => {
+  // electron-updater serializes the error before sending across IPC,
+  // so `error` here is usually a plain object with a `message` field.
+  const message =
+    (error && (error.message || error.stack)) || String(error) || 'Unknown'
   log.error('Update Error Event:', event)
-  log.error('Update Error:', error)
+  log.error('Update Error:', message)
+  // Surface to the user — silent failure is what made this bug hard to
+  // spot in the first place. A simple system alert is enough; if/when
+  // we add a global toast component this should move to that.
+  window.alert(
+    `The update could not be installed.\n\n${message}\n\nSee the application log for details.`
+  )
 })
 
 window.mainApi?.on('logout', async () => {
