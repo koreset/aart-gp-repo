@@ -2658,8 +2658,11 @@ func computeEducatorSlicePremiums(m *models.MemberRatingResult, riskWeightedSA f
 // assignments and before the educator/conversion cascade reads those values.
 //
 // Mode == experience_rated → ExpAdjLoaded{Benefit}Rate is replaced by
+//
 //	OverrideRate (a direct annual-fraction substitution).
+//
 // Mode == theoretical (or row missing) → ExpAdjLoaded{Benefit}Rate is reset to
+//
 //	Loaded{Benefit}Rate so the rest of the pipeline behaves as if no
 //	experience adjustment applied for that benefit.
 //
@@ -10915,6 +10918,692 @@ func GetGroupSchemesInforce() ([]models.GroupScheme, error) {
 	return groupSchemes, nil
 }
 
+// claimsAggForITD is the per-scheme claims roll-up used to compute ITD ALR.
+// Status set is {approved, paid} — both represent claims the insurer has
+// committed to on the book. Declined / withdrawn / pending are excluded.
+type claimsAggForITD struct {
+	SchemeID      int     `gorm:"column:scheme_id"`
+	TotalAmount   float64 `gorm:"column:total_amount"`
+	ClaimsCount   int     `gorm:"column:claims_count"`
+	LastClaimDate string  `gorm:"column:last_claim_date"`
+}
+
+// computeSchemePerformanceRows builds per-scheme rows for the in-force book.
+// Shared by GetSchemePerformanceRows and GetInForceRiskProfile so that the
+// portfolio-level KPIs and the table use exactly the same source of truth.
+func computeSchemePerformanceRows() ([]models.SchemePerformanceRow, error) {
+	var schemes []models.GroupScheme
+	if err := DB.Where("in_force = ? OR status = ?", true, models.StatusInForce).
+		Find(&schemes).Error; err != nil {
+		return nil, err
+	}
+	if len(schemes) == 0 {
+		return []models.SchemePerformanceRow{}, nil
+	}
+
+	schemeIDs := make([]int, len(schemes))
+	for i, s := range schemes {
+		schemeIDs[i] = s.ID
+	}
+
+	var aggs []claimsAggForITD
+	if err := DB.Table("group_scheme_claims").
+		Select(`scheme_id,
+			COALESCE(SUM(claim_amount), 0) AS total_amount,
+			COUNT(*) AS claims_count,
+			COALESCE(MAX(date_of_event), '') AS last_claim_date`).
+		Where("scheme_id IN ? AND status IN ?", schemeIDs, []string{"approved", "paid"}).
+		Group("scheme_id").
+		Scan(&aggs).Error; err != nil {
+		return nil, err
+	}
+	aggBySchemeID := make(map[int]claimsAggForITD, len(aggs))
+	for _, a := range aggs {
+		aggBySchemeID[a.SchemeID] = a
+	}
+
+	// Rolling-12-month claims per scheme — date_of_event in the last 12
+	// months, same status filter as ITD. date_of_event is a string
+	// (YYYY-MM-DD) so we compare lexicographically against today minus 12.
+	r12mCutoff := time.Now().AddDate(-1, 0, 0).Format("2006-01-02")
+	var r12mAggs []claimsAggForITD
+	if err := DB.Table("group_scheme_claims").
+		Select(`scheme_id,
+			COALESCE(SUM(claim_amount), 0) AS total_amount,
+			COUNT(*) AS claims_count`).
+		Where("scheme_id IN ? AND status IN ? AND date_of_event >= ?",
+			schemeIDs, []string{"approved", "paid"}, r12mCutoff).
+		Group("scheme_id").
+		Scan(&r12mAggs).Error; err != nil {
+		return nil, err
+	}
+	r12mBySchemeID := make(map[int]claimsAggForITD, len(r12mAggs))
+	for _, a := range r12mAggs {
+		r12mBySchemeID[a.SchemeID] = a
+	}
+
+	now := time.Now()
+	rows := make([]models.SchemePerformanceRow, 0, len(schemes))
+	for i := range schemes {
+		s := schemes[i]
+
+		var coverStart *time.Time
+		if !s.CoverStartDate.IsZero() {
+			coverStart = &s.CoverStartDate
+		}
+
+		startForMonths := s.CoverStartDate
+		if startForMonths.IsZero() {
+			startForMonths = s.CreationDate
+		}
+		months := 0
+		if !startForMonths.IsZero() && now.After(startForMonths) {
+			months = int(now.Sub(startForMonths).Hours()/(24*30)) + 1
+			if months < 1 {
+				months = 1
+			}
+		}
+
+		itdEarned := s.EarnedPremium
+		if itdEarned <= 0 && s.AnnualPremium > 0 && months > 0 {
+			itdEarned = s.AnnualPremium * float64(months) / 12.0
+		}
+
+		commissionPct := 0.0
+		if s.AnnualPremium > 0 {
+			commissionPct = FloatPrecision(s.Commission/s.AnnualPremium*100, 2)
+		}
+
+		agg := aggBySchemeID[s.ID]
+
+		var avgSeverity *float64
+		if agg.ClaimsCount > 0 {
+			v := FloatPrecision(agg.TotalAmount/float64(agg.ClaimsCount), 2)
+			avgSeverity = &v
+		}
+
+		var freq *float64
+		if s.MemberCount > 0 {
+			v := FloatPrecision(float64(agg.ClaimsCount)/s.MemberCount*1000, 2)
+			freq = &v
+		}
+
+		var alr, delta *float64
+		if itdEarned > 0 {
+			v := FloatPrecision(agg.TotalAmount/itdEarned*100, 1)
+			alr = &v
+			d := FloatPrecision(v-s.ExpectedLossRatio, 1)
+			delta = &d
+		}
+
+		// Rolling-12-month ALR. Denominator = annual_premium when scheme
+		// has been in force the full window, otherwise pro-rated by
+		// months_in_force / 12 — same shape as ITD earned premium logic.
+		r12m := r12mBySchemeID[s.ID]
+		var r12mAlr *float64
+		var r12mDenom float64
+		if s.AnnualPremium > 0 {
+			if months >= 12 {
+				r12mDenom = s.AnnualPremium
+			} else if months > 0 {
+				r12mDenom = s.AnnualPremium * float64(months) / 12.0
+			}
+		}
+		if r12mDenom > 0 {
+			v := FloatPrecision(r12m.TotalAmount/r12mDenom*100, 1)
+			r12mAlr = &v
+		}
+
+		rows = append(rows, models.SchemePerformanceRow{
+			SchemeID:          s.ID,
+			SchemeName:        s.Name,
+			Status:            string(s.Status),
+			CoverStartDate:    coverStart,
+			MonthsInForce:     months,
+			MemberCount:       s.MemberCount,
+			AnnualPremium:     FloatPrecision(s.AnnualPremium, 2),
+			EarnedPremium:     FloatPrecision(s.EarnedPremium, 2),
+			ITDEarnedPremium:  FloatPrecision(itdEarned, 2),
+			CommissionPct:     commissionPct,
+			ItdClaimsPaid:     FloatPrecision(agg.TotalAmount, 2),
+			ItdClaimsCount:    agg.ClaimsCount,
+			AvgClaimSeverity:  avgSeverity,
+			ClaimsFrequency:   freq,
+			ExpectedLossRatio: FloatPrecision(s.ExpectedLossRatio, 1),
+			ActualLossRatio:   alr,
+			LossRatioDelta:    delta,
+			R12mClaimsPaid:    FloatPrecision(r12m.TotalAmount, 2),
+			R12mClaimsCount:   r12m.ClaimsCount,
+			R12mAlr:           r12mAlr,
+			LastClaimDate:     agg.LastClaimDate,
+		})
+	}
+	return rows, nil
+}
+
+// GetSchemePerformanceRows returns the per-scheme performance table along
+// with portfolio-level totals (used by the headline KPI cards).
+func GetSchemePerformanceRows() (models.SchemePerformanceResponse, error) {
+	rows, err := computeSchemePerformanceRows()
+	if err != nil {
+		return models.SchemePerformanceResponse{}, err
+	}
+	resp := models.SchemePerformanceResponse{
+		Rows:         rows,
+		TotalSchemes: len(rows),
+	}
+	var totalEarned, totalR12mDenom float64
+	for _, r := range rows {
+		resp.TotalPremium += r.AnnualPremium
+		resp.TotalItdClaims += r.ItdClaimsPaid
+		totalEarned += r.ITDEarnedPremium
+		resp.TotalR12mClaims += r.R12mClaimsPaid
+		// Match the per-scheme R12M denominator pro-rating so the portfolio
+		// ratio is internally consistent with the per-scheme rows.
+		if r.AnnualPremium > 0 {
+			if r.MonthsInForce >= 12 {
+				totalR12mDenom += r.AnnualPremium
+			} else if r.MonthsInForce > 0 {
+				totalR12mDenom += r.AnnualPremium * float64(r.MonthsInForce) / 12.0
+			}
+		}
+	}
+	resp.TotalPremium = FloatPrecision(resp.TotalPremium, 2)
+	resp.TotalItdClaims = FloatPrecision(resp.TotalItdClaims, 2)
+	resp.TotalR12mClaims = FloatPrecision(resp.TotalR12mClaims, 2)
+	if totalEarned > 0 {
+		v := FloatPrecision(resp.TotalItdClaims/totalEarned*100, 1)
+		resp.PortfolioALR = &v
+	}
+	if totalR12mDenom > 0 {
+		v := FloatPrecision(resp.TotalR12mClaims/totalR12mDenom*100, 1)
+		resp.PortfolioR12mALR = &v
+	}
+	return resp, nil
+}
+
+// GetInForceRiskProfile derives all risk-profile signals from the per-scheme
+// rows: concentration KPIs, Pareto curve, loss-ratio distribution, top-10
+// worst, frequency-severity scatter, industry/region heatmap, and the
+// deteriorating-schemes panel.
+func GetInForceRiskProfile() (models.RiskProfileResult, error) {
+	result := models.RiskProfileResult{
+		Pareto:            []models.ParetoPoint{},
+		LossRatioBuckets:  []models.LossRatioBucket{},
+		Top10Worst:        []models.SchemePerformanceRow{},
+		IndustryRegion:    []models.IndustryRegionCell{},
+		FrequencySeverity: []models.FreqSeverityPoint{},
+		Deteriorating:     []models.DeterioratingScheme{},
+	}
+
+	// Resolve company-level deteriorating-scheme thresholds from the
+	// singleton settings row. Falls back to the documented defaults if the
+	// row is missing or has zeros (e.g. fresh DB before settings have been
+	// touched).
+	alrCeiling := 100.0
+	alrDelta := 20.0
+	var settings models.GroupPricingSetting
+	if err := DB.First(&settings, 1).Error; err == nil {
+		if settings.RiskAlrCeilingPct > 0 {
+			alrCeiling = settings.RiskAlrCeilingPct
+		}
+		if settings.RiskAlrDeltaPp > 0 {
+			alrDelta = settings.RiskAlrDeltaPp
+		}
+	}
+	result.Thresholds = models.RiskWatchlistThresholds{
+		AlrCeilingPct: alrCeiling,
+		AlrDeltaPp:    alrDelta,
+	}
+
+	rows, err := computeSchemePerformanceRows()
+	if err != nil {
+		return result, err
+	}
+	result.Concentration.TotalSchemes = len(rows)
+	if len(rows) == 0 {
+		result.LossRatioBuckets = makeEmptyLossRatioBuckets()
+		return result, nil
+	}
+
+	// ── Concentration KPIs and Pareto ─────────────────────────────────────
+	byPremium := make([]models.SchemePerformanceRow, len(rows))
+	copy(byPremium, rows)
+	sort.SliceStable(byPremium, func(i, j int) bool {
+		return byPremium[i].AnnualPremium > byPremium[j].AnnualPremium
+	})
+	var totalPremium float64
+	for _, r := range byPremium {
+		totalPremium += r.AnnualPremium
+	}
+	if totalPremium > 0 {
+		var top5, top10, hhi, cum float64
+		paretoLimit := len(byPremium)
+		if paretoLimit > 50 {
+			paretoLimit = 50
+		}
+		result.Pareto = make([]models.ParetoPoint, 0, paretoLimit)
+		for i, r := range byPremium {
+			share := r.AnnualPremium / totalPremium
+			if i < 5 {
+				top5 += share
+			}
+			if i < 10 {
+				top10 += share
+			}
+			hhi += share * share
+			cum += share
+			if i < paretoLimit {
+				result.Pareto = append(result.Pareto, models.ParetoPoint{
+					Rank:            i + 1,
+					SchemeName:      r.SchemeName,
+					Premium:         r.AnnualPremium,
+					CumulativeShare: FloatPrecision(cum, 4),
+				})
+			}
+		}
+		result.Concentration.Top5PremiumShare = FloatPrecision(top5*100, 2)
+		result.Concentration.Top10PremiumShare = FloatPrecision(top10*100, 2)
+		result.Concentration.HHI = FloatPrecision(hhi*10000, 1)
+	}
+
+	// ── Loss-ratio distribution buckets ───────────────────────────────────
+	buckets := makeEmptyLossRatioBuckets()
+	for _, r := range rows {
+		if r.ActualLossRatio == nil {
+			continue
+		}
+		alr := *r.ActualLossRatio
+		idx := bucketIndexForALR(alr)
+		buckets[idx].SchemeCount++
+		buckets[idx].Premium = FloatPrecision(buckets[idx].Premium+r.AnnualPremium, 2)
+	}
+	result.LossRatioBuckets = buckets
+
+	// ── Top 10 worst ──────────────────────────────────────────────────────
+	withALR := make([]models.SchemePerformanceRow, 0, len(rows))
+	for _, r := range rows {
+		if r.ActualLossRatio != nil {
+			withALR = append(withALR, r)
+		}
+	}
+	sort.SliceStable(withALR, func(i, j int) bool {
+		if *withALR[i].ActualLossRatio == *withALR[j].ActualLossRatio {
+			return withALR[i].ItdClaimsPaid > withALR[j].ItdClaimsPaid
+		}
+		return *withALR[i].ActualLossRatio > *withALR[j].ActualLossRatio
+	})
+	if len(withALR) > 10 {
+		result.Top10Worst = withALR[:10]
+	} else {
+		result.Top10Worst = withALR
+	}
+
+	// ── Frequency / severity scatter ──────────────────────────────────────
+	for _, r := range rows {
+		if r.ClaimsFrequency == nil || r.AvgClaimSeverity == nil {
+			continue
+		}
+		result.FrequencySeverity = append(result.FrequencySeverity, models.FreqSeverityPoint{
+			SchemeID:      r.SchemeID,
+			SchemeName:    r.SchemeName,
+			Frequency:     *r.ClaimsFrequency,
+			AvgSeverity:   *r.AvgClaimSeverity,
+			AnnualPremium: r.AnnualPremium,
+		})
+	}
+
+	// ── Deteriorating schemes ─────────────────────────────────────────────
+	ceilingLabel := strconv.FormatFloat(alrCeiling, 'f', -1, 64)
+	deltaLabel := strconv.FormatFloat(alrDelta, 'f', -1, 64)
+	for _, r := range rows {
+		reasons := []string{}
+		if r.ActualLossRatio != nil && *r.ActualLossRatio > alrCeiling {
+			reasons = append(reasons, "ALR > "+ceilingLabel+"%")
+		}
+		if r.LossRatioDelta != nil && *r.LossRatioDelta > alrDelta {
+			reasons = append(reasons, "ALR exceeds ELR by >"+deltaLabel+"pp")
+		}
+		if len(reasons) == 0 {
+			continue
+		}
+		result.Deteriorating = append(result.Deteriorating, models.DeterioratingScheme{
+			SchemeID:          r.SchemeID,
+			SchemeName:        r.SchemeName,
+			TriggerReasons:    reasons,
+			ExpectedLossRatio: r.ExpectedLossRatio,
+			ActualLossRatio:   r.ActualLossRatio,
+			LossRatioDelta:    r.LossRatioDelta,
+			ItdClaimsPaid:     r.ItdClaimsPaid,
+			LastClaimDate:     r.LastClaimDate,
+		})
+	}
+	sort.SliceStable(result.Deteriorating, func(i, j int) bool {
+		ai := safeFloatPtr(result.Deteriorating[i].ActualLossRatio)
+		aj := safeFloatPtr(result.Deteriorating[j].ActualLossRatio)
+		return ai > aj
+	})
+
+	// ── Industry / region heatmap ─────────────────────────────────────────
+	heatmap, hmErr := computeIndustryRegionHeatmap(rows)
+	if hmErr == nil {
+		result.IndustryRegion = heatmap
+	}
+
+	return result, nil
+}
+
+// trendWindowMonths controls how many trailing months are returned by the
+// loss-ratio trend endpoint. 24 months gives the user enough history to
+// distinguish a steady scheme from one that's deteriorating without making
+// the chart unreadable.
+const trendWindowMonths = 24
+
+// GetLossRatioTrend returns rolling-12-month ALR per in-force scheme over the
+// last `trendWindowMonths` months, plus a portfolio aggregate line. Computed
+// from monthly per-scheme claims sums + each scheme's annual premium so the
+// frontend has everything it needs to render line charts.
+func GetLossRatioTrend() (models.LossRatioTrendResult, error) {
+	result := models.LossRatioTrendResult{
+		Months:    []string{},
+		Portfolio: []*float64{},
+		Schemes:   []models.LossRatioTrendSeries{},
+	}
+
+	var schemes []models.GroupScheme
+	if err := DB.Where("in_force = ? OR status = ?", true, models.StatusInForce).
+		Find(&schemes).Error; err != nil {
+		return result, err
+	}
+	if len(schemes) == 0 {
+		return result, nil
+	}
+	schemeIDs := make([]int, len(schemes))
+	for i, s := range schemes {
+		schemeIDs[i] = s.ID
+	}
+
+	// Build the display month axis (oldest → newest) and a lookback table to
+	// collect per-scheme monthly claims back to (display oldest − 11 months)
+	// so we can compute rolling-12 sums for the very first display point.
+	now := time.Now()
+	displayStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).
+		AddDate(0, -(trendWindowMonths - 1), 0)
+	dataStart := displayStart.AddDate(0, -11, 0)
+	cutoff := dataStart.Format("2006-01-02")
+
+	// Pull monthly per-scheme sums in a single query. date_of_event is
+	// stored as a YYYY-MM-DD string so we extract YYYY-MM with LEFT() —
+	// portable across the project's three supported dialects.
+	type monthRow struct {
+		SchemeID int     `gorm:"column:scheme_id"`
+		YM       string  `gorm:"column:ym"`
+		Total    float64 `gorm:"column:total"`
+	}
+	var monthRows []monthRow
+	if err := DB.Table("group_scheme_claims").
+		Select("scheme_id, LEFT(date_of_event, 7) AS ym, COALESCE(SUM(claim_amount), 0) AS total").
+		Where("scheme_id IN ? AND status IN ? AND date_of_event >= ?",
+			schemeIDs, []string{"approved", "paid"}, cutoff).
+		Group("scheme_id, LEFT(date_of_event, 7)").
+		Scan(&monthRows).Error; err != nil {
+		return result, err
+	}
+
+	// claimsByScheme[schemeID][ym] = sum
+	claimsByScheme := make(map[int]map[string]float64, len(schemes))
+	for _, mr := range monthRows {
+		if _, ok := claimsByScheme[mr.SchemeID]; !ok {
+			claimsByScheme[mr.SchemeID] = map[string]float64{}
+		}
+		claimsByScheme[mr.SchemeID][mr.YM] = mr.Total
+	}
+
+	// Display months: trendWindowMonths entries, formatted YYYY-MM.
+	displayMonths := make([]string, trendWindowMonths)
+	displayCursor := displayStart
+	for i := 0; i < trendWindowMonths; i++ {
+		displayMonths[i] = displayCursor.Format("2006-01")
+		displayCursor = displayCursor.AddDate(0, 1, 0)
+	}
+	result.Months = displayMonths
+
+	// Look-up months: 12 months prior up to the current display month, used
+	// for the rolling sum at each display point.
+	lookbackKey := func(end time.Time, offset int) string {
+		return end.AddDate(0, -offset, 0).Format("2006-01")
+	}
+
+	// Sort schemes by current ITD claims as a cheap proxy for "biggest
+	// signal" — caller can pick top N from this order if it wants a default.
+	sort.SliceStable(schemes, func(i, j int) bool {
+		return schemes[i].AnnualPremium > schemes[j].AnnualPremium
+	})
+
+	// Compute per-scheme rolling-12 ALR series, plus accumulate portfolio
+	// numerator and denominator per display month.
+	portNum := make([]float64, trendWindowMonths)
+	portDen := make([]float64, trendWindowMonths)
+	for _, s := range schemes {
+		months := claimsByScheme[s.ID]
+		series := models.LossRatioTrendSeries{
+			SchemeID:      s.ID,
+			SchemeName:    s.Name,
+			AnnualPremium: FloatPrecision(s.AnnualPremium, 2),
+			Values:        make([]*float64, trendWindowMonths),
+		}
+
+		startForMonths := s.CoverStartDate
+		if startForMonths.IsZero() {
+			startForMonths = s.CreationDate
+		}
+
+		for i := 0; i < trendWindowMonths; i++ {
+			endOfWindow := displayStart.AddDate(0, i, 0).AddDate(0, 1, 0).Add(-time.Hour)
+			// Skip points before the scheme existed.
+			if !startForMonths.IsZero() && endOfWindow.Before(startForMonths) {
+				continue
+			}
+
+			// Sum claims in trailing 12 months ending in display-month i.
+			var num float64
+			pivot := displayStart.AddDate(0, i, 0)
+			for k := 0; k < 12; k++ {
+				num += months[lookbackKey(pivot, k)]
+			}
+
+			// Time-weighted denominator: months in force as of pivot,
+			// capped at 12.
+			minf := 0
+			if !startForMonths.IsZero() {
+				diff := endOfWindow.Sub(startForMonths).Hours() / (24 * 30)
+				if diff > 0 {
+					minf = int(diff) + 1
+				}
+			}
+			if minf > 12 {
+				minf = 12
+			}
+			denom := 0.0
+			if s.AnnualPremium > 0 && minf > 0 {
+				denom = s.AnnualPremium * float64(minf) / 12.0
+			}
+			if denom > 0 {
+				v := FloatPrecision(num/denom*100, 1)
+				series.Values[i] = &v
+				portNum[i] += num
+				portDen[i] += denom
+			}
+		}
+
+		// Latest non-nil value is the "current" R12M ALR for this scheme —
+		// useful for the UI to default to top N by current value.
+		for i := trendWindowMonths - 1; i >= 0; i-- {
+			if series.Values[i] != nil {
+				v := *series.Values[i]
+				series.CurrentR12mALR = &v
+				break
+			}
+		}
+
+		result.Schemes = append(result.Schemes, series)
+	}
+
+	result.Portfolio = make([]*float64, trendWindowMonths)
+	for i := 0; i < trendWindowMonths; i++ {
+		if portDen[i] > 0 {
+			v := FloatPrecision(portNum[i]/portDen[i]*100, 1)
+			result.Portfolio[i] = &v
+		}
+	}
+
+	return result, nil
+}
+
+func makeEmptyLossRatioBuckets() []models.LossRatioBucket {
+	return []models.LossRatioBucket{
+		{Label: "<50%", LowerBound: 0, UpperBound: 50},
+		{Label: "50-80%", LowerBound: 50, UpperBound: 80},
+		{Label: "80-100%", LowerBound: 80, UpperBound: 100},
+		{Label: "100-150%", LowerBound: 100, UpperBound: 150},
+		{Label: ">150%", LowerBound: 150, UpperBound: -1},
+	}
+}
+
+func bucketIndexForALR(alr float64) int {
+	switch {
+	case alr < 50:
+		return 0
+	case alr < 80:
+		return 1
+	case alr < 100:
+		return 2
+	case alr < 150:
+		return 3
+	default:
+		return 4
+	}
+}
+
+func safeFloatPtr(p *float64) float64 {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
+// computeIndustryRegionHeatmap maps each in-force scheme to its (industry,
+// region) pair — industry from the parent group_pricing_quotes row, region
+// from the scheme's first scheme_category — and aggregates premium and ITD
+// claims by that pair.
+func computeIndustryRegionHeatmap(rows []models.SchemePerformanceRow) ([]models.IndustryRegionCell, error) {
+	if len(rows) == 0 {
+		return []models.IndustryRegionCell{}, nil
+	}
+	rowBySchemeID := make(map[int]models.SchemePerformanceRow, len(rows))
+	schemeIDs := make([]int, 0, len(rows))
+	for _, r := range rows {
+		rowBySchemeID[r.SchemeID] = r
+		schemeIDs = append(schemeIDs, r.SchemeID)
+	}
+
+	type schemeIndustryRow struct {
+		SchemeID int    `gorm:"column:scheme_id"`
+		Industry string `gorm:"column:industry"`
+	}
+	var inds []schemeIndustryRow
+	if err := DB.Table("group_schemes gs").
+		Select("gs.id AS scheme_id, COALESCE(q.industry, '') AS industry").
+		Joins("LEFT JOIN group_pricing_quotes q ON q.id = gs.quote_id").
+		Where("gs.id IN ?", schemeIDs).
+		Scan(&inds).Error; err != nil {
+		return nil, err
+	}
+	industryBySchemeID := make(map[int]string, len(inds))
+	for _, ir := range inds {
+		industryBySchemeID[ir.SchemeID] = ir.Industry
+	}
+
+	// Region: per scheme, take the lowest-id scheme_category's region (a
+	// pragmatic V1 simplification — schemes that span multiple regions get
+	// represented by their first category).
+	type schemeRegionRow struct {
+		SchemeID int    `gorm:"column:scheme_id"`
+		Region   string `gorm:"column:region"`
+	}
+	var regs []schemeRegionRow
+	if err := DB.Table("group_schemes gs").
+		Select("gs.id AS scheme_id, COALESCE(MIN(sc.region), '') AS region").
+		Joins("LEFT JOIN scheme_categories sc ON sc.quote_id = gs.quote_id").
+		Where("gs.id IN ?", schemeIDs).
+		Group("gs.id").
+		Scan(&regs).Error; err != nil {
+		return nil, err
+	}
+	regionBySchemeID := make(map[int]string, len(regs))
+	for _, rr := range regs {
+		regionBySchemeID[rr.SchemeID] = rr.Region
+	}
+
+	// Build (industry, region) pairs per scheme.
+	type schemeCatRow struct {
+		SchemeID int
+		Industry string
+		Region   string
+	}
+	cats := make([]schemeCatRow, 0, len(rows))
+	for _, r := range rows {
+		cats = append(cats, schemeCatRow{
+			SchemeID: r.SchemeID,
+			Industry: industryBySchemeID[r.SchemeID],
+			Region:   regionBySchemeID[r.SchemeID],
+		})
+	}
+
+	type cellKey struct {
+		Industry string
+		Region   string
+	}
+	cellMap := make(map[cellKey]*models.IndustryRegionCell)
+	for _, c := range cats {
+		ind := c.Industry
+		if ind == "" {
+			ind = "Unknown"
+		}
+		reg := c.Region
+		if reg == "" {
+			reg = "Unknown"
+		}
+		k := cellKey{Industry: ind, Region: reg}
+		row := rowBySchemeID[c.SchemeID]
+		cell, ok := cellMap[k]
+		if !ok {
+			cell = &models.IndustryRegionCell{Industry: ind, Region: reg}
+			cellMap[k] = cell
+		}
+		cell.Premium += row.AnnualPremium
+		cell.ClaimsPaid += row.ItdClaimsPaid
+		cell.MemberCount += int64(row.MemberCount)
+	}
+
+	cells := make([]models.IndustryRegionCell, 0, len(cellMap))
+	for _, c := range cellMap {
+		c.Premium = FloatPrecision(c.Premium, 2)
+		c.ClaimsPaid = FloatPrecision(c.ClaimsPaid, 2)
+		if c.Premium > 0 {
+			c.LossRatio = FloatPrecision(c.ClaimsPaid/c.Premium*100, 1)
+		}
+		cells = append(cells, *c)
+	}
+	sort.SliceStable(cells, func(i, j int) bool {
+		if cells[i].Industry == cells[j].Industry {
+			return cells[i].Region < cells[j].Region
+		}
+		return cells[i].Industry < cells[j].Industry
+	})
+	return cells, nil
+}
+
 // hydrateSchemesTreatyLinkFlag sets HasTreatyLink on each scheme by checking
 // treaty_scheme_links for linked scheme IDs in a single query.
 func hydrateSchemesTreatyLinkFlag(schemes []models.GroupScheme) {
@@ -12545,30 +13234,35 @@ func GetGroupPricingDashboardData(year int, dataSource string, benefit string) (
 		TotalSalary float64 `gorm:"column:total_salary" json:"total_salary"`
 	}
 	var provinceRows []provinceRow
-	// Quote-level benefit filter via the GSE subquery — narrows to quotes
-	// that have exposure for the chosen benefit. Members on those quotes
-	// are then counted by region. Coarser than per-member precision (a
-	// quote's full member list is counted even if some members didn't
-	// elect the benefit), but reliable across data sources unlike
-	// member.benefits_*_enabled which isn't populated for CSV uploads.
+	// Region comes from scheme_categories (sc.region) — the category-level
+	// region is reliably populated even when the member-level province is
+	// not. Benefit filter also uses scheme_categories per-benefit flags
+	// (sc.gla_benefit, sc.ttd_benefit, etc.) which are set at quote-config
+	// time and don't depend on whether exposure rebuild has been run.
+	benefitCategoryCol := map[string]string{
+		"GLA":  "sc.gla_benefit",
+		"SGLA": "sc.sgla_benefit",
+		"PTD":  "sc.ptd_benefit",
+		"CI":   "sc.ci_benefit",
+		"TTD":  "sc.ttd_benefit",
+		"PHI":  "sc.phi_benefit",
+	}
 	provinceQ := DB.Table("g_pricing_member_data m").
 		Select(`sc.region,
 			COUNT(DISTINCT m.id) as member_count,
 			COALESCE(SUM(m.annual_salary), 0) as total_salary`).
 		Joins("JOIN group_pricing_quotes q ON q.id = m.quote_id").
-		Joins("LEFT JOIN scheme_categories sc ON sc.quote_id = m.quote_id AND sc.scheme_category = m.scheme_category")
-	if benefit != "" && benefit != "All" {
-		provinceQ = provinceQ.Joins(
-			"JOIN (SELECT DISTINCT quote_id FROM group_scheme_exposures WHERE financial_year = ? AND benefit = ?) gse ON gse.quote_id = m.quote_id",
-			year, benefit,
-		)
-	} else {
-		provinceQ = provinceQ.Joins(
+		Joins("LEFT JOIN scheme_categories sc ON sc.quote_id = m.quote_id AND sc.scheme_category = m.scheme_category").
+		Joins(
 			"JOIN (SELECT DISTINCT quote_id FROM group_scheme_exposures WHERE financial_year = ?) gse ON gse.quote_id = m.quote_id",
 			year,
-		)
+		).
+		Where("sc.region IS NOT NULL AND sc.region != ''")
+	if benefit != "" && benefit != "All" {
+		if col, ok := benefitCategoryCol[benefit]; ok {
+			provinceQ = provinceQ.Where(col+" = ?", true)
+		}
 	}
-	provinceQ = provinceQ.Where("sc.region IS NOT NULL AND sc.region != ''")
 	switch dataSource {
 	case "inforce":
 		provinceQ = provinceQ.Where("q.status IN ?", []string{"accepted", "in_force"})

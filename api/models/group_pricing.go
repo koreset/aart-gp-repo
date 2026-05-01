@@ -56,58 +56,58 @@ type CalculationJob struct {
 
 // GroupPricingQuote struct
 type GroupPricingQuote struct {
-	ID                           int                       `json:"id" gorm:"primary_key"`
-	QuoteName                    string                    `json:"quote_name"`
-	Basis                        string                    `json:"basis"`
-	CreationDate                 time.Time                 `json:"creation_date" gorm:"type:datetime"`
-	QuoteType                    string                    `json:"quote_type"`
-	SchemeName                   string                    `json:"scheme_name"`
-	SchemeID                     int                       `json:"scheme_id"`
-	SchemeContact                string                    `json:"scheme_contact"`
-	SchemeEmail                  string                    `json:"scheme_email"`
-	QuoteBroker                  QuoteBroker               `json:"quote_broker" gorm:"embedded;embeddedPrefix:broker_"`
-	DistributionChannel          DistributionChannel       `json:"distribution_channel" gorm:"size:20;default:'broker'"`
-	ObligationType               string                    `json:"obligation_type"`
-	CommencementDate             time.Time                 `json:"commencement_date"`
-	CoverEndDate                 time.Time                 `json:"cover_end_date"`
-	Industry                     string                    `json:"industry"`
-	OccupationClass              int                       `json:"occupation_class"`
-	FreeCoverLimit               float64                   `json:"free_cover_limit"`
-	Currency                     string                    `json:"currency"`
-	ExchangeRate                 int                       `json:"exchangeRate"`
-	NormalRetirementAge          int                       `json:"normal_retirement_age"`
-	ExperienceRating             string                    `json:"experience_rating"`
+	ID                  int                 `json:"id" gorm:"primary_key"`
+	QuoteName           string              `json:"quote_name"`
+	Basis               string              `json:"basis"`
+	CreationDate        time.Time           `json:"creation_date" gorm:"type:datetime"`
+	QuoteType           string              `json:"quote_type"`
+	SchemeName          string              `json:"scheme_name"`
+	SchemeID            int                 `json:"scheme_id"`
+	SchemeContact       string              `json:"scheme_contact"`
+	SchemeEmail         string              `json:"scheme_email"`
+	QuoteBroker         QuoteBroker         `json:"quote_broker" gorm:"embedded;embeddedPrefix:broker_"`
+	DistributionChannel DistributionChannel `json:"distribution_channel" gorm:"size:20;default:'broker'"`
+	ObligationType      string              `json:"obligation_type"`
+	CommencementDate    time.Time           `json:"commencement_date"`
+	CoverEndDate        time.Time           `json:"cover_end_date"`
+	Industry            string              `json:"industry"`
+	OccupationClass     int                 `json:"occupation_class"`
+	FreeCoverLimit      float64             `json:"free_cover_limit"`
+	Currency            string              `json:"currency"`
+	ExchangeRate        int                 `json:"exchangeRate"`
+	NormalRetirementAge int                 `json:"normal_retirement_age"`
+	ExperienceRating    string              `json:"experience_rating"`
 	// ExperienceOverrideCredibility is the manually-entered credibility (0-1)
 	// the actuary supplies alongside experience-rate overrides. Saved to
 	// HistoricalCredibilityData as ManuallyAddedCredibility for future
 	// reference. Only meaningful when ExperienceRating == "Override".
-	ExperienceOverrideCredibility float64                  `json:"experience_override_credibility" gorm:"not null;default:0"`
-	CreatedBy                    string                    `json:"created_by"`
-	Reviewer                     string                    `json:"reviewer"`
-	ApprovedBy                   string                    `json:"approved_by"`
-	SentBy                       string                    `json:"sent_by"`
-	ModifiedBy                   string                    `json:"modified_by"`
-	ModificationDate             time.Time                 `json:"modification_date"`
-	Status                       Status                    `json:"status"`
-	MemberDataCount              int                       `json:"member_data_count"`
-	ClaimsExperienceCount        int                       `json:"claims_experience_count"`
-	ExperienceRateOverridesCount int                       `json:"experience_rate_overrides_count" gorm:"-"`
-	MemberRatingResultCount      int                       `json:"member_rating_result_count"`
-	MemberPremiumScheduleCount   int                       `json:"member_premium_schedule_count"`
-	BordereauxCount              int                       `json:"bordereaux_count"`
-	CalculationCompletedAt       *time.Time                `json:"calculation_completed_at" gorm:"type:datetime"`
-	UseGlobalSalaryMultiple      bool                      `json:"use_global_salary_multiple"`
-	SelectedSchemeCategories     StringArray               `json:"selected_scheme_categories" gorm:"type:json"`
-	SchemeCategories             []SchemeCategory          `json:"scheme_categories" gorm:"foreignKey:QuoteId"`
-	Loadings                     Loadings                  `json:"loadings" gorm:"embedded;embeddedPrefix:loadings_"`
-	MemberAverageAge             int                       `json:"member_average_age" gorm:"column:member_average_age"`
-	MemberAverageIncome          float64                   `json:"member_average_income" gorm:"column:member_average_income"`
-	MemberMaleFemaleDistribution float64                   `json:"member_male_female_distribution" gorm:"column:member_male_female_distribution"`
-	MemberIndicativeData         bool                      `json:"member_indicative_data"`
-	MemberIndicativeDataSet      []MemberIndicativeDataSet `json:"member_indicative_data_set" gorm:"-"`
-	RiskRateCode                 string                    `json:"risk_rate_code" gorm:"column:risk_rate_code"`
-	SchemeQuoteStatus            Status                    `json:"scheme_quote_status" gorm:"column:scheme_quote_status"`
-	EditMode                     bool                      `json:"edit_mode" gorm:"-"`
+	ExperienceOverrideCredibility float64                   `json:"experience_override_credibility" gorm:"not null;default:0"`
+	CreatedBy                     string                    `json:"created_by"`
+	Reviewer                      string                    `json:"reviewer"`
+	ApprovedBy                    string                    `json:"approved_by"`
+	SentBy                        string                    `json:"sent_by"`
+	ModifiedBy                    string                    `json:"modified_by"`
+	ModificationDate              time.Time                 `json:"modification_date"`
+	Status                        Status                    `json:"status"`
+	MemberDataCount               int                       `json:"member_data_count"`
+	ClaimsExperienceCount         int                       `json:"claims_experience_count"`
+	ExperienceRateOverridesCount  int                       `json:"experience_rate_overrides_count" gorm:"-"`
+	MemberRatingResultCount       int                       `json:"member_rating_result_count"`
+	MemberPremiumScheduleCount    int                       `json:"member_premium_schedule_count"`
+	BordereauxCount               int                       `json:"bordereaux_count"`
+	CalculationCompletedAt        *time.Time                `json:"calculation_completed_at" gorm:"type:datetime"`
+	UseGlobalSalaryMultiple       bool                      `json:"use_global_salary_multiple"`
+	SelectedSchemeCategories      StringArray               `json:"selected_scheme_categories" gorm:"type:json"`
+	SchemeCategories              []SchemeCategory          `json:"scheme_categories" gorm:"foreignKey:QuoteId"`
+	Loadings                      Loadings                  `json:"loadings" gorm:"embedded;embeddedPrefix:loadings_"`
+	MemberAverageAge              int                       `json:"member_average_age" gorm:"column:member_average_age"`
+	MemberAverageIncome           float64                   `json:"member_average_income" gorm:"column:member_average_income"`
+	MemberMaleFemaleDistribution  float64                   `json:"member_male_female_distribution" gorm:"column:member_male_female_distribution"`
+	MemberIndicativeData          bool                      `json:"member_indicative_data"`
+	MemberIndicativeDataSet       []MemberIndicativeDataSet `json:"member_indicative_data_set" gorm:"-"`
+	RiskRateCode                  string                    `json:"risk_rate_code" gorm:"column:risk_rate_code"`
+	SchemeQuoteStatus             Status                    `json:"scheme_quote_status" gorm:"column:scheme_quote_status"`
+	EditMode                      bool                      `json:"edit_mode" gorm:"-"`
 }
 
 type GroupRiskQuoteStats struct {
@@ -887,21 +887,21 @@ const (
 // ExpAdjLoaded{Benefit}Rate; Mode == "theoretical" leaves ExpAdjLoaded equal to
 // the loaded rate (no experience adjustment).
 type GroupPricingExperienceRateOverride struct {
-	ID             int       `json:"id" gorm:"primary_key"`
-	QuoteId        int       `json:"quote_id" gorm:"index;uniqueIndex:ux_quote_cat_benefit,priority:1"`
-	SchemeCategory string    `json:"scheme_category" gorm:"size:128;uniqueIndex:ux_quote_cat_benefit,priority:2"`
-	Benefit        string    `json:"benefit" gorm:"size:8;uniqueIndex:ux_quote_cat_benefit,priority:3"`
-	Mode           string    `json:"mode" gorm:"size:24;not null;default:theoretical"`
-	OverrideRate   float64   `json:"override_rate" gorm:"not null;default:0"`
+	ID             int     `json:"id" gorm:"primary_key"`
+	QuoteId        int     `json:"quote_id" gorm:"index;uniqueIndex:ux_quote_cat_benefit,priority:1"`
+	SchemeCategory string  `json:"scheme_category" gorm:"size:128;uniqueIndex:ux_quote_cat_benefit,priority:2"`
+	Benefit        string  `json:"benefit" gorm:"size:8;uniqueIndex:ux_quote_cat_benefit,priority:3"`
+	Mode           string  `json:"mode" gorm:"size:24;not null;default:theoretical"`
+	OverrideRate   float64 `json:"override_rate" gorm:"not null;default:0"`
 	// Credibility (0-1) the actuary records for this (category, benefit)
 	// override row. Recorded on every calc run into HistoricalCredibilityData
 	// so different benefits can carry different credibility weights even on
 	// the same quote.
-	Credibility    float64   `json:"credibility" gorm:"not null;default:0"`
-	CreatedAt      time.Time `json:"created_at" gorm:"autoCreateTime"`
-	CreatedBy      string    `json:"created_by" gorm:"size:128"`
-	UpdatedAt      time.Time `json:"updated_at" gorm:"autoUpdateTime"`
-	UpdatedBy      string    `json:"updated_by" gorm:"size:128"`
+	Credibility float64   `json:"credibility" gorm:"not null;default:0"`
+	CreatedAt   time.Time `json:"created_at" gorm:"autoCreateTime"`
+	CreatedBy   string    `json:"created_by" gorm:"size:128"`
+	UpdatedAt   time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+	UpdatedBy   string    `json:"updated_by" gorm:"size:128"`
 }
 
 type MemberRatingResult struct {
@@ -1342,21 +1342,21 @@ type MemberRatingResult struct {
 }
 
 type MemberRatingResultSummary struct {
-	ID                                      int     `json:"id" gorm:"primary_key"`
-	QuoteId                                 int     `json:"quote_id" csv:"quote_id" gorm:"index"`
-	SchemeId                                int     `json:"scheme_id" csv:"scheme_id"`
-	Category                                string  `json:"category" csv:"category"`
-	FinancialYear                           int     `json:"financial_year" csv:"financial_year"`
-	MemberCount                             float64 `json:"member_count" csv:"member_count"`
-	TotalAnnualSalary                       float64 `json:"total_annual_salary" csv:"total_annual_salary"`
-	IfStatus                                Status  `json:"if_status" csv:"if_status"`
-	QuoteType                               string  `json:"quote_type" csv:"quote_type"`
-	FreeCoverLimit                          float64 `json:"free_cover_limit" csv:"free_cover_limit"`
-	ExpenseLoading                          float64 `json:"expense_loading" csv:"expense_loading"`
-	CommissionLoading                       float64 `json:"commission_loading" csv:"commission_loading"`
-	ProfitLoading                           float64 `json:"profit_loading" csv:"profit_loading"`
-	AdminLoading                            float64 `json:"admin_loading" csv:"admin_loading"`
-	OtherLoading                            float64 `json:"other_loading" csv:"other_loading"`
+	ID                int     `json:"id" gorm:"primary_key"`
+	QuoteId           int     `json:"quote_id" csv:"quote_id" gorm:"index"`
+	SchemeId          int     `json:"scheme_id" csv:"scheme_id"`
+	Category          string  `json:"category" csv:"category"`
+	FinancialYear     int     `json:"financial_year" csv:"financial_year"`
+	MemberCount       float64 `json:"member_count" csv:"member_count"`
+	TotalAnnualSalary float64 `json:"total_annual_salary" csv:"total_annual_salary"`
+	IfStatus          Status  `json:"if_status" csv:"if_status"`
+	QuoteType         string  `json:"quote_type" csv:"quote_type"`
+	FreeCoverLimit    float64 `json:"free_cover_limit" csv:"free_cover_limit"`
+	ExpenseLoading    float64 `json:"expense_loading" csv:"expense_loading"`
+	CommissionLoading float64 `json:"commission_loading" csv:"commission_loading"`
+	ProfitLoading     float64 `json:"profit_loading" csv:"profit_loading"`
+	AdminLoading      float64 `json:"admin_loading" csv:"admin_loading"`
+	OtherLoading      float64 `json:"other_loading" csv:"other_loading"`
 	// Discount is a negative fraction (e.g. -0.05 for a 5% discount) added into
 	// SchemeTotalLoading so Final office premium = Risk / (1 - SchemeTotalLoading)
 	// shrinks once a discount is applied. Zero pre-discount.
@@ -1669,9 +1669,9 @@ type MemberRatingResultSummary struct {
 	TotalSumAssured                  float64 `json:"total_sum_assured" csv:"total_sum_assured"`
 	TotalAnnualPremium               float64 `json:"total_annual_premium" csv:"total_annual_premium" gorm:"default:0"`
 	ExpTotalAnnualPremiumExclFuneral float64 `json:"exp_total_annual_premium_excl_funeral" csv:"exp_total_annual_premium_excl_funeral"`
-	TotalCommission                            float64 `json:"total_commission" csv:"total_commission"`
-	TotalExpenses                              float64 `json:"total_expenses" csv:"total_expenses"`
-	TotalExpectedClaims                        float64 `json:"total_expected_claims" csv:"total_expected_claims"`
+	TotalCommission                  float64 `json:"total_commission" csv:"total_commission"`
+	TotalExpenses                    float64 `json:"total_expenses" csv:"total_expenses"`
+	TotalExpectedClaims              float64 `json:"total_expected_claims" csv:"total_expected_claims"`
 
 	AnnualGlaExperienceWeightedRate    float64 `json:"annual_gla_experience_weighted_rate" csv:"annual_gla_experience_weighted_rate"`
 	AnnualPtdExperienceWeightedRate    float64 `json:"annual_ptd_experience_weighted_rate" csv:"annual_ptd_experience_weighted_rate"`
@@ -1859,28 +1859,28 @@ type MemberRatingResultSummary struct {
 	// premium and commission whenever Discount changes; pre-discount equal to
 	// the Exp* counterparts. On non-binder distribution channels both rates
 	// are 0 so these stay 0.
-	FinalGlaAnnualBinderAmount                     float64 `json:"final_gla_annual_binder_amount" csv:"final_gla_annual_binder_amount"`
-	FinalGlaAnnualOutsourcedAmount                 float64 `json:"final_gla_annual_outsourced_amount" csv:"final_gla_annual_outsourced_amount"`
-	FinalAdditionalAccidentalGlaAnnualBinderAmount float64 `json:"final_additional_accidental_gla_annual_binder_amount" csv:"final_additional_accidental_gla_annual_binder_amount" gorm:"column:final_add_acc_gla_annual_binder_amount"`
+	FinalGlaAnnualBinderAmount                      float64 `json:"final_gla_annual_binder_amount" csv:"final_gla_annual_binder_amount"`
+	FinalGlaAnnualOutsourcedAmount                  float64 `json:"final_gla_annual_outsourced_amount" csv:"final_gla_annual_outsourced_amount"`
+	FinalAdditionalAccidentalGlaAnnualBinderAmount  float64 `json:"final_additional_accidental_gla_annual_binder_amount" csv:"final_additional_accidental_gla_annual_binder_amount" gorm:"column:final_add_acc_gla_annual_binder_amount"`
 	FinalAdditionalAccidentalGlaAnnualOutsourcedAmt float64 `json:"final_additional_accidental_gla_annual_outsourced_amount" csv:"final_additional_accidental_gla_annual_outsourced_amount" gorm:"column:final_add_acc_gla_annual_outsourced_amount"`
-	FinalPtdAnnualBinderAmount                     float64 `json:"final_ptd_annual_binder_amount" csv:"final_ptd_annual_binder_amount"`
-	FinalPtdAnnualOutsourcedAmount                 float64 `json:"final_ptd_annual_outsourced_amount" csv:"final_ptd_annual_outsourced_amount"`
-	FinalCiAnnualBinderAmount                      float64 `json:"final_ci_annual_binder_amount" csv:"final_ci_annual_binder_amount"`
-	FinalCiAnnualOutsourcedAmount                  float64 `json:"final_ci_annual_outsourced_amount" csv:"final_ci_annual_outsourced_amount"`
-	FinalSglaAnnualBinderAmount                    float64 `json:"final_sgla_annual_binder_amount" csv:"final_sgla_annual_binder_amount"`
-	FinalSglaAnnualOutsourcedAmount                float64 `json:"final_sgla_annual_outsourced_amount" csv:"final_sgla_annual_outsourced_amount"`
-	FinalTaxSaverAnnualBinderAmount                float64 `json:"final_tax_saver_annual_binder_amount" csv:"final_tax_saver_annual_binder_amount"`
-	FinalTaxSaverAnnualOutsourcedAmount            float64 `json:"final_tax_saver_annual_outsourced_amount" csv:"final_tax_saver_annual_outsourced_amount"`
-	FinalTtdAnnualBinderAmount                     float64 `json:"final_ttd_annual_binder_amount" csv:"final_ttd_annual_binder_amount"`
-	FinalTtdAnnualOutsourcedAmount                 float64 `json:"final_ttd_annual_outsourced_amount" csv:"final_ttd_annual_outsourced_amount"`
-	FinalPhiAnnualBinderAmount                     float64 `json:"final_phi_annual_binder_amount" csv:"final_phi_annual_binder_amount"`
-	FinalPhiAnnualOutsourcedAmount                 float64 `json:"final_phi_annual_outsourced_amount" csv:"final_phi_annual_outsourced_amount"`
-	FinalFunAnnualBinderAmount                     float64 `json:"final_fun_annual_binder_amount" csv:"final_fun_annual_binder_amount"`
-	FinalFunAnnualOutsourcedAmount                 float64 `json:"final_fun_annual_outsourced_amount" csv:"final_fun_annual_outsourced_amount"`
-	FinalGlaEducatorAnnualBinderAmount             float64 `json:"final_gla_educator_annual_binder_amount" csv:"final_gla_educator_annual_binder_amount"`
-	FinalGlaEducatorAnnualOutsourcedAmount         float64 `json:"final_gla_educator_annual_outsourced_amount" csv:"final_gla_educator_annual_outsourced_amount"`
-	FinalPtdEducatorAnnualBinderAmount             float64 `json:"final_ptd_educator_annual_binder_amount" csv:"final_ptd_educator_annual_binder_amount"`
-	FinalPtdEducatorAnnualOutsourcedAmount         float64 `json:"final_ptd_educator_annual_outsourced_amount" csv:"final_ptd_educator_annual_outsourced_amount"`
+	FinalPtdAnnualBinderAmount                      float64 `json:"final_ptd_annual_binder_amount" csv:"final_ptd_annual_binder_amount"`
+	FinalPtdAnnualOutsourcedAmount                  float64 `json:"final_ptd_annual_outsourced_amount" csv:"final_ptd_annual_outsourced_amount"`
+	FinalCiAnnualBinderAmount                       float64 `json:"final_ci_annual_binder_amount" csv:"final_ci_annual_binder_amount"`
+	FinalCiAnnualOutsourcedAmount                   float64 `json:"final_ci_annual_outsourced_amount" csv:"final_ci_annual_outsourced_amount"`
+	FinalSglaAnnualBinderAmount                     float64 `json:"final_sgla_annual_binder_amount" csv:"final_sgla_annual_binder_amount"`
+	FinalSglaAnnualOutsourcedAmount                 float64 `json:"final_sgla_annual_outsourced_amount" csv:"final_sgla_annual_outsourced_amount"`
+	FinalTaxSaverAnnualBinderAmount                 float64 `json:"final_tax_saver_annual_binder_amount" csv:"final_tax_saver_annual_binder_amount"`
+	FinalTaxSaverAnnualOutsourcedAmount             float64 `json:"final_tax_saver_annual_outsourced_amount" csv:"final_tax_saver_annual_outsourced_amount"`
+	FinalTtdAnnualBinderAmount                      float64 `json:"final_ttd_annual_binder_amount" csv:"final_ttd_annual_binder_amount"`
+	FinalTtdAnnualOutsourcedAmount                  float64 `json:"final_ttd_annual_outsourced_amount" csv:"final_ttd_annual_outsourced_amount"`
+	FinalPhiAnnualBinderAmount                      float64 `json:"final_phi_annual_binder_amount" csv:"final_phi_annual_binder_amount"`
+	FinalPhiAnnualOutsourcedAmount                  float64 `json:"final_phi_annual_outsourced_amount" csv:"final_phi_annual_outsourced_amount"`
+	FinalFunAnnualBinderAmount                      float64 `json:"final_fun_annual_binder_amount" csv:"final_fun_annual_binder_amount"`
+	FinalFunAnnualOutsourcedAmount                  float64 `json:"final_fun_annual_outsourced_amount" csv:"final_fun_annual_outsourced_amount"`
+	FinalGlaEducatorAnnualBinderAmount              float64 `json:"final_gla_educator_annual_binder_amount" csv:"final_gla_educator_annual_binder_amount"`
+	FinalGlaEducatorAnnualOutsourcedAmount          float64 `json:"final_gla_educator_annual_outsourced_amount" csv:"final_gla_educator_annual_outsourced_amount"`
+	FinalPtdEducatorAnnualBinderAmount              float64 `json:"final_ptd_educator_annual_binder_amount" csv:"final_ptd_educator_annual_binder_amount"`
+	FinalPtdEducatorAnnualOutsourcedAmount          float64 `json:"final_ptd_educator_annual_outsourced_amount" csv:"final_ptd_educator_annual_outsourced_amount"`
 
 	FinalTotalAnnualPremiumExclFuneral float64 `json:"final_total_annual_premium_excl_funeral" csv:"final_total_annual_premium_excl_funeral"`
 	FinalTotalAnnualPremium            float64 `json:"final_total_annual_premium" csv:"final_total_annual_premium"`
@@ -1913,7 +1913,8 @@ type MemberRatingResultSummary struct {
 // SchemeTotalLoading returns the scheme-level office-premium loading fraction
 // used to derive the *pre-commission* office premium:
 // ExpenseLoading + ProfitLoading + AdminLoading + OtherLoading
-//   + BinderFeeRate + OutsourceFeeRate.
+//   - BinderFeeRate + OutsourceFeeRate.
+//
 // Mirrors the rating-phase TotalPremiumLoading sum so summary-level helpers
 // stay consistent with per-member calculation. CommissionLoading is
 // intentionally excluded — commission is added on top of the pre-comm office
@@ -2415,6 +2416,14 @@ type GroupPricingSetting struct {
 	FCLMethodUpdatedAt      *time.Time `json:"fcl_method_updated_at"`
 	FCLMethodUpdatedBy      string     `json:"fcl_method_updated_by"`
 	FCLOverrideTolerance    float64    `json:"fcl_override_tolerance" gorm:"not null;default:0.2"`
+	// Risk watchlist thresholds — drive the Performance & Risk dashboard's
+	// "Deteriorating Schemes" panel. RiskAlrCeilingPct flags any scheme whose
+	// ITD ALR exceeds this percentage; RiskAlrDeltaPp flags schemes where ITD
+	// ALR exceeds Expected LR by more than this many percentage points.
+	RiskAlrCeilingPct       float64    `json:"risk_alr_ceiling_pct" gorm:"not null;default:100"`
+	RiskAlrDeltaPp          float64    `json:"risk_alr_delta_pp" gorm:"not null;default:20"`
+	RiskThresholdsUpdatedAt *time.Time `json:"risk_thresholds_updated_at"`
+	RiskThresholdsUpdatedBy string     `json:"risk_thresholds_updated_by"`
 	UpdatedAt               time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
 	UpdatedBy               string     `json:"updated_by"`
 }
@@ -3558,14 +3567,14 @@ type HistoricalCredibilityData struct {
 	// eight columns share the same value (claims-based credibility is
 	// quote-wide); in Override mode each is the simple average of that
 	// benefit's per-(category) credibility values across the override rows.
-	GlaCredibility           float64   `json:"gla_credibility" gorm:"not null;default:0"`
-	AaglaCredibility         float64   `json:"aagla_credibility" gorm:"not null;default:0"`
-	SglaCredibility          float64   `json:"sgla_credibility" gorm:"not null;default:0"`
-	PtdCredibility           float64   `json:"ptd_credibility" gorm:"not null;default:0"`
-	TtdCredibility           float64   `json:"ttd_credibility" gorm:"not null;default:0"`
-	PhiCredibility           float64   `json:"phi_credibility" gorm:"not null;default:0"`
-	CiCredibility            float64   `json:"ci_credibility" gorm:"not null;default:0"`
-	FunCredibility           float64   `json:"fun_credibility" gorm:"not null;default:0"`
+	GlaCredibility   float64 `json:"gla_credibility" gorm:"not null;default:0"`
+	AaglaCredibility float64 `json:"aagla_credibility" gorm:"not null;default:0"`
+	SglaCredibility  float64 `json:"sgla_credibility" gorm:"not null;default:0"`
+	PtdCredibility   float64 `json:"ptd_credibility" gorm:"not null;default:0"`
+	TtdCredibility   float64 `json:"ttd_credibility" gorm:"not null;default:0"`
+	PhiCredibility   float64 `json:"phi_credibility" gorm:"not null;default:0"`
+	CiCredibility    float64 `json:"ci_credibility" gorm:"not null;default:0"`
+	FunCredibility   float64 `json:"fun_credibility" gorm:"not null;default:0"`
 }
 
 type MemberIndicativeDataSet struct {
@@ -3829,6 +3838,146 @@ type DashboardPricingMetrics struct {
 	AvgCommissionPct   float64 `json:"avg_commission_pct"`
 	ExpectedLossRatio  float64 `json:"expected_loss_ratio"`
 	ActualLossRatio    float64 `json:"actual_loss_ratio"`
+}
+
+// SchemePerformanceRow is one row of the in-force Performance & Risk table —
+// one per scheme, with all per-scheme KPIs the dashboard needs.
+// ALR/severity/frequency are nullable: nil means "undefined" (e.g. no premium,
+// no members) and the UI renders an em-dash rather than 0.
+type SchemePerformanceRow struct {
+	SchemeID          int        `json:"scheme_id"`
+	SchemeName        string     `json:"scheme_name"`
+	Status            string     `json:"status"`
+	CoverStartDate    *time.Time `json:"cover_start_date,omitempty"`
+	MonthsInForce     int        `json:"months_in_force"`
+	MemberCount       float64    `json:"member_count"`
+	AnnualPremium     float64    `json:"annual_premium"`
+	EarnedPremium     float64    `json:"earned_premium"`
+	ITDEarnedPremium  float64    `json:"itd_earned_premium"`
+	CommissionPct     float64    `json:"commission_pct"`
+	ItdClaimsPaid     float64    `json:"itd_claims_paid"`
+	ItdClaimsCount    int        `json:"itd_claims_count"`
+	AvgClaimSeverity  *float64   `json:"avg_claim_severity"`
+	ClaimsFrequency   *float64   `json:"claims_frequency"`
+	ExpectedLossRatio float64    `json:"expected_loss_ratio"`
+	ActualLossRatio   *float64   `json:"actual_loss_ratio"`
+	LossRatioDelta    *float64   `json:"loss_ratio_delta"`
+	// R12mClaimsPaid is the sum of approved+paid claims with date_of_event in
+	// the trailing 12 months. R12mAlr is that divided by the time-weighted
+	// 12-month earned premium (annual_premium for schemes ≥ 12 months in
+	// force, pro-rated otherwise). Nil when the denominator is zero.
+	R12mClaimsPaid  float64  `json:"r12m_claims_paid"`
+	R12mClaimsCount int      `json:"r12m_claims_count"`
+	R12mAlr         *float64 `json:"r12m_alr"`
+	LastClaimDate   string   `json:"last_claim_date,omitempty"`
+}
+
+// SchemePerformanceResponse is what /scheme-performance returns.
+type SchemePerformanceResponse struct {
+	Rows            []SchemePerformanceRow `json:"rows"`
+	TotalSchemes    int                    `json:"total_schemes"`
+	TotalPremium    float64                `json:"total_premium"`
+	TotalItdClaims  float64                `json:"total_itd_claims"`
+	PortfolioALR    *float64               `json:"portfolio_alr"`
+	TotalR12mClaims float64                `json:"total_r12m_claims"`
+	PortfolioR12mALR *float64              `json:"portfolio_r12m_alr"`
+}
+
+// LossRatioTrendSeries is one scheme's monthly rolling-12-month ALR over the
+// configured trend window. Values are aligned positionally with the months
+// array on the response. Nil entries indicate "not enough history" (the
+// scheme didn't exist 12 months before that point).
+type LossRatioTrendSeries struct {
+	SchemeID      int        `json:"scheme_id"`
+	SchemeName    string     `json:"scheme_name"`
+	AnnualPremium float64    `json:"annual_premium"`
+	CurrentR12mALR *float64  `json:"current_r12m_alr"`
+	Values        []*float64 `json:"values"`
+}
+
+// LossRatioTrendResult is what /loss-ratio-trend returns. The portfolio line
+// is computed across all in-force schemes and is the heavy reference line on
+// the chart; per-scheme series are pickable in the UI.
+type LossRatioTrendResult struct {
+	Months    []string               `json:"months"`
+	Portfolio []*float64             `json:"portfolio"`
+	Schemes   []LossRatioTrendSeries `json:"schemes"`
+}
+
+// LossRatioBucket groups schemes by ALR band for the distribution histogram.
+type LossRatioBucket struct {
+	Label       string  `json:"label"`
+	LowerBound  float64 `json:"lower_bound"`
+	UpperBound  float64 `json:"upper_bound"` // -1 means "and above"
+	SchemeCount int     `json:"scheme_count"`
+	Premium     float64 `json:"premium"`
+}
+
+// ConcentrationKPIs summarises premium concentration across the in-force book.
+type ConcentrationKPIs struct {
+	Top5PremiumShare  float64 `json:"top5_premium_share"`
+	Top10PremiumShare float64 `json:"top10_premium_share"`
+	HHI               float64 `json:"hhi"` // 0–10 000 scale
+	TotalSchemes      int     `json:"total_schemes"`
+}
+
+// ParetoPoint is one rank on the cumulative-premium curve.
+type ParetoPoint struct {
+	Rank            int     `json:"rank"`
+	SchemeName      string  `json:"scheme_name"`
+	Premium         float64 `json:"premium"`
+	CumulativeShare float64 `json:"cumulative_share"` // 0–1
+}
+
+// IndustryRegionCell is one heatmap cell.
+type IndustryRegionCell struct {
+	Industry    string  `json:"industry"`
+	Region      string  `json:"region"`
+	Premium     float64 `json:"premium"`
+	ClaimsPaid  float64 `json:"claims_paid"`
+	LossRatio   float64 `json:"loss_ratio"` // claims_paid / premium * 100
+	MemberCount int64   `json:"member_count"`
+}
+
+// FreqSeverityPoint is one bubble on the frequency-severity scatter.
+type FreqSeverityPoint struct {
+	SchemeID      int     `json:"scheme_id"`
+	SchemeName    string  `json:"scheme_name"`
+	Frequency     float64 `json:"frequency"` // claims per 1000 lives
+	AvgSeverity   float64 `json:"avg_severity"`
+	AnnualPremium float64 `json:"annual_premium"`
+}
+
+// DeterioratingScheme flags a scheme requiring attention.
+type DeterioratingScheme struct {
+	SchemeID          int      `json:"scheme_id"`
+	SchemeName        string   `json:"scheme_name"`
+	TriggerReasons    []string `json:"trigger_reasons"`
+	ExpectedLossRatio float64  `json:"expected_loss_ratio"`
+	ActualLossRatio   *float64 `json:"actual_loss_ratio"`
+	LossRatioDelta    *float64 `json:"loss_ratio_delta"`
+	ItdClaimsPaid     float64  `json:"itd_claims_paid"`
+	LastClaimDate     string   `json:"last_claim_date,omitempty"`
+}
+
+// RiskWatchlistThresholds are the company-level deteriorating-scheme triggers
+// configured on GroupPricingSetting. The dashboard uses them as defaults but
+// can override per-session locally (see Performance & Risk tab).
+type RiskWatchlistThresholds struct {
+	AlrCeilingPct float64 `json:"alr_ceiling_pct"`
+	AlrDeltaPp    float64 `json:"alr_delta_pp"`
+}
+
+// RiskProfileResult is what /risk-profile returns.
+type RiskProfileResult struct {
+	Concentration     ConcentrationKPIs       `json:"concentration"`
+	Pareto            []ParetoPoint           `json:"pareto"`
+	LossRatioBuckets  []LossRatioBucket       `json:"loss_ratio_buckets"`
+	Top10Worst        []SchemePerformanceRow  `json:"top10_worst"`
+	IndustryRegion    []IndustryRegionCell    `json:"industry_region"`
+	FrequencySeverity []FreqSeverityPoint     `json:"frequency_severity"`
+	Deteriorating     []DeterioratingScheme   `json:"deteriorating"`
+	Thresholds        RiskWatchlistThresholds `json:"thresholds"`
 }
 
 // WinProbabilityModel stores persisted logistic regression weights and normalisation parameters.

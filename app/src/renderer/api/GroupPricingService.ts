@@ -41,6 +41,8 @@ export default {
     discount_method?: 'loading_adjustment' | 'prorata'
     fcl_method?: 'percentile' | 'outlier'
     fcl_override_tolerance?: number
+    risk_alr_ceiling_pct?: number
+    risk_alr_delta_pp?: number
   }) {
     return Api.put('/group-pricing/settings', payload, {
       headers: {
@@ -489,6 +491,15 @@ export default {
     return Api.get(
       `/group-pricing/dashboard/year/${year}?data_source=${dataSource}&benefit=${encodeURIComponent(benefit)}`
     )
+  },
+  getSchemePerformance() {
+    return Api.get('/group-pricing/dashboard/scheme-performance')
+  },
+  getRiskProfile() {
+    return Api.get('/group-pricing/dashboard/risk-profile')
+  },
+  getLossRatioTrend() {
+    return Api.get('/group-pricing/dashboard/loss-ratio-trend')
   },
   getExposureData(year, benefit, dataSource = 'all') {
     return Api.get(

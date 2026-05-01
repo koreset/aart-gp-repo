@@ -18,12 +18,14 @@
         <v-list-subheader>Download</v-list-subheader>
 
         <v-list-item
+          v-if="chartRef"
           prepend-icon="mdi-image-outline"
           title="PNG image"
           @click="downloadPng"
         ></v-list-item>
 
         <v-list-item
+          v-if="chartRef"
           prepend-icon="mdi-file-pdf-box"
           title="PDF (via print)"
           @click="downloadPdf"
@@ -96,8 +98,12 @@
 import { computed, ref } from 'vue'
 
 const props = defineProps<{
-  /** Ref to the <ag-charts> Vue component instance */
-  chartRef: any
+  /**
+   * Ref to the <ag-charts> Vue component instance. Optional — when omitted,
+   * PNG and PDF download options are hidden and the menu becomes a
+   * table-only download menu (CSV + View underlying data).
+   */
+  chartRef?: any
   /** Human-readable title — used as dialog header and download filename */
   title: string
   /** Current data array bound to the chart */

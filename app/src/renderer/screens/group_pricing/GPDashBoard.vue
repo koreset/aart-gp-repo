@@ -11,6 +11,7 @@
             <v-tabs v-model="dashboardTab" color="primary" class="mb-4">
               <v-tab value="quoting">Quoting</v-tab>
               <v-tab value="inforce">Inforce</v-tab>
+              <v-tab value="performance-risk">Performance &amp; Risk</v-tab>
             </v-tabs>
 
             <v-window v-model="dashboardTab">
@@ -1231,6 +1232,10 @@
                   </v-col>
                 </v-row>
               </v-window-item>
+
+              <v-window-item value="performance-risk" eager>
+                <PerformanceRiskTab />
+              </v-window-item>
             </v-window>
           </template>
         </base-card>
@@ -1248,13 +1253,19 @@ import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { useStatusBarStore } from '@/renderer/store/statusBar'
+import PerformanceRiskTab from './dashboard/PerformanceRiskTab.vue'
 
 const statusBarStore = useStatusBarStore()
 const router = useRouter()
 const route = useRoute()
 
-const dashboardTab = computed<'quoting' | 'inforce'>({
-  get: () => (route.query.tab === 'inforce' ? 'inforce' : 'quoting'),
+type DashboardTab = 'quoting' | 'inforce' | 'performance-risk'
+const dashboardTab = computed<DashboardTab>({
+  get: () => {
+    const t = route.query.tab
+    if (t === 'inforce' || t === 'performance-risk') return t
+    return 'quoting'
+  },
   set: (v) => router.replace({ query: { ...route.query, tab: v } })
 })
 
@@ -1913,9 +1924,10 @@ const provinceBarOptions = computed<any>(() => {
   const isCount = provinceViewBy.value === 'Count'
   const yKey = isCount ? 'member_count' : 'total_salary'
   const yLabel = isCount ? 'Member Count' : 'Total Annual Salary (R)'
+  const titleText = `${selectedBenefit.value || 'All'} Exposure by Region — ${exposureDataSourceLabel.value}`
   return {
     data: rawProvinceData.value,
-    title: { text: 'Exposure by Region', fontSize: 14, fontWeight: 'bold' },
+    title: { text: titleText, fontSize: 14, fontWeight: 'bold' },
     background: { fill: 'aliceblue' },
     series: [
       {
@@ -2082,9 +2094,10 @@ const provinceBarOptionsQuoting = computed<any>(() => {
   const isCount = provinceViewByQuoting.value === 'Count'
   const yKey = isCount ? 'member_count' : 'total_salary'
   const yLabel = isCount ? 'Member Count' : 'Total Annual Salary (R)'
+  const titleText = `${selectedBenefitQuoting.value || 'All'} Exposure by Region — ${exposureDataSourceLabelQuoting.value}`
   return {
     data: rawProvinceDataQuoting.value,
-    title: { text: 'Exposure by Region', fontSize: 14, fontWeight: 'bold' },
+    title: { text: titleText, fontSize: 14, fontWeight: 'bold' },
     background: { fill: 'aliceblue' },
     series: [
       {

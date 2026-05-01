@@ -695,7 +695,6 @@ func GetGroupPricingAgeBands(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": bands})
 }
 
-
 func GetGPTableData(c *gin.Context) {
 	tableType := c.Param("table_type")
 	results := services.GetGPTableData(tableType)
@@ -1617,6 +1616,40 @@ func GetGroupPricingDashboardData(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, data)
+}
+
+// GetSchemePerformance returns per-scheme performance rows for the in-force
+// Performance & Risk dashboard tab.
+func GetSchemePerformance(c *gin.Context) {
+	resp, err := services.GetSchemePerformanceRows()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// GetInForceRiskProfile returns concentration KPIs, loss-ratio distribution,
+// industry/region heatmap, frequency-severity scatter, and deteriorating
+// schemes for the in-force Performance & Risk dashboard tab.
+func GetInForceRiskProfile(c *gin.Context) {
+	resp, err := services.GetInForceRiskProfile()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// GetLossRatioTrend returns rolling-12-month ALR per scheme + portfolio over
+// the trailing 24 months. Used by the Loss Ratio Trend chart.
+func GetLossRatioTrend(c *gin.Context) {
+	resp, err := services.GetLossRatioTrend()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 // GetGroupSchemeClaimsDashboard returns aggregated analytics for claims dashboard
@@ -3010,7 +3043,6 @@ func GetTableDataCsvExport(c *gin.Context) {
 
 }
 
-
 // GetGroupSchemeStatusAudit returns the audit trail for a given group scheme
 func GetGroupSchemeStatusAudit(c *gin.Context) {
 	schemeId := c.Param("id")
@@ -3480,6 +3512,8 @@ func GetGroupPricingSettings(c *gin.Context) {
 			DiscountMethod:       models.DiscountMethodLoadingAdjustment,
 			FCLMethod:            models.FCLMethodPercentile,
 			FCLOverrideTolerance: services.FCLOverrideToleranceDefault,
+			RiskAlrCeilingPct:    100,
+			RiskAlrDeltaPp:       20,
 		}
 		services.DB.Create(&s)
 	}
@@ -3497,6 +3531,8 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 		DiscountMethod       *string  `json:"discount_method"`
 		FCLMethod            *string  `json:"fcl_method"`
 		FCLOverrideTolerance *float64 `json:"fcl_override_tolerance"`
+		RiskAlrCeilingPct    *float64 `json:"risk_alr_ceiling_pct"`
+		RiskAlrDeltaPp       *float64 `json:"risk_alr_delta_pp"`
 	}
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
@@ -3519,6 +3555,16 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "fcl_override_tolerance must be between 0 and 1"})
 		return
 	}
+	if payload.RiskAlrCeilingPct != nil &&
+		(*payload.RiskAlrCeilingPct < 0 || *payload.RiskAlrCeilingPct > 1000) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "risk_alr_ceiling_pct must be between 0 and 1000"})
+		return
+	}
+	if payload.RiskAlrDeltaPp != nil &&
+		(*payload.RiskAlrDeltaPp < 0 || *payload.RiskAlrDeltaPp > 1000) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "risk_alr_delta_pp must be between 0 and 1000"})
+		return
+	}
 	user := c.MustGet("user").(models.AppUser)
 
 	var s models.GroupPricingSetting
@@ -3528,6 +3574,8 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 			DiscountMethod:       models.DiscountMethodLoadingAdjustment,
 			FCLMethod:            models.FCLMethodPercentile,
 			FCLOverrideTolerance: services.FCLOverrideToleranceDefault,
+			RiskAlrCeilingPct:    100,
+			RiskAlrDeltaPp:       20,
 		}
 	}
 	now := time.Now()
@@ -3543,6 +3591,16 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 	}
 	if payload.FCLOverrideTolerance != nil {
 		s.FCLOverrideTolerance = *payload.FCLOverrideTolerance
+	}
+	if payload.RiskAlrCeilingPct != nil || payload.RiskAlrDeltaPp != nil {
+		if payload.RiskAlrCeilingPct != nil {
+			s.RiskAlrCeilingPct = *payload.RiskAlrCeilingPct
+		}
+		if payload.RiskAlrDeltaPp != nil {
+			s.RiskAlrDeltaPp = *payload.RiskAlrDeltaPp
+		}
+		s.RiskThresholdsUpdatedAt = &now
+		s.RiskThresholdsUpdatedBy = user.UserEmail
 	}
 	s.UpdatedBy = user.UserEmail
 	if err := services.DB.Save(&s).Error; err != nil {

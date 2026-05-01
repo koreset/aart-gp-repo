@@ -16,15 +16,12 @@ func ConfigureRouter(router *gin.Engine) {
 	router.GET("/health", controllers.CheckHealth)
 	router.GET("/version", controllers.GetAppVersion)
 
-
 	// WebSocket endpoint — registered outside auth middleware because
 	// the browser WebSocket API cannot send custom headers. Auth is
 	// handled inside the controller via the query-param token.
 	router.GET("/ws", controllers.HandleWebSocketUpgrade)
 
 	apiv1 := router.Group("", GetActiveUser())
-
-
 
 	{
 
@@ -47,8 +44,6 @@ func ConfigureRouter(router *gin.Engine) {
 			valuationJobs.GET("all-jobs/:id/excel/scoped", controllers.GetProjectionJobExcelScoped)
 
 		}
-
-
 
 		// NoCache() forces every group-pricing response to carry
 		// Cache-Control: no-store so dynamic per-quote data (result
@@ -202,6 +197,9 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.DELETE("insurers/:id/on-risk-letter-template/:templateId", controllers.DeleteInsurerOnRiskLetterTemplate)
 			groupPricing.GET("on-risk-letter-template/sample", controllers.DownloadSampleOnRiskLetterTemplate)
 			groupPricing.GET("dashboard/year/:year", controllers.GetGroupPricingDashboardData)
+			groupPricing.GET("dashboard/scheme-performance", controllers.GetSchemePerformance)
+			groupPricing.GET("dashboard/risk-profile", controllers.GetInForceRiskProfile)
+			groupPricing.GET("dashboard/loss-ratio-trend", controllers.GetLossRatioTrend)
 			groupPricing.GET("dashboard/exposures/year/:year/benefit/:benefit", controllers.GetGroupSchemeExposureData)
 			groupPricing.POST("dashboard/exposures/rebuild/year/:year", controllers.RebuildExposureData)
 			groupPricing.GET("dashboard/exposures/trend", controllers.GetExposureTrend)
