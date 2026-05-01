@@ -68,6 +68,7 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.GET("quotes/:id/on-risk-letter", controllers.GetOnRiskLetterData)
 			groupPricing.GET("quotes/:id/on-risk-letter/document.docx", controllers.GenerateOnRiskLetterDocxTemplated)
 			groupPricing.POST("quotes/:id/apply-discount/:discount", controllers.ApplyDiscountToQuote)
+			groupPricing.POST("quotes/:id/additional-gla-cover/smoothed-rates", controllers.SaveAdditionalGlaCoverSmoothedRates)
 			groupPricing.GET("discount-authority/risk-code/:risk_rate_code", controllers.GetDiscountAuthority)
 			groupPricing.GET("settings", controllers.GetGroupPricingSettings)
 			groupPricing.PUT("settings", controllers.UpdateGroupPricingSettings)

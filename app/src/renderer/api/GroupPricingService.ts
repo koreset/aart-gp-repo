@@ -34,6 +34,33 @@ export default {
       `/group-pricing/quotes/${quoteId}/apply-discount/${discountPct}`
     )
   },
+  saveAdditionalGlaSmoothedRates(
+    quoteId: number | string,
+    payload: {
+      category: string
+      rows: Array<{
+        min_age: number
+        max_age: number
+        smoothed_office_rate_per1000?: number | null
+        smoothed_office_rate_per1000_male?: number | null
+        smoothed_office_rate_per1000_female?: number | null
+        smoothing_factor?: number | null
+        smoothing_factor_male?: number | null
+        smoothing_factor_female?: number | null
+        clear_smoothed?: boolean
+        clear_smoothed_male?: boolean
+        clear_smoothed_female?: boolean
+        clear_factor?: boolean
+        clear_factor_male?: boolean
+        clear_factor_female?: boolean
+      }>
+    }
+  ) {
+    return Api.post(
+      `/group-pricing/quotes/${quoteId}/additional-gla-cover/smoothed-rates`,
+      payload
+    )
+  },
   getGroupPricingSettings() {
     return Api.get('/group-pricing/settings')
   },

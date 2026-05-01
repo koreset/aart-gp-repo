@@ -298,6 +298,11 @@
             value="reinsurancepremiumsummary"
             >Reinsurance Premium Summary</v-tab
           >
+          <v-tab
+            v-if="hasPermission('quote:view_premium_summary')"
+            value="additionalglacover"
+            >Additional GLA Cover</v-tab
+          >
         </v-tabs>
         <v-window v-model="tab">
           <v-window-item value="summary" eager>
@@ -362,6 +367,19 @@
               :key="`reins-${resultsRefreshKey}`"
               :resultSummaries="resultSummaries"
               :quote="quote"
+            />
+          </v-window-item>
+          <v-window-item
+            v-if="hasPermission('quote:view_premium_summary')"
+            value="additionalglacover"
+            eager
+          >
+            <AdditionalGlaCoverSummary
+              v-if="resultSummaries !== null"
+              :key="`agla-${resultsRefreshKey}`"
+              :resultSummaries="resultSummaries"
+              :quote="quote"
+              @quote-updated="loadQuote"
             />
           </v-window-item>
         </v-window>
@@ -624,6 +642,7 @@ import QuoteDataTableManager from './QuoteDataTableManager.vue'
 import QuoteResults from './QuoteResults.vue'
 import QuoteBenefitSummary from './QuoteBenefitSummary.vue'
 import QuoteReinsurancePremiumSummary from './QuoteReinsurancePremiumSummary.vue'
+import AdditionalGlaCoverSummary from './AdditionalGlaCoverSummary.vue'
 import formatDateString from '@/renderer/utils/helpers'
 
 // Import Other Components

@@ -381,6 +381,8 @@ type SchemeCategory struct {
 	AdditionalGlaCoverCustomAgeBands         AdditionalGlaCoverAgeBandArray  `json:"additional_gla_cover_custom_age_bands" gorm:"type:text"`
 	AdditionalGlaCoverBandRates              AdditionalGlaCoverBandRateArray `json:"additional_gla_cover_band_rates" gorm:"type:text"`
 	AdditionalGlaCoverMalePropUsed           *float64                        `json:"additional_gla_cover_male_prop_used"`
+	AdditionalGlaSmoothedUpdatedAt           *time.Time                      `json:"additional_gla_smoothed_updated_at"`
+	AdditionalGlaSmoothedUpdatedBy           string                          `json:"additional_gla_smoothed_updated_by" gorm:"size:255"`
 	PtdRiskType                              string                          `json:"ptd_risk_type"`
 	PtdBenefitType                           string                          `json:"ptd_benefit_type"`
 	PtdSalaryMultiple                        float64                         `json:"ptd_salary_multiple"`
@@ -609,6 +611,32 @@ type AdditionalGlaCoverBandRate struct {
 	OfficeRatePer1000Male     float64 `json:"office_rate_per1000_male"`
 	OfficeRatePer1000Female   float64 `json:"office_rate_per1000_female"`
 	MalePropUsed              float64 `json:"male_prop_used"`
+
+	// Pre-smoothing snapshot of the office rate / 1,000. Captured by the
+	// progressive-commission back-patch so the smoothing comparison view
+	// can show the unsmoothed reference even after OfficeRatePer1000* has
+	// been overwritten with the smoothed-derived final value.
+	OriginalOfficeRatePer1000        *float64 `json:"original_office_rate_per1000,omitempty"`
+	OriginalOfficeRatePer1000Male    *float64 `json:"original_office_rate_per1000_male,omitempty"`
+	OriginalOfficeRatePer1000Female  *float64 `json:"original_office_rate_per1000_female,omitempty"`
+
+	// Exposure-weighted office rate per 1000 — Σ(member rate × member SA) / Σ(member SA)
+	// for members whose age falls in this band. nil when the band has no members.
+	WeightedOfficeRatePer1000        *float64 `json:"weighted_office_rate_per1000,omitempty"`
+	WeightedOfficeRatePer1000Male    *float64 `json:"weighted_office_rate_per1000_male,omitempty"`
+	WeightedOfficeRatePer1000Female  *float64 `json:"weighted_office_rate_per1000_female,omitempty"`
+
+	// Smoothed office rate per 1000. Persisted across recalcs. nil = no smoothing
+	// applied yet (UI shows OfficeRatePer1000 as the default smoothed value).
+	SmoothedOfficeRatePer1000        *float64 `json:"smoothed_office_rate_per1000,omitempty"`
+	SmoothedOfficeRatePer1000Male    *float64 `json:"smoothed_office_rate_per1000_male,omitempty"`
+	SmoothedOfficeRatePer1000Female  *float64 `json:"smoothed_office_rate_per1000_female,omitempty"`
+
+	// Per-cell smoothing multiplier. nil treated as 1.0. When set, Smoothed = Office × Factor.
+	// Direct edits to Smoothed* override any factor.
+	SmoothingFactor       *float64 `json:"smoothing_factor,omitempty"`
+	SmoothingFactorMale   *float64 `json:"smoothing_factor_male,omitempty"`
+	SmoothingFactorFemale *float64 `json:"smoothing_factor_female,omitempty"`
 }
 type Loadings struct {
 	CommissionLoading  float64 `json:"commission_loading"`

@@ -3867,3 +3867,67 @@ func DeleteExperienceRateOverrides(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
+
+// SaveAdditionalGlaCoverSmoothedRates persists smoothed OfficeRate/1000 values
+// (and per-cell smoothing factors) for one scheme category's Additional GLA
+// Cover bands. Body shape:
+//
+//	{
+//	  "category": "Main",
+//	  "rows": [
+//	    {
+//	      "min_age": 18, "max_age": 24,
+//	      "smoothed_office_rate_per1000_male": 2.31,
+//	      "smoothing_factor": 0.95
+//	    }, ...
+//	  ]
+//	}
+func SaveAdditionalGlaCoverSmoothedRates(c *gin.Context) {
+	quoteID, err := strconv.Atoi(c.Param("id"))
+	if err != nil || quoteID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid quote id"})
+		return
+	}
+
+	var body struct {
+		Category string                                  `json:"category"`
+		Rows     []services.AdditionalGlaSmoothedRateRow `json:"rows"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(body.Category) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "category is required"})
+		return
+	}
+
+	// Prefer the user's display name for the audit; fall back to email so the
+	// banner still has a useful identifier when the name isn't populated.
+	updatedBy := ""
+	if u, ok := c.Get("user"); ok {
+		if user, ok := u.(models.AppUser); ok {
+			if strings.TrimSpace(user.UserName) != "" {
+				updatedBy = user.UserName
+			} else {
+				updatedBy = user.UserEmail
+			}
+		}
+	}
+
+	result, err := services.SaveAdditionalGlaCoverSmoothedRates(quoteID, body.Category, body.Rows, updatedBy)
+	if err != nil {
+		if errors.Is(err, services.ErrAglaSmoothingLocked) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"category":                           body.Category,
+		"additional_gla_cover_band_rates":    result.BandRates,
+		"additional_gla_smoothed_updated_at": result.UpdatedAt,
+		"additional_gla_smoothed_updated_by": result.UpdatedBy,
+	})
+}

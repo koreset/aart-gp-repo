@@ -87,6 +87,18 @@ export const useGroupPricingStore = defineStore('groupPricing', {
         office_rate_per1000_male: number
         office_rate_per1000_female: number
         male_prop_used: number
+        weighted_office_rate_per1000?: number | null
+        weighted_office_rate_per1000_male?: number | null
+        weighted_office_rate_per1000_female?: number | null
+        original_office_rate_per1000?: number | null
+        original_office_rate_per1000_male?: number | null
+        original_office_rate_per1000_female?: number | null
+        smoothed_office_rate_per1000?: number | null
+        smoothed_office_rate_per1000_male?: number | null
+        smoothed_office_rate_per1000_female?: number | null
+        smoothing_factor?: number | null
+        smoothing_factor_male?: number | null
+        smoothing_factor_female?: number | null
       }>,
       ptd_risk_type: null,
       ptd_benefit_type: null,

@@ -1522,6 +1522,25 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 				premiumLoading.AdminLoading +
 				premiumLoading.ProfitLoading +
 				premiumLoading.OtherLoading
+			// Snapshot the pre-existing smoothed values (and their factors)
+			// keyed by (min_age, max_age) so they survive a recalc when the
+			// same band still exists. New/resized bands start unsmoothed.
+			type aglaSmoothCarry struct {
+				smoothed, smoothedM, smoothedF *float64
+				factor, factorM, factorF       *float64
+			}
+			priorSmoothed := make(map[[2]int]aglaSmoothCarry, len(category.AdditionalGlaCoverBandRates))
+			for _, prev := range category.AdditionalGlaCoverBandRates {
+				priorSmoothed[[2]int{prev.MinAge, prev.MaxAge}] = aglaSmoothCarry{
+					smoothed:  prev.SmoothedOfficeRatePer1000,
+					smoothedM: prev.SmoothedOfficeRatePer1000Male,
+					smoothedF: prev.SmoothedOfficeRatePer1000Female,
+					factor:    prev.SmoothingFactor,
+					factorM:   prev.SmoothingFactorMale,
+					factorF:   prev.SmoothingFactorFemale,
+				}
+			}
+
 			aglaBandRates, aglaErr := CalculateAdditionalGlaCoverBandRates(
 				groupParameter.RiskRateCode,
 				category.GlaBenefitType,
@@ -1536,6 +1555,9 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 				aglaOutsourceRate,
 				aglaOtherLoadings,
 				premiumLoading.MinimumPremiumLoading,
+				memberMps,
+				groupQuote.CommencementDate,
+				category.GlaSalaryMultiple,
 			)
 			if aglaErr != nil {
 				logger.WithFields(map[string]interface{}{
@@ -1546,6 +1568,16 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 					"male_prop":    maleProp,
 				}).Warn("Failed to compute additional GLA cover band rates")
 			} else {
+				for i := range aglaBandRates {
+					if carry, ok := priorSmoothed[[2]int{aglaBandRates[i].MinAge, aglaBandRates[i].MaxAge}]; ok {
+						aglaBandRates[i].SmoothedOfficeRatePer1000 = carry.smoothed
+						aglaBandRates[i].SmoothedOfficeRatePer1000Male = carry.smoothedM
+						aglaBandRates[i].SmoothedOfficeRatePer1000Female = carry.smoothedF
+						aglaBandRates[i].SmoothingFactor = carry.factor
+						aglaBandRates[i].SmoothingFactorMale = carry.factorM
+						aglaBandRates[i].SmoothingFactorFemale = carry.factorF
+					}
+				}
 				category.AdditionalGlaCoverBandRates = aglaBandRates
 				mpUsed := maleProp
 				category.AdditionalGlaCoverMalePropUsed = &mpUsed
@@ -8020,10 +8052,52 @@ func recomputeFinalPremiumsAndCommission(quoteID int, groupQuote models.GroupPri
 			}
 			risk := b.RiskRatePer1000 / 1000.0
 			officePer1000 := (risk / divisor) * 1000.0 * prorataMul
-			b.OfficeRatePer1000 = officePer1000
-			b.BinderFeePer1000 = officePer1000 * s.BinderFeeRate
-			b.OutsourceFeePer1000 = officePer1000 * s.OutsourceFeeRate
-			b.CommissionPer1000 = officePer1000 * rate
+			// Snapshot the freshly computed pre-smoothed rate so the
+			// smoothing comparison view always has the unsmoothed
+			// reference, regardless of whether smoothing has been
+			// applied. Same approach for the gender variants below.
+			origC := officePer1000
+			b.OriginalOfficeRatePer1000 = &origC
+
+			riskM := b.RiskRatePer1000Male / 1000.0
+			officeM := (riskM / divisor) * 1000.0 * prorataMul
+			origM := officeM
+			b.OriginalOfficeRatePer1000Male = &origM
+
+			riskF := b.RiskRatePer1000Female / 1000.0
+			officeF := (riskF / divisor) * 1000.0 * prorataMul
+			origF := officeF
+			b.OriginalOfficeRatePer1000Female = &origF
+
+			// If smoothing has been applied for this band/gender, the
+			// final office rate equals the smoothed value; otherwise it
+			// equals the freshly computed rate. Downstream consumers
+			// (PDFs, certificates, exports) just read OfficeRatePer1000
+			// and get the right thing automatically.
+			if b.SmoothedOfficeRatePer1000 != nil {
+				b.OfficeRatePer1000 = *b.SmoothedOfficeRatePer1000
+			} else {
+				b.OfficeRatePer1000 = officePer1000
+			}
+			if b.SmoothedOfficeRatePer1000Male != nil {
+				b.OfficeRatePer1000Male = *b.SmoothedOfficeRatePer1000Male
+			} else {
+				b.OfficeRatePer1000Male = officeM
+			}
+			if b.SmoothedOfficeRatePer1000Female != nil {
+				b.OfficeRatePer1000Female = *b.SmoothedOfficeRatePer1000Female
+			} else {
+				b.OfficeRatePer1000Female = officeF
+			}
+			b.BinderFeePer1000 = b.OfficeRatePer1000 * s.BinderFeeRate
+			b.BinderFeePer1000Male = b.OfficeRatePer1000Male * s.BinderFeeRate
+			b.BinderFeePer1000Female = b.OfficeRatePer1000Female * s.BinderFeeRate
+			b.OutsourceFeePer1000 = b.OfficeRatePer1000 * s.OutsourceFeeRate
+			b.OutsourceFeePer1000Male = b.OfficeRatePer1000Male * s.OutsourceFeeRate
+			b.OutsourceFeePer1000Female = b.OfficeRatePer1000Female * s.OutsourceFeeRate
+			b.CommissionPer1000 = b.OfficeRatePer1000 * rate
+			b.CommissionPer1000Male = b.OfficeRatePer1000Male * rate
+			b.CommissionPer1000Female = b.OfficeRatePer1000Female * rate
 		}
 	}
 
@@ -9926,6 +10000,9 @@ func CalculateAdditionalGlaCoverBandRates(
 	maleProp float64,
 	bands []models.AdditionalGlaCoverAgeBand,
 	commissionLoading, binderFeeRate, outsourceFeeRate, otherLoadingsSum, minimumPremiumLoading float64,
+	members []models.GPricingMemberData,
+	referenceDate time.Time,
+	categoryGlaSalaryMultiple float64,
 ) ([]models.AdditionalGlaCoverBandRate, error) {
 	totalPremiumLoading := math.Max(
 		commissionLoading+binderFeeRate+outsourceFeeRate+otherLoadingsSum,
@@ -10231,6 +10308,68 @@ func CalculateAdditionalGlaCoverBandRates(
 		}
 		return sum / float64(count)
 	}
+	// Per-band exposure-weighted office rate, using each member's exact-age
+	// office rate weighted by their GLA covered sum assured (= multiple ×
+	// salary, uncapped). Members are already filtered to the scheme category
+	// upstream, so we don't gate on Benefits.GlaEnabled — that flag is
+	// populated only after the calc engine seeds it from the category, and
+	// when reading raw rows from DB it's typically false.
+	// Returns nil pointers when the band has no members contributing SA so
+	// the UI can render an empty cell instead of zero.
+	weightedForBand := func(minAge, maxAge int) (m, f, c *float64) {
+		var maleSARate, maleSA, femaleSARate, femaleSA float64
+		// Combined is the SA-weighted average across both genders, using
+		// each member's own gender-specific rate. When only one gender has
+		// members in the band, Combined collapses to that gender's value.
+		var combinedSARate, combinedSA float64
+		for _, mp := range members {
+			multiple := mp.Benefits.GlaMultiple
+			if multiple <= 0 {
+				multiple = categoryGlaSalaryMultiple
+			}
+			sa := multiple * mp.AnnualSalary
+			if sa <= 0 {
+				continue
+			}
+			age := calculateAgeNextBirthday(referenceDate, mp.DateOfBirth)
+			if age < minAge || age > maxAge {
+				continue
+			}
+			g := strings.ToUpper(strings.TrimSpace(mp.Gender))
+			switch g {
+			case "M", "MALE":
+				if r, ok := loadedRateMale[age]; ok {
+					rate := (r / loadingDivisor) * 1000.0
+					maleSARate += rate * sa
+					maleSA += sa
+					combinedSARate += rate * sa
+					combinedSA += sa
+				}
+			case "F", "FEMALE":
+				if r, ok := loadedRateFemale[age]; ok {
+					rate := (r / loadingDivisor) * 1000.0
+					femaleSARate += rate * sa
+					femaleSA += sa
+					combinedSARate += rate * sa
+					combinedSA += sa
+				}
+			}
+		}
+		if maleSA > 0 {
+			v := maleSARate / maleSA
+			m = &v
+		}
+		if femaleSA > 0 {
+			v := femaleSARate / femaleSA
+			f = &v
+		}
+		if combinedSA > 0 {
+			v := combinedSARate / combinedSA
+			c = &v
+		}
+		return
+	}
+
 	results := make([]models.AdditionalGlaCoverBandRate, 0, len(bands))
 	for _, b := range bands {
 		lo := b.MinAge
@@ -10262,28 +10401,243 @@ func CalculateAdditionalGlaCoverBandRates(
 		officeM := (avgM / loadingDivisor) * 1000.0
 		officeF := (avgF / loadingDivisor) * 1000.0
 
+		weightedM, weightedF, weightedC := weightedForBand(b.MinAge, b.MaxAge)
+
 		results = append(results, models.AdditionalGlaCoverBandRate{
-			MinAge:                    b.MinAge,
-			MaxAge:                    b.MaxAge,
-			RiskRatePer1000:           avgC * 1000.0,
-			RiskRatePer1000Male:       avgM * 1000.0,
-			RiskRatePer1000Female:     avgF * 1000.0,
-			BinderFeePer1000:          officeC * binderFeeRate,
-			BinderFeePer1000Male:      officeM * binderFeeRate,
-			BinderFeePer1000Female:    officeF * binderFeeRate,
-			OutsourceFeePer1000:       officeC * outsourceFeeRate,
-			OutsourceFeePer1000Male:   officeM * outsourceFeeRate,
-			OutsourceFeePer1000Female: officeF * outsourceFeeRate,
-			CommissionPer1000:         officeC * commissionLoading,
-			CommissionPer1000Male:     officeM * commissionLoading,
-			CommissionPer1000Female:   officeF * commissionLoading,
-			OfficeRatePer1000:         officeC,
-			OfficeRatePer1000Male:     officeM,
-			OfficeRatePer1000Female:   officeF,
-			MalePropUsed:              maleProp,
+			MinAge:                          b.MinAge,
+			MaxAge:                          b.MaxAge,
+			RiskRatePer1000:                 avgC * 1000.0,
+			RiskRatePer1000Male:             avgM * 1000.0,
+			RiskRatePer1000Female:           avgF * 1000.0,
+			BinderFeePer1000:                officeC * binderFeeRate,
+			BinderFeePer1000Male:            officeM * binderFeeRate,
+			BinderFeePer1000Female:          officeF * binderFeeRate,
+			OutsourceFeePer1000:             officeC * outsourceFeeRate,
+			OutsourceFeePer1000Male:         officeM * outsourceFeeRate,
+			OutsourceFeePer1000Female:       officeF * outsourceFeeRate,
+			CommissionPer1000:               officeC * commissionLoading,
+			CommissionPer1000Male:           officeM * commissionLoading,
+			CommissionPer1000Female:         officeF * commissionLoading,
+			OfficeRatePer1000:               officeC,
+			OfficeRatePer1000Male:           officeM,
+			OfficeRatePer1000Female:         officeF,
+			MalePropUsed:                    maleProp,
+			WeightedOfficeRatePer1000:       weightedC,
+			WeightedOfficeRatePer1000Male:   weightedM,
+			WeightedOfficeRatePer1000Female: weightedF,
 		})
 	}
 	return results, nil
+}
+
+// AdditionalGlaSmoothedRateRow is one ageband update from the UI. min_age and
+// max_age identify the band; the smoothed/factor pointers are applied verbatim
+// (nil leaves the persisted value unchanged via the explicit `clear` flags).
+type AdditionalGlaSmoothedRateRow struct {
+	MinAge int `json:"min_age"`
+	MaxAge int `json:"max_age"`
+
+	SmoothedOfficeRatePer1000       *float64 `json:"smoothed_office_rate_per1000,omitempty"`
+	SmoothedOfficeRatePer1000Male   *float64 `json:"smoothed_office_rate_per1000_male,omitempty"`
+	SmoothedOfficeRatePer1000Female *float64 `json:"smoothed_office_rate_per1000_female,omitempty"`
+
+	SmoothingFactor       *float64 `json:"smoothing_factor,omitempty"`
+	SmoothingFactorMale   *float64 `json:"smoothing_factor_male,omitempty"`
+	SmoothingFactorFemale *float64 `json:"smoothing_factor_female,omitempty"`
+
+	// When true, the corresponding pointer field above is cleared to nil
+	// regardless of the value. Lets the UI revert a single cell back to the
+	// computed OfficeRate without sending a sentinel.
+	ClearSmoothed       bool `json:"clear_smoothed,omitempty"`
+	ClearSmoothedMale   bool `json:"clear_smoothed_male,omitempty"`
+	ClearSmoothedFemale bool `json:"clear_smoothed_female,omitempty"`
+	ClearFactor         bool `json:"clear_factor,omitempty"`
+	ClearFactorMale     bool `json:"clear_factor_male,omitempty"`
+	ClearFactorFemale   bool `json:"clear_factor_female,omitempty"`
+}
+
+// ErrAglaSmoothingLocked is returned when the caller tries to mutate the
+// smoothed rates of a quote whose status no longer allows underwriter edits
+// (approved / accepted / in-force). The HTTP layer maps this to 409 Conflict
+// so the UI can show a friendly message rather than a generic 500.
+var ErrAglaSmoothingLocked = errors.New("additional GLA smoothed rates are locked for this quote status")
+
+// AdditionalGlaSmoothedSaveResult is the structured response from a save: the
+// updated band rates plus the audit metadata so the UI can refresh the
+// "last updated by X at Y" banner without refetching the whole quote.
+type AdditionalGlaSmoothedSaveResult struct {
+	BandRates []models.AdditionalGlaCoverBandRate `json:"additional_gla_cover_band_rates"`
+	UpdatedAt *time.Time                          `json:"additional_gla_smoothed_updated_at"`
+	UpdatedBy string                              `json:"additional_gla_smoothed_updated_by"`
+}
+
+// SaveAdditionalGlaCoverSmoothedRates merges per-band smoothed rates and
+// smoothing factors into the persisted scheme_categories row for the given
+// quote+category and mirrors the result onto the matching member_rating_result_summaries
+// row so the Premium Summary refreshes without requiring a full quote recalc.
+// Only the band rate JSON column is touched; the rest of the snapshot is
+// untouched.
+//
+// updatedBy is recorded against the scheme_categories row alongside the
+// timestamp so the UI can show "last updated by X at Y". Pass an empty
+// string when there's no user context (e.g. background jobs).
+func SaveAdditionalGlaCoverSmoothedRates(quoteID int, category string, rows []AdditionalGlaSmoothedRateRow, updatedBy string) (*AdditionalGlaSmoothedSaveResult, error) {
+	// Reject the save once the quote is locked. Smoothed rates feed into the
+	// agreed pricing, so we can't let them shift after the quote is approved
+	// or accepted.
+	var quote models.GroupPricingQuote
+	if err := DB.Select("status").Where("id = ?", quoteID).First(&quote).Error; err != nil {
+		return nil, fmt.Errorf("quote %d not found: %w", quoteID, err)
+	}
+	switch quote.Status {
+	case models.StatusApproved, models.StatusAccepted, models.StatusInForce:
+		return nil, ErrAglaSmoothingLocked
+	}
+
+	var sc models.SchemeCategory
+	if err := DB.Where("quote_id = ? AND scheme_category = ?", quoteID, category).
+		First(&sc).Error; err != nil {
+		return nil, fmt.Errorf("scheme category not found for quote %d, category %q: %w", quoteID, category, err)
+	}
+	if len(sc.AdditionalGlaCoverBandRates) == 0 {
+		return nil, fmt.Errorf("no additional GLA cover band rates persisted for quote %d, category %q — recalculate the quote first", quoteID, category)
+	}
+
+	updates := make(map[[2]int]AdditionalGlaSmoothedRateRow, len(rows))
+	for _, r := range rows {
+		updates[[2]int{r.MinAge, r.MaxAge}] = r
+	}
+
+	for i := range sc.AdditionalGlaCoverBandRates {
+		band := &sc.AdditionalGlaCoverBandRates[i]
+		u, ok := updates[[2]int{band.MinAge, band.MaxAge}]
+		if !ok {
+			continue
+		}
+		if u.ClearSmoothed {
+			band.SmoothedOfficeRatePer1000 = nil
+		} else if u.SmoothedOfficeRatePer1000 != nil {
+			band.SmoothedOfficeRatePer1000 = u.SmoothedOfficeRatePer1000
+		}
+		if u.ClearSmoothedMale {
+			band.SmoothedOfficeRatePer1000Male = nil
+		} else if u.SmoothedOfficeRatePer1000Male != nil {
+			band.SmoothedOfficeRatePer1000Male = u.SmoothedOfficeRatePer1000Male
+		}
+		if u.ClearSmoothedFemale {
+			band.SmoothedOfficeRatePer1000Female = nil
+		} else if u.SmoothedOfficeRatePer1000Female != nil {
+			band.SmoothedOfficeRatePer1000Female = u.SmoothedOfficeRatePer1000Female
+		}
+		if u.ClearFactor {
+			band.SmoothingFactor = nil
+		} else if u.SmoothingFactor != nil {
+			band.SmoothingFactor = u.SmoothingFactor
+		}
+		if u.ClearFactorMale {
+			band.SmoothingFactorMale = nil
+		} else if u.SmoothingFactorMale != nil {
+			band.SmoothingFactorMale = u.SmoothingFactorMale
+		}
+		if u.ClearFactorFemale {
+			band.SmoothingFactorFemale = nil
+		} else if u.SmoothingFactorFemale != nil {
+			band.SmoothingFactorFemale = u.SmoothingFactorFemale
+		}
+
+		// Propagate the smoothed-or-original office rate into the
+		// regular OfficeRatePer1000* fields and recompute the
+		// associated Binder / Outsource / Commission per-1,000 so any
+		// downstream consumer reading the band rates gets the final
+		// (smoothed-applied) value without an extra recalc. The
+		// pre-smoothed reference is held in OriginalOfficeRatePer1000*
+		// — capture it on first save when missing so the comparison
+		// view still has it.
+		if band.OriginalOfficeRatePer1000 == nil {
+			v := band.OfficeRatePer1000
+			band.OriginalOfficeRatePer1000 = &v
+		}
+		if band.OriginalOfficeRatePer1000Male == nil {
+			v := band.OfficeRatePer1000Male
+			band.OriginalOfficeRatePer1000Male = &v
+		}
+		if band.OriginalOfficeRatePer1000Female == nil {
+			v := band.OfficeRatePer1000Female
+			band.OriginalOfficeRatePer1000Female = &v
+		}
+
+		// Recover per-category Binder / Outsource / Commission rates
+		// from the existing band before we overwrite the office rate.
+		// Falls back to 0 when the band hasn't been computed yet.
+		var binderRate, outsourceRate, commissionRate float64
+		if band.OfficeRatePer1000 > 0 {
+			binderRate = band.BinderFeePer1000 / band.OfficeRatePer1000
+			outsourceRate = band.OutsourceFeePer1000 / band.OfficeRatePer1000
+			commissionRate = band.CommissionPer1000 / band.OfficeRatePer1000
+		}
+
+		if band.SmoothedOfficeRatePer1000 != nil {
+			band.OfficeRatePer1000 = *band.SmoothedOfficeRatePer1000
+		} else if band.OriginalOfficeRatePer1000 != nil {
+			band.OfficeRatePer1000 = *band.OriginalOfficeRatePer1000
+		}
+		if band.SmoothedOfficeRatePer1000Male != nil {
+			band.OfficeRatePer1000Male = *band.SmoothedOfficeRatePer1000Male
+		} else if band.OriginalOfficeRatePer1000Male != nil {
+			band.OfficeRatePer1000Male = *band.OriginalOfficeRatePer1000Male
+		}
+		if band.SmoothedOfficeRatePer1000Female != nil {
+			band.OfficeRatePer1000Female = *band.SmoothedOfficeRatePer1000Female
+		} else if band.OriginalOfficeRatePer1000Female != nil {
+			band.OfficeRatePer1000Female = *band.OriginalOfficeRatePer1000Female
+		}
+
+		band.BinderFeePer1000 = band.OfficeRatePer1000 * binderRate
+		band.BinderFeePer1000Male = band.OfficeRatePer1000Male * binderRate
+		band.BinderFeePer1000Female = band.OfficeRatePer1000Female * binderRate
+		band.OutsourceFeePer1000 = band.OfficeRatePer1000 * outsourceRate
+		band.OutsourceFeePer1000Male = band.OfficeRatePer1000Male * outsourceRate
+		band.OutsourceFeePer1000Female = band.OfficeRatePer1000Female * outsourceRate
+		band.CommissionPer1000 = band.OfficeRatePer1000 * commissionRate
+		band.CommissionPer1000Male = band.OfficeRatePer1000Male * commissionRate
+		band.CommissionPer1000Female = band.OfficeRatePer1000Female * commissionRate
+	}
+
+	now := time.Now()
+	if err := DB.Model(&models.SchemeCategory{}).
+		Where("id = ?", sc.ID).
+		Updates(map[string]interface{}{
+			"additional_gla_cover_band_rates":     sc.AdditionalGlaCoverBandRates,
+			"additional_gla_smoothed_updated_at":  now,
+			"additional_gla_smoothed_updated_by":  updatedBy,
+		}).Error; err != nil {
+		return nil, fmt.Errorf("persist scheme_categories.additional_gla_cover_band_rates: %w", err)
+	}
+	sc.AdditionalGlaSmoothedUpdatedAt = &now
+	sc.AdditionalGlaSmoothedUpdatedBy = updatedBy
+
+	// Mirror onto the MRRS row so the result-summary GET surfaces the
+	// updated band rates (including the smoothed snapshot) on the next
+	// reload. Best-effort — log and continue if no MRRS row.
+	// Note: MRRS keys the category by `category` (not `scheme_category`).
+	if err := DB.Model(&models.MemberRatingResultSummary{}).
+		Where("quote_id = ? AND category = ?", quoteID, category).
+		Updates(map[string]interface{}{
+			"additional_gla_cover_band_rates": sc.AdditionalGlaCoverBandRates,
+		}).Error; err != nil {
+		logger := appLog.WithContext(context.Background())
+		logger.WithFields(map[string]interface{}{
+			"error":    err.Error(),
+			"quote_id": quoteID,
+			"category": category,
+		}).Warn("Failed to mirror smoothed AGLA rates onto MemberRatingResultSummary; Premium Summary may show stale values until next recalc")
+	}
+
+	return &AdditionalGlaSmoothedSaveResult{
+		BandRates: sc.AdditionalGlaCoverBandRates,
+		UpdatedAt: sc.AdditionalGlaSmoothedUpdatedAt,
+		UpdatedBy: sc.AdditionalGlaSmoothedUpdatedBy,
+	}, nil
 }
 
 // ResolveAdditionalGlaCoverMaleProp returns the male proportion that should
