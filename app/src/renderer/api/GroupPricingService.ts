@@ -485,9 +485,9 @@ export default {
   getOnRiskLetterData(quoteId: number | string) {
     return Api.get(`/group-pricing/quotes/${quoteId}/on-risk-letter`)
   },
-  getDashboardData(year, dataSource = 'inforce') {
+  getDashboardData(year, dataSource = 'inforce', benefit = 'All') {
     return Api.get(
-      `/group-pricing/dashboard/year/${year}?data_source=${dataSource}`
+      `/group-pricing/dashboard/year/${year}?data_source=${dataSource}&benefit=${encodeURIComponent(benefit)}`
     )
   },
   getExposureData(year, benefit, dataSource = 'all') {

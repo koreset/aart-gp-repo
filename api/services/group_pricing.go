@@ -11840,7 +11840,7 @@ func UpdateGroupSchemeCoverEndDate(schemeId int, coverEndDate time.Time, user mo
 	})
 }
 
-func GetGroupPricingDashboardData(year int, dataSource string) (map[string]interface{}, error) {
+func GetGroupPricingDashboardData(year int, dataSource string, benefit string) (map[string]interface{}, error) {
 	resultData := make(map[string]interface{})
 
 	// get all quotes and quotes that in force
@@ -12545,14 +12545,30 @@ func GetGroupPricingDashboardData(year int, dataSource string) (map[string]inter
 		TotalSalary float64 `gorm:"column:total_salary" json:"total_salary"`
 	}
 	var provinceRows []provinceRow
+	// Quote-level benefit filter via the GSE subquery — narrows to quotes
+	// that have exposure for the chosen benefit. Members on those quotes
+	// are then counted by region. Coarser than per-member precision (a
+	// quote's full member list is counted even if some members didn't
+	// elect the benefit), but reliable across data sources unlike
+	// member.benefits_*_enabled which isn't populated for CSV uploads.
 	provinceQ := DB.Table("g_pricing_member_data m").
 		Select(`sc.region,
 			COUNT(DISTINCT m.id) as member_count,
 			COALESCE(SUM(m.annual_salary), 0) as total_salary`).
 		Joins("JOIN group_pricing_quotes q ON q.id = m.quote_id").
-		Joins("LEFT JOIN scheme_categories sc ON sc.quote_id = m.quote_id AND sc.scheme_category = m.scheme_category").
-		Joins("JOIN (SELECT DISTINCT quote_id FROM group_scheme_exposures WHERE financial_year = ?) gse ON gse.quote_id = m.quote_id", year).
-		Where("sc.region IS NOT NULL AND sc.region != ''")
+		Joins("LEFT JOIN scheme_categories sc ON sc.quote_id = m.quote_id AND sc.scheme_category = m.scheme_category")
+	if benefit != "" && benefit != "All" {
+		provinceQ = provinceQ.Joins(
+			"JOIN (SELECT DISTINCT quote_id FROM group_scheme_exposures WHERE financial_year = ? AND benefit = ?) gse ON gse.quote_id = m.quote_id",
+			year, benefit,
+		)
+	} else {
+		provinceQ = provinceQ.Joins(
+			"JOIN (SELECT DISTINCT quote_id FROM group_scheme_exposures WHERE financial_year = ?) gse ON gse.quote_id = m.quote_id",
+			year,
+		)
+	}
+	provinceQ = provinceQ.Where("sc.region IS NOT NULL AND sc.region != ''")
 	switch dataSource {
 	case "inforce":
 		provinceQ = provinceQ.Where("q.status IN ?", []string{"accepted", "in_force"})
@@ -12581,6 +12597,9 @@ func GetGroupPricingDashboardData(year int, dataSource string) (map[string]inter
 		Select(`industry, age_band, MIN(min_age) as min_age,
 			COUNT(*) as record_count, SUM(total_sum_assured) as total_sum_assured`).
 		Where("financial_year = ? AND industry IS NOT NULL AND industry != ''", year)
+	if benefit != "" && benefit != "All" {
+		industryAgeQ = industryAgeQ.Where("benefit = ?", benefit)
+	}
 	switch dataSource {
 	case "inforce":
 		industryAgeQ = industryAgeQ.Where("quote_status IN ?", []string{"accepted", "in_force"})

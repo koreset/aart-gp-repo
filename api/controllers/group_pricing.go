@@ -1610,7 +1610,8 @@ func GetGroupPricingDashboardData(c *gin.Context) {
 		return
 	}
 	dataSource := c.DefaultQuery("data_source", "inforce")
-	data, err := services.GetGroupPricingDashboardData(year, dataSource)
+	benefit := c.DefaultQuery("benefit", "All")
+	data, err := services.GetGroupPricingDashboardData(year, dataSource, benefit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
