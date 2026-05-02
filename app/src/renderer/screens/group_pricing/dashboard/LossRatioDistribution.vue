@@ -17,9 +17,9 @@
               />
             </template>
             <span>
-              Schemes bucketed by Inception-to-date Actual Loss Ratio
-              (claims ÷ earned premium). Schemes shifting right are
-              consuming more premium in claims than originally priced.
+              Schemes bucketed by Inception-to-date Actual Loss Ratio (claims ÷
+              earned premium). Schemes shifting right are consuming more premium
+              in claims than originally priced.
             </span>
           </v-tooltip>
           <ChartMenu
@@ -160,34 +160,31 @@ const alrStyle = (v: number | null) => {
 const goToScheme = (id: number) =>
   router.push({ name: 'group-pricing-schemes-detail', params: { id } })
 
-const histogramOptions = computed<any>(
-  () =>
-    ({
-      data: props.buckets.map((b) => ({
-        label: b.label,
-        count: b.scheme_count,
-        color: bandColor(b.label)
-      })),
-      background: { fill: 'transparent' },
-      height: 280,
-      series: [
-        {
-          type: 'bar',
-          xKey: 'label',
-          yKey: 'count',
-          yName: 'Schemes',
-          itemStyler: (p: any) => ({ fill: p.datum.color })
-        }
-      ],
-      axes: [
-        {
-          type: 'category',
-          position: 'bottom',
-          title: { text: 'ITD ALR band' }
-        },
-        { type: 'number', position: 'left', title: { text: 'Schemes' } }
-      ],
-      legend: { enabled: false }
-    })
-)
+const histogramOptions = computed<any>(() => ({
+  data: props.buckets.map((b) => ({
+    label: b.label,
+    count: b.scheme_count,
+    color: bandColor(b.label)
+  })),
+  background: { fill: 'transparent' },
+  height: 280,
+  series: [
+    {
+      type: 'bar',
+      xKey: 'label',
+      yKey: 'count',
+      yName: 'Schemes',
+      itemStyler: (p: any) => ({ fill: p.datum.color })
+    }
+  ],
+  axes: [
+    {
+      type: 'category',
+      position: 'bottom',
+      title: { text: 'ITD ALR band' }
+    },
+    { type: 'number', position: 'left', title: { text: 'Schemes' } }
+  ],
+  legend: { enabled: false }
+}))
 </script>

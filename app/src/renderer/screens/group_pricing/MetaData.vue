@@ -87,6 +87,16 @@
 
               <v-expansion-panel>
                 <v-expansion-panel-title>
+                  <v-icon icon="mdi-medical-bag" class="mr-2" />
+                  Medical Aid Waiver Calculation Method
+                </v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  <medical-aid-waiver-method-settings />
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+
+              <v-expansion-panel>
+                <v-expansion-panel-title>
                   <v-icon icon="mdi-alert-octagon-outline" class="mr-2" />
                   Risk Watchlist Thresholds
                 </v-expansion-panel-title>
@@ -140,6 +150,7 @@ import SchemeCategoryManagement from '@/renderer/components/grouppricing/SchemeC
 import BenefitsCustomization from '@/renderer/components/grouppricing/BenefitsCustomization.vue'
 import DiscountMethodSettings from '@/renderer/components/grouppricing/DiscountMethodSettings.vue'
 import FreeCoverLimitMethodSettings from '@/renderer/components/grouppricing/FreeCoverLimitMethodSettings.vue'
+import MedicalAidWaiverMethodSettings from '@/renderer/components/grouppricing/MedicalAidWaiverMethodSettings.vue'
 import RiskWatchlistThresholdSettings from '@/renderer/components/grouppricing/RiskWatchlistThresholdSettings.vue'
 import QuoteTemplateManagement from '@/renderer/components/grouppricing/QuoteTemplateManagement.vue'
 import OnRiskLetterTemplateManagement from '@/renderer/components/grouppricing/OnRiskLetterTemplateManagement.vue'

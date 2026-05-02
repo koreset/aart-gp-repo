@@ -36,8 +36,7 @@
         density="compact"
         variant="tonal"
       >
-        {{ benefitTitle }} is not enabled on any scheme category for this
-        quote.
+        {{ benefitTitle }} is not enabled on any scheme category for this quote.
       </v-alert>
       <template v-else>
         <v-tabs
@@ -79,694 +78,670 @@
               </div>
 
               <template v-if="viewTab === 'smoothing'">
-
-              <!-- ===== Top: Smoothed comparison table ===== -->
-              <v-alert
-                v-if="isLocked"
-                type="info"
-                density="compact"
-                variant="tonal"
-                icon="mdi-lock"
-                class="mt-2 mb-2"
-              >
-                Smoothed rates are locked because this quote is
-                <strong>{{ formatStatus(quoteStatus) }}</strong
-                >. Any further changes require reverting the quote status.
-              </v-alert>
-              <div
-                v-if="getMetadata(rs.category)"
-                class="text-caption text-medium-emphasis mt-2"
-              >
-                <v-icon size="x-small" class="mr-1">mdi-history</v-icon>
-                Last updated
-                <span v-if="getMetadata(rs.category)?.updatedBy">
-                  by
-                  <strong>{{ getMetadata(rs.category)?.updatedBy }}</strong>
-                </span>
-                <span v-if="getMetadata(rs.category)?.updatedAt">
-                  at {{ formatTimestamp(getMetadata(rs.category)?.updatedAt) }}
-                </span>
-              </div>
-              <div
-                class="d-flex align-center mt-2 mb-1 flex-wrap"
-                style="gap: 8px"
-              >
-                <div class="text-subtitle-2">
-                  Smoothed Office Rate / 1,000 — comparison
-                </div>
-                <v-chip
-                  v-if="hasUnsavedChanges(rs.category)"
-                  size="x-small"
-                  color="warning"
+                <!-- ===== Top: Smoothed comparison table ===== -->
+                <v-alert
+                  v-if="isLocked"
+                  type="info"
+                  density="compact"
                   variant="tonal"
-                  >Unsaved changes</v-chip
+                  icon="mdi-lock"
+                  class="mt-2 mb-2"
                 >
-                <v-spacer />
-                <v-btn
-                  size="x-small"
-                  variant="text"
-                  prepend-icon="mdi-download"
-                  @click="downloadTemplate(rs)"
+                  Smoothed rates are locked because this quote is
+                  <strong>{{ formatStatus(quoteStatus) }}</strong
+                  >. Any further changes require reverting the quote status.
+                </v-alert>
+                <div
+                  v-if="getMetadata(rs.category)"
+                  class="text-caption text-medium-emphasis mt-2"
                 >
-                  Download Template
-                </v-btn>
-                <v-btn
-                  size="x-small"
-                  variant="text"
-                  prepend-icon="mdi-upload"
-                  :disabled="isReadonly(rs.category)"
-                  @click="triggerUpload(rs.category)"
+                  <v-icon size="x-small" class="mr-1">mdi-history</v-icon>
+                  Last updated
+                  <span v-if="getMetadata(rs.category)?.updatedBy">
+                    by
+                    <strong>{{ getMetadata(rs.category)?.updatedBy }}</strong>
+                  </span>
+                  <span v-if="getMetadata(rs.category)?.updatedAt">
+                    at
+                    {{ formatTimestamp(getMetadata(rs.category)?.updatedAt) }}
+                  </span>
+                </div>
+                <div
+                  class="d-flex align-center mt-2 mb-1 flex-wrap"
+                  style="gap: 8px"
                 >
-                  Upload Smoothed
-                </v-btn>
-                <input
-                  :ref="(el) => bindUploadInput(rs.category, el as any)"
-                  type="file"
-                  accept=".xlsx"
-                  style="display: none"
-                  @change="onUploadFile($event, rs.category)"
-                />
-                <v-btn
-                  size="x-small"
-                  variant="text"
-                  color="warning"
-                  prepend-icon="mdi-restore"
-                  :disabled="
-                    isReadonly(rs.category) || !hasUnsavedChanges(rs.category)
-                  "
-                  @click="resetCategory(rs.category)"
-                >
-                  Reset
-                </v-btn>
-                <!-- Save/Edit toggle: once a category has persisted smoothed
+                  <div class="text-subtitle-2">
+                    Smoothed Office Rate / 1,000 — comparison
+                  </div>
+                  <v-chip
+                    v-if="hasUnsavedChanges(rs.category)"
+                    size="x-small"
+                    color="warning"
+                    variant="tonal"
+                    >Unsaved changes</v-chip
+                  >
+                  <v-spacer />
+                  <v-btn
+                    size="x-small"
+                    variant="text"
+                    prepend-icon="mdi-download"
+                    @click="downloadTemplate(rs)"
+                  >
+                    Download Template
+                  </v-btn>
+                  <v-btn
+                    size="x-small"
+                    variant="text"
+                    prepend-icon="mdi-upload"
+                    :disabled="isReadonly(rs.category)"
+                    @click="triggerUpload(rs.category)"
+                  >
+                    Upload Smoothed
+                  </v-btn>
+                  <input
+                    :ref="(el) => bindUploadInput(rs.category, el as any)"
+                    type="file"
+                    accept=".xlsx"
+                    style="display: none"
+                    @change="onUploadFile($event, rs.category)"
+                  />
+                  <v-btn
+                    size="x-small"
+                    variant="text"
+                    color="warning"
+                    prepend-icon="mdi-restore"
+                    :disabled="
+                      isReadonly(rs.category) || !hasUnsavedChanges(rs.category)
+                    "
+                    @click="resetCategory(rs.category)"
+                  >
+                    Reset
+                  </v-btn>
+                  <!-- Save/Edit toggle: once a category has persisted smoothed
                      values, the table drops to read-only and the primary
                      button reads "Edit". Clicking it re-opens the inputs;
                      the next Save commits and flips back. -->
-                <v-btn
-                  v-if="isReadonly(rs.category) && !isLocked"
-                  size="x-small"
-                  variant="flat"
-                  color="primary"
-                  prepend-icon="mdi-pencil"
-                  @click="enterEditMode(rs.category)"
-                >
-                  Edit
-                </v-btn>
-                <v-btn
-                  v-else
-                  size="x-small"
-                  variant="flat"
-                  color="primary"
-                  prepend-icon="mdi-content-save"
-                  :disabled="
-                    isLocked ||
-                    !hasUnsavedChanges(rs.category) ||
-                    saving[rs.category]
-                  "
-                  :loading="saving[rs.category]"
-                  @click="saveCategory(rs.category)"
-                >
-                  Save
-                </v-btn>
-              </div>
-
-              <div style="overflow-x: auto">
-                <v-table density="compact" class="agla-summary-table">
-                  <thead>
-                    <tr>
-                      <th rowspan="2" class="agla-age-band">Age Band</th>
-                      <th colspan="3" class="text-center agla-group-divider">
-                        Office Rate / 1,000
-                      </th>
-                      <th colspan="3" class="text-center agla-group-divider">
-                        Weighted by GLA Covered SA
-                      </th>
-                      <th colspan="3" class="text-center">
-                        Smoothed Office Rate / 1,000
-                      </th>
-                    </tr>
-                    <tr>
-                      <th class="text-right agla-mf-cell">M</th>
-                      <th class="text-right agla-mf-cell">F</th>
-                      <th
-                        class="text-right agla-combined-cell agla-group-divider"
-                      >
-                        Combined
-                      </th>
-                      <th class="text-right agla-mf-cell">M</th>
-                      <th class="text-right agla-mf-cell">F</th>
-                      <th
-                        class="text-right agla-combined-cell agla-group-divider"
-                      >
-                        Combined
-                      </th>
-                      <th class="text-right agla-mf-cell">M</th>
-                      <th class="text-right agla-mf-cell">F</th>
-                      <th class="text-right agla-combined-cell">Combined</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      v-for="(r, j) in rs.additional_gla_cover_band_rates"
-                      :key="'agla-cmp-' + i + '-' + j"
-                    >
-                      <td class="agla-age-band">{{ formatBandLabel(r) }}</td>
-                      <td class="text-right agla-mf-cell">
-                        {{
-                          roundUpToTwoDecimalsAccounting(
-                            getOfficeRate(r, 'male')
-                          )
-                        }}
-                      </td>
-                      <td class="text-right agla-mf-cell">
-                        {{
-                          roundUpToTwoDecimalsAccounting(
-                            getOfficeRate(r, 'female')
-                          )
-                        }}
-                      </td>
-                      <td
-                        class="text-right agla-combined-cell agla-group-divider"
-                      >
-                        {{
-                          roundUpToTwoDecimalsAccounting(
-                            getOfficeRate(r, 'combined')
-                          )
-                        }}
-                      </td>
-                      <td class="text-right agla-mf-cell">
-                        {{ formatNullable(r.weighted_office_rate_per1000_male) }}
-                      </td>
-                      <td class="text-right agla-mf-cell">
-                        {{
-                          formatNullable(r.weighted_office_rate_per1000_female)
-                        }}
-                      </td>
-                      <td
-                        class="text-right agla-combined-cell agla-group-divider"
-                      >
-                        {{ formatNullable(r.weighted_office_rate_per1000) }}
-                      </td>
-                      <td class="text-right agla-mf-cell pa-0">
-                        <input
-                          class="smoothed-input"
-                          type="number"
-                          step="0.01"
-                          :readonly="isReadonly(rs.category)"
-                          :value="effectiveSmoothed(rs.category, j, 'male')"
-                          @input="
-                            (e) =>
-                              onSmoothedInput(
-                                rs.category,
-                                j,
-                                'male',
-                                (e.target as HTMLInputElement).value
-                              )
-                          "
-                        />
-                      </td>
-                      <td class="text-right agla-mf-cell pa-0">
-                        <input
-                          class="smoothed-input"
-                          type="number"
-                          step="0.01"
-                          :readonly="isReadonly(rs.category)"
-                          :value="effectiveSmoothed(rs.category, j, 'female')"
-                          @input="
-                            (e) =>
-                              onSmoothedInput(
-                                rs.category,
-                                j,
-                                'female',
-                                (e.target as HTMLInputElement).value
-                              )
-                          "
-                        />
-                      </td>
-                      <td class="text-right agla-combined-cell pa-0">
-                        <input
-                          class="smoothed-input"
-                          type="number"
-                          step="0.01"
-                          :readonly="isReadonly(rs.category)"
-                          :value="effectiveSmoothed(rs.category, j, 'combined')"
-                          @input="
-                            (e) =>
-                              onSmoothedInput(
-                                rs.category,
-                                j,
-                                'combined',
-                                (e.target as HTMLInputElement).value
-                              )
-                          "
-                        />
-                      </td>
-                    </tr>
-                    <tr class="factor-row">
-                      <td class="agla-age-band text-medium-emphasis">
-                        Smoothing factor
-                      </td>
-                      <td colspan="6" class="text-medium-emphasis">
-                        Apply a multiplier to OfficeRate/1000 (1.00 = no
-                        change). Direct edits to a Smoothed cell override the
-                        factor for that cell.
-                      </td>
-                      <td class="text-right pa-0">
-                        <input
-                          class="factor-input"
-                          type="number"
-                          step="0.01"
-                          :readonly="isReadonly(rs.category)"
-                          :value="
-                            getCategoryFactor(rs.category, 'male') ?? ''
-                          "
-                          placeholder="1.00"
-                          @input="
-                            (e) =>
-                              onFactorInput(
-                                rs.category,
-                                'male',
-                                (e.target as HTMLInputElement).value
-                              )
-                          "
-                        />
-                      </td>
-                      <td class="text-right pa-0">
-                        <input
-                          class="factor-input"
-                          type="number"
-                          step="0.01"
-                          :readonly="isReadonly(rs.category)"
-                          :value="
-                            getCategoryFactor(rs.category, 'female') ?? ''
-                          "
-                          placeholder="1.00"
-                          @input="
-                            (e) =>
-                              onFactorInput(
-                                rs.category,
-                                'female',
-                                (e.target as HTMLInputElement).value
-                              )
-                          "
-                        />
-                      </td>
-                      <td class="text-right pa-0">
-                        <input
-                          class="factor-input"
-                          type="number"
-                          step="0.01"
-                          :readonly="isReadonly(rs.category)"
-                          :value="
-                            getCategoryFactor(rs.category, 'combined') ?? ''
-                          "
-                          placeholder="1.00"
-                          @input="
-                            (e) =>
-                              onFactorInput(
-                                rs.category,
-                                'combined',
-                                (e.target as HTMLInputElement).value
-                              )
-                          "
-                        />
-                      </td>
-                    </tr>
-                  </tbody>
-                </v-table>
-              </div>
-
-              <!-- ===== Middle: comparison chart ===== -->
-              <div class="d-flex align-center mt-4 mb-1">
-                <div class="text-subtitle-2">
-                  Office Rate / 1,000 — Original vs Smoothed
+                  <v-btn
+                    v-if="isReadonly(rs.category) && !isLocked"
+                    size="x-small"
+                    variant="flat"
+                    color="primary"
+                    prepend-icon="mdi-pencil"
+                    @click="enterEditMode(rs.category)"
+                  >
+                    Edit
+                  </v-btn>
+                  <v-btn
+                    v-else
+                    size="x-small"
+                    variant="flat"
+                    color="primary"
+                    prepend-icon="mdi-content-save"
+                    :disabled="
+                      isLocked ||
+                      !hasUnsavedChanges(rs.category) ||
+                      saving[rs.category]
+                    "
+                    :loading="saving[rs.category]"
+                    @click="saveCategory(rs.category)"
+                  >
+                    Save
+                  </v-btn>
                 </div>
-                <v-spacer />
-                <ChartMenu
-                  :chart-ref="chartRefs[rs.category]"
-                  :title="`${benefitTitle} — ${rs.category} — Office vs Smoothed`"
-                  :data="chartDataFor(rs)"
-                />
-              </div>
-              <ag-charts
-                :ref="(el) => bindChartRef(rs.category, el)"
-                :options="chartOptionsFor(rs)"
-              />
 
-              <!-- ===== Bottom: existing detailed breakdown ===== -->
-              <div class="text-subtitle-2 mt-4 mb-1">
-                Detailed breakdown (current)
-              </div>
-              <div style="overflow-x: auto">
-                <v-table density="compact" class="agla-summary-table">
-                  <thead>
-                    <tr>
-                      <th rowspan="2" class="agla-age-band">Age Band</th>
-                      <th colspan="3" class="text-center agla-group-divider">
-                        Risk Rate / 1,000
-                      </th>
-                      <th colspan="3" class="text-center agla-group-divider">
-                        Binder Fee / 1,000
-                      </th>
-                      <th colspan="3" class="text-center agla-group-divider">
-                        Outsource Fee / 1,000
-                      </th>
-                      <th colspan="3" class="text-center agla-group-divider">
-                        Commission / 1,000
-                      </th>
-                      <th colspan="3" class="text-center">
-                        Office Rate / 1,000
-                      </th>
-                    </tr>
-                    <tr>
-                      <th class="text-right agla-mf-cell">M</th>
-                      <th class="text-right agla-mf-cell">F</th>
-                      <th
-                        class="text-right agla-combined-cell agla-group-divider"
+                <div style="overflow-x: auto">
+                  <v-table density="compact" class="agla-summary-table">
+                    <thead>
+                      <tr>
+                        <th rowspan="2" class="agla-age-band">Age Band</th>
+                        <th colspan="3" class="text-center agla-group-divider">
+                          Office Rate / 1,000
+                        </th>
+                        <th colspan="3" class="text-center agla-group-divider">
+                          Weighted by GLA Covered SA
+                        </th>
+                        <th colspan="3" class="text-center">
+                          Smoothed Office Rate / 1,000
+                        </th>
+                      </tr>
+                      <tr>
+                        <th class="text-right agla-mf-cell">M</th>
+                        <th class="text-right agla-mf-cell">F</th>
+                        <th
+                          class="text-right agla-combined-cell agla-group-divider"
+                        >
+                          Combined
+                        </th>
+                        <th class="text-right agla-mf-cell">M</th>
+                        <th class="text-right agla-mf-cell">F</th>
+                        <th
+                          class="text-right agla-combined-cell agla-group-divider"
+                        >
+                          Combined
+                        </th>
+                        <th class="text-right agla-mf-cell">M</th>
+                        <th class="text-right agla-mf-cell">F</th>
+                        <th class="text-right agla-combined-cell">Combined</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="(r, j) in rs.additional_gla_cover_band_rates"
+                        :key="'agla-cmp-' + i + '-' + j"
                       >
-                        Combined
-                      </th>
-                      <th class="text-right agla-mf-cell">M</th>
-                      <th class="text-right agla-mf-cell">F</th>
-                      <th
-                        class="text-right agla-combined-cell agla-group-divider"
+                        <td class="agla-age-band">{{ formatBandLabel(r) }}</td>
+                        <td class="text-right agla-mf-cell">
+                          {{
+                            roundUpToTwoDecimalsAccounting(
+                              getOfficeRate(r, 'male')
+                            )
+                          }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{
+                            roundUpToTwoDecimalsAccounting(
+                              getOfficeRate(r, 'female')
+                            )
+                          }}
+                        </td>
+                        <td
+                          class="text-right agla-combined-cell agla-group-divider"
+                        >
+                          {{
+                            roundUpToTwoDecimalsAccounting(
+                              getOfficeRate(r, 'combined')
+                            )
+                          }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{
+                            formatNullable(r.weighted_office_rate_per1000_male)
+                          }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{
+                            formatNullable(
+                              r.weighted_office_rate_per1000_female
+                            )
+                          }}
+                        </td>
+                        <td
+                          class="text-right agla-combined-cell agla-group-divider"
+                        >
+                          {{ formatNullable(r.weighted_office_rate_per1000) }}
+                        </td>
+                        <td class="text-right agla-mf-cell pa-0">
+                          <input
+                            class="smoothed-input"
+                            type="number"
+                            step="0.01"
+                            :readonly="isReadonly(rs.category)"
+                            :value="effectiveSmoothed(rs.category, j, 'male')"
+                            @input="
+                              (e) =>
+                                onSmoothedInput(
+                                  rs.category,
+                                  j,
+                                  'male',
+                                  (e.target as HTMLInputElement).value
+                                )
+                            "
+                          />
+                        </td>
+                        <td class="text-right agla-mf-cell pa-0">
+                          <input
+                            class="smoothed-input"
+                            type="number"
+                            step="0.01"
+                            :readonly="isReadonly(rs.category)"
+                            :value="effectiveSmoothed(rs.category, j, 'female')"
+                            @input="
+                              (e) =>
+                                onSmoothedInput(
+                                  rs.category,
+                                  j,
+                                  'female',
+                                  (e.target as HTMLInputElement).value
+                                )
+                            "
+                          />
+                        </td>
+                        <td class="text-right agla-combined-cell pa-0">
+                          <input
+                            class="smoothed-input"
+                            type="number"
+                            step="0.01"
+                            :readonly="isReadonly(rs.category)"
+                            :value="
+                              effectiveSmoothed(rs.category, j, 'combined')
+                            "
+                            @input="
+                              (e) =>
+                                onSmoothedInput(
+                                  rs.category,
+                                  j,
+                                  'combined',
+                                  (e.target as HTMLInputElement).value
+                                )
+                            "
+                          />
+                        </td>
+                      </tr>
+                      <tr class="factor-row">
+                        <td class="agla-age-band text-medium-emphasis">
+                          Smoothing factor
+                        </td>
+                        <td colspan="6" class="text-medium-emphasis">
+                          Apply a multiplier to OfficeRate/1000 (1.00 = no
+                          change). Direct edits to a Smoothed cell override the
+                          factor for that cell.
+                        </td>
+                        <td class="text-right pa-0">
+                          <input
+                            class="factor-input"
+                            type="number"
+                            step="0.01"
+                            :readonly="isReadonly(rs.category)"
+                            :value="
+                              getCategoryFactor(rs.category, 'male') ?? ''
+                            "
+                            placeholder="1.00"
+                            @input="
+                              (e) =>
+                                onFactorInput(
+                                  rs.category,
+                                  'male',
+                                  (e.target as HTMLInputElement).value
+                                )
+                            "
+                          />
+                        </td>
+                        <td class="text-right pa-0">
+                          <input
+                            class="factor-input"
+                            type="number"
+                            step="0.01"
+                            :readonly="isReadonly(rs.category)"
+                            :value="
+                              getCategoryFactor(rs.category, 'female') ?? ''
+                            "
+                            placeholder="1.00"
+                            @input="
+                              (e) =>
+                                onFactorInput(
+                                  rs.category,
+                                  'female',
+                                  (e.target as HTMLInputElement).value
+                                )
+                            "
+                          />
+                        </td>
+                        <td class="text-right pa-0">
+                          <input
+                            class="factor-input"
+                            type="number"
+                            step="0.01"
+                            :readonly="isReadonly(rs.category)"
+                            :value="
+                              getCategoryFactor(rs.category, 'combined') ?? ''
+                            "
+                            placeholder="1.00"
+                            @input="
+                              (e) =>
+                                onFactorInput(
+                                  rs.category,
+                                  'combined',
+                                  (e.target as HTMLInputElement).value
+                                )
+                            "
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </v-table>
+                </div>
+
+                <!-- ===== Middle: comparison chart ===== -->
+                <div class="d-flex align-center mt-4 mb-1">
+                  <div class="text-subtitle-2">
+                    Office Rate / 1,000 — Original vs Smoothed
+                  </div>
+                  <v-spacer />
+                  <ChartMenu
+                    :chart-ref="chartRefs[rs.category]"
+                    :title="`${benefitTitle} — ${rs.category} — Office vs Smoothed`"
+                    :data="chartDataFor(rs)"
+                  />
+                </div>
+                <ag-charts
+                  :ref="(el) => bindChartRef(rs.category, el)"
+                  :options="chartOptionsFor(rs)"
+                />
+
+                <!-- ===== Bottom: existing detailed breakdown ===== -->
+                <div class="text-subtitle-2 mt-4 mb-1">
+                  Detailed breakdown (current)
+                </div>
+                <div style="overflow-x: auto">
+                  <v-table density="compact" class="agla-summary-table">
+                    <thead>
+                      <tr>
+                        <th rowspan="2" class="agla-age-band">Age Band</th>
+                        <th colspan="3" class="text-center agla-group-divider">
+                          Risk Rate / 1,000
+                        </th>
+                        <th colspan="3" class="text-center agla-group-divider">
+                          Binder Fee / 1,000
+                        </th>
+                        <th colspan="3" class="text-center agla-group-divider">
+                          Outsource Fee / 1,000
+                        </th>
+                        <th colspan="3" class="text-center agla-group-divider">
+                          Commission / 1,000
+                        </th>
+                        <th colspan="3" class="text-center">
+                          Office Rate / 1,000
+                        </th>
+                      </tr>
+                      <tr>
+                        <th class="text-right agla-mf-cell">M</th>
+                        <th class="text-right agla-mf-cell">F</th>
+                        <th
+                          class="text-right agla-combined-cell agla-group-divider"
+                        >
+                          Combined
+                        </th>
+                        <th class="text-right agla-mf-cell">M</th>
+                        <th class="text-right agla-mf-cell">F</th>
+                        <th
+                          class="text-right agla-combined-cell agla-group-divider"
+                        >
+                          Combined
+                        </th>
+                        <th class="text-right agla-mf-cell">M</th>
+                        <th class="text-right agla-mf-cell">F</th>
+                        <th
+                          class="text-right agla-combined-cell agla-group-divider"
+                        >
+                          Combined
+                        </th>
+                        <th class="text-right agla-mf-cell">M</th>
+                        <th class="text-right agla-mf-cell">F</th>
+                        <th
+                          class="text-right agla-combined-cell agla-group-divider"
+                        >
+                          Combined
+                        </th>
+                        <th class="text-right agla-mf-cell">M</th>
+                        <th class="text-right agla-mf-cell">F</th>
+                        <th class="text-right agla-combined-cell">Combined</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="(r, j) in rs.additional_gla_cover_band_rates"
+                        :key="'agla-detail-' + i + '-' + j"
                       >
-                        Combined
-                      </th>
-                      <th class="text-right agla-mf-cell">M</th>
-                      <th class="text-right agla-mf-cell">F</th>
-                      <th
-                        class="text-right agla-combined-cell agla-group-divider"
-                      >
-                        Combined
-                      </th>
-                      <th class="text-right agla-mf-cell">M</th>
-                      <th class="text-right agla-mf-cell">F</th>
-                      <th
-                        class="text-right agla-combined-cell agla-group-divider"
-                      >
-                        Combined
-                      </th>
-                      <th class="text-right agla-mf-cell">M</th>
-                      <th class="text-right agla-mf-cell">F</th>
-                      <th class="text-right agla-combined-cell">Combined</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      v-for="(r, j) in rs.additional_gla_cover_band_rates"
-                      :key="'agla-detail-' + i + '-' + j"
-                    >
-                      <td class="agla-age-band">{{ formatBandLabel(r) }}</td>
-                      <td class="text-right agla-mf-cell">
-                        {{
-                          roundUpToTwoDecimalsAccounting(
-                            r.risk_rate_per1000_male ?? 0
-                          )
-                        }}
-                      </td>
-                      <td class="text-right agla-mf-cell">
-                        {{
-                          roundUpToTwoDecimalsAccounting(
-                            r.risk_rate_per1000_female ?? 0
-                          )
-                        }}
-                      </td>
-                      <td
-                        class="text-right agla-combined-cell agla-group-divider"
-                      >
-                        {{
-                          roundUpToTwoDecimalsAccounting(r.risk_rate_per1000)
-                        }}
-                      </td>
-                      <td class="text-right agla-mf-cell">
-                        {{
-                          roundUpToTwoDecimalsAccounting(
-                            r.binder_fee_per1000_male ?? 0
-                          )
-                        }}
-                      </td>
-                      <td class="text-right agla-mf-cell">
-                        {{
-                          roundUpToTwoDecimalsAccounting(
-                            r.binder_fee_per1000_female ?? 0
-                          )
-                        }}
-                      </td>
-                      <td
-                        class="text-right agla-combined-cell agla-group-divider"
-                      >
-                        {{
-                          roundUpToTwoDecimalsAccounting(
-                            r.binder_fee_per1000 ?? 0
-                          )
-                        }}
-                      </td>
-                      <td class="text-right agla-mf-cell">
-                        {{
-                          roundUpToTwoDecimalsAccounting(
-                            r.outsource_fee_per1000_male ?? 0
-                          )
-                        }}
-                      </td>
-                      <td class="text-right agla-mf-cell">
-                        {{
-                          roundUpToTwoDecimalsAccounting(
-                            r.outsource_fee_per1000_female ?? 0
-                          )
-                        }}
-                      </td>
-                      <td
-                        class="text-right agla-combined-cell agla-group-divider"
-                      >
-                        {{
-                          roundUpToTwoDecimalsAccounting(
-                            r.outsource_fee_per1000 ?? 0
-                          )
-                        }}
-                      </td>
-                      <td class="text-right agla-mf-cell">
-                        {{
-                          roundUpToTwoDecimalsAccounting(
-                            r.commission_per1000_male ?? 0
-                          )
-                        }}
-                      </td>
-                      <td class="text-right agla-mf-cell">
-                        {{
-                          roundUpToTwoDecimalsAccounting(
-                            r.commission_per1000_female ?? 0
-                          )
-                        }}
-                      </td>
-                      <td
-                        class="text-right agla-combined-cell agla-group-divider"
-                      >
-                        {{
-                          roundUpToTwoDecimalsAccounting(
-                            r.commission_per1000 ?? 0
-                          )
-                        }}
-                      </td>
-                      <td class="text-right agla-mf-cell">
-                        {{
-                          roundUpToTwoDecimalsAccounting(
-                            r.office_rate_per1000_male ?? 0
-                          )
-                        }}
-                      </td>
-                      <td class="text-right agla-mf-cell">
-                        {{
-                          roundUpToTwoDecimalsAccounting(
-                            r.office_rate_per1000_female ?? 0
-                          )
-                        }}
-                      </td>
-                      <td class="text-right agla-combined-cell">
-                        {{
-                          roundUpToTwoDecimalsAccounting(r.office_rate_per1000)
-                        }}
-                      </td>
-                    </tr>
-                  </tbody>
-                </v-table>
-              </div>
+                        <td class="agla-age-band">{{ formatBandLabel(r) }}</td>
+                        <td class="text-right agla-mf-cell">
+                          {{
+                            roundUpToTwoDecimalsAccounting(
+                              r.risk_rate_per1000_male ?? 0
+                            )
+                          }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{
+                            roundUpToTwoDecimalsAccounting(
+                              r.risk_rate_per1000_female ?? 0
+                            )
+                          }}
+                        </td>
+                        <td
+                          class="text-right agla-combined-cell agla-group-divider"
+                        >
+                          {{
+                            roundUpToTwoDecimalsAccounting(r.risk_rate_per1000)
+                          }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{
+                            roundUpToTwoDecimalsAccounting(
+                              r.binder_fee_per1000_male ?? 0
+                            )
+                          }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{
+                            roundUpToTwoDecimalsAccounting(
+                              r.binder_fee_per1000_female ?? 0
+                            )
+                          }}
+                        </td>
+                        <td
+                          class="text-right agla-combined-cell agla-group-divider"
+                        >
+                          {{
+                            roundUpToTwoDecimalsAccounting(
+                              r.binder_fee_per1000 ?? 0
+                            )
+                          }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{
+                            roundUpToTwoDecimalsAccounting(
+                              r.outsource_fee_per1000_male ?? 0
+                            )
+                          }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{
+                            roundUpToTwoDecimalsAccounting(
+                              r.outsource_fee_per1000_female ?? 0
+                            )
+                          }}
+                        </td>
+                        <td
+                          class="text-right agla-combined-cell agla-group-divider"
+                        >
+                          {{
+                            roundUpToTwoDecimalsAccounting(
+                              r.outsource_fee_per1000 ?? 0
+                            )
+                          }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{
+                            roundUpToTwoDecimalsAccounting(
+                              (r.office_rate_per1000_male ?? 0) *
+                                schemeCommissionRate
+                            )
+                          }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{
+                            roundUpToTwoDecimalsAccounting(
+                              (r.office_rate_per1000_female ?? 0) *
+                                schemeCommissionRate
+                            )
+                          }}
+                        </td>
+                        <td
+                          class="text-right agla-combined-cell agla-group-divider"
+                        >
+                          {{
+                            roundUpToTwoDecimalsAccounting(
+                              (r.office_rate_per1000 ?? 0) *
+                                schemeCommissionRate
+                            )
+                          }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{
+                            roundUpToTwoDecimalsAccounting(
+                              r.office_rate_per1000_male ?? 0
+                            )
+                          }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{
+                            roundUpToTwoDecimalsAccounting(
+                              r.office_rate_per1000_female ?? 0
+                            )
+                          }}
+                        </td>
+                        <td class="text-right agla-combined-cell">
+                          {{
+                            roundUpToTwoDecimalsAccounting(
+                              r.office_rate_per1000
+                            )
+                          }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </v-table>
+                </div>
               </template>
 
               <!-- ===== Final results view ===== -->
               <template v-else>
-                  <div class="text-subtitle-2 mt-2 mb-1">
-                    Final results (Smoothed Office Rate / 1,000 applied)
-                  </div>
-                  <div class="text-caption text-medium-emphasis mb-2">
-                    Binder, outsource and commission per 1,000 are projected
-                    by applying each band's category-level binder /
-                    outsource rate and the scheme-wide final commission rate
-                    to the Smoothed Office Rate. Commission already reflects
-                    the progressive scheme-wide rate from the most recent
-                    quote calculation.
-                  </div>
-                  <div style="overflow-x: auto">
-                    <v-table density="compact" class="agla-summary-table">
-                      <thead>
-                        <tr>
-                          <th rowspan="2" class="agla-age-band">Age Band</th>
-                          <th
-                            colspan="3"
-                            class="text-center agla-group-divider"
-                          >
-                            Binder Fee / 1,000
-                          </th>
-                          <th
-                            colspan="3"
-                            class="text-center agla-group-divider"
-                          >
-                            Outsource Fee / 1,000
-                          </th>
-                          <th
-                            colspan="3"
-                            class="text-center agla-group-divider"
-                          >
-                            Commission / 1,000
-                          </th>
-                          <th colspan="3" class="text-center">
-                            Final Office Rate / 1,000
-                          </th>
-                        </tr>
-                        <tr>
-                          <th class="text-right agla-mf-cell">M</th>
-                          <th class="text-right agla-mf-cell">F</th>
-                          <th
-                            class="text-right agla-combined-cell agla-group-divider"
-                          >
-                            Combined
-                          </th>
-                          <th class="text-right agla-mf-cell">M</th>
-                          <th class="text-right agla-mf-cell">F</th>
-                          <th
-                            class="text-right agla-combined-cell agla-group-divider"
-                          >
-                            Combined
-                          </th>
-                          <th class="text-right agla-mf-cell">M</th>
-                          <th class="text-right agla-mf-cell">F</th>
-                          <th
-                            class="text-right agla-combined-cell agla-group-divider"
-                          >
-                            Combined
-                          </th>
-                          <th class="text-right agla-mf-cell">M</th>
-                          <th class="text-right agla-mf-cell">F</th>
-                          <th class="text-right agla-combined-cell">
-                            Combined
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr
-                          v-for="(r, j) in rs.additional_gla_cover_band_rates"
-                          :key="'agla-final-' + i + '-' + j"
+                <div class="text-subtitle-2 mt-2 mb-1">
+                  Final results (Smoothed Office Rate / 1,000 applied)
+                </div>
+                <div class="text-caption text-medium-emphasis mb-2">
+                  Binder and outsource per 1,000 are projected by applying
+                  each band's category-level fee rate to the Smoothed Office
+                  Rate. Commission per 1,000 is the Smoothed Office Rate
+                  multiplied by the scheme-wide ratio of final commission to
+                  final premium, so the rate reconciles to the scheme totals
+                  shown elsewhere in the quote.
+                </div>
+                <div style="overflow-x: auto">
+                  <v-table density="compact" class="agla-summary-table">
+                    <thead>
+                      <tr>
+                        <th rowspan="2" class="agla-age-band">Age Band</th>
+                        <th colspan="3" class="text-center agla-group-divider">
+                          Binder Fee / 1,000
+                        </th>
+                        <th colspan="3" class="text-center agla-group-divider">
+                          Outsource Fee / 1,000
+                        </th>
+                        <th colspan="3" class="text-center agla-group-divider">
+                          Commission / 1,000
+                        </th>
+                        <th colspan="3" class="text-center">
+                          Final Office Rate / 1,000
+                        </th>
+                      </tr>
+                      <tr>
+                        <th class="text-right agla-mf-cell">M</th>
+                        <th class="text-right agla-mf-cell">F</th>
+                        <th
+                          class="text-right agla-combined-cell agla-group-divider"
                         >
-                          <td class="agla-age-band">
-                            {{ formatBandLabel(r) }}
-                          </td>
-                          <td class="text-right agla-mf-cell">
-                            {{ formatFinal(rs.category, j, 'binder', 'male') }}
-                          </td>
-                          <td class="text-right agla-mf-cell">
-                            {{
-                              formatFinal(rs.category, j, 'binder', 'female')
-                            }}
-                          </td>
-                          <td
-                            class="text-right agla-combined-cell agla-group-divider"
-                          >
-                            {{
-                              formatFinal(
-                                rs.category,
-                                j,
-                                'binder',
-                                'combined'
-                              )
-                            }}
-                          </td>
-                          <td class="text-right agla-mf-cell">
-                            {{
-                              formatFinal(rs.category, j, 'outsource', 'male')
-                            }}
-                          </td>
-                          <td class="text-right agla-mf-cell">
-                            {{
-                              formatFinal(
-                                rs.category,
-                                j,
-                                'outsource',
-                                'female'
-                              )
-                            }}
-                          </td>
-                          <td
-                            class="text-right agla-combined-cell agla-group-divider"
-                          >
-                            {{
-                              formatFinal(
-                                rs.category,
-                                j,
-                                'outsource',
-                                'combined'
-                              )
-                            }}
-                          </td>
-                          <td class="text-right agla-mf-cell">
-                            {{
-                              formatFinal(rs.category, j, 'commission', 'male')
-                            }}
-                          </td>
-                          <td class="text-right agla-mf-cell">
-                            {{
-                              formatFinal(
-                                rs.category,
-                                j,
-                                'commission',
-                                'female'
-                              )
-                            }}
-                          </td>
-                          <td
-                            class="text-right agla-combined-cell agla-group-divider"
-                          >
-                            {{
-                              formatFinal(
-                                rs.category,
-                                j,
-                                'commission',
-                                'combined'
-                              )
-                            }}
-                          </td>
-                          <td class="text-right agla-mf-cell">
-                            {{ formatFinal(rs.category, j, 'office', 'male') }}
-                          </td>
-                          <td class="text-right agla-mf-cell">
-                            {{
-                              formatFinal(rs.category, j, 'office', 'female')
-                            }}
-                          </td>
-                          <td class="text-right agla-combined-cell">
-                            {{
-                              formatFinal(rs.category, j, 'office', 'combined')
-                            }}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </v-table>
-                  </div>
+                          Combined
+                        </th>
+                        <th class="text-right agla-mf-cell">M</th>
+                        <th class="text-right agla-mf-cell">F</th>
+                        <th
+                          class="text-right agla-combined-cell agla-group-divider"
+                        >
+                          Combined
+                        </th>
+                        <th class="text-right agla-mf-cell">M</th>
+                        <th class="text-right agla-mf-cell">F</th>
+                        <th
+                          class="text-right agla-combined-cell agla-group-divider"
+                        >
+                          Combined
+                        </th>
+                        <th class="text-right agla-mf-cell">M</th>
+                        <th class="text-right agla-mf-cell">F</th>
+                        <th class="text-right agla-combined-cell">
+                          Combined
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="(r, j) in rs.additional_gla_cover_band_rates"
+                        :key="'agla-final-' + i + '-' + j"
+                      >
+                        <td class="agla-age-band">
+                          {{ formatBandLabel(r) }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{ formatFinal(rs.category, j, 'binder', 'male') }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{ formatFinal(rs.category, j, 'binder', 'female') }}
+                        </td>
+                        <td
+                          class="text-right agla-combined-cell agla-group-divider"
+                        >
+                          {{
+                            formatFinal(rs.category, j, 'binder', 'combined')
+                          }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{ formatFinal(rs.category, j, 'outsource', 'male') }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{
+                            formatFinal(rs.category, j, 'outsource', 'female')
+                          }}
+                        </td>
+                        <td
+                          class="text-right agla-combined-cell agla-group-divider"
+                        >
+                          {{
+                            formatFinal(rs.category, j, 'outsource', 'combined')
+                          }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{
+                            formatFinal(rs.category, j, 'commission', 'male')
+                          }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{
+                            formatFinal(rs.category, j, 'commission', 'female')
+                          }}
+                        </td>
+                        <td
+                          class="text-right agla-combined-cell agla-group-divider"
+                        >
+                          {{
+                            formatFinal(
+                              rs.category,
+                              j,
+                              'commission',
+                              'combined'
+                            )
+                          }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{ formatFinal(rs.category, j, 'office', 'male') }}
+                        </td>
+                        <td class="text-right agla-mf-cell">
+                          {{ formatFinal(rs.category, j, 'office', 'female') }}
+                        </td>
+                        <td class="text-right agla-combined-cell">
+                          {{
+                            formatFinal(rs.category, j, 'office', 'combined')
+                          }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </v-table>
+                </div>
               </template>
             </template>
             <v-alert v-else type="warning" density="compact" variant="tonal">
               {{ benefitTitle }} is enabled for
-              <strong>{{ rs.category }}</strong> but per-band rates could not
-              be computed. Re-run the quote calculation after fixing the
+              <strong>{{ rs.category }}</strong> but per-band rates could not be
+              computed. Re-run the quote calculation after fixing the
               configuration.
             </v-alert>
           </v-window-item>
@@ -865,6 +840,23 @@ const categories = computed<CategorySummary[]>(() =>
   })
 )
 
+// Scheme-wide blended commission rate, derived from the post-commission
+// totals on the response so the commission shown reconciles to the scheme
+// final commission and final premium the rest of the quote displays.
+// final_scheme_total_commission is mirrored on every summary; final_total_
+// annual_premium is per-category, so it is summed across summaries.
+const schemeCommissionRate = computed<number>(() => {
+  const sums = (props.resultSummaries ?? []) as any[]
+  if (sums.length === 0) return 0
+  const schemeCommission = Number(sums[0]?.final_scheme_total_commission ?? 0)
+  const schemePremium = sums.reduce(
+    (acc: number, s: any) => acc + Number(s?.final_total_annual_premium ?? 0),
+    0
+  )
+  if (!schemePremium) return 0
+  return schemeCommission / schemePremium
+})
+
 // Smoothed rates feed downstream pricing, so once the quote leaves the
 // underwriter's hands (approved / accepted / on risk) the table drops to
 // read-only. Status strings come from the Go models.Status enum.
@@ -939,7 +931,9 @@ onMounted(async () => {
     )
     if (aglaBenefit) {
       benefitTitle.value =
-        aglaBenefit.benefit_alias || aglaBenefit.benefit_name || benefitTitle.value
+        aglaBenefit.benefit_alias ||
+        aglaBenefit.benefit_name ||
+        benefitTitle.value
     }
   } catch (e) {
     // Non-fatal — keep the default label
@@ -981,11 +975,14 @@ const findCategory = (cat: string): CategorySummary | undefined =>
 // data written before the snapshot field existed.
 const getOfficeRate = (band: BandRate, g: Gender): number => {
   if (g === 'male') {
-    return band.original_office_rate_per1000_male ?? band.office_rate_per1000_male
+    return (
+      band.original_office_rate_per1000_male ?? band.office_rate_per1000_male
+    )
   }
   if (g === 'female') {
     return (
-      band.original_office_rate_per1000_female ?? band.office_rate_per1000_female
+      band.original_office_rate_per1000_female ??
+      band.office_rate_per1000_female
     )
   }
   return band.original_office_rate_per1000 ?? band.office_rate_per1000
@@ -1017,11 +1014,7 @@ const getCategoryFactor = (cat: string, g: Gender): number | null => {
 // Resolves the value to display in the smoothed input cell, in priority:
 // 1. user's draft direct edit, 2. user's draft factor × office, 3. persisted
 // smoothed, 4. office rate (default).
-const effectiveSmoothed = (
-  cat: string,
-  bandIdx: number,
-  g: Gender
-): string => {
+const effectiveSmoothed = (cat: string, bandIdx: number, g: Gender): string => {
   const v = effectiveSmoothedNumber(cat, bandIdx, g)
   if (v == null) return ''
   // Round-up to two decimals so an unsmoothed cell displays identically to
@@ -1113,9 +1106,8 @@ const buildPayloadRows = (
             ? 'smoothed_office_rate_per1000'
             : `smoothed_office_rate_per1000_${g}`
         if (directEdit === null) {
-          row[
-            g === 'combined' ? 'clear_smoothed' : `clear_smoothed_${g}`
-          ] = true
+          row[g === 'combined' ? 'clear_smoothed' : `clear_smoothed_${g}`] =
+            true
         } else {
           row[fieldKey] = directEdit
         }
@@ -1127,9 +1119,8 @@ const buildPayloadRows = (
             ? 'smoothed_office_rate_per1000'
             : `smoothed_office_rate_per1000_${g}`
         if (factor == null) {
-          row[
-            g === 'combined' ? 'clear_smoothed' : `clear_smoothed_${g}`
-          ] = true
+          row[g === 'combined' ? 'clear_smoothed' : `clear_smoothed_${g}`] =
+            true
         } else {
           row[fieldKey] = getOfficeRate(band, g) * factor
         }
@@ -1155,8 +1146,9 @@ const buildPayloadRows = (
           rows.push(row)
         }
         if (factor == null) row[clearKey] = true
-        else row[fieldKey] = factor
-        // Mark the band index for stable ordering when sorting later
+        else
+          row[fieldKey] = factor
+          // Mark the band index for stable ordering when sorting later
         ;(row as any).__idx = idx
       })
     }
@@ -1280,9 +1272,7 @@ const downloadTemplate = (rs: CategorySummary) => {
       Number(b.office_rate_per1000_female ?? 0),
       Number(b.office_rate_per1000 ?? 0),
       Number(
-        b.smoothed_office_rate_per1000_male ??
-          b.office_rate_per1000_male ??
-          0
+        b.smoothed_office_rate_per1000_male ?? b.office_rate_per1000_male ?? 0
       ),
       Number(
         b.smoothed_office_rate_per1000_female ??
@@ -1369,22 +1359,21 @@ const onUploadFile = async (e: Event, cat: string) => {
 
 // ===== Final results: smoothed office rate × scheme-level fee rates =====
 //
-// Each band already carries the realised binder / outsource / commission
-// per-1,000 values for the unsmoothed office rate. Dividing by the
-// unsmoothed office rate recovers the per-category rate (binder fee rate,
-// outsource fee rate, scheme-wide final commission rate after the
-// progressive back-patch in services.recomputeFinalPremiumsAndCommission).
-// We then apply that ratio to the smoothed office rate to project the
-// "what the fees would be if the smoothed rates were used" view.
+// Binder and outsource per-1,000 values on the band are divided by the
+// unsmoothed office rate to recover the per-category fee rate, which we
+// then apply to the smoothed office rate. Commission, by contrast, uses
+// the scheme-wide ratio (final_scheme_total_commission ÷
+// Σ final_total_annual_premium) so it reconciles to the scheme totals
+// shown elsewhere in the quote.
 type FeeKind = 'binder' | 'outsource' | 'commission' | 'office'
 
 const rateRatio = (band: BandRate, kind: FeeKind): number => {
   if (kind === 'office') return 1
+  if (kind === 'commission') return schemeCommissionRate.value
   const office = band.office_rate_per1000
   if (!office || office === 0) return 0
   if (kind === 'binder') return (band.binder_fee_per1000 ?? 0) / office
-  if (kind === 'outsource') return (band.outsource_fee_per1000 ?? 0) / office
-  return (band.commission_per1000 ?? 0) / office
+  return (band.outsource_fee_per1000 ?? 0) / office
 }
 
 const finalValue = (
@@ -1514,38 +1503,78 @@ const exportSummaryToExcel = () => {
     (rs) => (rs.additional_gla_cover_band_rates?.length ?? 0) > 0
   )
   if (cats.length === 0) return
+  const isFinal = viewTab.value === 'final'
   const wb = XLSX.utils.book_new()
   cats.forEach((rs) => {
     const bands = rs.additional_gla_cover_band_rates ?? []
     const aoa: any[][] = []
-    aoa.push([`${benefitTitle.value} — ${rs.category}`])
-    aoa.push([])
     aoa.push([
-      'Age Band',
-      'OfficeRate M',
-      'OfficeRate F',
-      'OfficeRate Combined',
-      'Weighted M',
-      'Weighted F',
-      'Weighted Combined',
-      'Smoothed M',
-      'Smoothed F',
-      'Smoothed Combined'
+      `${benefitTitle.value} — ${rs.category} — ${
+        isFinal ? 'Final results' : 'Smoothing'
+      }`
     ])
-    bands.forEach((b, idx) => {
+    aoa.push([])
+    if (isFinal) {
       aoa.push([
-        formatBandLabel(b),
-        Number(b.office_rate_per1000_male ?? 0),
-        Number(b.office_rate_per1000_female ?? 0),
-        Number(b.office_rate_per1000 ?? 0),
-        b.weighted_office_rate_per1000_male ?? '',
-        b.weighted_office_rate_per1000_female ?? '',
-        b.weighted_office_rate_per1000 ?? '',
-        effectiveSmoothedNumber(rs.category, idx, 'male') ?? '',
-        effectiveSmoothedNumber(rs.category, idx, 'female') ?? '',
-        effectiveSmoothedNumber(rs.category, idx, 'combined') ?? ''
+        'Age Band',
+        'Binder M',
+        'Binder F',
+        'Binder Combined',
+        'Outsource M',
+        'Outsource F',
+        'Outsource Combined',
+        'Commission M',
+        'Commission F',
+        'Commission Combined',
+        'Final Office M',
+        'Final Office F',
+        'Final Office Combined'
       ])
-    })
+      bands.forEach((b, idx) => {
+        aoa.push([
+          formatBandLabel(b),
+          finalValue(rs.category, idx, 'binder', 'male') ?? '',
+          finalValue(rs.category, idx, 'binder', 'female') ?? '',
+          finalValue(rs.category, idx, 'binder', 'combined') ?? '',
+          finalValue(rs.category, idx, 'outsource', 'male') ?? '',
+          finalValue(rs.category, idx, 'outsource', 'female') ?? '',
+          finalValue(rs.category, idx, 'outsource', 'combined') ?? '',
+          finalValue(rs.category, idx, 'commission', 'male') ?? '',
+          finalValue(rs.category, idx, 'commission', 'female') ?? '',
+          finalValue(rs.category, idx, 'commission', 'combined') ?? '',
+          finalValue(rs.category, idx, 'office', 'male') ?? '',
+          finalValue(rs.category, idx, 'office', 'female') ?? '',
+          finalValue(rs.category, idx, 'office', 'combined') ?? ''
+        ])
+      })
+    } else {
+      aoa.push([
+        'Age Band',
+        'OfficeRate M',
+        'OfficeRate F',
+        'OfficeRate Combined',
+        'Weighted M',
+        'Weighted F',
+        'Weighted Combined',
+        'Smoothed M',
+        'Smoothed F',
+        'Smoothed Combined'
+      ])
+      bands.forEach((b, idx) => {
+        aoa.push([
+          formatBandLabel(b),
+          Number(getOfficeRate(b, 'male')),
+          Number(getOfficeRate(b, 'female')),
+          Number(getOfficeRate(b, 'combined')),
+          b.weighted_office_rate_per1000_male ?? '',
+          b.weighted_office_rate_per1000_female ?? '',
+          b.weighted_office_rate_per1000 ?? '',
+          effectiveSmoothedNumber(rs.category, idx, 'male') ?? '',
+          effectiveSmoothedNumber(rs.category, idx, 'female') ?? '',
+          effectiveSmoothedNumber(rs.category, idx, 'combined') ?? ''
+        ])
+      })
+    }
     const ws = XLSX.utils.aoa_to_sheet(aoa)
     const sheetName = String(rs.category ?? 'Category')
       .replace(/[:\\/?*[\]]/g, '_')
@@ -1553,7 +1582,11 @@ const exportSummaryToExcel = () => {
     XLSX.utils.book_append_sheet(wb, ws, sheetName || 'Category')
   })
   const schemeName = (props.quote as any)?.scheme_name ?? 'quote'
-  XLSX.writeFile(wb, `additional_gla_cover_summary_${schemeName}.xlsx`)
+  const fileSuffix = isFinal ? 'final_results' : 'smoothing'
+  XLSX.writeFile(
+    wb,
+    `additional_gla_cover_${fileSuffix}_${schemeName}.xlsx`
+  )
 }
 </script>
 

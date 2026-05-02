@@ -611,6 +611,8 @@ func getStructType(structName string) (reflect.Type, error) {
 		return reflect.TypeOf(models.BelBuildupBaseVariable{}), nil
 	case "GroupPricingAgeBands":
 		return reflect.TypeOf(models.GroupPricingAgeBands{}), nil
+	case "MedicalWaiver":
+		return reflect.TypeOf(models.MedicalWaiver{}), nil
 	case "GroupBusinessBenefits":
 		return reflect.TypeOf(models.GroupBusinessBenefits{}), nil
 	case "GPPermission":

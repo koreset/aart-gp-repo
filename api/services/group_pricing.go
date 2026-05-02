@@ -1973,9 +1973,8 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.TotalAnnualSalary += mr.AnnualSalary
 
 		if category != nil && (category.GlaEducatorBenefit == "Yes" || category.PtdEducatorBenefit == "Yes") {
-			educatorRates := GetEducatorRate(groupParameter, mr.AgeNextBirthday)
-			mdrs.TotalRiskWeightedEducatorSumAssured += mr.Grade0SumAssured*educatorRates.Grade0RiskRate + mr.Grade17SumAssured*educatorRates.Grade17RiskRate + mr.Grade812SumAssured*educatorRates.Grade812RiskRate + mr.TertiarySumAssured*educatorRates.TertiaryRiskRate
-			mdrs.TotalEducatorSumAssured += mr.Grade0SumAssured + mr.Grade17SumAssured + mr.Grade812SumAssured + mr.TertiarySumAssured
+			//educatorRates := GetEducatorRate(groupParameter, mr.AgeNextBirthday)
+			mdrs.TotalEducatorSumAssured += mr.EducatorSumAtRisk
 			mdrs.TotalGlaEducatorRiskPremium += mr.GlaEducatorRiskPremium
 			mdrs.ExpAdjTotalGlaEducatorRiskPremium += mr.ExpAdjGlaEducatorRiskPremium
 			mdrs.TotalPtdEducatorRiskPremium += mr.PtdEducatorRiskPremium
@@ -2928,7 +2927,13 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		memberDataPointResult.PhiContributionWaiver = math.Min(addedMemberInForce.AnnualSalary*addedMemberInForce.ContributionWaiverProportion, restriction.PhiMaximumMonthlyContributionWaiver)
 	}
 	if schemeCategory.PhiMedicalAidPremiumWaiver == "Yes" {
-		memberDataPointResult.PhiMedicalAidWaiver = math.Min(addedMemberInForce.AnnualSalary*groupParameter.MedicalAidWaiverProportion+groupParameter.MedicalAidWaiverAmount, restriction.MaxMedicalAidWaiver)
+		var waiver float64
+		if GetMedicalAidWaiverMethod() == models.MedicalAidWaiverMethodTableLookup {
+			waiver = GetMedicalWaiverSumAtRisk(memberDataPointResult, groupParameter, mpIncomeLevel)
+		} else {
+			waiver = addedMemberInForce.AnnualSalary*groupParameter.MedicalAidWaiverProportion + groupParameter.MedicalAidWaiverAmount
+		}
+		memberDataPointResult.PhiMedicalAidWaiver = math.Min(waiver, restriction.MaxMedicalAidWaiver)
 	}
 
 	memberDataPointResult.PhiMonthlyBenefit = memberDataPointResult.PhiCappedIncome + memberDataPointResult.PhiContributionWaiver + memberDataPointResult.PhiMedicalAidWaiver
@@ -3915,7 +3920,13 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 			memberDataPointResult.PhiContributionWaiver = math.Min(mp.AnnualSalary*mp.ContributionWaiverProportion/12.0, restriction.PhiMaximumMonthlyContributionWaiver) * indicativeRatesCount
 		}
 		if groupQuote.SchemeCategories[i].PhiMedicalAidPremiumWaiver == "Yes" {
-			memberDataPointResult.PhiMedicalAidWaiver = math.Min(mp.AnnualSalary*groupParameter.MedicalAidWaiverProportion/12.0+groupParameter.MedicalAidWaiverAmount, restriction.MaxMedicalAidWaiver) * indicativeRatesCount
+			var waiver float64
+			if GetMedicalAidWaiverMethod() == models.MedicalAidWaiverMethodTableLookup {
+				waiver = GetMedicalWaiverSumAtRisk(&memberDataPointResult, groupParameter, mpIncomeLevel)
+			} else {
+				waiver = mp.AnnualSalary*groupParameter.MedicalAidWaiverProportion/12.0 + groupParameter.MedicalAidWaiverAmount
+			}
+			memberDataPointResult.PhiMedicalAidWaiver = math.Min(waiver, restriction.MaxMedicalAidWaiver) * indicativeRatesCount
 		}
 		memberDataPointResult.PhiMonthlyBenefit = memberDataPointResult.PhiCappedIncome + memberDataPointResult.PhiContributionWaiver + memberDataPointResult.PhiMedicalAidWaiver
 	}
@@ -4189,32 +4200,22 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	computeEducatorLoadedRates(&memberDataPointResult)
 
 	if groupQuote.SchemeCategories[i].GlaEducatorBenefit == "Yes" || groupQuote.SchemeCategories[i].PtdEducatorBenefit == "Yes" { //groupQuote.Educator
-		educatorRates := GetEducatorRate(groupParameter, memberDataPointResult.AgeNextBirthday)
-		memberDataPointResult.Grade0SumAssured = educatorBenefitStructure.Grade0MaxTuitionPerYear * educatorBenefitStructure.Grade0MaxCoverageYears * (1 + educatorBenefitStructure.MaxBookAllowanceProportion + educatorBenefitStructure.MaxAccommodationAllowanceProportion)
-		memberDataPointResult.Grade17SumAssured = educatorBenefitStructure.Grade17MaxTuitionPerYear * educatorBenefitStructure.Grade17MaxCoverageYears * (1 + educatorBenefitStructure.MaxBookAllowanceProportion + educatorBenefitStructure.MaxAccommodationAllowanceProportion)
-		memberDataPointResult.Grade812SumAssured = educatorBenefitStructure.Grade812MaxTuitionPerYear * educatorBenefitStructure.Grade812MaxCoverageYears * (1 + educatorBenefitStructure.MaxBookAllowanceProportion + educatorBenefitStructure.MaxAccommodationAllowanceProportion)
-		memberDataPointResult.TertiarySumAssured = educatorBenefitStructure.TertiaryMaxTuitionPerYear * educatorBenefitStructure.TertiaryMaxCoverageYears * (1 + educatorBenefitStructure.MaxBookAllowanceProportion + educatorBenefitStructure.MaxAccommodationAllowanceProportion)
-		memberDataPointResult.Grade0RiskRate = educatorRates.Grade0RiskRate
-		memberDataPointResult.Grade17RiskRate = educatorRates.Grade17RiskRate
-		memberDataPointResult.Grade812RiskRate = educatorRates.Grade812RiskRate
-		memberDataPointResult.TertiaryRiskRate = educatorRates.TertiaryRiskRate
+		educatorRates := GetEducatorRate(groupParameter, educatorCodeForCategory(&groupQuote.SchemeCategories[i]), memberDataPointResult.AgeNextBirthday, memberDataPointResult.IncomeLevel)
+		memberDataPointResult.EducatorSumAtRisk = educatorRates.EducatorSumAtRisk
+
 		// Educator premium uses LoadedGla/PtdEducatorRate (which folds in
 		// educator-specific conversion / continuity loadings). The split
 		// Gla/Ptd educator premiums are computed only when the respective
 		// toggle is "Yes". ExpAdj variants come in the Experience Rating block.
-		riskWeightedSA := memberDataPointResult.Grade0SumAssured*educatorRates.Grade0RiskRate +
-			memberDataPointResult.Grade17SumAssured*educatorRates.Grade17RiskRate +
-			memberDataPointResult.Grade812SumAssured*educatorRates.Grade812RiskRate +
-			memberDataPointResult.TertiarySumAssured*educatorRates.TertiaryRiskRate
 		if groupQuote.SchemeCategories[i].GlaEducatorBenefit == "Yes" {
-			memberDataPointResult.GlaEducatorRiskPremium = riskWeightedSA * memberDataPointResult.LoadedGlaEducatorRate
+			memberDataPointResult.GlaEducatorRiskPremium = memberDataPointResult.EducatorSumAtRisk * memberDataPointResult.LoadedGlaEducatorRate
 		}
 		if groupQuote.SchemeCategories[i].PtdEducatorBenefit == "Yes" {
-			memberDataPointResult.PtdEducatorRiskPremium = riskWeightedSA * memberDataPointResult.LoadedPtdEducatorRate
+			memberDataPointResult.PtdEducatorRiskPremium = memberDataPointResult.EducatorSumAtRisk * memberDataPointResult.LoadedPtdEducatorRate
 		}
 		// Educator conversion / continuity slice premiums (risk leg).
 		// ExpAdj variants computed in the Experience Rating block below.
-		computeEducatorSlicePremiums(&memberDataPointResult, riskWeightedSA)
+		computeEducatorSlicePremiums(&memberDataPointResult, memberDataPointResult.EducatorSumAtRisk)
 	}
 
 	//Experience Rating
@@ -4267,24 +4268,21 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	computeEducatorLoadedRates(&memberDataPointResult)
 
 	if groupQuote.SchemeCategories[i].GlaEducatorBenefit == "Yes" || groupQuote.SchemeCategories[i].PtdEducatorBenefit == "Yes" { //groupQuote.Educator
-		educatorRates := GetEducatorRate(groupParameter, memberDataPointResult.AgeNextBirthday)
+		educatorRates := GetEducatorRate(groupParameter, educatorCodeForCategory(&groupQuote.SchemeCategories[i]), memberDataPointResult.AgeNextBirthday, memberDataPointResult.IncomeLevel)
 		// ExpAdj split uses ExpAdjLoadedGla/PtdEducatorRate (the pre-split
 		// implementation used ExpAdjLoadedTtdRate by mistake).
-		riskWeightedSA := memberDataPointResult.Grade0SumAssured*educatorRates.Grade0RiskRate +
-			memberDataPointResult.Grade17SumAssured*educatorRates.Grade17RiskRate +
-			memberDataPointResult.Grade812SumAssured*educatorRates.Grade812RiskRate +
-			memberDataPointResult.TertiarySumAssured*educatorRates.TertiaryRiskRate
+
 		if groupQuote.SchemeCategories[i].GlaEducatorBenefit == "Yes" {
-			memberDataPointResult.ExpAdjGlaEducatorRiskPremium = riskWeightedSA * memberDataPointResult.ExpAdjLoadedGlaEducatorRate
+			memberDataPointResult.ExpAdjGlaEducatorRiskPremium = educatorRates.EducatorSumAtRisk * memberDataPointResult.ExpAdjLoadedGlaEducatorRate
 		}
 		if groupQuote.SchemeCategories[i].PtdEducatorBenefit == "Yes" {
-			memberDataPointResult.ExpAdjPtdEducatorRiskPremium = riskWeightedSA * memberDataPointResult.ExpAdjLoadedPtdEducatorRate
+			memberDataPointResult.ExpAdjPtdEducatorRiskPremium = educatorRates.EducatorSumAtRisk * memberDataPointResult.ExpAdjLoadedPtdEducatorRate
 		}
 		// Recompute educator slice premiums using the finalised ExpAdj
 		// educator loaded rates. This overwrites the partial values from the
 		// first pass (non-ExpAdj risk + office) so that ExpAdj fields are
 		// populated correctly.
-		computeEducatorSlicePremiums(&memberDataPointResult, riskWeightedSA)
+		computeEducatorSlicePremiums(&memberDataPointResult, educatorRates.EducatorSumAtRisk)
 	}
 
 	// Non-educator conversion / continuity slice premiums (risk + office +
@@ -5027,6 +5025,7 @@ var gpTableSpecs = []gpTableSpec{
 	{"schemeSizeLevel", "Scheme Size Levels", "schemesizelevels", "group_pricing", models.SchemeSizeLevel{}},
 	{"taxTable", "Tax Table", "taxtable", "group_pricing", models.TaxTable{}},
 	{"ageBands", "Age Bands", "agebands", "group_pricing", models.GroupPricingAgeBands{}},
+	{"medicalWaiver", "Medical Waiver", "medicalwaiver", "group_pricing", models.MedicalWaiver{}},
 	{"reinsuranceGlaRate", "Reinsurance GLA Rate", "reinsuranceglarate", "reinsurance", models.ReinsuranceGlaRate{}},
 	{"reinsuranceCiRate", "Reinsurance CI Rate", "reinsurancecirate", "reinsurance", models.ReinsuranceCiRate{}},
 	{"reinsurancePtdRate", "Reinsurance PTD Rate", "reinsuranceptdrate", "reinsurance", models.ReinsurancePtdRate{}},
@@ -6694,6 +6693,29 @@ func SaveGPTables(v *multipart.FileHeader, tableType string, riskRateCode string
 			return fmt.Errorf("failed to save Age Bands data: %v", err)
 		}
 
+	case "Medical Waiver":
+		if err := utils.ValidateCSVHeaders(headers, models.MedicalWaiver{}); err != nil {
+			return fmt.Errorf("%s validation failed: %v", tableType, err)
+		}
+		DB.Where("risk_rate_code = ?", riskRateCode).Delete(&models.MedicalWaiver{})
+		var pps []models.MedicalWaiver
+		for i := 1; ; i++ {
+			var pp models.MedicalWaiver
+			if err := dec.Decode(&pp); err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("error decoding Medical Waiver at row %d: %v", i, err)
+			}
+			pp.RiskRateCode = riskRateCode
+			pp.CreatedBy = user.UserName
+			pps = append(pps, pp)
+		}
+		err = DB.CreateInBatches(&pps, 100).Error
+		if err != nil {
+			appLog.Error("Save Medical Waiver error: ", err.Error())
+			return fmt.Errorf("failed to save Medical Waiver data: %v", err)
+		}
+
 	case "Commission Structure":
 		if err := utils.ValidateCSVHeaders(headers, models.CommissionStructure{}); err != nil {
 			return fmt.Errorf("%s validation failed: %v", tableType, err)
@@ -6842,6 +6864,8 @@ func DeleteGPTableData(tableType, riskCode string) error {
 		if riskCode != "" {
 			DB.Where("type = ?", riskCode).Delete(&models.GroupPricingAgeBands{})
 		}
+	case "medicalwaiver":
+		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.MedicalWaiver{})
 	}
 	// Update the stats table so GetGPTableMetaData reflects the deletion.
 	go refreshGPTableStatByDeleteKey(tableType)
@@ -6937,6 +6961,8 @@ func GetGPTableRiskCodes(tableType string) []string {
 		// re-uses this endpoint to populate the delete picker, so we return
 		// distinct types under the same key.
 		DB.Model(&models.GroupPricingAgeBands{}).Select("DISTINCT type").Order("type asc").Find(&riskCodes)
+	case "medicalwaiver":
+		DB.Model(&models.MedicalWaiver{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
 	}
 	return riskCodes
 }
@@ -7354,6 +7380,14 @@ func GetGPTableData(tableType string) []map[string]interface{} {
 		if err != nil {
 			fmt.Println(err)
 		}
+	case "medicalwaiver":
+		var data []models.MedicalWaiver
+		DB.Find(&data)
+		b, _ := json.Marshal(&data)
+		err := json.Unmarshal(b, &results)
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 
 	return results
@@ -7477,6 +7511,37 @@ func GetGlaRate(memberResultData *models.MemberRatingResult, groupPricingParamet
 	GroupPricingCache.Set(cacheKey, qx, 1)
 	//time.Sleep(5 * time.Millisecond)
 	return qx
+}
+
+// GetMedicalWaiverSumAtRisk looks up the medical waiver sum-at-risk from the
+// medical_waivers table by (risk_rate_code, age_next_birthday, income_level,
+// gender). Returns 0 when no row matches, which the caller treats as a zero
+// PhiMedicalAidWaiver under the table_lookup methodology.
+func GetMedicalWaiverSumAtRisk(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int) float64 {
+	tableName := "medical_waivers"
+	var keyString strings.Builder
+	keyString.WriteString(groupPricingParameter.RiskRateCode + "_")
+	keyString.WriteString(strconv.Itoa(memberResultData.AgeNextBirthday) + "_")
+	keyString.WriteString(strconv.Itoa(incomeLevel) + "_")
+	if len(memberResultData.Gender) > 0 {
+		keyString.WriteString(memberResultData.Gender[:1] + "_")
+	}
+	cacheKey := tableName + "_" + keyString.String()
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(float64)
+	}
+	var sumAtRisk float64
+	query := "risk_rate_code=? and age_next_birthday=? and income_level=? and gender=?"
+	if err := DB.Table(tableName).Where(query,
+		groupPricingParameter.RiskRateCode,
+		memberResultData.AgeNextBirthday,
+		incomeLevel,
+		memberResultData.Gender,
+	).Pluck("medicalwaiver_sum_at_risk", &sumAtRisk).Error; err != nil {
+		fmt.Println(err)
+	}
+	GroupPricingCache.Set(cacheKey, sumAtRisk, 1)
+	return sumAtRisk
 }
 
 // GetAdditionalAccidentalGlaRate looks up the qx from gla_rates using the
@@ -8748,6 +8813,22 @@ func GetFCLMethod() string {
 	return s.FCLMethod
 }
 
+// GetMedicalAidWaiverMethod returns the globally configured PHI medical aid
+// waiver methodology from the GroupPricingSetting singleton row. Defaults to
+// the formula method (salary * proportion + amount) when the row is missing or
+// the column is empty so quotes computed before the setting was introduced
+// behave identically to historical output.
+func GetMedicalAidWaiverMethod() string {
+	var s models.GroupPricingSetting
+	if err := DB.First(&s, 1).Error; err != nil {
+		return models.MedicalAidWaiverMethodFormula
+	}
+	if s.MedicalAidWaiverMethod == "" {
+		return models.MedicalAidWaiverMethodFormula
+	}
+	return s.MedicalAidWaiverMethod
+}
+
 // FCLOverrideToleranceDefault is the headroom (as a fraction) allowed above
 // Restriction.MaximumAllowedFCL before a quote-level FCL override is clamped.
 // 0.2 means a 20% allowance.
@@ -9736,25 +9817,25 @@ func GetSpouseGlaRate(memberResultData *models.MemberRatingResult, groupPricingP
 	return qx
 }
 
-func GetEducatorRate(groupPricingParameter models.GroupPricingParameters, anb int) models.EducatorRate {
+func GetEducatorRate(groupPricingParameter models.GroupPricingParameters, educatorBenefitCode string, anb int, incomeLevel int) models.EducatorRate {
 	tableName := "educator_rates"
 	var educatorRates models.EducatorRate
 	var keyString strings.Builder
 
 	keyString.WriteString(groupPricingParameter.RiskRateCode + "_")
+	keyString.WriteString(educatorBenefitCode + "_")
 	keyString.WriteString(strconv.Itoa(anb) + "_")
+	keyString.WriteString(strconv.Itoa(incomeLevel) + "_")
 	key := keyString.String()
 	cacheKey := tableName + "_" + key
 	cached, found := GroupPricingCache.Get(cacheKey)
 
 	if found {
 		result := cached.(models.EducatorRate)
-		//if result > 0 {
 		return result
-		//}
 	} else {
-		query := "risk_rate_code=? and age_next_birthday=?"
-		err := DB.Table(tableName).Where(query, groupPricingParameter.RiskRateCode, anb).First(&educatorRates).Error
+		query := "risk_rate_code=? and educator_benefit_code=? and age_next_birthday=? and income_level=?"
+		err := DB.Table(tableName).Where(query, groupPricingParameter.RiskRateCode, educatorBenefitCode, anb, incomeLevel).First(&educatorRates).Error
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -10607,9 +10688,9 @@ func SaveAdditionalGlaCoverSmoothedRates(quoteID int, category string, rows []Ad
 	if err := DB.Model(&models.SchemeCategory{}).
 		Where("id = ?", sc.ID).
 		Updates(map[string]interface{}{
-			"additional_gla_cover_band_rates":     sc.AdditionalGlaCoverBandRates,
-			"additional_gla_smoothed_updated_at":  now,
-			"additional_gla_smoothed_updated_by":  updatedBy,
+			"additional_gla_cover_band_rates":    sc.AdditionalGlaCoverBandRates,
+			"additional_gla_smoothed_updated_at": now,
+			"additional_gla_smoothed_updated_by": updatedBy,
 		}).Error; err != nil {
 		return nil, fmt.Errorf("persist scheme_categories.additional_gla_cover_band_rates: %w", err)
 	}

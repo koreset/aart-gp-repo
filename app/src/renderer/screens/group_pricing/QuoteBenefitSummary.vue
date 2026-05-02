@@ -181,7 +181,6 @@
       </v-window>
     </template>
   </base-card>
-
 </template>
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'

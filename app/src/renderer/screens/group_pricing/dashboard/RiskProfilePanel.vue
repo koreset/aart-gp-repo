@@ -19,9 +19,9 @@
               </template>
               <span>
                 Top-N share = % of total annual premium from the N largest
-                schemes. HHI (Herfindahl–Hirschman Index) = Σ(scheme share)²
-                on a 0–10 000 scale: &lt; 1 500 = low, 1 500–2 500 =
-                moderate, &gt; 2 500 = highly concentrated book.
+                schemes. HHI (Herfindahl–Hirschman Index) = Σ(scheme share)² on
+                a 0–10 000 scale: &lt; 1 500 = low, 1 500–2 500 = moderate, &gt;
+                2 500 = highly concentrated book.
               </span>
             </v-tooltip>
           </div>
@@ -52,7 +52,9 @@
               >
                 {{ profile.concentration.hhi.toFixed(0) }}
               </div>
-              <div class="text-caption">{{ hhiLabel(profile.concentration.hhi) }}</div>
+              <div class="text-caption">{{
+                hhiLabel(profile.concentration.hhi)
+              }}</div>
             </v-col>
             <v-col cols="6" class="mt-3">
               <div class="text-caption text-medium-emphasis">
@@ -82,9 +84,9 @@
                 />
               </template>
               <span>
-                Schemes ranked by annual premium (largest first). The line
-                shows cumulative share of total premium — a steep early
-                climb means the book leans heavily on a few schemes.
+                Schemes ranked by annual premium (largest first). The line shows
+                cumulative share of total premium — a steep early climb means
+                the book leans heavily on a few schemes.
               </span>
             </v-tooltip>
             <ChartMenu
@@ -121,11 +123,10 @@
                 />
               </template>
               <span>
-                Each cell groups in-force schemes by Industry (from the
-                quote) and Region (from the scheme’s first category). Cell
-                value is ITD claims paid ÷ annual premium for that segment;
-                deeper red = paying more in claims than the segment is
-                earning.
+                Each cell groups in-force schemes by Industry (from the quote)
+                and Region (from the scheme’s first category). Cell value is ITD
+                claims paid ÷ annual premium for that segment; deeper red =
+                paying more in claims than the segment is earning.
               </span>
             </v-tooltip>
             <ChartMenu
@@ -134,11 +135,14 @@
             />
           </div>
           <div class="text-caption text-medium-emphasis mb-2">
-            Cell colour reflects ITD claims paid ÷ annual premium for schemes
-            in that industry &amp; region. Deeper red = paying more in claims
-            than the segment is earning.
+            Cell colour reflects ITD claims paid ÷ annual premium for schemes in
+            that industry &amp; region. Deeper red = paying more in claims than
+            the segment is earning.
           </div>
-          <div v-if="heatmapMatrix.regions.length === 0" class="text-medium-emphasis">
+          <div
+            v-if="heatmapMatrix.regions.length === 0"
+            class="text-medium-emphasis"
+          >
             No industry/region data.
           </div>
           <table v-else class="heatmap-table">
@@ -149,10 +153,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr
-                v-for="ind in heatmapMatrix.industries"
-                :key="ind"
-              >
+              <tr v-for="ind in heatmapMatrix.industries" :key="ind">
                 <td class="industry-cell">{{ ind }}</td>
                 <td
                   v-for="r in heatmapMatrix.regions"
@@ -161,7 +162,9 @@
                   :title="cellTooltip(heatmapMatrix.cells[ind + '||' + r])"
                 >
                   <span v-if="heatmapMatrix.cells[ind + '||' + r]">
-                    {{ fmtPct(heatmapMatrix.cells[ind + '||' + r]!.loss_ratio) }}
+                    {{
+                      fmtPct(heatmapMatrix.cells[ind + '||' + r]!.loss_ratio)
+                    }}
                   </span>
                 </td>
               </tr>
@@ -190,10 +193,9 @@
                 />
               </template>
               <span>
-                Frequency = ITD claims count ÷ members × 1 000 (claims per
-                1 000 lives). Severity = avg ITD claim amount. Bubble size
-                = annual premium. Top-right bubbles need the closest
-                attention.
+                Frequency = ITD claims count ÷ members × 1 000 (claims per 1 000
+                lives). Severity = avg ITD claim amount. Bubble size = annual
+                premium. Top-right bubbles need the closest attention.
               </span>
             </v-tooltip>
             <ChartMenu
@@ -204,8 +206,8 @@
           </div>
           <div class="text-caption text-medium-emphasis mb-2">
             Each bubble is one in-force scheme. Bubble size scales with annual
-            premium. Top-right = high frequency &amp; high severity (most
-            urgent risks).
+            premium. Top-right = high frequency &amp; high severity (most urgent
+            risks).
           </div>
           <ag-charts
             v-if="scatterOptions"
@@ -224,12 +226,7 @@
             <div class="text-subtitle-1 font-weight-bold">
               Deteriorating Schemes
             </div>
-            <v-chip
-              size="small"
-              color="error"
-              variant="tonal"
-              class="ml-2"
-            >
+            <v-chip size="small" color="error" variant="tonal" class="ml-2">
               {{ deteriorating.length }}
             </v-chip>
             <v-tooltip location="top" max-width="360">
@@ -244,10 +241,10 @@
               </template>
               <span>
                 Schemes where ITD ALR &gt; ALR ceiling % OR ITD ALR exceeds
-                Expected LR by more than the configured pp delta. Defaults
-                come from MetaData → Risk Watchlist Thresholds; tweak the
-                inputs below for what-if exploration. Click a row to drill
-                through to the scheme.
+                Expected LR by more than the configured pp delta. Defaults come
+                from MetaData → Risk Watchlist Thresholds; tweak the inputs
+                below for what-if exploration. Click a row to drill through to
+                the scheme.
               </span>
             </v-tooltip>
             <v-spacer />
@@ -303,9 +300,7 @@
                     :color="isCustomView ? 'warning' : 'success'"
                     variant="tonal"
                     :prepend-icon="
-                      isCustomView
-                        ? 'mdi-restore'
-                        : 'mdi-check-circle-outline'
+                      isCustomView ? 'mdi-restore' : 'mdi-check-circle-outline'
                     "
                     :style="
                       isCustomView ? { cursor: 'pointer' } : { cursor: 'help' }
@@ -320,8 +315,8 @@
               </v-tooltip>
             </v-col>
             <v-col cols="auto" class="text-caption text-medium-emphasis">
-              {{ deteriorating.length }} of
-              {{ rowsWithAlrCount }} scored schemes flagged.
+              {{ deteriorating.length }} of {{ rowsWithAlrCount }} scored
+              schemes flagged.
               <span v-if="rowsWithAlrCount > 0 && deteriorating.length === 0">
                 Highest ALR: {{ fmtPct(maxAlr) }} · max Δ:
                 {{ maxDelta == null ? '—' : maxDelta.toFixed(1) + 'pp' }}.
@@ -520,41 +515,38 @@ const hhiLabel = (h: number) => {
   return 'Low concentration'
 }
 
-const paretoOptions = computed<any>(
-  () =>
-    ({
-      data: props.profile.pareto.map((p) => ({
-        rank: p.rank,
-        scheme: p.scheme_name,
-        cumulative: p.cumulative_share * 100
-      })),
-      background: { fill: 'transparent' },
-      height: 280,
-      series: [
-        {
-          type: 'line',
-          xKey: 'rank',
-          yKey: 'cumulative',
-          yName: 'Cumulative premium %',
-          tooltip: {
-            renderer: (p: any) =>
-              `<div style="padding:6px"><b>${p.datum.scheme}</b><br/>Rank ${p.datum.rank}: ${p.datum.cumulative.toFixed(1)}% of GWP</div>`
-          }
-        }
-      ],
-      axes: [
-        { type: 'number', position: 'bottom', title: { text: 'Scheme rank' } },
-        {
-          type: 'number',
-          position: 'left',
-          min: 0,
-          max: 100,
-          title: { text: 'Cumulative GWP %' }
-        }
-      ],
-      legend: { enabled: false }
-    })
-)
+const paretoOptions = computed<any>(() => ({
+  data: props.profile.pareto.map((p) => ({
+    rank: p.rank,
+    scheme: p.scheme_name,
+    cumulative: p.cumulative_share * 100
+  })),
+  background: { fill: 'transparent' },
+  height: 280,
+  series: [
+    {
+      type: 'line',
+      xKey: 'rank',
+      yKey: 'cumulative',
+      yName: 'Cumulative premium %',
+      tooltip: {
+        renderer: (p: any) =>
+          `<div style="padding:6px"><b>${p.datum.scheme}</b><br/>Rank ${p.datum.rank}: ${p.datum.cumulative.toFixed(1)}% of GWP</div>`
+      }
+    }
+  ],
+  axes: [
+    { type: 'number', position: 'bottom', title: { text: 'Scheme rank' } },
+    {
+      type: 'number',
+      position: 'left',
+      min: 0,
+      max: 100,
+      title: { text: 'Cumulative GWP %' }
+    }
+  ],
+  legend: { enabled: false }
+}))
 
 interface HeatmapMatrix {
   industries: string[]
@@ -597,44 +589,41 @@ const cellTooltip = (cell?: IndustryRegionCell) => {
   return `${cell.industry} / ${cell.region}\nPremium ${fmtCurrency(cell.premium)}\nClaims ${fmtCurrency(cell.claims_paid)}\nLR ${fmtPct(cell.loss_ratio)}`
 }
 
-const scatterOptions = computed<any>(
-  () =>
-    ({
-      data: props.profile.frequency_severity,
-      background: { fill: 'transparent' },
-      height: 320,
-      series: [
-        {
-          type: 'bubble',
-          xKey: 'frequency',
-          xName: 'Frequency (claims per 1000 lives)',
-          yKey: 'avg_severity',
-          yName: 'Avg severity',
-          sizeKey: 'annual_premium',
-          sizeName: 'Annual premium',
-          labelKey: 'scheme_name',
-          labelName: 'Scheme',
-          tooltip: {
-            renderer: (p: any) =>
-              `<div style="padding:6px"><b>${p.datum.scheme_name}</b><br/>Freq: ${p.datum.frequency.toFixed(2)}<br/>Severity: ${fmtCurrency(p.datum.avg_severity)}<br/>Premium: ${fmtCurrency(p.datum.annual_premium)}</div>`
-          }
-        }
-      ],
-      axes: [
-        {
-          type: 'number',
-          position: 'bottom',
-          title: { text: 'Claims frequency (per 1 000 lives)' }
-        },
-        {
-          type: 'number',
-          position: 'left',
-          title: { text: 'Average claim severity' }
-        }
-      ],
-      legend: { enabled: false }
-    })
-)
+const scatterOptions = computed<any>(() => ({
+  data: props.profile.frequency_severity,
+  background: { fill: 'transparent' },
+  height: 320,
+  series: [
+    {
+      type: 'bubble',
+      xKey: 'frequency',
+      xName: 'Frequency (claims per 1000 lives)',
+      yKey: 'avg_severity',
+      yName: 'Avg severity',
+      sizeKey: 'annual_premium',
+      sizeName: 'Annual premium',
+      labelKey: 'scheme_name',
+      labelName: 'Scheme',
+      tooltip: {
+        renderer: (p: any) =>
+          `<div style="padding:6px"><b>${p.datum.scheme_name}</b><br/>Freq: ${p.datum.frequency.toFixed(2)}<br/>Severity: ${fmtCurrency(p.datum.avg_severity)}<br/>Premium: ${fmtCurrency(p.datum.annual_premium)}</div>`
+      }
+    }
+  ],
+  axes: [
+    {
+      type: 'number',
+      position: 'bottom',
+      title: { text: 'Claims frequency (per 1 000 lives)' }
+    },
+    {
+      type: 'number',
+      position: 'left',
+      title: { text: 'Average claim severity' }
+    }
+  ],
+  legend: { enabled: false }
+}))
 </script>
 
 <style scoped>

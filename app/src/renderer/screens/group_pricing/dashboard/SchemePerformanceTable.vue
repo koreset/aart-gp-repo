@@ -175,7 +175,9 @@ const columnDefs = computed(() => [
     headerName: 'Δ (ALR-ELR)',
     field: 'loss_ratio_delta',
     valueFormatter: (p: any) =>
-      p.value == null ? '—' : `${p.value > 0 ? '+' : ''}${p.value.toFixed(1)}pp`,
+      p.value == null
+        ? '—'
+        : `${p.value > 0 ? '+' : ''}${p.value.toFixed(1)}pp`,
     cellStyle: (p: any) => {
       if (p.value == null) return null
       if (p.value > 20) return { backgroundColor: '#ffd6d6', fontWeight: '600' }

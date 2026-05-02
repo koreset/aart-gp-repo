@@ -3,9 +3,8 @@
     <!-- Calculation progress overlay -->
     <v-overlay
       :model-value="awaitingCalculation"
-      contained
       persistent
-      class="align-center justify-center"
+      class="align-start justify-center pt-16"
       scrim="rgba(0,0,0,0.4)"
     >
       <v-card width="400" class="pa-6 text-center" rounded="lg" elevation="8">
@@ -135,6 +134,12 @@
                     @click="basisDialog = true"
                     >Run Calculations</v-btn
                   >
+                  <div
+                    v-if="dismissedCalcStatusLabel"
+                    class="text-caption text-medium-emphasis mt-1 text-center mr-2"
+                  >
+                    {{ dismissedCalcStatusLabel }}
+                  </div>
                 </div>
               </template>
             </v-tooltip>
@@ -670,6 +675,22 @@ const {
 
 // Only show overlay and react to events when this component initiated the calculation.
 const awaitingCalculation = ref(false)
+// True from the moment the user clicks Run Calculations until the calculation
+// terminates (completed/failed). Stays true after the user dismisses the
+// overlay so the success snackbar still fires and the inline status label
+// keeps reporting progress under the Run Calculations button.
+const isOurCalc = ref(false)
+
+const dismissedCalcStatusLabel = computed(() => {
+  if (!isOurCalc.value || awaitingCalculation.value) return ''
+  const phase = calcProgress.value?.phase
+  if (!phase || phase === 'completed' || phase === 'failed') return ''
+  if (phase === 'queued') {
+    const pos = calcProgress.value?.queuePosition
+    return pos ? `Queued (${pos})` : 'Queued'
+  }
+  return 'In progress'
+})
 
 // Watchdog: if the WebSocket connection drops mid-calculation (e.g. a long
 // debugger pause or a real-world network blip exceeds the server's pongWait)
@@ -686,7 +707,7 @@ function startCalcWatchdog() {
   lastProgressEventAt = Date.now()
   if (watchdogTimer) clearInterval(watchdogTimer)
   watchdogTimer = setInterval(async () => {
-    if (!awaitingCalculation.value) {
+    if (!isOurCalc.value) {
       stopCalcWatchdog()
       return
     }
@@ -709,6 +730,7 @@ function startCalcWatchdog() {
         snackbarText.value = 'Calculations Successful'
         snackbar.value = true
         awaitingCalculation.value = false
+        isOurCalc.value = false
         stopTracking()
         await loadQuote()
         stopCalcWatchdog()
@@ -728,20 +750,21 @@ function stopCalcWatchdog() {
   }
 }
 
-async function dismissCalcOverlay() {
+// Dismiss only hides the overlay. Tracking and the watchdog keep running so
+// the success snackbar still fires on completion and the inline status label
+// under Run Calculations stays current.
+function dismissCalcOverlay() {
   awaitingCalculation.value = false
-  stopTracking()
-  stopCalcWatchdog()
-  await loadQuote()
 }
 
 watch(calcProgress, (val) => {
-  if (!awaitingCalculation.value) return
+  if (!isOurCalc.value) return
   lastProgressEventAt = Date.now()
   if (val?.phase === 'completed') {
     snackbarText.value = 'Calculations Successful'
     snackbar.value = true
     awaitingCalculation.value = false
+    isOurCalc.value = false
     stopCalcWatchdog()
     loadQuote()
   }
@@ -750,6 +773,7 @@ watch(calcProgress, (val) => {
       'Calculations failed. Please contact your administrator.'
     snackbar.value = true
     awaitingCalculation.value = false
+    isOurCalc.value = false
     stopCalcWatchdog()
   }
 })
@@ -980,6 +1004,7 @@ const runQuoteCalculations = async () => {
   if (quote.value.basis !== null && quote.value.basis !== '') {
     loading.value = true
     awaitingCalculation.value = true
+    isOurCalc.value = true
     startTracking(String(quote.value.id))
     startCalcWatchdog()
     try {
@@ -998,6 +1023,7 @@ const runQuoteCalculations = async () => {
       stopTracking()
       stopCalcWatchdog()
       awaitingCalculation.value = false
+      isOurCalc.value = false
       const apiMessage = error?.response?.data?.message || error?.response?.data
       snackbarText.value =
         typeof apiMessage === 'string' && apiMessage

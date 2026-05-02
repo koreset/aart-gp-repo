@@ -729,6 +729,13 @@ const viewTable = (item: any) => {
 // fields are appended after the preferred ones in their original order.
 const preferredColumnOrder: Record<string, string[]> = {
   'Age Bands': ['name', 'type', 'min_age', 'max_age'],
+  'Medical Waiver': [
+    'risk_rate_code',
+    'gender',
+    'age_next_birthday',
+    'income_level',
+    'medicalwaiver_sum_at_risk'
+  ],
   'Tax Retirement': [
     'risk_rate_code',
     'lower_bound',

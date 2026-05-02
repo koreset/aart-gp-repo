@@ -2418,17 +2418,17 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 
 	if groupQuote.SchemeCategories[i].GlaEducatorBenefit == "Yes" || groupQuote.SchemeCategories[i].PtdEducatorBenefit == "Yes" { //groupQuote.Educator
 		educatorRates := GetEducatorRate(groupParameter, memberDataPointResult.AgeNextBirthday)
-		memberDataPointResult.Grade0SumAssured = educatorBenefitStructure.Grade0MaxTuitionPerYear * educatorBenefitStructure.Grade0MaxCoverageYears * (1 + educatorBenefitStructure.MaxBookAllowanceProportion + educatorBenefitStructure.MaxAccommodationAllowanceProportion)
+		memberDataPointResult.EducatorSumAtRisk = educatorBenefitStructure.Grade0MaxTuitionPerYear * educatorBenefitStructure.Grade0MaxCoverageYears * (1 + educatorBenefitStructure.MaxBookAllowanceProportion + educatorBenefitStructure.MaxAccommodationAllowanceProportion)
 		memberDataPointResult.Grade17SumAssured = educatorBenefitStructure.Grade17MaxTuitionPerYear * educatorBenefitStructure.Grade17MaxCoverageYears * (1 + educatorBenefitStructure.MaxBookAllowanceProportion + educatorBenefitStructure.MaxAccommodationAllowanceProportion)
 		memberDataPointResult.Grade812SumAssured = educatorBenefitStructure.Grade812MaxTuitionPerYear * educatorBenefitStructure.Grade812MaxCoverageYears * (1 + educatorBenefitStructure.MaxBookAllowanceProportion + educatorBenefitStructure.MaxAccommodationAllowanceProportion)
 		memberDataPointResult.TertiarySumAssured = educatorBenefitStructure.TertiaryMaxTuitionPerYear * educatorBenefitStructure.TertiaryMaxCoverageYears * (1 + educatorBenefitStructure.MaxBookAllowanceProportion + educatorBenefitStructure.MaxAccommodationAllowanceProportion)
 		memberDataPointResult.Grade0RiskRate = educatorRates.Grade0RiskRate
-		memberDataPointResult.Grade17RiskRate = educatorRates.Grade17RiskRate
-		memberDataPointResult.Grade812RiskRate = educatorRates.Grade812RiskRate
-		memberDataPointResult.TertiaryRiskRate = educatorRates.TertiaryRiskRate
-		memberDataPointResult.EducatorRiskPremium = (memberDataPointResult.Grade0SumAssured*educatorRates.Grade0RiskRate + memberDataPointResult.Grade17SumAssured*educatorRates.Grade17RiskRate + memberDataPointResult.Grade812SumAssured*educatorRates.Grade812RiskRate + memberDataPointResult.TertiarySumAssured*educatorRates.TertiaryRiskRate) * (memberDataPointResult.LoadedGlaRate + memberDataPointResult.LoadedPtdRate)
+		memberDataPointResult.EducatorSumAtRisk = educatorRates.EducatorSumAtRisk
+		memberDataPointResult.Grade812SumAtRisk = educatorRates.Grade812SumAtRisk
+		memberDataPointResult.TertiarySumAtRisk = educatorRates.TertiarySumAtRisk
+		memberDataPointResult.EducatorRiskPremium = (memberDataPointResult.EducatorSumAtRisk*educatorRates.Grade0RiskRate + memberDataPointResult.Grade17SumAssured*educatorRates.EducatorSumAtRisk + memberDataPointResult.Grade812SumAssured*educatorRates.Grade812SumAtRisk + memberDataPointResult.TertiarySumAssured*educatorRates.TertiarySumAtRisk) * (memberDataPointResult.LoadedGlaRate + memberDataPointResult.LoadedPtdRate)
 		memberDataPointResult.EducatorOfficePremium = memberDataPointResult.EducatorRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
-		memberDataPointResult.ExpAdjEducatorRiskPremium = (memberDataPointResult.Grade0SumAssured*educatorRates.Grade0RiskRate + memberDataPointResult.Grade17SumAssured*educatorRates.Grade17RiskRate + memberDataPointResult.Grade812SumAssured*educatorRates.Grade812RiskRate + memberDataPointResult.TertiarySumAssured*educatorRates.TertiaryRiskRate) * (memberDataPointResult.ExpAdjLoadedGlaRate + memberDataPointResult.ExpAdjLoadedTtdRate)
+		memberDataPointResult.ExpAdjEducatorRiskPremium = (memberDataPointResult.EducatorSumAtRisk*educatorRates.Grade0RiskRate + memberDataPointResult.Grade17SumAssured*educatorRates.EducatorSumAtRisk + memberDataPointResult.Grade812SumAssured*educatorRates.Grade812SumAtRisk + memberDataPointResult.TertiarySumAssured*educatorRates.TertiarySumAtRisk) * (memberDataPointResult.ExpAdjLoadedGlaRate + memberDataPointResult.ExpAdjLoadedTtdRate)
 		memberDataPointResult.ExpAdjEducatorOfficePremium = memberDataPointResult.ExpAdjEducatorRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
 	}
 
@@ -2468,7 +2468,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 
 	if groupQuote.SchemeCategories[i].GlaEducatorBenefit == "Yes" || groupQuote.SchemeCategories[i].PtdEducatorBenefit == "Yes" { //groupQuote.Educator
 		educatorRates := GetEducatorRate(groupParameter, memberDataPointResult.AgeNextBirthday)
-		memberDataPointResult.ExpAdjEducatorRiskPremium = (memberDataPointResult.Grade0SumAssured*educatorRates.Grade0RiskRate + memberDataPointResult.Grade17SumAssured*educatorRates.Grade17RiskRate + memberDataPointResult.Grade812SumAssured*educatorRates.Grade812RiskRate + memberDataPointResult.TertiarySumAssured*educatorRates.TertiaryRiskRate) * (memberDataPointResult.ExpAdjLoadedGlaRate + memberDataPointResult.ExpAdjLoadedTtdRate)
+		memberDataPointResult.ExpAdjEducatorRiskPremium = (memberDataPointResult.EducatorSumAtRisk*educatorRates.Grade0RiskRate + memberDataPointResult.Grade17SumAssured*educatorRates.EducatorSumAtRisk + memberDataPointResult.Grade812SumAssured*educatorRates.Grade812SumAtRisk + memberDataPointResult.TertiarySumAssured*educatorRates.TertiarySumAtRisk) * (memberDataPointResult.ExpAdjLoadedGlaRate + memberDataPointResult.ExpAdjLoadedTtdRate)
 		memberDataPointResult.ExpAdjEducatorOfficePremium = memberDataPointResult.ExpAdjEducatorRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
 	}
 
@@ -2678,7 +2678,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 
 	if groupQuote.SchemeCategories[i].GlaEducatorBenefit == "Yes" || groupQuote.SchemeCategories[i].PtdEducatorBenefit == "Yes" {
 		educatorRates := GetEducatorRate(groupParameter, memberDataPointResult.AgeNextBirthday)
-		mdrs.TotalRiskWeightedEducatorSumAssured += memberDataPointResult.Grade0SumAssured*educatorRates.Grade0RiskRate + memberDataPointResult.Grade17SumAssured*educatorRates.Grade17RiskRate + memberDataPointResult.Grade812SumAssured*educatorRates.Grade812RiskRate + memberDataPointResult.TertiarySumAssured*educatorRates.TertiaryRiskRate
+		mdrs.TotalRiskWeightedEducatorSumAssured += memberDataPointResult.EducatorSumAtRisk*educatorRates.Grade0RiskRate + memberDataPointResult.Grade17SumAssured*educatorRates.EducatorSumAtRisk + memberDataPointResult.Grade812SumAssured*educatorRates.Grade812SumAtRisk + memberDataPointResult.TertiarySumAssured*educatorRates.TertiarySumAtRisk
 		mdrs.TotalEducatorRiskPremium += memberDataPointResult.EducatorRiskPremium
 		mdrs.TotalEducatorOfficePremium += memberDataPointResult.EducatorOfficePremium
 		mdrs.ExpAdjTotalEducatorRiskPremium += memberDataPointResult.ExpAdjEducatorRiskPremium

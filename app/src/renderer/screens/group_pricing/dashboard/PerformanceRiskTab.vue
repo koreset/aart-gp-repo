@@ -9,9 +9,9 @@
       class="mb-4"
       icon="mdi-chart-line"
     >
-      <strong>Performance &amp; Risk</strong> — Per-scheme view of the
-      in-force book. Loss ratios are inception-to-date (claims since each
-      scheme's cover start ÷ ITD earned premium).
+      <strong>Performance &amp; Risk</strong> — Per-scheme view of the in-force
+      book. Loss ratios are inception-to-date (claims since each scheme's cover
+      start ÷ ITD earned premium).
     </v-alert>
 
     <div v-if="loading" class="d-flex justify-center my-8">
@@ -21,12 +21,7 @@
     <template v-else>
       <!-- Headline KPI cards -->
       <v-row class="d-flex justify-center">
-        <v-col
-          v-for="card in kpiCards"
-          :key="card.title"
-          cols="6"
-          md="2"
-        >
+        <v-col v-for="card in kpiCards" :key="card.title" cols="6" md="2">
           <v-card
             variant="tonal"
             :color="card.color || 'primary'"
@@ -77,10 +72,10 @@
               />
             </template>
             <span>
-              One row per in-force scheme. ELR = Expected Loss Ratio (priced
-              at quote time). ITD ALR = Actual Loss Ratio inception-to-date
-              (claims paid ÷ earned premium since cover start). Δ = ALR −
-              ELR; positive means the scheme is running worse than priced.
+              One row per in-force scheme. ELR = Expected Loss Ratio (priced at
+              quote time). ITD ALR = Actual Loss Ratio inception-to-date (claims
+              paid ÷ earned premium since cover start). Δ = ALR − ELR; positive
+              means the scheme is running worse than priced.
             </span>
           </v-tooltip>
         </v-col>
@@ -227,9 +222,7 @@ const derivedDeteriorating = computed(() => {
       last_claim_date: r.last_claim_date
     })
   }
-  out.sort(
-    (a, b) => (b.actual_loss_ratio ?? 0) - (a.actual_loss_ratio ?? 0)
-  )
+  out.sort((a, b) => (b.actual_loss_ratio ?? 0) - (a.actual_loss_ratio ?? 0))
   return out
 })
 

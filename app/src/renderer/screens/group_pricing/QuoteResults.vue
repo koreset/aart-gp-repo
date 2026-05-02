@@ -165,9 +165,8 @@
   <!-- Calculation progress overlay -->
   <v-overlay
     :model-value="awaitingManualCredibility"
-    contained
     persistent
-    class="align-center justify-center"
+    class="align-start justify-center pt-16"
     scrim="rgba(0,0,0,0.4)"
   >
     <v-card width="400" class="pa-6 text-center" rounded="lg" elevation="8">

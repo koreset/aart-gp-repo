@@ -15,11 +15,10 @@
           />
         </template>
         <span>
-          Each line is one scheme's rolling-12-month ALR (claims in trailing
-          12 months ÷ time-weighted annual premium) at the end of each
-          month. The dashed line is the portfolio aggregate. Default
-          selection is the top 5 schemes by current R12M ALR; pick others
-          from the dropdown.
+          Each line is one scheme's rolling-12-month ALR (claims in trailing 12
+          months ÷ time-weighted annual premium) at the end of each month. The
+          dashed line is the portfolio aggregate. Default selection is the top 5
+          schemes by current R12M ALR; pick others from the dropdown.
         </span>
       </v-tooltip>
       <v-spacer />
@@ -67,11 +66,7 @@
       </v-col>
     </v-row>
 
-    <ag-charts
-      v-if="chartOptions"
-      ref="trendChart"
-      :options="chartOptions"
-    />
+    <ag-charts v-if="chartOptions" ref="trendChart" :options="chartOptions" />
     <div
       v-if="trend.months.length === 0"
       class="text-center text-medium-emphasis my-4"
@@ -115,9 +110,7 @@ const schemeOptions = computed(() =>
 const defaultSelection = computed(() =>
   [...props.trend.schemes]
     .filter((s) => s.current_r12m_alr != null)
-    .sort(
-      (a, b) => (b.current_r12m_alr ?? 0) - (a.current_r12m_alr ?? 0)
-    )
+    .sort((a, b) => (b.current_r12m_alr ?? 0) - (a.current_r12m_alr ?? 0))
     .slice(0, 5)
     .map((s) => s.scheme_id)
 )
@@ -141,9 +134,7 @@ watch(
 // Build chart data: each row = { month, portfolio, [scheme_<id>]: value }
 const chartData = computed(() => {
   const selected = new Set(selectedSchemeIds.value)
-  const seriesById = new Map(
-    props.trend.schemes.map((s) => [s.scheme_id, s])
-  )
+  const seriesById = new Map(props.trend.schemes.map((s) => [s.scheme_id, s]))
   return props.trend.months.map((m, i) => {
     const row: Record<string, any> = { month: m }
     if (showPortfolio.value) {
@@ -221,9 +212,7 @@ const chartOptions = computed<any>(() => ({
 // Flatten for CSV export: one row per month per active series.
 const csvData = computed(() => {
   const out: Record<string, any>[] = []
-  const seriesById = new Map(
-    props.trend.schemes.map((s) => [s.scheme_id, s])
-  )
+  const seriesById = new Map(props.trend.schemes.map((s) => [s.scheme_id, s]))
   for (let i = 0; i < props.trend.months.length; i++) {
     const month = props.trend.months[i]
     if (showPortfolio.value) {

@@ -616,21 +616,21 @@ type AdditionalGlaCoverBandRate struct {
 	// progressive-commission back-patch so the smoothing comparison view
 	// can show the unsmoothed reference even after OfficeRatePer1000* has
 	// been overwritten with the smoothed-derived final value.
-	OriginalOfficeRatePer1000        *float64 `json:"original_office_rate_per1000,omitempty"`
-	OriginalOfficeRatePer1000Male    *float64 `json:"original_office_rate_per1000_male,omitempty"`
-	OriginalOfficeRatePer1000Female  *float64 `json:"original_office_rate_per1000_female,omitempty"`
+	OriginalOfficeRatePer1000       *float64 `json:"original_office_rate_per1000,omitempty"`
+	OriginalOfficeRatePer1000Male   *float64 `json:"original_office_rate_per1000_male,omitempty"`
+	OriginalOfficeRatePer1000Female *float64 `json:"original_office_rate_per1000_female,omitempty"`
 
 	// Exposure-weighted office rate per 1000 — Σ(member rate × member SA) / Σ(member SA)
 	// for members whose age falls in this band. nil when the band has no members.
-	WeightedOfficeRatePer1000        *float64 `json:"weighted_office_rate_per1000,omitempty"`
-	WeightedOfficeRatePer1000Male    *float64 `json:"weighted_office_rate_per1000_male,omitempty"`
-	WeightedOfficeRatePer1000Female  *float64 `json:"weighted_office_rate_per1000_female,omitempty"`
+	WeightedOfficeRatePer1000       *float64 `json:"weighted_office_rate_per1000,omitempty"`
+	WeightedOfficeRatePer1000Male   *float64 `json:"weighted_office_rate_per1000_male,omitempty"`
+	WeightedOfficeRatePer1000Female *float64 `json:"weighted_office_rate_per1000_female,omitempty"`
 
 	// Smoothed office rate per 1000. Persisted across recalcs. nil = no smoothing
 	// applied yet (UI shows OfficeRatePer1000 as the default smoothed value).
-	SmoothedOfficeRatePer1000        *float64 `json:"smoothed_office_rate_per1000,omitempty"`
-	SmoothedOfficeRatePer1000Male    *float64 `json:"smoothed_office_rate_per1000_male,omitempty"`
-	SmoothedOfficeRatePer1000Female  *float64 `json:"smoothed_office_rate_per1000_female,omitempty"`
+	SmoothedOfficeRatePer1000       *float64 `json:"smoothed_office_rate_per1000,omitempty"`
+	SmoothedOfficeRatePer1000Male   *float64 `json:"smoothed_office_rate_per1000_male,omitempty"`
+	SmoothedOfficeRatePer1000Female *float64 `json:"smoothed_office_rate_per1000_female,omitempty"`
 
 	// Per-cell smoothing multiplier. nil treated as 1.0. When set, Smoothed = Office × Factor.
 	// Direct edits to Smoothed* override any factor.
@@ -1135,14 +1135,7 @@ type MemberRatingResult struct {
 	ExpAdjTotalFuneralOfficePremium float64 `json:"exp_adj_total_funeral_office_premium" csv:"exp_adj_total_funeral_office_premium"`
 	FinalTotalFuneralOfficePremium  float64 `json:"final_total_funeral_office_premium" csv:"final_total_funeral_office_premium"`
 
-	Grade0SumAssured   float64 `json:"grade_0_sum_assured" csv:"grade_0_sum_assured"`
-	Grade17SumAssured  float64 `json:"grade_1_7_sum_assured" csv:"grade_1_7_sum_assured"`
-	Grade812SumAssured float64 `json:"grade_8_12_sum_assured" csv:"grade_8_12_sum_assured"`
-	TertiarySumAssured float64 `json:"tertiary_sum_assured" csv:"tertiary_sum_assured"`
-	Grade0RiskRate     float64 `json:"grade_0_risk_rate" csv:"grade_0_risk_rate"`
-	Grade17RiskRate    float64 `json:"grade_1_7_risk_rate" csv:"grade_1_7_risk_rate"`
-	Grade812RiskRate   float64 `json:"grade_8_12_risk_rate" csv:"grade_8_12_risk_rate"`
-	TertiaryRiskRate   float64 `json:"tertiary_risk_rate" csv:"tertiary_risk_rate"`
+	EducatorSumAtRisk float64 `json:"educator_sum_at_risk" csv:"educator_sum_at_risk"`
 	// Educator premium is tracked separately by its GLA and PTD components
 	// (the business does not maintain a combined total — each component
 	// stands alone against its underlying life/disability rate).
@@ -2432,6 +2425,11 @@ const (
 	FCLMethodOutlier    = "outlier"
 )
 
+const (
+	MedicalAidWaiverMethodFormula     = "formula"
+	MedicalAidWaiverMethodTableLookup = "table_lookup"
+)
+
 // GroupPricingSetting is a singleton table (one row, ID=1) holding global
 // group-pricing configuration toggles. Today it carries the discount
 // calculation method; future system-wide flags can be added here.
@@ -2444,6 +2442,9 @@ type GroupPricingSetting struct {
 	FCLMethodUpdatedAt      *time.Time `json:"fcl_method_updated_at"`
 	FCLMethodUpdatedBy      string     `json:"fcl_method_updated_by"`
 	FCLOverrideTolerance    float64    `json:"fcl_override_tolerance" gorm:"not null;default:0.2"`
+	MedicalAidWaiverMethod          string     `json:"medical_aid_waiver_method" gorm:"size:32;not null;default:formula"`
+	MedicalAidWaiverMethodUpdatedAt *time.Time `json:"medical_aid_waiver_method_updated_at"`
+	MedicalAidWaiverMethodUpdatedBy string     `json:"medical_aid_waiver_method_updated_by"`
 	// Risk watchlist thresholds — drive the Performance & Risk dashboard's
 	// "Deteriorating Schemes" panel. RiskAlrCeilingPct flags any scheme whose
 	// ITD ALR exceeds this percentage; RiskAlrDeltaPp flags schemes where ITD
@@ -2617,16 +2618,14 @@ type BinderFee struct {
 type EducatorRate struct {
 	ID int `json:"id" gorm:"primary_key"`
 	//Year                  int       `json:"year" csv:"year"`
-	RiskRateCode          string    `json:"risk_rate_code" csv:"risk_rate_code"`
-	AgeNextBirthday       float64   `json:"age_next_birthday" csv:"age_next_birthday"`
-	AverageChildAge       float64   `json:"average_child_age" csv:"average_child_age"`
-	AverageNumberChildren float64   `json:"average_number_children" csv:"average_number_children"`
-	Grade0RiskRate        float64   `json:"grade0_risk_rate" csv:"grade0_risk_rate"`
-	Grade17RiskRate       float64   `json:"grade17_risk_rate" csv:"grade17_risk_rate"`
-	Grade812RiskRate      float64   `json:"grade812_risk_rate" csv:"grade812_risk_rate"`
-	TertiaryRiskRate      float64   `json:"tertiary_risk_rate" csv:"tertiary_risk_rate"`
-	CreationDate          time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
-	CreatedBy             string    `json:"created_by" csv:"created_by"`
+	RiskRateCode                 string    `json:"risk_rate_code" csv:"risk_rate_code"`
+	EducatorBenefitCode          string    `json:"educator_benefit_code" csv:"educator_benefit_code"`
+	AgeNextBirthday              float64   `json:"age_next_birthday" csv:"age_next_birthday"`
+	IncomeLevel                  int       `json:"income_level" csv:"income_level"`
+	EducatorSumAtRisk            float64   `json:"educator_sum_at_risk" csv:"educator_sum_at_risk"`
+	ReinsuranceEducatorSumAtRisk float64   `json:"reinsurance_educator_sum_at_risk" csv:"reinsurance_educator_sum_at_risk"`
+	CreationDate                 time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy                    string    `json:"created_by" csv:"created_by"`
 }
 
 type Escalations struct {
@@ -3134,6 +3133,18 @@ type GroupPricingAgeBands struct {
 	MaxAge       int       `json:"max_age" csv:"max_age"`
 	CreationDate time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy    string    `json:"created_by" csv:"created_by"`
+}
+
+type MedicalWaiver struct {
+	ID                                int       `json:"id" gorm:"primary_key"`
+	RiskRateCode                      string    `json:"risk_rate_code" csv:"risk_rate_code"`
+	Gender                            string    `json:"gender" csv:"gender"`
+	AgeNextBirthday                   int       `json:"age_next_birthday" csv:"age_next_birthday"`
+	IncomeLevel                       int       `json:"income_level" csv:"income_level"`
+	MedicalwaiverSumAtRisk            float64   `json:"medicalwaiver_sum_at_risk" csv:"medicalwaiver_sum_at_risk"`
+	ReinsuranceMedicalwaiverSumAtRisk float64   `json:"reinsurance_medicalwaiver_sum_at_risk" csv:"reinsurance_medicalwaiver_sum_at_risk"`
+	CreationDate                      time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy                         string    `json:"created_by" csv:"created_by"`
 }
 
 type GroupBusinessBenefits struct {
@@ -3902,13 +3913,13 @@ type SchemePerformanceRow struct {
 
 // SchemePerformanceResponse is what /scheme-performance returns.
 type SchemePerformanceResponse struct {
-	Rows            []SchemePerformanceRow `json:"rows"`
-	TotalSchemes    int                    `json:"total_schemes"`
-	TotalPremium    float64                `json:"total_premium"`
-	TotalItdClaims  float64                `json:"total_itd_claims"`
-	PortfolioALR    *float64               `json:"portfolio_alr"`
-	TotalR12mClaims float64                `json:"total_r12m_claims"`
-	PortfolioR12mALR *float64              `json:"portfolio_r12m_alr"`
+	Rows             []SchemePerformanceRow `json:"rows"`
+	TotalSchemes     int                    `json:"total_schemes"`
+	TotalPremium     float64                `json:"total_premium"`
+	TotalItdClaims   float64                `json:"total_itd_claims"`
+	PortfolioALR     *float64               `json:"portfolio_alr"`
+	TotalR12mClaims  float64                `json:"total_r12m_claims"`
+	PortfolioR12mALR *float64               `json:"portfolio_r12m_alr"`
 }
 
 // LossRatioTrendSeries is one scheme's monthly rolling-12-month ALR over the
@@ -3916,11 +3927,11 @@ type SchemePerformanceResponse struct {
 // array on the response. Nil entries indicate "not enough history" (the
 // scheme didn't exist 12 months before that point).
 type LossRatioTrendSeries struct {
-	SchemeID      int        `json:"scheme_id"`
-	SchemeName    string     `json:"scheme_name"`
-	AnnualPremium float64    `json:"annual_premium"`
-	CurrentR12mALR *float64  `json:"current_r12m_alr"`
-	Values        []*float64 `json:"values"`
+	SchemeID       int        `json:"scheme_id"`
+	SchemeName     string     `json:"scheme_name"`
+	AnnualPremium  float64    `json:"annual_premium"`
+	CurrentR12mALR *float64   `json:"current_r12m_alr"`
+	Values         []*float64 `json:"values"`
 }
 
 // LossRatioTrendResult is what /loss-ratio-trend returns. The portfolio line

@@ -14,10 +14,10 @@
       <p class="text-body-2 text-medium-emphasis mb-4">
         These two thresholds drive the <strong>Deteriorating Schemes</strong>
         watchlist on the In-Force Performance &amp; Risk dashboard. They
-        represent the company's stated risk appetite — analysts can still
-        dial them down on the dashboard for ad-hoc what-if exploration, but
-        the values saved here are the official defaults the dashboard
-        always loads with.
+        represent the company's stated risk appetite — analysts can still dial
+        them down on the dashboard for ad-hoc what-if exploration, but the
+        values saved here are the official defaults the dashboard always loads
+        with.
       </p>
       <p v-if="lastUpdatedLabel" class="text-caption text-medium-emphasis mb-4">
         {{ lastUpdatedLabel }}
@@ -151,10 +151,8 @@ async function save() {
       risk_alr_ceiling_pct: alrCeiling.value,
       risk_alr_delta_pp: alrDelta.value
     })
-    updatedAt.value =
-      data?.risk_thresholds_updated_at ?? updatedAt.value
-    updatedBy.value =
-      data?.risk_thresholds_updated_by ?? updatedBy.value
+    updatedAt.value = data?.risk_thresholds_updated_at ?? updatedAt.value
+    updatedBy.value = data?.risk_thresholds_updated_by ?? updatedBy.value
     flash.show('Risk thresholds saved', 'success')
   } catch (err: any) {
     flash.show(

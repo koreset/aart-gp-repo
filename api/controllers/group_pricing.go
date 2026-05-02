@@ -3508,12 +3508,13 @@ func GetGroupPricingSettings(c *gin.Context) {
 	var s models.GroupPricingSetting
 	if err := services.DB.First(&s, 1).Error; err != nil {
 		s = models.GroupPricingSetting{
-			ID:                   1,
-			DiscountMethod:       models.DiscountMethodLoadingAdjustment,
-			FCLMethod:            models.FCLMethodPercentile,
-			FCLOverrideTolerance: services.FCLOverrideToleranceDefault,
-			RiskAlrCeilingPct:    100,
-			RiskAlrDeltaPp:       20,
+			ID:                     1,
+			DiscountMethod:         models.DiscountMethodLoadingAdjustment,
+			FCLMethod:              models.FCLMethodPercentile,
+			FCLOverrideTolerance:   services.FCLOverrideToleranceDefault,
+			RiskAlrCeilingPct:      100,
+			RiskAlrDeltaPp:         20,
+			MedicalAidWaiverMethod: models.MedicalAidWaiverMethodFormula,
 		}
 		services.DB.Create(&s)
 	}
@@ -3528,11 +3529,12 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 	// "explicitly set to zero" — relevant for FCLOverrideTolerance, where 0
 	// is a meaningful (strict) value.
 	var payload struct {
-		DiscountMethod       *string  `json:"discount_method"`
-		FCLMethod            *string  `json:"fcl_method"`
-		FCLOverrideTolerance *float64 `json:"fcl_override_tolerance"`
-		RiskAlrCeilingPct    *float64 `json:"risk_alr_ceiling_pct"`
-		RiskAlrDeltaPp       *float64 `json:"risk_alr_delta_pp"`
+		DiscountMethod         *string  `json:"discount_method"`
+		FCLMethod              *string  `json:"fcl_method"`
+		FCLOverrideTolerance   *float64 `json:"fcl_override_tolerance"`
+		RiskAlrCeilingPct      *float64 `json:"risk_alr_ceiling_pct"`
+		RiskAlrDeltaPp         *float64 `json:"risk_alr_delta_pp"`
+		MedicalAidWaiverMethod *string  `json:"medical_aid_waiver_method"`
 	}
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
@@ -3548,6 +3550,12 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 		*payload.FCLMethod != models.FCLMethodPercentile &&
 		*payload.FCLMethod != models.FCLMethodOutlier {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid fcl_method"})
+		return
+	}
+	if payload.MedicalAidWaiverMethod != nil &&
+		*payload.MedicalAidWaiverMethod != models.MedicalAidWaiverMethodFormula &&
+		*payload.MedicalAidWaiverMethod != models.MedicalAidWaiverMethodTableLookup {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid medical_aid_waiver_method"})
 		return
 	}
 	if payload.FCLOverrideTolerance != nil &&
@@ -3570,12 +3578,13 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 	var s models.GroupPricingSetting
 	if err := services.DB.First(&s, 1).Error; err != nil {
 		s = models.GroupPricingSetting{
-			ID:                   1,
-			DiscountMethod:       models.DiscountMethodLoadingAdjustment,
-			FCLMethod:            models.FCLMethodPercentile,
-			FCLOverrideTolerance: services.FCLOverrideToleranceDefault,
-			RiskAlrCeilingPct:    100,
-			RiskAlrDeltaPp:       20,
+			ID:                     1,
+			DiscountMethod:         models.DiscountMethodLoadingAdjustment,
+			FCLMethod:              models.FCLMethodPercentile,
+			FCLOverrideTolerance:   services.FCLOverrideToleranceDefault,
+			RiskAlrCeilingPct:      100,
+			RiskAlrDeltaPp:         20,
+			MedicalAidWaiverMethod: models.MedicalAidWaiverMethodFormula,
 		}
 	}
 	now := time.Now()
@@ -3588,6 +3597,11 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 		s.FCLMethod = *payload.FCLMethod
 		s.FCLMethodUpdatedAt = &now
 		s.FCLMethodUpdatedBy = user.UserEmail
+	}
+	if payload.MedicalAidWaiverMethod != nil {
+		s.MedicalAidWaiverMethod = *payload.MedicalAidWaiverMethod
+		s.MedicalAidWaiverMethodUpdatedAt = &now
+		s.MedicalAidWaiverMethodUpdatedBy = user.UserEmail
 	}
 	if payload.FCLOverrideTolerance != nil {
 		s.FCLOverrideTolerance = *payload.FCLOverrideTolerance
