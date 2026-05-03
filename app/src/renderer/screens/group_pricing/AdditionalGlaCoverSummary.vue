@@ -609,12 +609,12 @@
                   Final results (Smoothed Office Rate / 1,000 applied)
                 </div>
                 <div class="text-caption text-medium-emphasis mb-2">
-                  Binder and outsource per 1,000 are projected by applying
-                  each band's category-level fee rate to the Smoothed Office
-                  Rate. Commission per 1,000 is the Smoothed Office Rate
-                  multiplied by the scheme-wide ratio of final commission to
-                  final premium, so the rate reconciles to the scheme totals
-                  shown elsewhere in the quote.
+                  Binder and outsource per 1,000 are projected by applying each
+                  band's category-level fee rate to the Smoothed Office Rate.
+                  Commission per 1,000 is the Smoothed Office Rate multiplied by
+                  the scheme-wide ratio of final commission to final premium, so
+                  the rate reconciles to the scheme totals shown elsewhere in
+                  the quote.
                 </div>
                 <div style="overflow-x: auto">
                   <v-table density="compact" class="agla-summary-table">
@@ -1583,10 +1583,7 @@ const exportSummaryToExcel = () => {
   })
   const schemeName = (props.quote as any)?.scheme_name ?? 'quote'
   const fileSuffix = isFinal ? 'final_results' : 'smoothing'
-  XLSX.writeFile(
-    wb,
-    `additional_gla_cover_${fileSuffix}_${schemeName}.xlsx`
-  )
+  XLSX.writeFile(wb, `additional_gla_cover_${fileSuffix}_${schemeName}.xlsx`)
 }
 </script>
 
