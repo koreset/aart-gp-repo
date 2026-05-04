@@ -101,6 +101,10 @@ func BaseData(initTables bool) {
 	// to gp_default_roles.json never reach existing installs without this sync.
 	syncDefaultRoleNavigation(gpDefaultRoles)
 
+	// Strip role_permissions entries that point at disabled slugs from
+	// gp_permissions.json. Idempotent: subsequent runs find no rows.
+	purgeDisabledPermissionAssignments(gpPermissions)
+
 	// Group Pricing Age Bands are user-managed via the rate-tables upload flow
 	// (services.UploadTable, case "Age Bands"). Do not seed from
 	// installer/group_business_agebands.json — the bundled JSON has no `type`
@@ -412,6 +416,51 @@ func syncDefaultRoleNavigation(defaultRoles []DefaultRole) {
 	}
 
 	log.Info().Msg("Default role navigation sync complete")
+}
+
+// purgeDisabledPermissionAssignments removes role_permissions rows that point
+// at slugs marked disabled:true in gp_permissions.json. Run after seeding so
+// legacy slugs (claims:access, scheme:access, navigation:results, etc.) drop
+// off existing default roles without manual SQL. Idempotent — once cleaned,
+// subsequent boots find no rows to delete.
+//
+// Note: this affects ALL roles (default and user-created) because the
+// disabled flag means the slug is retired system-wide. Users who explicitly
+// added a now-disabled slug to a custom role would lose it — acceptable
+// trade-off given the slugs no longer enforce anything in the app.
+func purgeDisabledPermissionAssignments(gpPermissions []models.GPPermission) {
+	disabledSlugs := make([]string, 0)
+	for _, gp := range gpPermissions {
+		if gp.Disabled {
+			disabledSlugs = append(disabledSlugs, gp.Slug)
+		}
+	}
+	if len(disabledSlugs) == 0 {
+		return
+	}
+
+	var disabledIDs []int
+	if err := DB.Model(&models.GPPermission{}).
+		Where("slug IN ?", disabledSlugs).
+		Pluck("id", &disabledIDs).Error; err != nil {
+		log.Error().Err(err).Msg("Failed to look up disabled permission IDs")
+		return
+	}
+	if len(disabledIDs) == 0 {
+		return
+	}
+
+	res := DB.Exec(
+		"DELETE FROM role_permissions WHERE gp_permission_id IN ?",
+		disabledIDs,
+	)
+	if res.Error != nil {
+		log.Error().Err(res.Error).Msg("Failed to purge disabled permission assignments")
+		return
+	}
+	if res.RowsAffected > 0 {
+		log.Info().Msgf("Purged %d disabled permission assignment(s) from role_permissions (slugs: %v)", res.RowsAffected, disabledSlugs)
+	}
 }
 
 //func AddOtherTableData(product models.Product) {

@@ -99,105 +99,149 @@
                     </span>
                   </div>
 
-                  <div v-if="!isSuperuser">
-                    <template v-for="cat in filteredCategories" :key="cat.category">
-                      <div class="text-overline mt-4 mb-1 text-medium-emphasis">
+                  <div v-if="!isSuperuser && filteredCategories.length > 0">
+                    <v-tabs
+                      v-model="activeTab"
+                      show-arrows
+                      density="compact"
+                      color="primary"
+                      class="mb-2"
+                    >
+                      <v-tab
+                        v-for="cat in filteredCategories"
+                        :key="cat.category"
+                        :value="cat.category"
+                      >
                         {{ cat.category }}
-                      </div>
-                      <v-expansion-panels multiple variant="accordion">
-                        <v-expansion-panel
-                          v-for="group in cat.groups"
-                          :key="group.baseline.slug"
+                        <v-chip
+                          v-if="categorySelectionCount(cat) > 0"
+                          size="x-small"
+                          variant="tonal"
+                          color="primary"
+                          class="ml-2"
                         >
-                          <v-expansion-panel-title>
-                            <div class="d-flex align-center w-100">
-                              <v-checkbox-btn
-                                :model-value="selected.has(group.baseline.slug)"
-                                :indeterminate="isPartial(group)"
-                                color="primary"
-                                @click.stop
-                                @update:model-value="toggleBaseline(group)"
-                              />
-                              <span class="font-weight-medium mr-2">{{
-                                group.baseline.name
-                              }}</span>
-                              <v-chip
+                          {{ categorySelectionCount(cat) }}
+                        </v-chip>
+                      </v-tab>
+                    </v-tabs>
+
+                    <v-window v-model="activeTab">
+                      <v-window-item
+                        v-for="cat in filteredCategories"
+                        :key="cat.category"
+                        :value="cat.category"
+                      >
+                        <v-expansion-panels
+                          multiple
+                          variant="accordion"
+                          :model-value="defaultOpen(cat)"
+                        >
+                          <v-expansion-panel
+                            v-for="group in cat.groups"
+                            :key="group.baseline.slug"
+                          >
+                            <v-expansion-panel-title>
+                              <div class="d-flex align-center w-100">
+                                <v-checkbox-btn
+                                  :model-value="
+                                    selected.has(group.baseline.slug)
+                                  "
+                                  :indeterminate="isPartial(group)"
+                                  color="primary"
+                                  @click.stop
+                                  @update:model-value="toggleBaseline(group)"
+                                />
+                                <span class="font-weight-medium mr-2">{{
+                                  group.baseline.name
+                                }}</span>
+                                <v-chip
+                                  v-if="group.specials.length > 0"
+                                  size="x-small"
+                                  variant="tonal"
+                                  :color="
+                                    selected.has(group.baseline.slug)
+                                      ? 'primary'
+                                      : 'default'
+                                  "
+                                >
+                                  {{ countSelectedSpecials(group) }} /
+                                  {{ group.specials.length }}
+                                </v-chip>
+                                <v-spacer />
+                              </div>
+                            </v-expansion-panel-title>
+                            <v-expansion-panel-text>
+                              <p class="text-caption text-medium-emphasis mb-2">
+                                {{ group.baseline.description }}
+                              </p>
+                              <div
                                 v-if="group.specials.length > 0"
-                                size="x-small"
-                                variant="tonal"
-                                :color="
-                                  selected.has(group.baseline.slug)
-                                    ? 'primary'
-                                    : 'default'
-                                "
+                                class="d-flex justify-end mb-2"
                               >
-                                {{ countSelectedSpecials(group) }} /
-                                {{ group.specials.length }}
-                              </v-chip>
-                              <v-spacer />
-                            </div>
-                          </v-expansion-panel-title>
-                          <v-expansion-panel-text>
-                            <p class="text-caption text-medium-emphasis mb-2">
-                              {{ group.baseline.description }}
-                            </p>
-                            <div
-                              v-if="group.specials.length > 0"
-                              class="d-flex justify-end mb-2"
-                            >
-                              <v-btn
-                                size="x-small"
-                                variant="text"
-                                :disabled="!selected.has(group.baseline.slug)"
-                                @click="selectAllInGroup(group)"
-                                >Select all</v-btn
+                                <v-btn
+                                  size="x-small"
+                                  variant="text"
+                                  :disabled="
+                                    !selected.has(group.baseline.slug)
+                                  "
+                                  @click="selectAllInGroup(group)"
+                                  >Select all</v-btn
+                                >
+                                <v-btn
+                                  size="x-small"
+                                  variant="text"
+                                  :disabled="
+                                    !group.specials.some((s) =>
+                                      selected.has(s.slug)
+                                    )
+                                  "
+                                  @click="clearAllInGroup(group)"
+                                  >Clear all</v-btn
+                                >
+                              </div>
+                              <div
+                                v-if="group.specials.length === 0"
+                                class="text-caption text-medium-emphasis"
                               >
-                              <v-btn
-                                size="x-small"
-                                variant="text"
-                                :disabled="
-                                  !group.specials.some((s) =>
-                                    selected.has(s.slug)
-                                  )
-                                "
-                                @click="clearAllInGroup(group)"
-                                >Clear all</v-btn
-                              >
-                            </div>
-                            <div
-                              v-if="group.specials.length === 0"
-                              class="text-caption text-medium-emphasis"
-                            >
-                              No additional function-level permissions in this
-                              section.
-                            </div>
-                            <v-list density="compact" class="pl-2">
-                              <v-list-item
-                                v-for="s in filteredSpecials(group)"
-                                :key="s.slug"
-                                class="px-2"
-                              >
-                                <template #prepend>
-                                  <v-checkbox-btn
-                                    :model-value="selected.has(s.slug)"
-                                    :disabled="!selected.has(group.baseline.slug)"
-                                    @update:model-value="
-                                      toggleSpecial(group, s, $event)
-                                    "
-                                  />
-                                </template>
-                                <v-list-item-title class="text-body-2">{{
-                                  s.name
-                                }}</v-list-item-title>
-                                <v-list-item-subtitle class="text-caption">{{
-                                  s.description
-                                }}</v-list-item-subtitle>
-                              </v-list-item>
-                            </v-list>
-                          </v-expansion-panel-text>
-                        </v-expansion-panel>
-                      </v-expansion-panels>
-                    </template>
+                                No additional function-level permissions in
+                                this section.
+                              </div>
+                              <v-list density="compact" class="pl-2">
+                                <v-list-item
+                                  v-for="s in filteredSpecials(group)"
+                                  :key="s.slug"
+                                  class="px-2"
+                                >
+                                  <template #prepend>
+                                    <v-checkbox-btn
+                                      :model-value="selected.has(s.slug)"
+                                      :disabled="
+                                        !selected.has(group.baseline.slug)
+                                      "
+                                      @update:model-value="
+                                        toggleSpecial(group, s, $event)
+                                      "
+                                    />
+                                  </template>
+                                  <v-list-item-title class="text-body-2">{{
+                                    s.name
+                                  }}</v-list-item-title>
+                                  <v-list-item-subtitle class="text-caption">{{
+                                    s.description
+                                  }}</v-list-item-subtitle>
+                                </v-list-item>
+                              </v-list>
+                            </v-expansion-panel-text>
+                          </v-expansion-panel>
+                        </v-expansion-panels>
+                      </v-window-item>
+                    </v-window>
+                  </div>
+                  <div
+                    v-else-if="!isSuperuser"
+                    class="text-center text-medium-emphasis py-6"
+                  >
+                    No permissions match your search.
                   </div>
 
                   <v-row class="mt-4">
@@ -224,48 +268,67 @@
             </v-row>
 
             <v-row>
+              <v-col cols="12" md="5">
+                <v-text-field
+                  v-model="rolesSearch"
+                  prepend-inner-icon="mdi-magnify"
+                  label="Search roles"
+                  density="compact"
+                  variant="outlined"
+                  clearable
+                  hide-details
+                />
+              </v-col>
+            </v-row>
+            <v-row>
               <v-col>
-                <v-table class="trans-tables">
-                  <thead>
-                    <tr class="table-row">
-                      <th class="table-col text-left">Role Name</th>
-                      <th class="table-col text-left">Description</th>
-                      <th class="table-col text-left">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="role in userRoles" :key="role.role_name">
-                      <td>{{ role.role_name }}</td>
-                      <td>{{ role.description }}</td>
-                      <td class="text-right">
-                        <v-btn
-                          size="small"
-                          variant="text"
-                          @click="viewPermissions(role)"
-                        >
-                          View Permissions
-                        </v-btn>
-                        <v-btn
-                          v-if="hasPermission('system:manage_roles')"
-                          size="small"
-                          variant="text"
-                          @click="assignPermissions(role)"
-                        >
-                          Edit Permissions
-                        </v-btn>
-                        <v-btn
-                          v-if="hasPermission('system:manage_roles')"
-                          size="small"
-                          variant="text"
-                          icon
-                          @click="deleteRole(role)"
-                        >
-                          <v-icon color="red">mdi-delete</v-icon>
-                        </v-btn>
-                      </td>
-                    </tr>
-                  </tbody>
-                </v-table>
+                <v-data-table
+                  :headers="roleHeaders"
+                  :items="userRoles"
+                  :search="rolesSearch"
+                  :items-per-page="10"
+                  :items-per-page-options="[5, 10, 25, 50]"
+                  density="comfortable"
+                  class="trans-tables"
+                >
+                  <template v-slot:[`item.actions`]="{ item }">
+                    <div
+                      class="d-flex justify-end align-center ga-1 flex-nowrap"
+                    >
+                      <v-btn
+                        size="small"
+                        variant="text"
+                        class="text-none"
+                        @click="viewPermissions(item)"
+                      >
+                        View Permissions
+                      </v-btn>
+                      <v-btn
+                        v-if="hasPermission('system:manage_roles')"
+                        size="small"
+                        variant="text"
+                        class="text-none"
+                        @click="assignPermissions(item)"
+                      >
+                        Edit Permissions
+                      </v-btn>
+                      <v-btn
+                        v-if="hasPermission('system:manage_roles')"
+                        size="small"
+                        variant="text"
+                        icon
+                        @click="deleteRole(item)"
+                      >
+                        <v-icon color="red">mdi-delete</v-icon>
+                      </v-btn>
+                    </div>
+                  </template>
+                  <template #no-data>
+                    <div class="text-center text-medium-emphasis py-4">
+                      No roles found.
+                    </div>
+                  </template>
+                </v-data-table>
               </v-col>
             </v-row>
 
@@ -318,7 +381,7 @@
 
 <script setup lang="ts">
 import BaseCard from '@/renderer/components/BaseCard.vue'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import ConfirmDialog from '@/renderer/components/ConfirmDialog.vue'
 import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
@@ -359,9 +422,23 @@ const roleId = ref(0)
 const permissions = ref<GPPermission[]>([])
 const selected = ref<Set<string>>(new Set())
 const search = ref('')
+const activeTab = ref<string>('')
 const rolePermissions = ref<GPPermission[]>([])
 
 const userRoles = ref<any[]>([])
+const rolesSearch = ref('')
+const roleHeaders = [
+  { title: 'Role Name', key: 'role_name', sortable: true, width: '20%' },
+  { title: 'Description', key: 'description', sortable: true },
+  {
+    title: 'Actions',
+    key: 'actions',
+    sortable: false,
+    align: 'end' as const,
+    width: 320,
+    cellProps: { style: 'white-space: nowrap;' }
+  }
+]
 
 onMounted(() => {
   fetchRoles()
@@ -466,6 +543,39 @@ const specialCount = computed(() => {
 const countSelectedSpecials = (group: PermissionGroup) =>
   group.specials.filter((s) => selected.value.has(s.slug)).length
 
+const categorySelectionCount = (cat: CategorySection) => {
+  let n = 0
+  for (const g of cat.groups) {
+    if (selected.value.has(g.baseline.slug)) n++
+    for (const s of g.specials) if (selected.value.has(s.slug)) n++
+  }
+  return n
+}
+
+// Auto-expand every panel within the active tab so the user lands on the
+// specials immediately. Indices 0..n-1 because v-expansion-panels uses
+// positional values when no explicit `:value` props are set on each panel.
+const defaultOpen = (cat: CategorySection) => cat.groups.map((_, i) => i)
+
+// Snap activeTab to a sensible default whenever the visible category list
+// changes — e.g. after permissions load, when search filters the list, or
+// when entering edit mode for an existing role. Prefer the first category
+// that already has any selected permission so editors see selections on
+// arrival; otherwise fall back to the first visible category.
+watch(
+  filteredCategories,
+  (cats) => {
+    if (cats.length === 0) {
+      activeTab.value = ''
+      return
+    }
+    if (cats.some((c) => c.category === activeTab.value)) return
+    const withSelection = cats.find((c) => categorySelectionCount(c) > 0)
+    activeTab.value = (withSelection ?? cats[0]).category
+  },
+  { immediate: true }
+)
+
 const isPartial = (group: PermissionGroup) => {
   const has = countSelectedSpecials(group)
   return (
@@ -532,6 +642,7 @@ const openNewRole = () => {
   roleDescription.value = ''
   selected.value = new Set()
   search.value = ''
+  activeTab.value = ''
   addRole.value = true
 }
 
@@ -542,6 +653,7 @@ const cancelEdit = () => {
   roleDescription.value = ''
   selected.value = new Set()
   search.value = ''
+  activeTab.value = ''
 }
 
 const closeTable = () => {
@@ -556,6 +668,7 @@ const assignPermissions = (role: any) => {
   roleDescription.value = role.description
   roleId.value = role.id
   search.value = ''
+  activeTab.value = ''
   addRole.value = true
 }
 
