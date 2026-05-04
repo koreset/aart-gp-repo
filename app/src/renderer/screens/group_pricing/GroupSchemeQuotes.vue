@@ -72,6 +72,7 @@
                       size="small"
                       variant="plain"
                       color="primary"
+                      :disabled="item.status === 'accepted'"
                       @click="editItem(item)"
                     >
                       <v-icon>mdi-pencil</v-icon>
@@ -81,6 +82,7 @@
                       variant="plain"
                       size="small"
                       color="error"
+                      :disabled="item.status === 'accepted'"
                       @click="deleteItem(item)"
                     >
                       <v-icon>mdi-delete</v-icon>
@@ -108,6 +110,7 @@
                           variant="plain"
                           size="small"
                           v-bind="props"
+                          :disabled="item.status === 'accepted'"
                           @click="submitReview(item)"
                         >
                           <v-icon>mdi-file-eye-outline</v-icon>
@@ -125,6 +128,7 @@
                           variant="plain"
                           size="small"
                           v-bind="props"
+                          :disabled="item.status === 'accepted'"
                           @click="submitQuoteGeneration(item)"
                         >
                           <v-icon>mdi-file-send-outline</v-icon>

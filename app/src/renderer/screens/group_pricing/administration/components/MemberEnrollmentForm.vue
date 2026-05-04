@@ -149,14 +149,18 @@
               </v-col>
               <v-col cols="12" md="6">
                 <v-text-field
-                  v-model.number="formData.annual_salary"
+                  :model-value="annualSalaryDisplay"
                   label="Annual Salary *"
-                  type="number"
+                  type="text"
+                  inputmode="decimal"
                   prefix="R"
                   variant="outlined"
                   density="compact"
                   :rules="[rules.required, rules.salary]"
                   required
+                  @update:model-value="onAnnualSalaryInput"
+                  @focus="onAnnualSalaryFocus"
+                  @blur="onAnnualSalaryBlur"
                 />
               </v-col>
             </v-row>
@@ -516,6 +520,27 @@ const provinces = [
 ]
 
 // Validation rules
+const rsaIdDobMismatch = (
+  idType: string | null | undefined,
+  idNumber: string | null | undefined,
+  dob: Date | null | undefined
+): boolean => {
+  if (idType !== 'RSA_ID') return false
+  if (!dob) return false
+  const id = (idNumber ?? '').trim()
+  if (!/^\d{13}$/.test(id)) return false
+  const birth = new Date(dob)
+  if (isNaN(birth.getTime())) return false
+  const idYY = parseInt(id.slice(0, 2), 10)
+  const idMM = parseInt(id.slice(2, 4), 10)
+  const idDD = parseInt(id.slice(4, 6), 10)
+  return (
+    idYY !== birth.getFullYear() % 100 ||
+    idMM !== birth.getMonth() + 1 ||
+    idDD !== birth.getDate()
+  )
+}
+
 const rules = {
   required: (value: any) => !!value || 'Field is required',
   email: (value: string) => {
@@ -526,7 +551,16 @@ const rules = {
   idNumber: (value: string) => {
     if (!value) return 'ID number is required'
     if (formData.value.member_id_type === 'RSA_ID') {
-      return value.length === 13 || 'RSA ID number must be 13 digits'
+      if (value.length !== 13) return 'RSA ID number must be 13 digits'
+      if (
+        rsaIdDobMismatch(
+          formData.value.member_id_type,
+          value,
+          formData.value.date_of_birth
+        )
+      ) {
+        return 'RSA ID does not match the date of birth'
+      }
     }
     return true
   },
@@ -535,10 +569,23 @@ const rules = {
     const today = new Date()
     const birthDate = new Date(value)
     const age = today.getFullYear() - birthDate.getFullYear()
-    return (age >= 16 && age <= 75) || 'Age must be between 16 and 75 years'
+    if (age < 16 || age > 75)
+      return 'Age must be between 16 and 75 years'
+    if (
+      rsaIdDobMismatch(
+        formData.value.member_id_type,
+        formData.value.member_id_number,
+        value
+      )
+    ) {
+      return 'Date of birth does not match the RSA ID'
+    }
+    return true
   },
-  salary: (value: number | null) => {
-    if (!value) return 'Annual salary is required'
+  salary: () => {
+    const value = formData.value.annual_salary
+    if (value === null || value === undefined)
+      return 'Annual salary is required'
     return value > 0 || 'Salary must be greater than 0'
   },
   dateOfEntry: (value: Date | null) => {
@@ -568,6 +615,42 @@ const isFormValid = computed(() => {
     formData.value.annual_salary > 0
   )
 })
+
+const annualSalaryDisplay = ref('')
+const annualSalaryFocused = ref(false)
+
+const formatAnnualSalary = (val: number | null | undefined): string => {
+  if (val === null || val === undefined) return ''
+  const num = Number(val)
+  if (isNaN(num)) return ''
+  return num.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })
+}
+
+const onAnnualSalaryInput = (val: string | null) => {
+  const cleaned = String(val ?? '').replace(/[^\d.]/g, '')
+  annualSalaryDisplay.value = cleaned
+  if (cleaned === '' || cleaned === '.') {
+    formData.value.annual_salary = null
+    return
+  }
+  const parsed = Number(cleaned)
+  formData.value.annual_salary = isNaN(parsed) ? null : parsed
+}
+
+const onAnnualSalaryFocus = () => {
+  annualSalaryFocused.value = true
+  const val = formData.value.annual_salary
+  annualSalaryDisplay.value =
+    val === null || val === undefined ? '' : String(val)
+}
+
+const onAnnualSalaryBlur = () => {
+  annualSalaryFocused.value = false
+  annualSalaryDisplay.value = formatAnnualSalary(formData.value.annual_salary)
+}
 
 const idNumberLabel = computed(() => {
   switch (formData.value.member_id_type) {
@@ -701,6 +784,16 @@ const onSchemeChange = async (schemeId: number) => {
 }
 
 // Watchers
+watch(
+  () => formData.value.annual_salary,
+  (val) => {
+    if (!annualSalaryFocused.value) {
+      annualSalaryDisplay.value = formatAnnualSalary(val)
+    }
+  },
+  { immediate: true }
+)
+
 watch(
   () => props.member,
   (newMember) => {

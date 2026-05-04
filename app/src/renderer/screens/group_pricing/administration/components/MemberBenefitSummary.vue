@@ -755,10 +755,300 @@ const downloadSummary = () => {
   }
 }
 
+const escapeHtml = (value: unknown): string => {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+const buildPrintHtml = (): string => {
+  const data = benefitSummary.value
+  if (!data) return ''
+
+  const status = (data.status || 'ACTIVE').toUpperCase()
+
+  const benefitCards = activeBenefits.value
+    .map((b) => {
+      const waitingRow = b.waiting_period
+        ? `<div class="row"><span class="muted">Waiting Period</span><span class="value">${b.waiting_period} months</span></div>`
+        : ''
+      return `
+        <div class="card ${b.is_active ? 'active' : 'inactive'}">
+          <div class="card-head">
+            <span class="card-title">${escapeHtml(b.name)}</span>
+            <span class="badge ${b.is_active ? 'badge-active' : 'badge-inactive'}">${b.is_active ? 'Active' : 'Inactive'}</span>
+          </div>
+          <div class="row"><span class="muted">Sum Assured</span><span class="value">${formatCurrency(b.covered_sum_assured)}</span></div>
+          <div class="row"><span class="muted">Multiple of Salary</span><span class="value">${b.salary_multiple}x</span></div>
+          ${waitingRow}
+        </div>
+      `
+    })
+    .join('')
+
+  const total = totalSumAssured.value || 1
+  const coverageItems = activeBenefits.value
+    .filter((b) => b.is_active)
+    .map((b) => {
+      const pct = Math.max(
+        0,
+        Math.min(100, ((b.covered_sum_assured || 0) / total) * 100)
+      )
+      const palette: { [k: string]: string } = {
+        GLA: '#1976d2',
+        SGLA: '#43a047',
+        PTD: '#fb8c00',
+        CI: '#e53935',
+        TTD: '#8e24aa',
+        PHI: '#00897b',
+        GFF: '#795548'
+      }
+      const color = palette[b.benefit_code] || '#757575'
+      return `
+        <div class="cov-item">
+          <div class="cov-row">
+            <span>${escapeHtml(b.name)}</span>
+            <span class="bold">${formatCurrency(b.covered_sum_assured)}</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(2)}%; background:${color};"></div></div>
+        </div>
+      `
+    })
+    .join('')
+
+  let gffSection = ''
+  if (data.gff) {
+    const order: Array<keyof GroupFamilyFuneral> = [
+      'main_member',
+      'spouse',
+      'children',
+      'parents',
+      'dependants'
+    ]
+    const items = order
+      .filter((key) => key in data.gff!)
+      .map((key) => {
+        const amount = data.gff![key] as number
+        const count = getGffCount(key as string)
+        const countSuffix = count ? ` (${count})` : ''
+        return `
+          <div class="gff-item">
+            <div class="gff-label">${formatMemberType(key as string)}${countSuffix}</div>
+            <div class="gff-value">${formatCurrency(amount)}</div>
+          </div>
+        `
+      })
+      .join('')
+    gffSection = `
+      <section class="section">
+        <h2 class="section-title brown">Group Family Funeral Benefits</h2>
+        <div class="gff-grid">${items}</div>
+      </section>
+    `
+  }
+
+  const generated = new Date().toLocaleString('en-ZA')
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Benefit Summary - ${escapeHtml(props.memberName)}</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #212121;
+    font-size: 11pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page { padding: 16mm 14mm; }
+  .doc-header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #1976d2; padding-bottom: 8pt; margin-bottom: 14pt; }
+  .doc-title { font-size: 18pt; font-weight: 700; color: #1976d2; margin: 0; }
+  .doc-sub { font-size: 10pt; color: #555; margin-top: 2pt; }
+  .doc-meta { font-size: 9pt; color: #666; text-align: right; }
+  .section { margin-bottom: 14pt; page-break-inside: avoid; }
+  .section-title { font-size: 12pt; font-weight: 700; color: #fff; background: #1976d2; padding: 6pt 10pt; margin: 0 0 8pt 0; border-radius: 3pt; }
+  .section-title.info { background: #0288d1; }
+  .section-title.brown { background: #795548; }
+  .section-title.secondary { background: #455a64; }
+
+  .info-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8pt; border: 1px solid #e0e0e0; padding: 10pt; border-radius: 3pt; }
+  .info-cell .lbl { font-size: 8pt; color: #757575; text-transform: uppercase; letter-spacing: 0.5pt; }
+  .info-cell .val { font-size: 10pt; font-weight: 600; margin-top: 2pt; word-break: break-word; }
+  .status-pill { display: inline-block; padding: 2pt 8pt; border-radius: 10pt; font-size: 8pt; font-weight: 700; color: #fff; }
+  .status-active { background: #2e7d32; }
+  .status-inactive { background: #c62828; }
+  .status-pending { background: #f9a825; }
+  .status-other { background: #757575; }
+
+  .card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8pt; }
+  .card { border: 1px solid #e0e0e0; border-radius: 3pt; padding: 8pt 10pt; page-break-inside: avoid; }
+  .card.active { border-color: #81c784; background: #f1f8f1; }
+  .card.inactive { background: #fafafa; }
+  .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6pt; }
+  .card-title { font-weight: 700; font-size: 10pt; }
+  .badge { font-size: 7pt; padding: 1pt 6pt; border-radius: 8pt; font-weight: 700; }
+  .badge-active { background: #c8e6c9; color: #1b5e20; }
+  .badge-inactive { background: #eeeeee; color: #555; }
+  .row { display: flex; justify-content: space-between; padding: 3pt 0; border-bottom: 1px dashed #eee; font-size: 9.5pt; }
+  .row:last-child { border-bottom: none; }
+  .muted { color: #757575; }
+  .value { font-weight: 600; }
+  .bold { font-weight: 700; }
+
+  .premium-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8pt; }
+  .premium-grid.full { grid-template-columns: 1fr; }
+  .premium-tile { border: 1px solid #e0e0e0; border-radius: 3pt; padding: 10pt; text-align: center; }
+  .premium-tile .amount { font-size: 16pt; font-weight: 700; }
+  .premium-tile .lbl { font-size: 9pt; color: #555; margin-top: 2pt; }
+  .tile-success { background: #e8f5e9; border-color: #a5d6a7; color: #1b5e20; }
+  .tile-primary { background: #e3f2fd; border-color: #90caf9; color: #0d47a1; }
+  .tile-warning { background: #fff8e1; border-color: #ffe082; color: #e65100; }
+  .tile-info    { background: #e1f5fe; border-color: #81d4fa; color: #01579b; }
+  .tile-secondary { background: #eceff1; border-color: #b0bec5; color: #263238; }
+
+  .cov-item { margin-bottom: 6pt; }
+  .cov-row { display: flex; justify-content: space-between; font-size: 9.5pt; margin-bottom: 2pt; }
+  .bar-track { height: 6pt; background: #eee; border-radius: 3pt; overflow: hidden; }
+  .bar-fill { height: 100%; }
+
+  .gff-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6pt; }
+  .gff-item { border: 1px solid #d7ccc8; background: #efebe9; border-radius: 3pt; padding: 8pt; text-align: center; }
+  .gff-label { font-size: 9pt; color: #5d4037; font-weight: 600; margin-bottom: 4pt; }
+  .gff-value { font-size: 11pt; font-weight: 700; color: #3e2723; }
+
+  .footer { margin-top: 16pt; padding-top: 6pt; border-top: 1px solid #e0e0e0; font-size: 8pt; color: #888; display: flex; justify-content: space-between; }
+
+  @page { size: A4 portrait; margin: 10mm; }
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="doc-header">
+      <div>
+        <h1 class="doc-title">Member Benefit Summary</h1>
+        <div class="doc-sub">${escapeHtml(props.memberName)}</div>
+      </div>
+      <div class="doc-meta">Generated: ${escapeHtml(generated)}</div>
+    </div>
+
+    <section class="section">
+      <div class="info-grid">
+        <div class="info-cell"><div class="lbl">Member ID</div><div class="val">${escapeHtml(data.member_id_number)}</div></div>
+        <div class="info-cell"><div class="lbl">Annual Salary</div><div class="val">${formatCurrency(data.annual_salary)}</div></div>
+        <div class="info-cell"><div class="lbl">Scheme</div><div class="val">${escapeHtml(data.scheme_name)}</div></div>
+        <div class="info-cell"><div class="lbl">Scheme Category</div><div class="val">${escapeHtml(data.scheme_category || '-')}</div></div>
+        <div class="info-cell"><div class="lbl">Status</div><div class="val"><span class="status-pill ${
+          status === 'ACTIVE'
+            ? 'status-active'
+            : status === 'INACTIVE'
+              ? 'status-inactive'
+              : status === 'PENDING'
+                ? 'status-pending'
+                : 'status-other'
+        }">${escapeHtml(status)}</span></div></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Benefits</h2>
+      <div class="card-grid">${benefitCards}</div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title info">Premium Summary</h2>
+      <div class="premium-grid">
+        <div class="premium-tile tile-success">
+          <div class="amount">${formatCurrency(totalMonthlyPremium.value)}</div>
+          <div class="lbl">Total Monthly Premium</div>
+        </div>
+        <div class="premium-tile tile-primary">
+          <div class="amount">${formatCurrency(totalAnnualPremium.value)}</div>
+          <div class="lbl">Total Annual Premium</div>
+        </div>
+      </div>
+      <div class="premium-grid full" style="margin-top:8pt;">
+        <div class="premium-tile tile-warning">
+          <div class="amount">${escapeHtml(premiumAsPercentageOfSalary.value)}%</div>
+          <div class="lbl">Premium as % of Annual Salary</div>
+        </div>
+      </div>
+      <div class="premium-grid" style="margin-top:8pt;">
+        <div class="premium-tile tile-info">
+          <div class="amount">${formatCurrency(funeralMonthlyPremium.value)}</div>
+          <div class="lbl">Funeral Monthly Premium</div>
+        </div>
+        <div class="premium-tile tile-secondary">
+          <div class="amount">${formatCurrency(funeralAnnualPremium.value)}</div>
+          <div class="lbl">Funeral Annual Premium</div>
+        </div>
+      </div>
+    </section>
+
+    ${
+      coverageItems
+        ? `<section class="section">
+      <h2 class="section-title secondary">Benefits Coverage Distribution</h2>
+      ${coverageItems}
+    </section>`
+        : ''
+    }
+
+    ${gffSection}
+
+    <div class="footer">
+      <span>${escapeHtml(props.memberName)} · ${escapeHtml(data.member_id_number)}</span>
+      <span>AART Group Pricing</span>
+    </div>
+  </div>
+</body>
+</html>`
+}
+
 const printSummary = () => {
-  console.log('Print benefit summary for member:', props.memberName)
-  // Simplified print - just use browser's default print
-  window.print()
+  if (!benefitSummary.value) return
+  const html = buildPrintHtml()
+
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.style.position = 'fixed'
+  iframe.style.right = '0'
+  iframe.style.bottom = '0'
+  iframe.style.width = '0'
+  iframe.style.height = '0'
+  iframe.style.border = '0'
+  iframe.style.opacity = '0'
+  document.body.appendChild(iframe)
+
+  const cleanup = () => {
+    if (iframe.parentNode) iframe.parentNode.removeChild(iframe)
+  }
+
+  iframe.onload = () => {
+    try {
+      const win = iframe.contentWindow
+      if (!win) {
+        cleanup()
+        return
+      }
+      win.focus()
+      win.print()
+      win.onafterprint = () => cleanup()
+      // Fallback in case onafterprint never fires
+      setTimeout(cleanup, 60000)
+    } catch (err) {
+      console.error('Failed to print benefit summary:', err)
+      cleanup()
+    }
+  }
+
+  iframe.srcdoc = html
 }
 </script>
 

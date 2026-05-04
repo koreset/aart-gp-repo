@@ -1130,20 +1130,6 @@ const confirmAcceptQuote = async () => {
 
     // Refresh the quote data to update the view
     await loadQuote()
-
-    // Auto-generate On Risk letter after successful acceptance
-    try {
-      const orlRes = await GroupPricingService.getOnRiskLetterData(
-        quote.value.id
-      )
-      await generateOnRiskLetterDocx(orlRes.data)
-      await generateOnRiskLetterPdf(orlRes.data)
-      snackbarText.value = 'Quote accepted and On Risk letter generated'
-      snackbarTimeout.value = 4000
-      snackbar.value = true
-    } catch (orlErr: any) {
-      console.error('On Risk letter generation failed:', orlErr)
-    }
   } catch (error: any) {
     console.error('Error:', error.data || error)
     snackbarText.value = 'Quote Acceptance Failed'
