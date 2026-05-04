@@ -4,8 +4,13 @@ import { defineStore } from 'pinia'
 //   idle        — no update activity, status bar shows nothing
 //   downloading — zip is being pulled; show progress in the status bar
 //   downloaded  — zip is on disk, awaiting user-confirmed restart
-//   error       — install/download failed (alert dialog handles surfacing;
-//                 status bar stays quiet for now to avoid double-noise)
+//   error       — install/download failed. The renderer logs to electron-log
+//                 and records the message here for debugging but does NOT
+//                 pop a dialog or show a status-bar indicator — interrupting
+//                 the user with raw electron-updater error text was noisy
+//                 and unhelpful (most "errors" are just a missing manifest
+//                 on the server, which is filtered out before reaching
+//                 this state anyway).
 export type UpdaterPhase = 'idle' | 'downloading' | 'downloaded' | 'error'
 
 interface UpdaterState {

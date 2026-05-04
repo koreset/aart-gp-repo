@@ -106,11 +106,7 @@
                   member?.employee_number || 'N/A'
                 }}</v-list-item-subtitle>
               </v-list-item>
-              <v-list-item
-                v-if="
-                  member?.status === 'Inactive' || member?.status === 'INACTIVE'
-                "
-              >
+              <v-list-item v-if="member?.effective_exit_date">
                 <v-list-item-title class="text-caption text-grey"
                   >Effective Exit Date</v-list-item-title
                 >

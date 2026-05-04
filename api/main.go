@@ -306,6 +306,7 @@ func startApplication(initTables bool, s service.Service) {
 	services.StartDeadlineOverdueSweeper()
 	services.StartBordereauxFileRetentionSweeper()
 	services.StartWinProbabilityRetrainingJob()
+	services.StartMemberExitDateSweeper()
 
 	// Initialize WebSocket hub for real-time communications
 	services.InitWSHub()

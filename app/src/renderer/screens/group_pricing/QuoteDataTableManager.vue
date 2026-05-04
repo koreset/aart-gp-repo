@@ -1029,6 +1029,27 @@ const createColumnDefs = (data: any) => {
     if (column.field === 'id' || column.field === 'quote_id') {
       column.hide = true
     }
+    if (column.field === 'benefits') {
+      column.valueFormatter = (params: any) => {
+        const b = params.value
+        if (!b || typeof b !== 'object') return ''
+        const parts: string[] = []
+        const add = (code: string, enabled: any, mult: any) => {
+          const m = Number(mult ?? 0)
+          if (enabled || m > 0) parts.push(`${code} ${m}x`)
+        }
+        add('GLA', b.gla_enabled, b.gla_multiple)
+        add('SGLA', b.sgla_enabled, b.sgla_multiple)
+        add('PTD', b.ptd_enabled, b.ptd_multiple)
+        add('CI', b.ci_enabled, b.ci_multiple)
+        add('TTD', b.ttd_enabled, b.ttd_multiple)
+        add('PHI', b.phi_enabled, b.phi_multiple)
+        if (b.gff_enabled) parts.push('GFF')
+        return parts.length ? parts.join(' · ') : '—'
+      }
+      column.minWidth = 280
+      column.filter = false
+    }
     // if column.field is exp_credibility, then set it to editable
     if (column.field === 'manually_added_credibility') {
       column.editable = true

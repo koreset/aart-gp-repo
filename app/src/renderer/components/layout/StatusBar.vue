@@ -72,12 +72,13 @@ onMounted(() => {
     <span class="status-spacer" />
 
     <!--
-      Auto-update indicator. Renders nothing in `idle` / `error` phases —
-      `error` is handled loudly by the alert dialog, so we keep the bar
-      quiet to avoid double-noise. During download we show a percent;
-      after download completes we leave a persistent "ready" pill so a
-      user who dismissed the restart confirmation can find their way
-      back to it.
+      Auto-update indicator. Renders nothing in `idle` / `error` phases.
+      Errors are logged to electron-log but deliberately not surfaced in
+      the UI — a verbose dialog or red banner for what is usually just a
+      missing-manifest 404 was confusing for end users. During download
+      we show a percent; after download completes we leave a persistent
+      "ready" pill so a user who dismissed the restart confirmation can
+      find their way back to it.
     -->
     <template v-if="updaterStore.phase === 'downloading'">
       <v-icon

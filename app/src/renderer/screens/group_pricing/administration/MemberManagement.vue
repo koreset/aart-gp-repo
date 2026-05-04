@@ -559,8 +559,25 @@ const memberColumnDefs = [
     field: 'status',
     filter: true,
     sortable: true,
-    minWidth: 120,
-    cellRenderer: (params: any) => statusCellRenderer(params.value || 'active')
+    minWidth: 220,
+    cellRenderer: (params: any) => {
+      const pill = statusCellRenderer(params.value || 'active')
+      const exit = params.data?.effective_exit_date
+      if (!exit) return pill
+      const d = new Date(exit)
+      if (isNaN(d.getTime())) return pill
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const dDay = new Date(d)
+      dDay.setHours(0, 0, 0, 0)
+      const verb = dDay > today ? 'Exits' : 'Exited'
+      return `
+        <div style="display:flex; align-items:center; gap:6px;">
+          ${pill}
+          <span style="font-size:10px; color:#757575; white-space:nowrap;">${verb} ${d.toLocaleDateString()}</span>
+        </div>
+      `
+    }
   },
   {
     headerName: 'Annual Salary',
@@ -873,16 +890,24 @@ const confirmDeactivation = async () => {
   if (!selectedMember.value || !exitDateValid.value) return
 
   try {
+    const today = new Date().toISOString().slice(0, 10)
+    const exitInFuture = exitDate.value > today
+
     const memberToUpdate: any = {
       ...selectedMember.value,
       effective_exit_date: exitDate.value,
-      status: 'INACTIVE'
+      status: exitInFuture ? 'ACTIVE' : 'INACTIVE'
     }
     await GroupPricingService.removeMemberFromScheme(
       selectedMember.value.scheme_id,
       memberToUpdate
     )
-    showSnackbar('Member deactivated successfully', 'success')
+    showSnackbar(
+      exitInFuture
+        ? `Deactivation scheduled for ${exitDate.value}`
+        : 'Member deactivated successfully',
+      'success'
+    )
     await loadMembers()
     memberDetailsDialog.value = false
     exitDateDialog.value = false

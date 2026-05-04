@@ -108,20 +108,32 @@ window.mainApi?.on('download_progress', (_event: any, progress: any) => {
   )
 })
 
-window.mainApi?.on('update_error', async (event: any, error: any) => {
+window.mainApi?.on('update_error', async (_event: any, error: any) => {
   // electron-updater serializes the error before sending across IPC,
   // so `error` here is usually a plain object with a `message` field.
   const message =
     (error && (error.message || error.stack)) || String(error) || 'Unknown'
-  log.error('Update Error Event:', event)
+
+  // A 404 on `latest-<platform>.yml` (or "Cannot find channel ... update
+  // info") just means the update server hasn't published a manifest for
+  // this build yet. From the user's perspective that's identical to
+  // "no update available", so swallow it silently — no log noise, no
+  // store error, no UI surface. Real errors still flow through below.
+  const isNoManifestError =
+    /Cannot find channel/i.test(message) ||
+    /latest-[a-z]+\.yml/i.test(message) ||
+    /\b404\b/.test(message)
+  if (isNoManifestError) {
+    return
+  }
+
+  // Genuine errors (network failures, signature mismatch, install
+  // problems) are recorded for debugging but no longer pop a dialog —
+  // interrupting the user's flow with a wall of stack-trace text was
+  // unhelpful. The status bar handles user-visible state if we ever
+  // need to surface it; until then this stays quiet.
   log.error('Update Error:', message)
   updaterStore.setError(message)
-  // Surface to the user — silent failure is what made this bug hard to
-  // spot in the first place. A simple system alert is enough; if/when
-  // we add a global toast component this should move to that.
-  window.alert(
-    `The update could not be installed.\n\n${message}\n\nSee the application log for details.`
-  )
 })
 
 window.mainApi?.on('logout', async () => {
