@@ -86,74 +86,97 @@
                   />
 
                   <div
-                    class="d-flex justify-space-between text-caption text-medium-emphasis my-2"
+                    class="d-flex justify-space-between align-center flex-wrap text-caption text-medium-emphasis my-2"
                   >
-                    <span
-                      >{{ baselineCount }} module{{ baselineCount === 1 ? '' : 's' }}
-                      + {{ specialCount }} function{{ specialCount === 1 ? '' : 's' }}
-                      selected</span
-                    >
                     <span>
+                      <strong>{{ baselineCount }}</strong> module{{
+                        baselineCount === 1 ? '' : 's'
+                      }}
+                      + <strong>{{ specialCount }}</strong> function{{
+                        specialCount === 1 ? '' : 's'
+                      }}
+                      selected
+                      <span v-if="isDirty" class="ml-2 text-warning">
+                        · {{ dirtyCount }} unsaved change{{
+                          dirtyCount === 1 ? '' : 's'
+                        }}
+                      </span>
+                    </span>
+                    <span v-if="search">
                       {{ filteredCategories.length }} of
                       {{ categories.length }} sections shown
                     </span>
                   </div>
 
                   <div v-if="!isSuperuser && filteredCategories.length > 0">
-                    <v-tabs
-                      v-model="activeTab"
-                      show-arrows
-                      density="compact"
-                      color="primary"
-                      class="mb-2"
-                    >
-                      <v-tab
-                        v-for="cat in filteredCategories"
-                        :key="cat.category"
-                        :value="cat.category"
-                      >
-                        {{ cat.category }}
-                        <v-chip
-                          v-if="categorySelectionCount(cat) > 0"
-                          size="x-small"
-                          variant="tonal"
+                    <v-row no-gutters class="role-editor-grid">
+                      <!-- Vertical module list (left pane) -->
+                      <v-col cols="12" md="3" class="role-editor-sidebar">
+                        <v-list
+                          density="compact"
+                          nav
+                          class="pa-1 module-list"
                           color="primary"
-                          class="ml-2"
+                          :selected="activeTab ? [activeTab] : []"
                         >
-                          {{ categorySelectionCount(cat) }}
-                        </v-chip>
-                      </v-tab>
-                    </v-tabs>
-
-                    <v-window v-model="activeTab">
-                      <v-window-item
-                        v-for="cat in filteredCategories"
-                        :key="cat.category"
-                        :value="cat.category"
-                      >
-                        <v-expansion-panels
-                          multiple
-                          variant="accordion"
-                          :model-value="defaultOpen(cat)"
-                        >
-                          <v-expansion-panel
-                            v-for="group in cat.groups"
-                            :key="group.baseline.slug"
+                          <v-list-item
+                            v-for="cat in filteredCategories"
+                            :key="cat.category"
+                            :value="cat.category"
+                            :active="activeTab === cat.category"
+                            @click="activeTab = cat.category"
                           >
-                            <v-expansion-panel-title>
-                              <div class="d-flex align-center w-100">
+                            <v-list-item-title class="text-body-2">{{
+                              cat.category
+                            }}</v-list-item-title>
+                            <template #append>
+                              <v-chip
+                                size="x-small"
+                                variant="tonal"
+                                :color="
+                                  categorySelectionCount(cat) > 0
+                                    ? 'primary'
+                                    : undefined
+                                "
+                              >
+                                {{ categorySelectionCount(cat) }}/{{
+                                  categoryTotalCount(cat)
+                                }}
+                              </v-chip>
+                            </template>
+                          </v-list-item>
+                        </v-list>
+                      </v-col>
+
+                      <!-- Active category content (right pane) -->
+                      <v-col cols="12" md="9" class="role-editor-content pl-md-3">
+                        <template v-for="cat in filteredCategories" :key="cat.category">
+                          <div v-if="cat.category === activeTab">
+                            <div
+                              v-for="group in cat.groups"
+                              :key="group.baseline.slug"
+                              class="module-group mb-3"
+                            >
+                              <div class="module-header">
                                 <v-checkbox-btn
-                                  :model-value="
-                                    selected.has(group.baseline.slug)
-                                  "
+                                  :model-value="selected.has(group.baseline.slug)"
                                   :indeterminate="isPartial(group)"
                                   color="primary"
-                                  @click.stop
+                                  hide-details
+                                  density="compact"
                                   @update:model-value="toggleBaseline(group)"
                                 />
-                                <span class="font-weight-medium mr-2">{{
-                                  group.baseline.name
-                                }}</span>
+                                <div class="module-header-text">
+                                  <div class="font-weight-medium">
+                                    {{ group.baseline.name }}
+                                  </div>
+                                  <div
+                                    v-if="group.baseline.description"
+                                    class="text-caption text-medium-emphasis"
+                                  >
+                                    {{ group.baseline.description }}
+                                  </div>
+                                </div>
                                 <v-chip
                                   v-if="group.specials.length > 0"
                                   size="x-small"
@@ -161,81 +184,76 @@
                                   :color="
                                     selected.has(group.baseline.slug)
                                       ? 'primary'
-                                      : 'default'
+                                      : undefined
                                   "
                                 >
                                   {{ countSelectedSpecials(group) }} /
                                   {{ group.specials.length }}
                                 </v-chip>
-                                <v-spacer />
                               </div>
-                            </v-expansion-panel-title>
-                            <v-expansion-panel-text>
-                              <p class="text-caption text-medium-emphasis mb-2">
-                                {{ group.baseline.description }}
-                              </p>
-                              <div
-                                v-if="group.specials.length > 0"
-                                class="d-flex justify-end mb-2"
-                              >
-                                <v-btn
-                                  size="x-small"
-                                  variant="text"
-                                  :disabled="
-                                    !selected.has(group.baseline.slug)
-                                  "
-                                  @click="selectAllInGroup(group)"
-                                  >Select all</v-btn
-                                >
-                                <v-btn
-                                  size="x-small"
-                                  variant="text"
-                                  :disabled="
-                                    !group.specials.some((s) =>
-                                      selected.has(s.slug)
-                                    )
-                                  "
-                                  @click="clearAllInGroup(group)"
-                                  >Clear all</v-btn
-                                >
-                              </div>
+
                               <div
                                 v-if="group.specials.length === 0"
-                                class="text-caption text-medium-emphasis"
+                                class="text-caption text-medium-emphasis px-3 pb-2"
                               >
                                 No additional function-level permissions in
                                 this section.
                               </div>
-                              <v-list density="compact" class="pl-2">
-                                <v-list-item
+
+                              <div v-else class="px-3 pb-2">
+                                <div class="d-flex justify-end ga-1 mb-1">
+                                  <v-btn
+                                    size="x-small"
+                                    variant="text"
+                                    :disabled="!selected.has(group.baseline.slug)"
+                                    @click="selectAllInGroup(group)"
+                                    >Select all</v-btn
+                                  >
+                                  <v-btn
+                                    size="x-small"
+                                    variant="text"
+                                    :disabled="
+                                      !group.specials.some((s) =>
+                                        selected.has(s.slug)
+                                      )
+                                    "
+                                    @click="clearAllInGroup(group)"
+                                    >Clear all</v-btn
+                                  >
+                                </div>
+                                <div
                                   v-for="s in filteredSpecials(group)"
                                   :key="s.slug"
-                                  class="px-2"
+                                  class="permission-row"
+                                  :title="s.description"
                                 >
-                                  <template #prepend>
-                                    <v-checkbox-btn
-                                      :model-value="selected.has(s.slug)"
-                                      :disabled="
-                                        !selected.has(group.baseline.slug)
-                                      "
-                                      @update:model-value="
-                                        toggleSpecial(group, s, $event)
-                                      "
-                                    />
-                                  </template>
-                                  <v-list-item-title class="text-body-2">{{
+                                  <v-checkbox-btn
+                                    :model-value="selected.has(s.slug)"
+                                    :disabled="
+                                      !selected.has(group.baseline.slug)
+                                    "
+                                    hide-details
+                                    density="compact"
+                                    @update:model-value="
+                                      toggleSpecial(group, s, $event)
+                                    "
+                                  />
+                                  <span class="permission-name">{{
                                     s.name
-                                  }}</v-list-item-title>
-                                  <v-list-item-subtitle class="text-caption">{{
-                                    s.description
-                                  }}</v-list-item-subtitle>
-                                </v-list-item>
-                              </v-list>
-                            </v-expansion-panel-text>
-                          </v-expansion-panel>
-                        </v-expansion-panels>
-                      </v-window-item>
-                    </v-window>
+                                  }}</span>
+                                  <span
+                                    v-if="s.description"
+                                    class="permission-desc text-medium-emphasis"
+                                  >
+                                    {{ s.description }}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </template>
+                      </v-col>
+                    </v-row>
                   </div>
                   <div
                     v-else-if="!isSuperuser"
@@ -245,22 +263,28 @@
                   </div>
 
                   <v-row class="mt-4">
-                    <v-col class="d-flex">
+                    <v-col class="d-flex align-center">
                       <v-btn
                         color="primary"
                         size="small"
                         rounded
-                        :disabled="!roleName"
+                        :disabled="!roleName || !isDirty"
                         @click="saveRole"
-                        >Save</v-btn
                       >
+                        Save<span v-if="isDirty">
+                          ({{ dirtyCount }} change{{
+                            dirtyCount === 1 ? '' : 's'
+                          }})</span
+                        >
+                      </v-btn>
                       <v-btn
                         size="small"
                         variant="text"
                         class="ml-2"
-                        @click="cancelEdit"
-                        >Cancel</v-btn
+                        @click="discardChanges"
                       >
+                        {{ isDirty ? 'Discard changes' : 'Close' }}
+                      </v-btn>
                     </v-col>
                   </v-row>
                 </v-card>
@@ -421,6 +445,9 @@ const roleDescription = ref('')
 const roleId = ref(0)
 const permissions = ref<GPPermission[]>([])
 const selected = ref<Set<string>>(new Set())
+const initialSelected = ref<Set<string>>(new Set())
+const initialRoleName = ref('')
+const initialRoleDescription = ref('')
 const search = ref('')
 const activeTab = ref<string>('')
 const rolePermissions = ref<GPPermission[]>([])
@@ -552,10 +579,28 @@ const categorySelectionCount = (cat: CategorySection) => {
   return n
 }
 
-// Auto-expand every panel within the active tab so the user lands on the
-// specials immediately. Indices 0..n-1 because v-expansion-panels uses
-// positional values when no explicit `:value` props are set on each panel.
-const defaultOpen = (cat: CategorySection) => cat.groups.map((_, i) => i)
+const categoryTotalCount = (cat: CategorySection) => {
+  let n = 0
+  for (const g of cat.groups) {
+    n += 1 + g.specials.length
+  }
+  return n
+}
+
+const dirtyCount = computed(() => {
+  let n = 0
+  if (roleName.value !== initialRoleName.value) n++
+  if (roleDescription.value !== initialRoleDescription.value) n++
+  for (const slug of selected.value) {
+    if (!initialSelected.value.has(slug)) n++
+  }
+  for (const slug of initialSelected.value) {
+    if (!selected.value.has(slug)) n++
+  }
+  return n
+})
+
+const isDirty = computed(() => dirtyCount.value > 0)
 
 // Snap activeTab to a sensible default whenever the visible category list
 // changes — e.g. after permissions load, when search filters the list, or
@@ -636,6 +681,12 @@ const clearAllInGroup = (group: PermissionGroup) => {
   selected.value = new Set(selected.value)
 }
 
+const snapshotInitial = () => {
+  initialSelected.value = new Set(selected.value)
+  initialRoleName.value = roleName.value
+  initialRoleDescription.value = roleDescription.value
+}
+
 const openNewRole = () => {
   roleId.value = 0
   roleName.value = ''
@@ -644,6 +695,7 @@ const openNewRole = () => {
   search.value = ''
   activeTab.value = ''
   addRole.value = true
+  snapshotInitial()
 }
 
 const cancelEdit = () => {
@@ -652,8 +704,22 @@ const cancelEdit = () => {
   roleName.value = ''
   roleDescription.value = ''
   selected.value = new Set()
+  initialSelected.value = new Set()
+  initialRoleName.value = ''
+  initialRoleDescription.value = ''
   search.value = ''
   activeTab.value = ''
+}
+
+const discardChanges = async () => {
+  if (isDirty.value) {
+    const ok = await confirmDeleteAction.value.open(
+      'Discard changes?',
+      `You have ${dirtyCount.value} unsaved change${dirtyCount.value === 1 ? '' : 's'}. Discard them and close the editor?`
+    )
+    if (!ok) return
+  }
+  cancelEdit()
 }
 
 const closeTable = () => {
@@ -670,6 +736,7 @@ const assignPermissions = (role: any) => {
   search.value = ''
   activeTab.value = ''
   addRole.value = true
+  snapshotInitial()
 }
 
 const fetchRoles = async () => {
@@ -746,4 +813,105 @@ const viewPermissions = (role: any) => {
 }
 </script>
 
-<style lang="css" scoped></style>
+<style lang="css" scoped>
+.role-editor-grid {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.role-editor-sidebar {
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.015);
+  max-height: 540px;
+  overflow-y: auto;
+}
+
+.role-editor-content {
+  max-height: 540px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.module-list :deep(.v-list-item) {
+  min-height: 36px;
+  border-radius: 4px;
+  margin-bottom: 2px;
+}
+
+.module-group {
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 4px;
+}
+
+.module-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.02);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  text-align: left;
+}
+
+.module-header-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+}
+
+.permission-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  min-height: 28px;
+  text-align: left;
+}
+
+.permission-row:hover {
+  background: rgba(0, 0, 0, 0.025);
+}
+
+/* Vuetify's v-checkbox-btn renders a v-selection-control which defaults to
+   flex-grow: 1, eating all available row width. Pin it to its natural size so
+   sibling labels sit immediately to the right of the checkbox. */
+.permission-row :deep(.v-selection-control),
+.module-header :deep(.v-selection-control) {
+  flex: 0 0 auto;
+  min-width: 0;
+  width: auto;
+}
+
+.permission-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  flex: 0 0 auto;
+}
+
+.permission-desc {
+  font-size: 0.75rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 960px) {
+  .role-editor-sidebar {
+    max-height: 200px;
+    border-right: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  }
+  .role-editor-content {
+    max-height: none;
+  }
+  .permission-desc {
+    white-space: normal;
+  }
+}
+</style>
