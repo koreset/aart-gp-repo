@@ -12725,8 +12725,7 @@ func GetMembersPaginated(page, pageSize int, search, schemeId, status string) ([
 }
 
 func GetGroupPricingQuoteResultSummary(quoteId int) ([]models.MemberRatingResultSummary, error) {
-	// just because I can
-	var summaries []models.MemberRatingResultSummary
+	summaries := make([]models.MemberRatingResultSummary, 0)
 	err := DB.Where("quote_id = ?", quoteId).Find(&summaries).Error
 	if err != nil {
 		return summaries, err
@@ -12882,7 +12881,7 @@ func GetGroupPricingQuoteEducatorBenefits(quoteId int) ([]CategoryEducatorBenefi
 	}
 
 	// Create a slice to hold the results
-	var results []CategoryEducatorBenefit
+	results := make([]CategoryEducatorBenefit, 0)
 
 	// For each scheme category in the quote
 	for _, category := range quote.SchemeCategories {

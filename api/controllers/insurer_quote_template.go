@@ -298,7 +298,8 @@ func DeleteInsurerQuoteTemplate(c *gin.Context) {
 		return
 	}
 
-	err = quote_template.DeleteTemplate(insurerIDInt, templateIDInt)
+	force := c.Query("force") == "true"
+	err = quote_template.DeleteTemplate(insurerIDInt, templateIDInt, force)
 	if err != nil {
 		// Detect the "active template" refusal via error-message match so
 		// callers see a 409 Conflict rather than a 500. This mirrors the

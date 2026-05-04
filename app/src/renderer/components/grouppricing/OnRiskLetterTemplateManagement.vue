@@ -92,6 +92,16 @@
         >
           Download sample template
         </v-btn>
+        <v-btn
+          color="error"
+          variant="outlined"
+          prepend-icon="mdi-trash-can-outline"
+          :disabled="!active"
+          :loading="deletingActive"
+          @click="confirmDeleteActive"
+        >
+          Delete active template
+        </v-btn>
         <input
           ref="fileInput"
           type="file"
@@ -224,6 +234,7 @@ const loading = ref(false)
 const uploading = ref(false)
 const deletingId = ref<number | null>(null)
 const deletingInactive = ref(false)
+const deletingActive = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 
 // Single dialog used for both single-version and bulk deletes.
@@ -382,6 +393,37 @@ async function deleteVersion(t: any) {
     showError(msg)
   } finally {
     deletingId.value = null
+  }
+}
+
+function confirmDeleteActive() {
+  if (!active.value) return
+  const t = active.value
+  deleteDialog.title = `Delete active template (v${t.version})?`
+  deleteDialog.message = `"${t.filename}" is the active template. Deleting it will revert On Risk letters to the system's default built-in layout. This cannot be undone.`
+  deleteDialog.confirm = () => {
+    deleteDialog.open = false
+    deleteActive()
+  }
+  deleteDialog.open = true
+}
+
+async function deleteActive() {
+  if (!insurerId.value || !active.value) return
+  deletingActive.value = true
+  try {
+    await GroupPricingService.deleteInsurerOnRiskLetterTemplate(
+      insurerId.value,
+      active.value.id,
+      { force: true }
+    )
+    showSuccess('Active template deleted')
+    await loadAll()
+  } catch (e) {
+    console.error(e)
+    showError('Failed to delete active template')
+  } finally {
+    deletingActive.value = false
   }
 }
 

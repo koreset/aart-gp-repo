@@ -290,7 +290,8 @@ func DeleteInsurerOnRiskLetterTemplate(c *gin.Context) {
 		return
 	}
 
-	err = on_risk_letter_template.DeleteTemplate(insurerIDInt, templateIDInt)
+	force := c.Query("force") == "true"
+	err = on_risk_letter_template.DeleteTemplate(insurerIDInt, templateIDInt, force)
 	if err != nil {
 		if strings.Contains(err.Error(), "active template") {
 			logger.WithField("error", err.Error()).Warn("Refused to delete active template")

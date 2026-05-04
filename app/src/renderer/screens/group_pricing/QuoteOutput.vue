@@ -932,11 +932,11 @@ onMounted(async () => {
     console.log('Quote data:', quote.value)
   })
   GroupPricingService.getResultSummary(props.quoteId).then((res) => {
-    resultSummaries.value = res.data
+    resultSummaries.value = res.data || []
     console.log('Result Summary:', resultSummaries.value)
   })
   GroupPricingService.getCategoryEducatorBenefits(props.quoteId).then((res) => {
-    categoryEducatorBenefits.value = res.data
+    categoryEducatorBenefits.value = res.data || []
     console.log('Category Educator Benefits:', categoryEducatorBenefits.value)
   })
 
@@ -1236,6 +1236,15 @@ const buildSystemPdf = async (): Promise<any> => {
     )
   }
 
+  // Keeps `pageNumber` in sync with the actual page jsPDF is on (autoTable
+  // can add pages internally) and paints the chrome. Use as the didDrawPage
+  // callback for every autoTable; do NOT add pages manually inside it —
+  // autoTable's own pagination plus pageBreak: 'avoid' handle that.
+  const paintPageChrome = () => {
+    pageNumber = doc.internal.getCurrentPageInfo().pageNumber
+    addPageHeaderFooter(doc, pageNumber)
+  }
+
   // Conservative page break detection function - only breaks when absolutely necessary
   const checkPageBreak = (doc, currentY, requiredHeight) => {
     const pageHeight = doc.internal.pageSize.getHeight()
@@ -1396,6 +1405,8 @@ const buildSystemPdf = async (): Promise<any> => {
   // Add the initial information table with enhanced styling
   doc.autoTable({
     startY: currentY,
+    pageBreak: 'avoid',
+    rowPageBreak: 'avoid',
     body: initialInfo,
     theme: 'grid',
     styles: {
@@ -1418,10 +1429,7 @@ const buildSystemPdf = async (): Promise<any> => {
     alternateRowStyles: {
       fillColor: [250, 250, 250]
     },
-    didDrawPage: (data) => {
-      // Add header and footer to each page
-      addPageHeaderFooter(doc, pageNumber)
-    }
+    didDrawPage: paintPageChrome
   })
 
   // Add page break before Premium Summary section
@@ -1549,6 +1557,8 @@ const buildSystemPdf = async (): Promise<any> => {
 
     doc.autoTable({
       startY: currentY,
+      pageBreak: 'avoid',
+      rowPageBreak: 'avoid',
       head: premiumSummaryData.slice(0, 1),
       body: premiumSummaryData.slice(1),
       theme: 'striped',
@@ -1576,18 +1586,7 @@ const buildSystemPdf = async (): Promise<any> => {
       alternateRowStyles: {
         fillColor: [252, 253, 254]
       },
-      didDrawPage: (data) => {
-        addPageHeaderFooter(doc, pageNumber)
-        const pageHeight = doc.internal.pageSize.getHeight()
-        const bottomMargin = 60 // A reasonable margin
-
-        if (data.cursor.y > pageHeight - bottomMargin) {
-          doc.addPage()
-          pageNumber++
-          addPageHeaderFooter(doc, pageNumber)
-          currentY = topMargin // Reset Y position for the new page
-        }
-      }
+      didDrawPage: paintPageChrome
     })
 
     currentY = doc.lastAutoTable.finalY + 10
@@ -1659,6 +1658,8 @@ const buildSystemPdf = async (): Promise<any> => {
 
   doc.autoTable({
     startY: currentY,
+    pageBreak: 'avoid',
+    rowPageBreak: 'avoid',
     head: groupFuneralData.slice(0, 1),
     body: groupFuneralData.slice(1),
     theme: 'striped',
@@ -1685,9 +1686,7 @@ const buildSystemPdf = async (): Promise<any> => {
     alternateRowStyles: {
       fillColor: [252, 253, 254]
     },
-    didDrawPage: (data) => {
-      addPageHeaderFooter(doc, pageNumber)
-    }
+    didDrawPage: paintPageChrome
   })
 
   // New Section for Premium Breakdown
@@ -1777,9 +1776,11 @@ const buildSystemPdf = async (): Promise<any> => {
     ])
 
     if (hasAnyNonFuneralBenefits) {
-      currentY += 4
+      currentY += 10
       doc.autoTable({
         startY: currentY,
+        pageBreak: 'avoid',
+        rowPageBreak: 'avoid',
         head: premiumBreakdownData.slice(0, 1),
         body: premiumBreakdownData.slice(1),
         theme: 'grid',
@@ -1805,18 +1806,7 @@ const buildSystemPdf = async (): Promise<any> => {
         alternateRowStyles: {
           fillColor: [253, 253, 254]
         },
-        didDrawPage: (data) => {
-          addPageHeaderFooter(doc, pageNumber)
-          const pageHeight = doc.internal.pageSize.getHeight()
-          const bottomMargin = 60 // A reasonable margin
-
-          if (data.cursor.y > pageHeight - bottomMargin) {
-            doc.addPage()
-            pageNumber++
-            addPageHeaderFooter(doc, pageNumber)
-            currentY = topMargin // Reset Y position for the new page
-          }
-        }
+        didDrawPage: paintPageChrome
       })
       currentY = doc.lastAutoTable.finalY + 10
     }
@@ -1826,7 +1816,7 @@ const buildSystemPdf = async (): Promise<any> => {
     doc.setFontSize(fonts.sizes.body)
     doc.setFont(fonts.primary, 'bold')
     doc.text(`${item.category} - Group Funeral`, leftMargin, currentY)
-    currentY += 4
+    currentY += 8
 
     const groupFuneralBreakdownData = [
       [
@@ -1851,6 +1841,8 @@ const buildSystemPdf = async (): Promise<any> => {
 
     doc.autoTable({
       startY: currentY,
+      pageBreak: 'avoid',
+      rowPageBreak: 'avoid',
       body: groupFuneralBreakdownData,
       theme: 'grid',
       styles: {
@@ -1863,21 +1855,7 @@ const buildSystemPdf = async (): Promise<any> => {
         0: { fontStyle: 'bold', fillColor: colors.light },
         1: { halign: 'right', fontStyle: 'bold' }
       },
-      didDrawPage: (data) => {
-        console.log('Drawing page for category:', data)
-        addPageHeaderFooter(doc, pageNumber)
-        const pageHeight = doc.internal.pageSize.getHeight()
-        const bottomMargin = 60 // A reasonable margin
-
-        if (data.cursor.y > pageHeight - bottomMargin) {
-          doc.addPage()
-          pageNumber++
-          addPageHeaderFooter(doc, pageNumber)
-          currentY = topMargin // Reset Y position for the new page
-        } else {
-          currentY = data.cursor.y + 6 // Update currentY based on where the table ended
-        }
-      }
+      didDrawPage: paintPageChrome
     })
 
     // currentY = doc.lastAutoTable.finalY + 20
@@ -1912,7 +1890,7 @@ const buildSystemPdf = async (): Promise<any> => {
   doc.setLineWidth(1)
   doc.line(leftMargin, currentY + 2, leftMargin + 120, currentY + 2)
 
-  currentY += 15
+  currentY += 20
   doc.setTextColor(...colors.dark)
 
   quote.value.scheme_categories.forEach((item, index) => {
@@ -1930,7 +1908,7 @@ const buildSystemPdf = async (): Promise<any> => {
     doc.setFontSize(fonts.sizes.subheading)
     doc.setFont(fonts.primary, 'bold')
     doc.text(`${item.scheme_category}`, leftMargin, currentY)
-    currentY += 5
+    currentY += 10
 
     const glaEducatorLabel =
       benefitMaps.value
@@ -1955,6 +1933,8 @@ const buildSystemPdf = async (): Promise<any> => {
     if (hasAnyNonFuneralBenefits) {
       doc.autoTable({
         startY: currentY,
+        pageBreak: 'avoid',
+        rowPageBreak: 'avoid',
         body: categoryBenefitCommonData,
         theme: 'grid',
         styles: {
@@ -1967,20 +1947,7 @@ const buildSystemPdf = async (): Promise<any> => {
           0: { fontStyle: 'bold', fillColor: colors.light },
           1: { fontStyle: 'normal' }
         },
-        didDrawPage: (data) => {
-          addPageHeaderFooter(doc, pageNumber)
-          const pageHeight = doc.internal.pageSize.getHeight()
-          const bottomMargin = 60 // A reasonable margin
-
-          if (data.cursor.y > pageHeight - bottomMargin) {
-            doc.addPage('a4', 'landscape')
-            pageNumber++
-            addPageHeaderFooter(doc, pageNumber)
-            currentY = topMargin // Reset Y position for the new page
-          } else {
-            currentY = data.cursor.y + 6 // Update currentY based on where the table ended
-          }
-        }
+        didDrawPage: paintPageChrome
       })
       currentY = doc.lastAutoTable.finalY + 8
     }
@@ -2061,7 +2028,9 @@ const buildSystemPdf = async (): Promise<any> => {
 
     if (hasAnyNonFuneralBenefits) {
       doc.autoTable({
-        startY: currentY + 5, // Add some space before the table
+        startY: currentY + 8,
+        pageBreak: 'avoid',
+        rowPageBreak: 'avoid',
         head: categoryBenefitData.slice(0, 1),
         body: categoryBenefitData.slice(1),
         theme: 'striped',
@@ -2094,18 +2063,7 @@ const buildSystemPdf = async (): Promise<any> => {
         alternateRowStyles: {
           fillColor: [252, 253, 254]
         },
-        didDrawPage: (data) => {
-          addPageHeaderFooter(doc, pageNumber)
-          const pageHeight = doc.internal.pageSize.getHeight()
-          const bottomMargin = 60 // A reasonable margin
-
-          if (data.cursor.y > pageHeight - bottomMargin) {
-            doc.addPage('a4', 'landscape')
-            pageNumber++
-            addPageHeaderFooter(doc, pageNumber)
-            currentY = topMargin // Reset Y position for the new page
-          }
-        }
+        didDrawPage: paintPageChrome
       })
     }
     // currentY = doc.lastAutoTable.finalY + 8
@@ -2141,7 +2099,9 @@ const buildSystemPdf = async (): Promise<any> => {
     )
 
     doc.autoTable({
-      startY: currentY + 5, // Add some space before the table
+      startY: currentY + 8,
+      pageBreak: 'avoid',
+      rowPageBreak: 'avoid',
       head: groupFuneralBenefitData.slice(0, 1),
       body: groupFuneralBenefitData.slice(1),
       theme: 'grid',
@@ -2163,20 +2123,7 @@ const buildSystemPdf = async (): Promise<any> => {
         1: { halign: 'right' },
         2: { halign: 'center' }
       },
-      didDrawPage: (data) => {
-        addPageHeaderFooter(doc, pageNumber)
-        const pageHeight = doc.internal.pageSize.getHeight()
-        const bottomMargin = 60 // A reasonable margin
-
-        if (data.cursor.y > pageHeight - bottomMargin) {
-          doc.addPage('a4', 'landscape')
-          pageNumber++
-          addPageHeaderFooter(doc, pageNumber)
-          currentY = topMargin // Reset Y position for the new page
-        } else {
-          currentY = data.cursor.y + 6 // Update currentY based on where the table ended
-        }
-      }
+      didDrawPage: paintPageChrome
     })
     currentY = doc.lastAutoTable.finalY + 8
 
@@ -2187,7 +2134,7 @@ const buildSystemPdf = async (): Promise<any> => {
       doc.setFontSize(fonts.sizes.body)
       doc.setFont(fonts.primary, 'bold')
       doc.text('Educator Benefits', leftMargin, currentY)
-      currentY += 4
+      currentY += 8
 
       const educatorBenefitsData = [
         [
@@ -2236,6 +2183,8 @@ const buildSystemPdf = async (): Promise<any> => {
 
       doc.autoTable({
         startY: currentY,
+        pageBreak: 'avoid',
+        rowPageBreak: 'avoid',
         head: educatorBenefitsData.slice(0, 1),
         body: educatorBenefitsData.slice(1),
         theme: 'grid',
@@ -2257,20 +2206,7 @@ const buildSystemPdf = async (): Promise<any> => {
           1: { halign: 'right' },
           2: { halign: 'center' }
         },
-        didDrawPage: (data) => {
-          addPageHeaderFooter(doc, pageNumber)
-          const pageHeight = doc.internal.pageSize.getHeight()
-          const bottomMargin = 60 // A reasonable margin
-
-          if (data.cursor.y > pageHeight - bottomMargin) {
-            doc.addPage()
-            pageNumber++
-            addPageHeaderFooter(doc, pageNumber)
-            currentY = topMargin // Reset Y position for the new page
-          } else {
-            currentY = data.cursor.y + 6 // Update currentY based on where the table ended
-          }
-        }
+        didDrawPage: paintPageChrome
       })
       if (hasAnyNonFuneralBenefits) {
         currentY = doc.lastAutoTable.finalY + 30

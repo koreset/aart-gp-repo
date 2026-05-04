@@ -145,9 +145,14 @@ export default {
       `/group-pricing/insurers/${insurerId}/quote-template/${templateId}/activate`
     )
   },
-  deleteInsurerQuoteTemplate(insurerId: number, templateId: number) {
+  deleteInsurerQuoteTemplate(
+    insurerId: number,
+    templateId: number,
+    opts: { force?: boolean } = {}
+  ) {
+    const qs = opts.force ? '?force=true' : ''
     return Api.delete(
-      `/group-pricing/insurers/${insurerId}/quote-template/${templateId}`
+      `/group-pricing/insurers/${insurerId}/quote-template/${templateId}${qs}`
     )
   },
   deleteInactiveInsurerQuoteTemplates(insurerId: number) {
@@ -191,9 +196,14 @@ export default {
       `/group-pricing/insurers/${insurerId}/on-risk-letter-template/${templateId}/activate`
     )
   },
-  deleteInsurerOnRiskLetterTemplate(insurerId: number, templateId: number) {
+  deleteInsurerOnRiskLetterTemplate(
+    insurerId: number,
+    templateId: number,
+    opts: { force?: boolean } = {}
+  ) {
+    const qs = opts.force ? '?force=true' : ''
     return Api.delete(
-      `/group-pricing/insurers/${insurerId}/on-risk-letter-template/${templateId}`
+      `/group-pricing/insurers/${insurerId}/on-risk-letter-template/${templateId}${qs}`
     )
   },
   deleteInactiveInsurerOnRiskLetterTemplates(insurerId: number) {

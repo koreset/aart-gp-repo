@@ -21,7 +21,7 @@
     <template v-else>
       <!-- Headline KPI cards -->
       <v-row class="d-flex justify-center">
-        <v-col v-for="card in kpiCards" :key="card.title" cols="6" md="2">
+        <v-col v-for="card in kpiCards" :key="card.title" cols="6" md="3">
           <v-card
             variant="tonal"
             :color="card.color || 'primary'"

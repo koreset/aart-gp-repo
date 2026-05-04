@@ -112,12 +112,14 @@ func GetTemplate(id int) (*models.InsurerOnRiskLetterTemplate, error) {
 	return &template, nil
 }
 
-// DeleteTemplate removes a single template version. Refuses to delete the
-// currently active template — callers must activate another version first,
-// so an insurer is never left without a usable template by accident.
-// Returns an error whose message contains "active template" for that case
-// so the controller can map it to a 409.
-func DeleteTemplate(insurerID, templateID int) error {
+// DeleteTemplate removes a single template version. By default refuses to
+// delete the currently active template — callers must activate another
+// version first, so an insurer is never left without a usable template by
+// accident. Pass force=true to override this guard (e.g. an admin who
+// explicitly wants to clear the active template and revert to the system
+// default). Returns an error whose message contains "active template" for
+// the refusal case so the controller can map it to a 409.
+func DeleteTemplate(insurerID, templateID int, force bool) error {
 	var template models.InsurerOnRiskLetterTemplate
 	result := services.DB.First(&template, templateID)
 	if result.Error != nil {
@@ -128,7 +130,7 @@ func DeleteTemplate(insurerID, templateID int) error {
 		return fmt.Errorf("template does not belong to insurer")
 	}
 
-	if template.IsActive {
+	if template.IsActive && !force {
 		return fmt.Errorf("cannot delete active template; activate another version first")
 	}
 
