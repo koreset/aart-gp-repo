@@ -148,7 +148,6 @@
           </template>
           <template #actions>
             <v-btn
-              v-if="hasPermission('reports:export')"
               color="primary"
               variant="outlined"
               prepend-icon="mdi-microsoft-excel"
@@ -178,10 +177,8 @@ import {
 import { useRouter } from 'vue-router'
 import formatDateString from '@/renderer/utils/helpers'
 import * as XLSX from 'xlsx'
-import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
 
 const router = useRouter()
-const { hasPermission } = usePermissionCheck()
 const confirmDialog = ref()
 const schemes: any = ref([])
 const selectedScheme: any = ref([])

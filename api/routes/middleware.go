@@ -4,7 +4,11 @@ import (
 	"api/log"
 	"api/models"
 	"api/services"
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -300,6 +304,69 @@ func RequirePermission(slug string) gin.HandlerFunc {
 			"success": false,
 			"message": "You do not have the required permission: " + slug,
 		})
+	}
+}
+
+// RequirePermissionFromBody returns a middleware that enforces a permission
+// whose slug depends on the request body — for example, the quote-type
+// endpoint where "New Business" requires quote:access_new_business and
+// "Renewal" requires quote:access_renewal. The slugFn is called with the
+// gin.Context and returns the slug to enforce (or an error → 400).
+//
+// The middleware buffers and re-attaches the body so downstream
+// controllers can still BindJSON it normally.
+func RequirePermissionFromBody(slugFn func(*gin.Context) (string, error)) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		slug, err := slugFn(c)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
+
+		up := resolveUserPermissions(c)
+		if !up.hasRole {
+			c.Next()
+			return
+		}
+		if up.slugs["system:admin"] || up.slugs[slug] {
+			c.Next()
+			return
+		}
+
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "You do not have the required permission: " + slug,
+		})
+	}
+}
+
+// QuoteTypeSlugFromBody is a slug-resolver for RequirePermissionFromBody:
+// reads quote_type from a quote-create JSON body and returns the matching
+// permission slug, re-attaching the body so the controller's BindJSON still
+// works. Used on POST /group-pricing/generate-quote.
+func QuoteTypeSlugFromBody(c *gin.Context) (string, error) {
+	raw, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read request body: %w", err)
+	}
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(raw))
+
+	var probe struct {
+		QuoteType string `json:"quote_type"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		return "", fmt.Errorf("invalid request body: %w", err)
+	}
+	switch probe.QuoteType {
+	case "New Business":
+		return "quote:access_new_business", nil
+	case "Renewal":
+		return "quote:access_renewal", nil
+	default:
+		return "", fmt.Errorf("invalid or missing quote_type: %q", probe.QuoteType)
 	}
 }
 

@@ -51,16 +51,44 @@ func BaseData(initTables bool) {
 	DB.Model(&models.GPPermission{}).Count(&gpCount)
 	if gpCount == 0 {
 		DB.Where("id > 0").Delete(&models.GPPermission{})
-		err = DB.CreateInBatches(gpPermissions, 100).Error
+		// Skip disabled entries on fresh installs.
+		fresh := make([]models.GPPermission, 0, len(gpPermissions))
+		for _, gp := range gpPermissions {
+			if gp.Disabled {
+				continue
+			}
+			fresh = append(fresh, gp)
+		}
+		err = DB.CreateInBatches(fresh, 100).Error
 	} else {
 		for _, gp := range gpPermissions {
-			var gpPermission models.GPPermission
-			DB.Where("slug = ?", gp.Slug).First(&gpPermission)
-			if gpPermission.ID == 0 {
-				err = DB.Create(&gp).Error
-				if err != nil {
+			if gp.Disabled {
+				// Retired slug: leave any existing row in place so historical
+				// role assignments still resolve, but do not seed or update.
+				continue
+			}
+			var existing models.GPPermission
+			DB.Where("slug = ?", gp.Slug).First(&existing)
+			if existing.ID == 0 {
+				if err := DB.Create(&gp).Error; err != nil {
 					fmt.Println(err)
 				}
+				continue
+			}
+			if existing.Name != gp.Name ||
+				existing.Description != gp.Description ||
+				existing.Category != gp.Category ||
+				existing.Tier != gp.Tier ||
+				existing.ParentSlug != gp.ParentSlug ||
+				existing.DisplayOrder != gp.DisplayOrder {
+				DB.Model(&existing).Updates(map[string]interface{}{
+					"name":          gp.Name,
+					"description":   gp.Description,
+					"category":      gp.Category,
+					"tier":          gp.Tier,
+					"parent_slug":   gp.ParentSlug,
+					"display_order": gp.DisplayOrder,
+				})
 			}
 		}
 	}
@@ -303,6 +331,13 @@ var managedNavSlugs = []string{
 	"navigation:manage_arrears",
 	"navigation:view_statements",
 	"navigation:manage_users",
+	"navigation:view_claims",
+	"navigation:manage_beneficiaries",
+	"navigation:manage_binder_fees",
+	"navigation:manage_commission_structures",
+	"navigation:claims_payments",
+	"navigation:view_reinsurance",
+	"navigation:manage_email",
 }
 
 func syncDefaultRoleNavigation(defaultRoles []DefaultRole) {

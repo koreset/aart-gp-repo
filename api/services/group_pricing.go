@@ -16131,7 +16131,29 @@ func GetRolePermissions(roleId string) ([]models.GPPermission, error) {
 		return permissions, err
 	}
 
-	return role.Permissions, nil
+	return filterByBaseline(role.Permissions), nil
+}
+
+// filterByBaseline drops any "special" permission whose parent baseline is
+// not also present in the slug set. Baselines, system:admin, and any slug with
+// no parent_slug pass through. Called wherever a user's effective permission
+// set is materialised (role lookup, license lookup, email lookup) so that
+// the rule "specials require their baseline" is enforced in one place — the
+// frontend permission map and the RequirePermission middleware then both see
+// a self-consistent set without needing their own checks.
+func filterByBaseline(perms []models.GPPermission) []models.GPPermission {
+	have := make(map[string]bool, len(perms))
+	for _, p := range perms {
+		have[p.Slug] = true
+	}
+	out := make([]models.GPPermission, 0, len(perms))
+	for _, p := range perms {
+		if p.Tier == "special" && p.ParentSlug != "" && !have[p.ParentSlug] {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 func AssignRoleToUser(user models.OrgUser) error {
@@ -16190,8 +16212,9 @@ func GetPermissionsForLicense(licenseId string) (hasRole bool, slugs []string, e
 		return false, nil, err
 	}
 
-	slugs = make([]string, 0, len(role.Permissions))
-	for _, p := range role.Permissions {
+	effective := filterByBaseline(role.Permissions)
+	slugs = make([]string, 0, len(effective))
+	for _, p := range effective {
 		slugs = append(slugs, p.Slug)
 	}
 	return true, slugs, nil
@@ -16217,8 +16240,9 @@ func GetPermissionsForEmail(email string) (hasRole bool, slugs []string, err err
 		return false, nil, err
 	}
 
-	slugs = make([]string, 0, len(role.Permissions))
-	for _, p := range role.Permissions {
+	effective := filterByBaseline(role.Permissions)
+	slugs = make([]string, 0, len(effective))
+	for _, p := range effective {
 		slugs = append(slugs, p.Slug)
 	}
 	return true, slugs, nil

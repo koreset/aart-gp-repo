@@ -215,13 +215,7 @@
                 </div>
               </template>
             </v-tooltip>
-            <v-menu
-              v-if="
-                hasPermission('quote:generate_on_risk_letter') ||
-                hasPermission('quote:generate_pdf')
-              "
-              location="bottom end"
-            >
+            <v-menu location="bottom end">
               <template #activator="{ props: menuProps }">
                 <v-btn
                   v-bind="menuProps"
@@ -239,7 +233,6 @@
               </template>
               <v-list density="compact">
                 <v-list-item
-                  v-if="hasPermission('quote:generate_on_risk_letter')"
                   :disabled="
                     (quote.status !== 'accepted' &&
                       quote.status !== 'in_force' &&
@@ -253,7 +246,6 @@
                   @click="generateOnRiskLetterManual"
                 />
                 <v-list-item
-                  v-if="hasPermission('quote:generate_on_risk_letter')"
                   :disabled="
                     (quote.status !== 'accepted' &&
                       quote.status !== 'in_force' &&
@@ -267,7 +259,6 @@
                   @click="generateOnRiskLetterFromBackend"
                 />
                 <v-list-item
-                  v-if="hasPermission('quote:generate_pdf')"
                   :disabled="hasEmptyQuoteTables"
                   prepend-icon="mdi-file-pdf-box"
                   title="Quote PDF"
@@ -286,28 +277,15 @@
             >Results & Analysis</v-tab
           >
           <v-tab
-            v-if="
-              resultSummaries !== null &&
-              hasPermission('quote:view_output_summary')
-            "
+            v-if="resultSummaries !== null"
             value="outputsummary"
             >Output Summary</v-tab
           >
-          <v-tab
-            v-if="hasPermission('quote:view_premium_summary')"
-            value="benefitssummary"
-            >Premiums Summary</v-tab
-          >
-          <v-tab
-            v-if="hasPermission('quote:view_premium_summary')"
-            value="reinsurancepremiumsummary"
+          <v-tab value="benefitssummary">Premiums Summary</v-tab>
+          <v-tab value="reinsurancepremiumsummary"
             >Reinsurance Premium Summary</v-tab
           >
-          <v-tab
-            v-if="hasPermission('quote:view_premium_summary')"
-            value="additionalglacover"
-            >Additional GLA Cover</v-tab
-          >
+          <v-tab value="additionalglacover">Additional GLA Cover</v-tab>
         </v-tabs>
         <v-window v-model="tab">
           <v-window-item value="summary" eager>
@@ -338,11 +316,7 @@
           >
             <QuoteResults :quote="quote" @quote-updated="loadQuote" />
           </v-window-item>
-          <v-window-item
-            v-if="hasPermission('quote:view_output_summary')"
-            value="outputsummary"
-            eager
-          >
+          <v-window-item value="outputsummary" eager>
             <OutputSummary
               v-if="resultSummaries !== null && resultSummaries.length > 0"
               :key="`output-${resultsRefreshKey}`"
@@ -350,11 +324,7 @@
               :resultSummaries="resultSummaries"
             />
           </v-window-item>
-          <v-window-item
-            v-if="hasPermission('quote:view_premium_summary')"
-            value="benefitssummary"
-            eager
-          >
+          <v-window-item value="benefitssummary" eager>
             <QuoteBenefitSummary
               v-if="resultSummaries !== null"
               :key="`premium-${resultsRefreshKey}`"
@@ -362,11 +332,7 @@
               :quote="quote"
             />
           </v-window-item>
-          <v-window-item
-            v-if="hasPermission('quote:view_premium_summary')"
-            value="reinsurancepremiumsummary"
-            eager
-          >
+          <v-window-item value="reinsurancepremiumsummary" eager>
             <QuoteReinsurancePremiumSummary
               v-if="resultSummaries !== null"
               :key="`reins-${resultsRefreshKey}`"
@@ -374,11 +340,7 @@
               :quote="quote"
             />
           </v-window-item>
-          <v-window-item
-            v-if="hasPermission('quote:view_premium_summary')"
-            value="additionalglacover"
-            eager
-          >
+          <v-window-item value="additionalglacover" eager>
             <AdditionalGlaCoverSummary
               v-if="resultSummaries !== null"
               :key="`agla-${resultsRefreshKey}`"

@@ -56,7 +56,9 @@ func ConfigureRouter(router *gin.Engine) {
 		// POST/PUT/DELETE is nil.
 		groupPricing := apiv1.Group("group-pricing", NoCache())
 		{
-			groupPricing.POST("generate-quote", controllers.GenerateGroupPricingQuote)
+			groupPricing.POST("generate-quote",
+				RequirePermissionFromBody(QuoteTypeSlugFromBody),
+				controllers.GenerateGroupPricingQuote)
 			groupPricing.POST("calculate-quote/:id/basis/:basis", controllers.CalculateGroupPricingQuote)
 			groupPricing.POST("calculate-quote/:id/basis/:basis/credibility/:credibility", controllers.CalculateGroupPricingQuote)
 			groupPricing.GET("calculation-job/:jobId", controllers.GetCalculationJobStatus)

@@ -12,7 +12,14 @@
             placeholder="Choose quote type"
             label="Quote for"
             :error-messages="errors.quote_type"
-            :items="groupStore.quoteTypes"
+            :items="allowedQuoteTypes"
+            :disabled="allowedQuoteTypes.length === 0"
+            :hint="
+              allowedQuoteTypes.length === 0
+                ? 'No quote types available — contact an administrator'
+                : ''
+            "
+            persistent-hint
             @update:model-value="chooseQuoteFlow"
           ></v-select>
         </v-col>
@@ -442,6 +449,13 @@ const handleSchemeNameChange = (schemeName: string | null) => {
 const canSetExperienceRating = computed(() =>
   hasPermission('quote:experience_rating')
 )
+
+const allowedQuoteTypes = computed(() => {
+  const out: string[] = []
+  if (hasPermission('quote:access_new_business')) out.push('New Business')
+  if (hasPermission('quote:access_renewal')) out.push('Renewal')
+  return out
+})
 
 const validateForm = handleSubmit(async (values) => {
   // 'values' contains all the validated form fields

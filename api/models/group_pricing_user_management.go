@@ -19,8 +19,14 @@ type GPUserRole struct {
 }
 
 type GPPermission struct {
-	ID          int    `json:"id" gorm:"primary_key"`
-	Name        string `json:"name" gorm:"unique"`
-	Slug        string `json:"slug" gorm:"unique"`
-	Description string `json:"description"`
+	ID             int    `json:"id" gorm:"primary_key"`
+	Name           string `json:"name" gorm:"unique"`
+	Slug           string `json:"slug" gorm:"unique"`
+	Description    string `json:"description"`
+	Category       string `json:"category"`
+	Tier           string `json:"tier"`
+	ParentSlug     string `json:"parent_slug"`
+	DisplayOrder   int    `json:"display_order"`
+	Disabled       bool   `json:"disabled" gorm:"-"`
+	DisabledReason string `json:"disabled_reason" gorm:"-"`
 }
