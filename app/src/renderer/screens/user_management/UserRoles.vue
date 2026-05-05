@@ -51,9 +51,9 @@
                     >
                   </div>
                   <p class="text-caption text-medium-emphasis mb-3">
-                    Tick a module to grant access to that menu tab. Function-level
-                    permissions inside a module become available once module access
-                    is granted.
+                    Tick a module to grant access to that menu tab.
+                    Function-level permissions inside a module become available
+                    once module access is granted.
                   </p>
 
                   <v-alert
@@ -149,8 +149,15 @@
                       </v-col>
 
                       <!-- Active category content (right pane) -->
-                      <v-col cols="12" md="9" class="role-editor-content pl-md-3">
-                        <template v-for="cat in filteredCategories" :key="cat.category">
+                      <v-col
+                        cols="12"
+                        md="9"
+                        class="role-editor-content pl-md-3"
+                      >
+                        <template
+                          v-for="cat in filteredCategories"
+                          :key="cat.category"
+                        >
                           <div v-if="cat.category === activeTab">
                             <div
                               v-for="group in cat.groups"
@@ -159,7 +166,9 @@
                             >
                               <div class="module-header">
                                 <v-checkbox-btn
-                                  :model-value="selected.has(group.baseline.slug)"
+                                  :model-value="
+                                    selected.has(group.baseline.slug)
+                                  "
                                   :indeterminate="isPartial(group)"
                                   color="primary"
                                   hide-details
@@ -196,8 +205,8 @@
                                 v-if="group.specials.length === 0"
                                 class="text-caption text-medium-emphasis px-3 pb-2"
                               >
-                                No additional function-level permissions in
-                                this section.
+                                No additional function-level permissions in this
+                                section.
                               </div>
 
                               <div v-else class="px-3 pb-2">
@@ -205,7 +214,9 @@
                                   <v-btn
                                     size="x-small"
                                     variant="text"
-                                    :disabled="!selected.has(group.baseline.slug)"
+                                    :disabled="
+                                      !selected.has(group.baseline.slug)
+                                    "
                                     @click="selectAllInGroup(group)"
                                     >Select all</v-btn
                                   >
@@ -489,7 +500,11 @@ const categories = computed<CategorySection[]>(() => {
     }
   }
   for (const p of active) {
-    if (p.tier === 'special' && p.parent_slug && byBaseline.has(p.parent_slug)) {
+    if (
+      p.tier === 'special' &&
+      p.parent_slug &&
+      byBaseline.has(p.parent_slug)
+    ) {
       byBaseline.get(p.parent_slug)!.specials.push(p)
     }
   }
@@ -505,9 +520,7 @@ const categories = computed<CategorySection[]>(() => {
         (a.baseline.display_order ?? 0) - (b.baseline.display_order ?? 0)
     )
     for (const g of sec.groups) {
-      g.specials.sort(
-        (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)
-      )
+      g.specials.sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
     }
   }
   // Hide System category — system:admin is rendered as the Superuser toggle

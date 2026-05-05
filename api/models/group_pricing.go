@@ -5,8 +5,57 @@ import (
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
+	"strconv"
+	"strings"
 	"time"
 )
+
+// CsvEmptyInt decodes an empty CSV cell as 0. Used on fields where blank
+// input semantically means "no limit" (e.g. MaxSchemeSize on
+// ReinsuranceCoverRestriction). Round-trips through JSON and the DB as a
+// plain integer.
+type CsvEmptyInt int
+
+func (e *CsvEmptyInt) UnmarshalCSV(b []byte) error {
+	s := strings.TrimSpace(string(b))
+	if s == "" {
+		*e = 0
+		return nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return err
+	}
+	*e = CsvEmptyInt(n)
+	return nil
+}
+
+func (e CsvEmptyInt) MarshalCSV() ([]byte, error) {
+	return []byte(strconv.Itoa(int(e))), nil
+}
+
+// CsvEmptyFloat decodes an empty CSV cell as 0. Used on fields where blank
+// input semantically means "no limit" (e.g. MaximumCover on
+// ReinsuranceCoverRestriction).
+type CsvEmptyFloat float64
+
+func (e *CsvEmptyFloat) UnmarshalCSV(b []byte) error {
+	s := strings.TrimSpace(string(b))
+	if s == "" {
+		*e = 0
+		return nil
+	}
+	n, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return err
+	}
+	*e = CsvEmptyFloat(n)
+	return nil
+}
+
+func (e CsvEmptyFloat) MarshalCSV() ([]byte, error) {
+	return []byte(strconv.FormatFloat(float64(e), 'f', -1, 64)), nil
+}
 
 type Status string
 
@@ -1927,6 +1976,51 @@ type MemberRatingResultSummary struct {
 	TotalGlaEducatorCommissionAmount                   float64 `json:"total_gla_educator_commission_amount" csv:"total_gla_educator_commission_amount"`
 	TotalPtdEducatorCommissionAmount                   float64 `json:"total_ptd_educator_commission_amount" csv:"total_ptd_educator_commission_amount"`
 
+	// Per-benefit total annual salary used as the denominator for
+	// Proportion*RiskPremiumSalary fields. Excludes members whose
+	// AgeNextBirthday exceeds the matching restriction.<Benefit>MaxCoverAge,
+	// since those members contribute 0 premium for that benefit. SGLA and
+	// AAGla follow GlaMaxCoverAge (no separate restriction column);
+	// educator and conversion / continuity slices reuse the parent benefit's
+	// total. TotalAnnualSalary itself remains the unfiltered gross sum.
+	TotalAnnualSalaryGla  float64 `json:"total_annual_salary_gla" csv:"total_annual_salary_gla"`
+	TotalAnnualSalaryPtd  float64 `json:"total_annual_salary_ptd" csv:"total_annual_salary_ptd"`
+	TotalAnnualSalaryCi   float64 `json:"total_annual_salary_ci" csv:"total_annual_salary_ci"`
+	TotalAnnualSalarySgla float64 `json:"total_annual_salary_sgla" csv:"total_annual_salary_sgla"`
+	TotalAnnualSalaryTtd  float64 `json:"total_annual_salary_ttd" csv:"total_annual_salary_ttd"`
+	TotalAnnualSalaryPhi  float64 `json:"total_annual_salary_phi" csv:"total_annual_salary_phi"`
+	TotalAnnualSalaryFun  float64 `json:"total_annual_salary_fun" csv:"total_annual_salary_fun"`
+
+	// Per-quote cap limits, persisted so downstream flows (bordereaux's
+	// CoveredSumsAssured, premium recomputation) can reapply the same caps
+	// the pricing flow used without re-querying restriction / reinsurance
+	// cover restriction tables. A value of 0 means "no limit".
+	MaximumGlaCover             float64 `json:"maximum_gla_cover" csv:"maximum_gla_cover"`
+	MaximumPtdCover             float64 `json:"maximum_ptd_cover" csv:"maximum_ptd_cover"`
+	SevereIllnessMaximumBenefit float64 `json:"severe_illness_maximum_benefit" csv:"severe_illness_maximum_benefit"`
+	SpouseGlaMaximumBenefit     float64 `json:"spouse_gla_maximum_benefit" csv:"spouse_gla_maximum_benefit"`
+	TtdMaximumMonthlyBenefit    float64 `json:"ttd_maximum_monthly_benefit" csv:"ttd_maximum_monthly_benefit"`
+	PhiMaximumMonthlyBenefit    float64 `json:"phi_maximum_monthly_benefit" csv:"phi_maximum_monthly_benefit"`
+
+	// Per-benefit max cover ages, persisted so the claim flow can reapply the
+	// same age guards the pricing flow used. A value of 0 means "no limit".
+	GlaMaxCoverAge int `json:"gla_max_cover_age" csv:"gla_max_cover_age"`
+	PtdMaxCoverAge int `json:"ptd_max_cover_age" csv:"ptd_max_cover_age"`
+	CiMaxCoverAge  int `json:"ci_max_cover_age" csv:"ci_max_cover_age"`
+	TtdMaxCoverAge int `json:"ttd_max_cover_age" csv:"ttd_max_cover_age"`
+	PhiMaxCoverAge int `json:"phi_max_cover_age" csv:"phi_max_cover_age"`
+	FunMaxCoverAge int `json:"fun_max_cover_age" csv:"fun_max_cover_age"`
+
+	// Reinsurance cover restrictions resolved against this quote's
+	// scheme-size band and the category's customised benefit codes.
+	ReinsMaxGlaCover  float64 `json:"reins_max_gla_cover" csv:"reins_max_gla_cover"`
+	ReinsMaxPtdCover  float64 `json:"reins_max_ptd_cover" csv:"reins_max_ptd_cover"`
+	ReinsMaxCiCover   float64 `json:"reins_max_ci_cover" csv:"reins_max_ci_cover"`
+	ReinsMaxSglaCover float64 `json:"reins_max_sgla_cover" csv:"reins_max_sgla_cover"`
+	ReinsMaxTtdCover  float64 `json:"reins_max_ttd_cover" csv:"reins_max_ttd_cover"`
+	ReinsMaxPhiCover  float64 `json:"reins_max_phi_cover" csv:"reins_max_phi_cover"`
+	ReinsMaxFunCover  float64 `json:"reins_max_fun_cover" csv:"reins_max_fun_cover"`
+
 	CreationDate time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy    string    `json:"created_by" csv:"created_by"`
 }
@@ -2449,10 +2543,15 @@ type GroupPricingSetting struct {
 	// "Deteriorating Schemes" panel. RiskAlrCeilingPct flags any scheme whose
 	// ITD ALR exceeds this percentage; RiskAlrDeltaPp flags schemes where ITD
 	// ALR exceeds Expected LR by more than this many percentage points.
-	RiskAlrCeilingPct       float64    `json:"risk_alr_ceiling_pct" gorm:"not null;default:100"`
-	RiskAlrDeltaPp          float64    `json:"risk_alr_delta_pp" gorm:"not null;default:20"`
-	RiskThresholdsUpdatedAt *time.Time `json:"risk_thresholds_updated_at"`
-	RiskThresholdsUpdatedBy string     `json:"risk_thresholds_updated_by"`
+	// RiskProfileVariationTolerancePct is the variation tolerance (in percent)
+	// quoted in the Acceptance Form — if the member data profile at
+	// implementation differs by more than this from the basis used for
+	// pricing, the insurer reserves the right to revise rates.
+	RiskAlrCeilingPct                float64    `json:"risk_alr_ceiling_pct" gorm:"not null;default:100"`
+	RiskAlrDeltaPp                   float64    `json:"risk_alr_delta_pp" gorm:"not null;default:20"`
+	RiskProfileVariationTolerancePct float64    `json:"risk_profile_variation_tolerance_pct" gorm:"not null;default:7"`
+	RiskThresholdsUpdatedAt          *time.Time `json:"risk_thresholds_updated_at"`
+	RiskThresholdsUpdatedBy          string     `json:"risk_thresholds_updated_by"`
 	UpdatedAt               time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
 	UpdatedBy               string     `json:"updated_by"`
 }
@@ -2777,6 +2876,8 @@ type Restriction struct {
 	TtdMaximumMonthlyBenefit            float64   `json:"ttd_maximum_monthly_benefit" csv:"ttd_maximum_monthly_benefit"`
 	MaxMedicalAidWaiver                 float64   `json:"max_medical_aid_waiver" csv:"max_medical_aid_waiver"`
 	MaximumAllowedFCL                   float64   `json:"maximum_allowed_fcl" csv:"maximum_allowed_fcl"`
+	MaximumGlaCover                     float64   `json:"maximum_gla_cover" csv:"maximum_gla_cover"`
+	MaximumPtdCover                     float64   `json:"maximum_ptd_cover" csv:"maximum_ptd_cover"`
 	MinEntryAge                         int       `json:"min_entry_age" csv:"min_entry_age"`
 	MaxEntryAge                         int       `json:"max_entry_age" csv:"max_entry_age"`
 	GlaMaxCoverAge                      int       `json:"gla_max_cover_age" csv:"gla_max_cover_age"`
@@ -2787,6 +2888,34 @@ type Restriction struct {
 	FunMaxCoverAge                      int       `json:"fun_max_cover_age" csv:"fun_max_cover_age"`
 	CreationDate                        time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy                           string    `json:"created_by" csv:"created_by"`
+}
+
+// Benefit-type identifiers used by ReinsuranceCoverRestriction.BenefitType.
+// Stored uppercase; lookups normalise via strings.ToUpper.
+const (
+	BenefitTypeGla  = "GLA"
+	BenefitTypePtd  = "PTD"
+	BenefitTypeCi   = "CI"
+	BenefitTypeSgla = "SGLA"
+	BenefitTypeTtd  = "TTD"
+	BenefitTypePhi  = "PHI"
+	BenefitTypeFun  = "FUN"
+)
+
+// ReinsuranceCoverRestriction caps the covered sum assured / covered income
+// for a given (risk rate code, scheme size band, benefit type). The lookup
+// matches a quote's MemberCount against [MinSchemeSize, MaxSchemeSize].
+// MaxSchemeSize = 0 represents an open upper bound (the top size band).
+// MaximumCover = 0 means no restriction for that combination.
+type ReinsuranceCoverRestriction struct {
+	ID            int           `json:"id" gorm:"primary_key"`
+	RiskRateCode  string        `json:"risk_rate_code" csv:"risk_rate_code"`
+	BenefitType   string        `json:"benefit_type" csv:"benefit_type"`
+	MinSchemeSize CsvEmptyInt   `json:"min_scheme_size" csv:"min_scheme_size"`
+	MaxSchemeSize CsvEmptyInt   `json:"max_scheme_size" csv:"max_scheme_size"`
+	MaximumCover  CsvEmptyFloat `json:"maximum_cover" csv:"maximum_cover"`
+	CreationDate  time.Time     `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy     string        `json:"created_by" csv:"created_by"`
 }
 
 type ReinsuranceGlaRate struct {

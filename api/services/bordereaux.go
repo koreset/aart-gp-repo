@@ -3739,6 +3739,10 @@ func monthIntToName(month int) string {
 //   - r        : member in force pricing data (salary, benefit multiples, etc.)
 //   - category : scheme category containing free cover limits and retention limits
 //   - quote    : quote containing reinsurance / cession configuration
+//   - mrss     : pre-resolved restriction maxes and reinsurance cover caps that
+//     were applied at pricing time. Each cap of 0 means "no limit"; non-zero
+//     values clamp the covered sum after the FCL clamp so this function lands
+//     on the same covered figures the pricing flow stored.
 //
 // Returns:
 //   - SumsAssuredResult with all benefit sums assured populated
@@ -3747,6 +3751,7 @@ func CoveredSumsAssured(
 	category models.SchemeCategory,
 	quote models.GroupPricingQuote,
 	reinsuranceTreaty models.ReinsuranceTreaty,
+	mrss models.MemberRatingResultSummary,
 ) models.SumsAssuredResult {
 
 	// --- Helper: compute covered, retained, ceded for a given raw sum assured ---
@@ -3770,42 +3775,48 @@ func CoveredSumsAssured(
 	// --- GLA ---
 	if category.GlaBenefit {
 		glaRaw := r.AnnualSalary * r.Benefits.GlaMultiple
+		glaRaw = applyMaxCoverCap(applyMaxCoverCap(glaRaw, mrss.MaximumGlaCover), mrss.ReinsMaxGlaCover)
 		glaCovered, glaRetained, glaCeded = SplitLumpSumSA(glaRaw, fcl, reinsuranceTreaty)
 	}
 
 	// --- PTD ---
 	if category.PtdBenefit {
 		ptdRaw := r.AnnualSalary * r.Benefits.PtdMultiple
+		ptdRaw = applyMaxCoverCap(applyMaxCoverCap(ptdRaw, mrss.MaximumPtdCover), mrss.ReinsMaxPtdCover)
 		ptdCovered, ptdRetained, ptdCeded = SplitLumpSumSA(ptdRaw, fcl, reinsuranceTreaty)
 	}
 
 	// --- CI ---
 	if category.CiBenefit {
 		ciRaw := r.AnnualSalary * r.Benefits.CiMultiple
+		ciRaw = applyMaxCoverCap(applyMaxCoverCap(ciRaw, mrss.SevereIllnessMaximumBenefit), mrss.ReinsMaxCiCover)
 		ciCovered, ciRetained, ciCeded = SplitLumpSumSA(ciRaw, fcl, reinsuranceTreaty)
 	}
 
 	// --- SGLA ---
 	if category.SglaBenefit {
 		sglaRaw := r.AnnualSalary * r.Benefits.SglaMultiple
+		sglaRaw = applyMaxCoverCap(applyMaxCoverCap(sglaRaw, mrss.SpouseGlaMaximumBenefit), mrss.ReinsMaxSglaCover)
 		sglaCovered, sglaRetained, sglaCeded = SplitLumpSumSA(sglaRaw, fcl, reinsuranceTreaty)
 	}
 
 	// --- PHI (monthly benefit) ---
 	if category.PhiBenefit {
 		phiRaw := r.AnnualSalary * r.Benefits.PhiMultiple
+		phiRaw = applyMaxCoverCap(applyMaxCoverCap(phiRaw, mrss.PhiMaximumMonthlyBenefit), mrss.ReinsMaxPhiCover)
 		phiCovered, phiRetained, phiCeded = SplitIncome(phiRaw, fcl, reinsuranceTreaty)
 	}
 
 	// --- TTD (monthly benefit) ---
 	if category.TtdBenefit {
 		ttdRaw := r.AnnualSalary * r.Benefits.TtdMultiple
+		ttdRaw = applyMaxCoverCap(applyMaxCoverCap(ttdRaw, mrss.TtdMaximumMonthlyBenefit), mrss.ReinsMaxTtdCover)
 		ttdCovered, ttdRetained, ttdCeded = SplitIncome(ttdRaw, fcl, reinsuranceTreaty)
 	}
 
 	// --- Funeral Sum Assured
 	if category.FamilyFuneralBenefit {
-		mmFuneralSARaw := category.FamilyFuneralMainMemberFuneralSumAssured
+		mmFuneralSARaw := applyMaxCoverCap(category.FamilyFuneralMainMemberFuneralSumAssured, mrss.ReinsMaxFunCover)
 		mmFuneralSACovered, mmFuneralRetained, mmFuneralCeded = SplitFuneralSA(mmFuneralSARaw, reinsuranceTreaty)
 
 		spFuneralSARaw := category.FamilyFuneralMainMemberFuneralSumAssured

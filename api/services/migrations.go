@@ -406,6 +406,7 @@ func MigrateGroupPricingTables() error {
 		&models.CustomTieredIncomeReplacement{},
 		&models.DiscountAuthority{},
 		&models.Restriction{},
+		&models.ReinsuranceCoverRestriction{},
 		&models.ReinsuranceGlaRate{},
 		&models.ReinsuranceCiRate{},
 		&models.ReinsurancePtdRate{},

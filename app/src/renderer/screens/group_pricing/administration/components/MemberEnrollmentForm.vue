@@ -569,8 +569,7 @@ const rules = {
     const today = new Date()
     const birthDate = new Date(value)
     const age = today.getFullYear() - birthDate.getFullYear()
-    if (age < 16 || age > 75)
-      return 'Age must be between 16 and 75 years'
+    if (age < 16 || age > 75) return 'Age must be between 16 and 75 years'
     if (
       rsaIdDobMismatch(
         formData.value.member_id_type,

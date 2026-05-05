@@ -237,7 +237,7 @@ func GenerateMonthlySchedule(schemeID int, month, year int, user models.AppUser)
 				return nil
 			}
 			memberratingResultSummary, err := MapMemberToMemberRatingResultSummary(m, memberRatingResultSummaries)
-			coveredSA := CoveredSumsAssured(m, category, quote, reinsuranceTreaty)
+			coveredSA := CoveredSumsAssured(m, category, quote, reinsuranceTreaty, memberratingResultSummary)
 			premium := PremiumComputation(m, coveredSA, memberratingResultSummary)
 
 			//prorata function

@@ -70,6 +70,7 @@ export default {
     fcl_override_tolerance?: number
     risk_alr_ceiling_pct?: number
     risk_alr_delta_pp?: number
+    risk_profile_variation_tolerance_pct?: number
     medical_aid_waiver_method?: 'formula' | 'table_lookup'
   }) {
     return Api.put('/group-pricing/settings', payload, {

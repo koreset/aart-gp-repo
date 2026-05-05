@@ -874,13 +874,15 @@ const convertExcelDataToGridData = () => {
       })
     }
 
-    // GLA Educator rider (per-category opt-in).
+    // GLA Educator rider (per-category opt-in). Educator is a rider on GLA so
+    // its displayed Total Sum Assured mirrors the parent GLA covered SA — the
+    // rider cannot exceed the main benefit it's attached to.
     if (schemeCategory?.gla_educator_benefit === 'Yes') {
       gridData.push({
         category,
         benefit: glaEducatorBenefitTitle.value,
         annualSalary: resultSummary.total_annual_salary,
-        totalSumAssured: resultSummary.total_educator_sum_assured,
+        totalSumAssured: resultSummary.total_gla_capped_sum_assured,
         annualPremium: computeOfficePremium(
           resultSummary.exp_adj_total_gla_educator_risk_premium,
           resultSummary
@@ -918,12 +920,13 @@ const convertExcelDataToGridData = () => {
     })
 
     // PTD Educator rider (only for categories with the benefit enabled).
+    // Rider on PTD — displayed SA mirrors the parent PTD covered SA.
     if (schemeCategory?.ptd_educator_benefit === 'Yes') {
       gridData.push({
         category,
         benefit: ptdEducatorBenefitTitle.value,
         annualSalary: resultSummary.total_annual_salary,
-        totalSumAssured: resultSummary.total_educator_sum_assured,
+        totalSumAssured: resultSummary.total_ptd_capped_sum_assured,
         annualPremium: computeOfficePremium(
           resultSummary.exp_adj_total_ptd_educator_risk_premium,
           resultSummary
@@ -1317,7 +1320,7 @@ const convertExcelDataToGridData = () => {
         category: totalsCategory,
         benefit: glaEducatorBenefitTitle.value,
         annualSalary: totals.total_annual_salary,
-        totalSumAssured: totals.total_educator_sum_assured,
+        totalSumAssured: totals.total_gla_capped_sum_assured,
         annualPremium: totals.exp_adj_total_gla_educator_office_premium,
         finalAnnualPremium: totals.final_gla_educator_annual_office_premium,
         finalAnnualCommission:
@@ -1326,9 +1329,9 @@ const convertExcelDataToGridData = () => {
           (totals.exp_adj_total_gla_educator_office_premium /
             totals.total_annual_salary || 0) * 100
         )}%`,
-        ratePer1000SA: totals.total_educator_sum_assured
+        ratePer1000SA: totals.total_gla_capped_sum_assured
           ? (totals.exp_adj_total_gla_educator_office_premium * 1000) /
-            totals.total_educator_sum_assured
+            totals.total_gla_capped_sum_assured
           : ''
       })
     }
@@ -1356,7 +1359,7 @@ const convertExcelDataToGridData = () => {
         category: totalsCategory,
         benefit: ptdEducatorBenefitTitle.value,
         annualSalary: totals.total_annual_salary,
-        totalSumAssured: totals.total_educator_sum_assured,
+        totalSumAssured: totals.total_ptd_capped_sum_assured,
         annualPremium: totals.exp_adj_total_ptd_educator_office_premium,
         finalAnnualPremium: totals.final_ptd_educator_annual_office_premium,
         finalAnnualCommission:
@@ -1365,9 +1368,9 @@ const convertExcelDataToGridData = () => {
           (totals.exp_adj_total_ptd_educator_office_premium /
             totals.total_annual_salary || 0) * 100
         )}%`,
-        ratePer1000SA: totals.total_educator_sum_assured
+        ratePer1000SA: totals.total_ptd_capped_sum_assured
           ? (totals.exp_adj_total_ptd_educator_office_premium * 1000) /
-            totals.total_educator_sum_assured
+            totals.total_ptd_capped_sum_assured
           : ''
       })
     }

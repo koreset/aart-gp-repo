@@ -54,6 +54,16 @@ func officePercentSalary(item models.MemberRatingResultSummary, riskProportion f
 	return fmt.Sprintf("%s%%", RoundUpToTwoDecimalsAccounting(riskProportion*100/denom))
 }
 
+// formatTolerancePct renders a percentage value without a trailing ".0", so
+// 7 prints as "7" and 7.5 prints as "7.5". Used in the Acceptance Form
+// notice so the wording reads naturally.
+func formatTolerancePct(pct float64) string {
+	if pct == math.Trunc(pct) {
+		return strconv.FormatFloat(pct, 'f', 0, 64)
+	}
+	return strings.TrimRight(strings.TrimRight(strconv.FormatFloat(pct, 'f', 2, 64), "0"), ".")
+}
+
 // FormatQuoteDate formats time.Time to "02 Jan 2006" format
 func FormatQuoteDate(t time.Time) string {
 	if t.IsZero() {

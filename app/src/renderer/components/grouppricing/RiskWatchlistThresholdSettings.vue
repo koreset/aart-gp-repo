@@ -54,6 +54,21 @@
             :disabled="loading"
           />
         </v-col>
+        <v-col cols="12" md="6">
+          <v-text-field
+            v-model.number="profileVariationTolerance"
+            label="Quote Risk Profile Variation tolerance (%)"
+            type="number"
+            min="0"
+            max="100"
+            step="0.5"
+            variant="outlined"
+            density="compact"
+            hint="Printed on the Acceptance Form: if the member data profile at implementation differs by more than this %, the insurer reserves the right to revise rates."
+            persistent-hint
+            :disabled="loading"
+          />
+        </v-col>
       </v-row>
 
       <v-alert
@@ -90,6 +105,7 @@ const flash = useFlashStore()
 
 const alrCeiling = ref<number>(100)
 const alrDelta = ref<number>(20)
+const profileVariationTolerance = ref<number>(7)
 const updatedAt = ref<string | null>(null)
 const updatedBy = ref<string>('')
 const loading = ref(false)
@@ -99,8 +115,11 @@ const canSave = computed(
   () =>
     Number.isFinite(alrCeiling.value) &&
     Number.isFinite(alrDelta.value) &&
+    Number.isFinite(profileVariationTolerance.value) &&
     alrCeiling.value >= 0 &&
-    alrDelta.value >= 0
+    alrDelta.value >= 0 &&
+    profileVariationTolerance.value >= 0 &&
+    profileVariationTolerance.value <= 100
 )
 
 const rangeWarning = computed(() => {
@@ -110,6 +129,14 @@ const rangeWarning = computed(() => {
   }
   if (alrDelta.value < 5 || alrDelta.value > 100) {
     issues.push('Delta outside the typical 5–100pp range')
+  }
+  if (
+    profileVariationTolerance.value < 1 ||
+    profileVariationTolerance.value > 25
+  ) {
+    issues.push(
+      'Profile variation tolerance outside the typical 1–25% range'
+    )
   }
   return issues.length > 0
     ? `${issues.join('; ')}. Save anyway if intentional.`
@@ -132,6 +159,9 @@ async function load() {
     const { data } = await GroupPricingService.getGroupPricingSettings()
     alrCeiling.value = Number(data?.risk_alr_ceiling_pct ?? 100)
     alrDelta.value = Number(data?.risk_alr_delta_pp ?? 20)
+    profileVariationTolerance.value = Number(
+      data?.risk_profile_variation_tolerance_pct ?? 7
+    )
     updatedAt.value = data?.risk_thresholds_updated_at ?? null
     updatedBy.value = data?.risk_thresholds_updated_by ?? ''
   } catch (err: any) {
@@ -149,7 +179,8 @@ async function save() {
   try {
     const { data } = await GroupPricingService.updateGroupPricingSettings({
       risk_alr_ceiling_pct: alrCeiling.value,
-      risk_alr_delta_pp: alrDelta.value
+      risk_alr_delta_pp: alrDelta.value,
+      risk_profile_variation_tolerance_pct: profileVariationTolerance.value
     })
     updatedAt.value = data?.risk_thresholds_updated_at ?? updatedAt.value
     updatedBy.value = data?.risk_thresholds_updated_by ?? updatedBy.value

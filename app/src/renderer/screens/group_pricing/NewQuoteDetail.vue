@@ -276,9 +276,7 @@
           <v-tab v-if="hasPermission('quote:view_results')" value="results"
             >Results & Analysis</v-tab
           >
-          <v-tab
-            v-if="resultSummaries !== null"
-            value="outputsummary"
+          <v-tab v-if="resultSummaries !== null" value="outputsummary"
             >Output Summary</v-tab
           >
           <v-tab value="benefitssummary">Premiums Summary</v-tab>

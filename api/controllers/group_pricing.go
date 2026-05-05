@@ -3508,13 +3508,14 @@ func GetGroupPricingSettings(c *gin.Context) {
 	var s models.GroupPricingSetting
 	if err := services.DB.First(&s, 1).Error; err != nil {
 		s = models.GroupPricingSetting{
-			ID:                     1,
-			DiscountMethod:         models.DiscountMethodLoadingAdjustment,
-			FCLMethod:              models.FCLMethodPercentile,
-			FCLOverrideTolerance:   services.FCLOverrideToleranceDefault,
-			RiskAlrCeilingPct:      100,
-			RiskAlrDeltaPp:         20,
-			MedicalAidWaiverMethod: models.MedicalAidWaiverMethodFormula,
+			ID:                               1,
+			DiscountMethod:                   models.DiscountMethodLoadingAdjustment,
+			FCLMethod:                        models.FCLMethodPercentile,
+			FCLOverrideTolerance:             services.FCLOverrideToleranceDefault,
+			RiskAlrCeilingPct:                100,
+			RiskAlrDeltaPp:                   20,
+			RiskProfileVariationTolerancePct: services.RiskProfileVariationToleranceDefault,
+			MedicalAidWaiverMethod:           models.MedicalAidWaiverMethodFormula,
 		}
 		services.DB.Create(&s)
 	}
@@ -3529,12 +3530,13 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 	// "explicitly set to zero" — relevant for FCLOverrideTolerance, where 0
 	// is a meaningful (strict) value.
 	var payload struct {
-		DiscountMethod         *string  `json:"discount_method"`
-		FCLMethod              *string  `json:"fcl_method"`
-		FCLOverrideTolerance   *float64 `json:"fcl_override_tolerance"`
-		RiskAlrCeilingPct      *float64 `json:"risk_alr_ceiling_pct"`
-		RiskAlrDeltaPp         *float64 `json:"risk_alr_delta_pp"`
-		MedicalAidWaiverMethod *string  `json:"medical_aid_waiver_method"`
+		DiscountMethod                   *string  `json:"discount_method"`
+		FCLMethod                        *string  `json:"fcl_method"`
+		FCLOverrideTolerance             *float64 `json:"fcl_override_tolerance"`
+		RiskAlrCeilingPct                *float64 `json:"risk_alr_ceiling_pct"`
+		RiskAlrDeltaPp                   *float64 `json:"risk_alr_delta_pp"`
+		RiskProfileVariationTolerancePct *float64 `json:"risk_profile_variation_tolerance_pct"`
+		MedicalAidWaiverMethod           *string  `json:"medical_aid_waiver_method"`
 	}
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
@@ -3573,18 +3575,24 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "risk_alr_delta_pp must be between 0 and 1000"})
 		return
 	}
+	if payload.RiskProfileVariationTolerancePct != nil &&
+		(*payload.RiskProfileVariationTolerancePct < 0 || *payload.RiskProfileVariationTolerancePct > 100) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "risk_profile_variation_tolerance_pct must be between 0 and 100"})
+		return
+	}
 	user := c.MustGet("user").(models.AppUser)
 
 	var s models.GroupPricingSetting
 	if err := services.DB.First(&s, 1).Error; err != nil {
 		s = models.GroupPricingSetting{
-			ID:                     1,
-			DiscountMethod:         models.DiscountMethodLoadingAdjustment,
-			FCLMethod:              models.FCLMethodPercentile,
-			FCLOverrideTolerance:   services.FCLOverrideToleranceDefault,
-			RiskAlrCeilingPct:      100,
-			RiskAlrDeltaPp:         20,
-			MedicalAidWaiverMethod: models.MedicalAidWaiverMethodFormula,
+			ID:                               1,
+			DiscountMethod:                   models.DiscountMethodLoadingAdjustment,
+			FCLMethod:                        models.FCLMethodPercentile,
+			FCLOverrideTolerance:             services.FCLOverrideToleranceDefault,
+			RiskAlrCeilingPct:                100,
+			RiskAlrDeltaPp:                   20,
+			RiskProfileVariationTolerancePct: services.RiskProfileVariationToleranceDefault,
+			MedicalAidWaiverMethod:           models.MedicalAidWaiverMethodFormula,
 		}
 	}
 	now := time.Now()
@@ -3606,12 +3614,17 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 	if payload.FCLOverrideTolerance != nil {
 		s.FCLOverrideTolerance = *payload.FCLOverrideTolerance
 	}
-	if payload.RiskAlrCeilingPct != nil || payload.RiskAlrDeltaPp != nil {
+	if payload.RiskAlrCeilingPct != nil ||
+		payload.RiskAlrDeltaPp != nil ||
+		payload.RiskProfileVariationTolerancePct != nil {
 		if payload.RiskAlrCeilingPct != nil {
 			s.RiskAlrCeilingPct = *payload.RiskAlrCeilingPct
 		}
 		if payload.RiskAlrDeltaPp != nil {
 			s.RiskAlrDeltaPp = *payload.RiskAlrDeltaPp
+		}
+		if payload.RiskProfileVariationTolerancePct != nil {
+			s.RiskProfileVariationTolerancePct = *payload.RiskProfileVariationTolerancePct
 		}
 		s.RiskThresholdsUpdatedAt = &now
 		s.RiskThresholdsUpdatedBy = user.UserEmail

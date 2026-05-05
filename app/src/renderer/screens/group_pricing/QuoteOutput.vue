@@ -479,6 +479,7 @@ const quote: any = ref(null)
 const resultSummaries: any = ref([])
 const insurer: any = ref(null)
 const categoryEducatorBenefits: any = ref([])
+const riskProfileVariationTolerancePct = ref<number>(7)
 
 // const router = useRouter()
 
@@ -944,6 +945,18 @@ onMounted(async () => {
     insurer.value = res.data
     console.log('Insurer data:', insurer.value)
   })
+
+  GroupPricingService.getGroupPricingSettings()
+    .then((res) => {
+      const tol = Number(res.data?.risk_profile_variation_tolerance_pct)
+      if (Number.isFinite(tol) && tol > 0) {
+        riskProfileVariationTolerancePct.value = tol
+      }
+    })
+    .catch(() => {
+      // Fall back to the default seeded into the ref so quote generation
+      // still works if the settings endpoint is unreachable.
+    })
 })
 
 const exportBenefitDataToExcel = () => {
@@ -1254,6 +1267,21 @@ const buildSystemPdf = async (): Promise<any> => {
       return true // Indicates a break is needed
     }
     return false // No page break needed
+  }
+
+  // Keeps a heading + its following table together on the same page. If the
+  // estimated block height won't fit in the remaining space, force a new page
+  // first, with a little extra top padding so the section doesn't crowd the
+  // page chrome.
+  const ensureSectionFits = (
+    heightNeeded: number,
+    orientation: 'portrait' | 'landscape'
+  ) => {
+    if (checkPageBreak(doc, currentY, heightNeeded)) {
+      doc.addPage('a4', orientation)
+      addPageHeaderFooter(doc, doc.internal.getCurrentPageInfo().pageNumber)
+      currentY = topMargin + 8
+    }
   }
 
   let pageNumber = 1
@@ -1712,6 +1740,11 @@ const buildSystemPdf = async (): Promise<any> => {
   // **Premium Breakdown Table per category (resultSummaries)**
   doc.setTextColor(...colors.dark)
   resultSummaries.value.forEach((item, index) => {
+    if (checkPageBreak(doc, currentY, 90)) {
+      doc.addPage('a4', 'portrait')
+      addPageHeaderFooter(doc, doc.internal.getCurrentPageInfo().pageNumber)
+      currentY = topMargin
+    }
     currentY += 15
 
     // Category header with background
@@ -1812,6 +1845,8 @@ const buildSystemPdf = async (): Promise<any> => {
     }
 
     // Group Funeral subsection with styled header
+    // Heading + 3-row body table; keep them on the same page.
+    ensureSectionFits(50, 'portrait')
     doc.setTextColor(...colors.dark)
     doc.setFontSize(fonts.sizes.body)
     doc.setFont(fonts.primary, 'bold')
@@ -1858,9 +1893,7 @@ const buildSystemPdf = async (): Promise<any> => {
       didDrawPage: paintPageChrome
     })
 
-    // currentY = doc.lastAutoTable.finalY + 20
-
-    // No manual page break needed - smart detection handles this automatically
+    currentY = doc.lastAutoTable.finalY + 12
   })
 
   // doc.addPage('a4', 'landscape')
@@ -1869,15 +1902,9 @@ const buildSystemPdf = async (): Promise<any> => {
   // const landscapeContentWidth = landscapePageWidth - leftMargin * 2
   // addPageHeaderFooter(doc, pageNumber)
 
-  if (!hasAnyNonFuneralBenefits) {
-    console.log('Adding new page for Benefits and Definitions section')
-    doc.addPage('a4', 'landscape')
-    pageNumber++
-    addPageHeaderFooter(doc, pageNumber)
-    currentY = topMargin + 10
-  } else {
-    currentY = topMargin + 10
-  }
+  doc.addPage('a4', 'landscape')
+  addPageHeaderFooter(doc, doc.internal.getCurrentPageInfo().pageNumber)
+  currentY = topMargin + 10
 
   // Enhanced landscape page title
 
@@ -1894,12 +1921,9 @@ const buildSystemPdf = async (): Promise<any> => {
   doc.setTextColor(...colors.dark)
 
   quote.value.scheme_categories.forEach((item, index) => {
-    // const pageHeight = doc.internal.pageSize.getHeight()
-    // Only check for page break if we're very close to the bottom (conservative approach)
-    if (checkPageBreak(doc, currentY, 60)) {
+    if (checkPageBreak(doc, currentY, 120)) {
       doc.addPage('a4', 'landscape')
-      pageNumber++
-      addPageHeaderFooter(doc, pageNumber)
+      addPageHeaderFooter(doc, doc.internal.getCurrentPageInfo().pageNumber)
       currentY = topMargin
     }
 
@@ -1972,7 +1996,7 @@ const buildSystemPdf = async (): Promise<any> => {
       item.gla_waiting_period,
       'n.a',
       'n.a',
-      'n.a'
+      item.gla_benefit_type || 'n.a'
     ])
     categoryBenefitData.push([
       sglaBenefitTitle.value,
@@ -2065,11 +2089,12 @@ const buildSystemPdf = async (): Promise<any> => {
         },
         didDrawPage: paintPageChrome
       })
+      currentY = doc.lastAutoTable.finalY + 8
     }
-    // currentY = doc.lastAutoTable.finalY + 8
 
     // Group Funeral section with styled header
-    console.log('Adding Group Funeral section for category:', currentY)
+    // Heading + 5 body rows + header row; keep them on the same page.
+    ensureSectionFits(90, 'landscape')
     doc.setTextColor(...colors.dark)
     doc.setFontSize(fonts.sizes.body)
     doc.setFont(fonts.primary, 'bold')
@@ -2127,9 +2152,21 @@ const buildSystemPdf = async (): Promise<any> => {
     })
     currentY = doc.lastAutoTable.finalY + 8
 
-    // educator benefits
-    if (categoryEducatorBenefits.value.length > 0 && hasAnyNonFuneralBenefits) {
+    // educator benefits — only render if THIS category has them selected
+    const catEducatorItem = categoryEducatorBenefits.value.find(
+      (educatorBenefit) =>
+        educatorBenefit.scheme_category === item.scheme_category
+    )
+    const categoryHasEducatorBenefit =
+      hasAnyNonFuneralBenefits &&
+      (item.gla_educator_benefit === 'Yes' ||
+        item.ptd_educator_benefit === 'Yes') &&
+      !!catEducatorItem?.educator_benefit_structure
+
+    if (categoryHasEducatorBenefit) {
       // Educator Benefits section header
+      // Heading + header row + 4 body rows; keep them on the same page.
+      ensureSectionFits(75, 'landscape')
       doc.setTextColor(...colors.dark)
       doc.setFontSize(fonts.sizes.body)
       doc.setFont(fonts.primary, 'bold')
@@ -2144,39 +2181,32 @@ const buildSystemPdf = async (): Promise<any> => {
         ]
       ]
 
-      const catItem = categoryEducatorBenefits.value.find(
-        (educatorBenefit) =>
-          educatorBenefit.scheme_category === item.scheme_category
-      )
-
-      console.log('Educator Benefits for Category:', catItem)
-
       educatorBenefitsData.push(
         [
           'Grade 0',
-          catItem?.educator_benefit_structure.grade0_max_tuition_per_year ||
+          catEducatorItem?.educator_benefit_structure.grade0_max_tuition_per_year ||
             'n.a',
-          catItem?.educator_benefit_structure.grade0_max_coverage_years || 'n.a'
+          catEducatorItem?.educator_benefit_structure.grade0_max_coverage_years || 'n.a'
         ],
         [
           'Grade  1 - 7',
-          catItem?.educator_benefit_structure.grade17_max_tuition_per_year ||
+          catEducatorItem?.educator_benefit_structure.grade17_max_tuition_per_year ||
             'n.a',
-          catItem?.educator_benefit_structure.grade17_max_coverage_years ||
+          catEducatorItem?.educator_benefit_structure.grade17_max_coverage_years ||
             'n.a'
         ],
         [
           'Grade  8 - 12',
-          catItem?.educator_benefit_structure.grade812_max_tuition_per_year ||
+          catEducatorItem?.educator_benefit_structure.grade812_max_tuition_per_year ||
             'n.a',
-          catItem?.educator_benefit_structure.grade812_max_coverage_years ||
+          catEducatorItem?.educator_benefit_structure.grade812_max_coverage_years ||
             'n.a'
         ],
         [
           'Tertiary Education',
-          catItem?.educator_benefit_structure.tertiary_max_tuition_per_year ||
+          catEducatorItem?.educator_benefit_structure.tertiary_max_tuition_per_year ||
             'n.a',
-          catItem?.educator_benefit_structure.tertiary_max_coverage_years ||
+          catEducatorItem?.educator_benefit_structure.tertiary_max_coverage_years ||
             'n.a'
         ]
       )
@@ -2208,11 +2238,89 @@ const buildSystemPdf = async (): Promise<any> => {
         },
         didDrawPage: paintPageChrome
       })
-      if (hasAnyNonFuneralBenefits) {
-        currentY = doc.lastAutoTable.finalY + 30
-      }
+      currentY = doc.lastAutoTable.finalY + 15
     } else {
-      currentY += 30
+      // No educator section for this category — keep a uniform gap below the
+      // funeral table so layout stays consistent with categories that do show
+      // educator benefits.
+      currentY += 15
+    }
+
+    // Conversion Options subsection — only rendered if at least one toggle is selected
+    const conversionOptions: any[] = []
+    if (item.gla_conversion_on_withdrawal)
+      conversionOptions.push([glaBenefitTitle.value, 'Conversion on Withdrawal'])
+    if (item.gla_conversion_on_retirement)
+      conversionOptions.push([glaBenefitTitle.value, 'Conversion on Retirement'])
+    if (item.gla_continuity_during_disability)
+      conversionOptions.push([
+        glaBenefitTitle.value,
+        'Continuity During Disability'
+      ])
+    if (item.sgla_conversion_on_withdrawal)
+      conversionOptions.push([
+        sglaBenefitTitle.value,
+        'Conversion on Withdrawal'
+      ])
+    if (item.ptd_conversion_on_withdrawal)
+      conversionOptions.push([ptdBenefitTitle.value, 'Conversion on Withdrawal'])
+    if (item.ci_conversion_on_withdrawal)
+      conversionOptions.push([ciBenefitTitle.value, 'Conversion on Withdrawal'])
+    if (item.phi_conversion_on_withdrawal)
+      conversionOptions.push([phiBenefitTitle.value, 'Conversion on Withdrawal'])
+    if (item.ttd_conversion_on_withdrawal)
+      conversionOptions.push([ttdBenefitTitle.value, 'Conversion on Withdrawal'])
+    if (item.fun_conversion_on_withdrawal)
+      conversionOptions.push(['Group Funeral', 'Conversion on Withdrawal'])
+    if (item.gla_educator_conversion_on_withdrawal)
+      conversionOptions.push([glaEducatorLabel, 'Conversion on Withdrawal'])
+    if (item.gla_educator_conversion_on_retirement)
+      conversionOptions.push([glaEducatorLabel, 'Conversion on Retirement'])
+    if (item.gla_educator_continuity_during_disability)
+      conversionOptions.push([glaEducatorLabel, 'Continuity During Disability'])
+    if (item.ptd_educator_conversion_on_withdrawal)
+      conversionOptions.push([ptdEducatorLabel, 'Conversion on Withdrawal'])
+    if (item.ptd_educator_conversion_on_retirement)
+      conversionOptions.push([ptdEducatorLabel, 'Conversion on Retirement'])
+
+    if (conversionOptions.length > 0) {
+      // Heading + header row + N body rows; keep them on the same page.
+      const conversionBlockHeight = 24 + conversionOptions.length * 9
+      ensureSectionFits(conversionBlockHeight, 'landscape')
+
+      doc.setTextColor(...colors.dark)
+      doc.setFontSize(fonts.sizes.body)
+      doc.setFont(fonts.primary, 'bold')
+      doc.text('Conversion Options', leftMargin, currentY)
+      currentY += 4
+
+      doc.autoTable({
+        startY: currentY,
+        pageBreak: 'avoid',
+        rowPageBreak: 'avoid',
+        head: [['Benefit', 'Option']],
+        body: conversionOptions,
+        theme: 'grid',
+        headStyles: {
+          fillColor: colors.primary,
+          textColor: colors.white,
+          fontSize: fonts.sizes.caption,
+          fontStyle: 'bold',
+          halign: 'center'
+        },
+        styles: {
+          fontSize: fonts.sizes.caption,
+          cellPadding: { top: 3, right: 5, bottom: 3, left: 5 },
+          lineColor: colors.light,
+          lineWidth: 0.3
+        },
+        columnStyles: {
+          0: { fontStyle: 'bold', fillColor: [248, 249, 250] },
+          1: { fontStyle: 'normal' }
+        },
+        didDrawPage: paintPageChrome
+      })
+      currentY = doc.lastAutoTable.finalY + 12
     }
 
     // Smart page break detection handles this automatically
@@ -2369,8 +2477,11 @@ const buildSystemPdf = async (): Promise<any> => {
   currentY += sectionHeight + 38
 
   setFont(10, 'normal', darkGray)
-  const profileText =
-    'If the member data profile at the quotation implementation date differ by 7% or more from that on which the quotation was based, we reserve the right to revise the rates and Automatic Acceptance Limit. The Employer/Scheme will be notified accordingly and must provide acceptance before implementation proceeds.'
+  const tolerancePct = riskProfileVariationTolerancePct.value
+  const toleranceText = Number.isInteger(tolerancePct)
+    ? String(tolerancePct)
+    : String(parseFloat(tolerancePct.toFixed(2)))
+  const profileText = `If the member data profile at the quotation implementation date differ by ${toleranceText}% or more from that on which the quotation was based, we reserve the right to revise the rates and Automatic Acceptance Limit. The Employer/Scheme will be notified accordingly and must provide acceptance before implementation proceeds.`
   const splitprofile = doc.splitTextToSize(profileText, contentWidth - 2)
   const textOptions = { align: 'justify', maxWidth: contentWidth - 2 }
   doc.text(splitprofile, margin, currentY - 26, textOptions)

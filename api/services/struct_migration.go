@@ -399,6 +399,8 @@ func getStructType(structName string) (reflect.Type, error) {
 		return reflect.TypeOf(models.DiscountAuthority{}), nil
 	case "Restriction":
 		return reflect.TypeOf(models.Restriction{}), nil
+	case "ReinsuranceCoverRestriction":
+		return reflect.TypeOf(models.ReinsuranceCoverRestriction{}), nil
 	case "ReinsuranceGlaRate":
 		return reflect.TypeOf(models.ReinsuranceGlaRate{}), nil
 	case "ReinsuranceCiRate":

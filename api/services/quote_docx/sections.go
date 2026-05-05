@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"api/models"
+	"api/services"
 )
 
 // BuildCoverAndSummarySection builds the Cover and Summary section (Section 1)
@@ -536,10 +537,13 @@ func BuildAcceptanceFormSection(quote models.GroupPricingQuote) string {
 	})
 	buf.WriteString(policyTable)
 
-	// Profile notice
+	// Profile notice — tolerance percentage is sourced from the singleton
+	// GroupPricingSetting row so the wording stays in sync with the value
+	// configured in the Risk Watchlist Thresholds metadata panel.
 	buf.WriteString(spacerXML(160))
+	tolerancePct := services.GetRiskProfileVariationTolerancePct()
 	buf.WriteString(bodyTextXML(
-		"If the member data profile at the quotation implementation date differ by 7% or more from that on which the quotation was based, we reserve the right to revise the rates and Automatic Acceptance Limit. The Employer/Scheme will be notified accordingly and must provide acceptance before implementation proceeds.",
+		fmt.Sprintf("If the member data profile at the quotation implementation date differ by %s%% or more from that on which the quotation was based, we reserve the right to revise the rates and Automatic Acceptance Limit. The Employer/Scheme will be notified accordingly and must provide acceptance before implementation proceeds.", formatTolerancePct(tolerancePct)),
 		false,
 	))
 	buf.WriteString(bodyTextXML(
