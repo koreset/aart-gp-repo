@@ -72,6 +72,7 @@ export default {
     risk_alr_delta_pp?: number
     risk_profile_variation_tolerance_pct?: number
     medical_aid_waiver_method?: 'formula' | 'table_lookup'
+    ptd_base_rate_method?: 'ptd_only' | 'ptd_plus_gla_aids'
   }) {
     return Api.put('/group-pricing/settings', payload, {
       headers: {

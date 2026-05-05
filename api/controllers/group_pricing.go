@@ -3537,6 +3537,7 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 		RiskAlrDeltaPp                   *float64 `json:"risk_alr_delta_pp"`
 		RiskProfileVariationTolerancePct *float64 `json:"risk_profile_variation_tolerance_pct"`
 		MedicalAidWaiverMethod           *string  `json:"medical_aid_waiver_method"`
+		PtdBaseRateMethod                *string  `json:"ptd_base_rate_method"`
 	}
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
@@ -3558,6 +3559,12 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 		*payload.MedicalAidWaiverMethod != models.MedicalAidWaiverMethodFormula &&
 		*payload.MedicalAidWaiverMethod != models.MedicalAidWaiverMethodTableLookup {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid medical_aid_waiver_method"})
+		return
+	}
+	if payload.PtdBaseRateMethod != nil &&
+		*payload.PtdBaseRateMethod != models.PtdBaseRateMethodPtdOnly &&
+		*payload.PtdBaseRateMethod != models.PtdBaseRateMethodPtdPlusGlaAids {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid ptd_base_rate_method"})
 		return
 	}
 	if payload.FCLOverrideTolerance != nil &&
@@ -3593,6 +3600,7 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 			RiskAlrDeltaPp:                   20,
 			RiskProfileVariationTolerancePct: services.RiskProfileVariationToleranceDefault,
 			MedicalAidWaiverMethod:           models.MedicalAidWaiverMethodFormula,
+			PtdBaseRateMethod:                models.PtdBaseRateMethodPtdOnly,
 		}
 	}
 	now := time.Now()
@@ -3610,6 +3618,11 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 		s.MedicalAidWaiverMethod = *payload.MedicalAidWaiverMethod
 		s.MedicalAidWaiverMethodUpdatedAt = &now
 		s.MedicalAidWaiverMethodUpdatedBy = user.UserEmail
+	}
+	if payload.PtdBaseRateMethod != nil {
+		s.PtdBaseRateMethod = *payload.PtdBaseRateMethod
+		s.PtdBaseRateMethodUpdatedAt = &now
+		s.PtdBaseRateMethodUpdatedBy = user.UserEmail
 	}
 	if payload.FCLOverrideTolerance != nil {
 		s.FCLOverrideTolerance = *payload.FCLOverrideTolerance

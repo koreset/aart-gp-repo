@@ -97,6 +97,16 @@
 
               <v-expansion-panel>
                 <v-expansion-panel-title>
+                  <v-icon icon="mdi-calculator-variant" class="mr-2" />
+                  PTD Base Rate Calculation Method
+                </v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  <ptd-base-rate-method-settings />
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+
+              <v-expansion-panel>
+                <v-expansion-panel-title>
                   <v-icon icon="mdi-alert-octagon-outline" class="mr-2" />
                   Risk Watchlist Thresholds
                 </v-expansion-panel-title>
@@ -151,6 +161,7 @@ import BenefitsCustomization from '@/renderer/components/grouppricing/BenefitsCu
 import DiscountMethodSettings from '@/renderer/components/grouppricing/DiscountMethodSettings.vue'
 import FreeCoverLimitMethodSettings from '@/renderer/components/grouppricing/FreeCoverLimitMethodSettings.vue'
 import MedicalAidWaiverMethodSettings from '@/renderer/components/grouppricing/MedicalAidWaiverMethodSettings.vue'
+import PtdBaseRateMethodSettings from '@/renderer/components/grouppricing/PtdBaseRateMethodSettings.vue'
 import RiskWatchlistThresholdSettings from '@/renderer/components/grouppricing/RiskWatchlistThresholdSettings.vue'
 import QuoteTemplateManagement from '@/renderer/components/grouppricing/QuoteTemplateManagement.vue'
 import OnRiskLetterTemplateManagement from '@/renderer/components/grouppricing/OnRiskLetterTemplateManagement.vue'

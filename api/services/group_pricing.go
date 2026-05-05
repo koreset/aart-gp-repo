@@ -4141,6 +4141,19 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		} else {
 			memberDataPointResult.BasePtdRate = ptdRate * (1 + memberDataPointResult.PtdIndustryLoading + memberDataPointResult.PtdRegionLoading)
 		}
+		// Method B (ptd_plus_gla_aids): mirror the GLA pattern by adding a
+		// GLA-AIDS-rate component (with its own region loading multiplier) to
+		// BasePtdRate. Method A (ptd_only, default) leaves BasePtdRate as the
+		// pure PTD calculation above. Reuses GlaAidsQx if already fetched for
+		// the GLA benefit; otherwise fetches it here so the toggle works on
+		// PTD-only schemes too.
+		if GetPtdBaseRateMethod() == models.PtdBaseRateMethodPtdPlusGlaAids {
+			glaAidsQx := memberDataPointResult.GlaAidsQx
+			if glaAidsQx == 0 {
+				glaAidsQx = applyCoverAgeLimit(GetGlaAidsRate(&memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.PtdMaxCoverAge)
+			}
+			memberDataPointResult.BasePtdRate += glaAidsQx * (1 + memberDataPointResult.GlaAidsRegionLoading)
+		}
 		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate * (1 + memberDataPointResult.PtdContingencyLoading + memberDataPointResult.PtdVoluntaryLoading + memberDataPointResult.PtdConversionOnWithdrawalLoading + memberDataPointResult.PtdSchemeSizeLoading)
 	}
 
@@ -8886,6 +8899,22 @@ func GetMedicalAidWaiverMethod() string {
 		return models.MedicalAidWaiverMethodFormula
 	}
 	return s.MedicalAidWaiverMethod
+}
+
+// GetPtdBaseRateMethod returns the globally configured PTD base-rate methodology
+// from the GroupPricingSetting singleton row. Defaults to "ptd_only" (historical
+// behaviour: BasePtdRate uses ptd_rate alone, GLA AIDS rate is excluded) when
+// the row is missing or the column is empty so quotes computed before the
+// setting was introduced behave identically to historical output.
+func GetPtdBaseRateMethod() string {
+	var s models.GroupPricingSetting
+	if err := DB.First(&s, 1).Error; err != nil {
+		return models.PtdBaseRateMethodPtdOnly
+	}
+	if s.PtdBaseRateMethod == "" {
+		return models.PtdBaseRateMethodPtdOnly
+	}
+	return s.PtdBaseRateMethod
 }
 
 // FCLOverrideToleranceDefault is the headroom (as a fraction) allowed above

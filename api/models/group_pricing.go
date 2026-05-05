@@ -2540,6 +2540,13 @@ const (
 	MedicalAidWaiverMethodTableLookup = "table_lookup"
 )
 
+const (
+	// PtdBaseRateMethodPtdOnly: BasePtdRate = ptd_rate * (1 + Industry + Region) — historical behaviour.
+	// PtdBaseRateMethodPtdPlusGlaAids: BasePtdRate = ptd_rate * (1 + Industry + Region) + gla_aids_rate * (1 + GlaAidsRegionLoading).
+	PtdBaseRateMethodPtdOnly        = "ptd_only"
+	PtdBaseRateMethodPtdPlusGlaAids = "ptd_plus_gla_aids"
+)
+
 // GroupPricingSetting is a singleton table (one row, ID=1) holding global
 // group-pricing configuration toggles. Today it carries the discount
 // calculation method; future system-wide flags can be added here.
@@ -2555,6 +2562,9 @@ type GroupPricingSetting struct {
 	MedicalAidWaiverMethod          string     `json:"medical_aid_waiver_method" gorm:"size:32;not null;default:formula"`
 	MedicalAidWaiverMethodUpdatedAt *time.Time `json:"medical_aid_waiver_method_updated_at"`
 	MedicalAidWaiverMethodUpdatedBy string     `json:"medical_aid_waiver_method_updated_by"`
+	PtdBaseRateMethod               string     `json:"ptd_base_rate_method" gorm:"size:32;not null;default:ptd_only"`
+	PtdBaseRateMethodUpdatedAt      *time.Time `json:"ptd_base_rate_method_updated_at"`
+	PtdBaseRateMethodUpdatedBy      string     `json:"ptd_base_rate_method_updated_by"`
 	// Risk watchlist thresholds — drive the Performance & Risk dashboard's
 	// "Deteriorating Schemes" panel. RiskAlrCeilingPct flags any scheme whose
 	// ITD ALR exceeds this percentage; RiskAlrDeltaPp flags schemes where ITD
