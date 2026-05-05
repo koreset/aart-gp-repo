@@ -2425,7 +2425,6 @@ type GroupPricingParameters struct {
 	FreeCoverLimitScalingFactor        float64 `json:"free_cover_limit_scaling_factor" csv:"free_cover_limit_scaling_factor"`
 	FreeCoverLimitPercentile           float64 `json:"free_cover_limit_percentile" csv:"free_cover_limit_percentile"`
 	FreeCoverLimitNearestMultiple      float64 `json:"free_cover_limit_nearest_multiple" csv:"free_cover_limit_nearest_multiple"`
-	FCLMaximumCoverScalingFactor       float64 `json:"fcl_maximum_cover_scaling_factor" csv:"fcl_maximum_cover_scaling_factor"`
 	GlobalGlaExperienceRate            float64 `json:"global_gla_experience_rate" csv:"global_gla_experience_rate"`
 	GlobalPtdExperienceRate            float64 `json:"global_ptd_experience_rate" csv:"global_ptd_experience_rate"`
 	GlobalCiExperienceRate             float64 `json:"global_ci_experience_rate" csv:"global_ci_experience_rate"`

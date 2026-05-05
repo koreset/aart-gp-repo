@@ -33,18 +33,10 @@ export const groupPricing = [
     data_source_type: 'User Input'
   },
   {
-    data_variable: 'fcl_maximum_cover_scaling_factor',
-    data_type: 'number',
-    data_description:
-      'Multiplier applied to the largest member sum assured to derive an upper bound on the free cover limit when the Statistical Outlier method is in use. The final free cover limit is then capped at this product, alongside the scaled mean salary and the log-normal upper bound on sum assured. Only consulted when the system-wide free cover limit method is set to Statistical Outlier; ignored under the Percentile method.',
-    data_source: 'Group Pricing Parameter Table',
-    data_source_type: 'User Input'
-  },
-  {
     data_variable: 'maximum_allowed_fcl',
     data_type: 'number',
     data_description:
-      'Underwriting ceiling for user-set free cover limits, configured per risk rate. When a quote-level free cover limit is enforced, the system uses it as-is unless it exceeds this ceiling by more than the configured override tolerance, in which case the ceiling is used. A value of 0 means no ceiling is configured and quote-level overrides pass through unchanged. Applies under both the Percentile and Statistical Outlier calculation methods.',
+      'Underwriting ceiling for user-set free cover limits, configured per risk rate. The quote-level free cover limit is clamped at this ceiling under both the Percentile and Statistical Outlier calculation methods. A value of 0 means no ceiling is configured and quote-level overrides pass through unchanged.',
     data_source: 'Restrictions Table',
     data_source_type: 'User Input'
   },
@@ -52,7 +44,7 @@ export const groupPricing = [
     data_variable: 'fcl_override_tolerance',
     data_type: 'number',
     data_description:
-      'Fractional headroom (0–1) allowed above the maximum allowed free cover limit before a quote-level override is clamped. Configured system-wide alongside the free cover limit calculation method on the metadata configuration screen. A value of 0.2 means quote-level overrides up to 20% above the ceiling are honoured as-is; anything beyond is clamped to the ceiling.',
+      'Fractional headroom (0–1) used by the Statistical Outlier free cover limit method. Caps the calculated free cover limit at (1 + tolerance) × the largest member sum assured, and provides headroom for quote-level overrides above the data-derived thresholds before they are clamped. Configured system-wide alongside the free cover limit calculation method on the metadata configuration screen. Has no effect under the Percentile method.',
     data_source: 'Group Pricing Settings (singleton metadata)',
     data_source_type: 'User Input'
   },

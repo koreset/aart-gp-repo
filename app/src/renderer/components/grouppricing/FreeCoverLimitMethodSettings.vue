@@ -33,7 +33,7 @@
         <p class="text-body-2 text-medium-emphasis ml-8 mb-4">
           Free cover limit is the lesser of the scaled mean salary, the
           log-normal +3σ upper bound of sum assured (exp(μ + 3σ) of ln(SA)), and
-          the largest member sum assured times the maximum-cover scaling factor.
+          (1 + override tolerance) × the largest member sum assured.
         </p>
       </v-radio-group>
       <v-alert type="info" variant="tonal" density="compact" class="mb-4">
@@ -42,7 +42,9 @@
           directly — except where it exceeds the maximum allowed free cover
           limit (configured per risk rate on the Restrictions table) by more
           than the override tolerance below, in which case the limit is clamped.
-          This applies under both calculation methods.
+          The override tolerance only applies under the Statistical Outlier
+          method; under the Percentile method the quote-level free cover limit
+          is clamped directly at the maximum allowed free cover limit.
         </p>
       </v-alert>
       <v-text-field

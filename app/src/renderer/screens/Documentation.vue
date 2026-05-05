@@ -208,7 +208,6 @@ const SECTION_DEFS = [
       'free_cover_limit_scaling_factor',
       'free_cover_limit_percentile',
       'free_cover_limit_nearest_multiple',
-      'fcl_maximum_cover_scaling_factor',
       'free_cover_limit'
     ]
   },

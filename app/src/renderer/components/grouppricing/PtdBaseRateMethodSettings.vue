@@ -26,14 +26,19 @@
       <v-radio-group v-model="method" :disabled="loading" density="compact">
         <v-radio label="PTD only (default)" value="ptd_only"></v-radio>
         <p class="text-body-2 text-medium-emphasis ml-8 mb-4">
-          <code>BasePtdRate = ptd_rate × (1 + PtdIndustryLoading + PtdRegionLoading)</code>.
-          GLA AIDS rate is excluded — historical behaviour.
+          <code
+            >BasePtdRate = ptd_rate × (1 + PtdIndustryLoading +
+            PtdRegionLoading)</code
+          >. GLA AIDS rate is excluded — historical behaviour.
         </p>
         <v-radio label="PTD + GLA AIDS" value="ptd_plus_gla_aids"></v-radio>
         <p class="text-body-2 text-medium-emphasis ml-8 mb-4">
           Mirrors the GLA pattern by adding a separately-loaded GLA AIDS rate
           component:
-          <code>BasePtdRate = ptd_rate × (1 + PtdIndustryLoading + PtdRegionLoading) + gla_aids_rate × (1 + GlaAidsRegionLoading)</code>.
+          <code
+            >BasePtdRate = ptd_rate × (1 + PtdIndustryLoading +
+            PtdRegionLoading) + gla_aids_rate × (1 + GlaAidsRegionLoading)</code
+          >.
         </p>
       </v-radio-group>
       <div class="d-flex justify-end">
@@ -107,10 +112,8 @@ async function save() {
     const { data } = await GroupPricingService.updateGroupPricingSettings({
       ptd_base_rate_method: method.value
     })
-    updatedAt.value =
-      data?.ptd_base_rate_method_updated_at ?? updatedAt.value
-    updatedBy.value =
-      data?.ptd_base_rate_method_updated_by ?? updatedBy.value
+    updatedAt.value = data?.ptd_base_rate_method_updated_at ?? updatedAt.value
+    updatedBy.value = data?.ptd_base_rate_method_updated_by ?? updatedBy.value
     flash.show('PTD base rate method saved', 'success')
   } catch (err: any) {
     flash.show(

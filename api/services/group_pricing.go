@@ -1787,8 +1787,8 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 			maximumSumAssured, _ = stats.Max(salaryData)
 
 			rawFCL = math.Min(scalingTerm, statisticalOutlierThreshold)
-			if groupParameter.FCLMaximumCoverScalingFactor > 0 {
-				rawFCL = math.Min(rawFCL, maximumSumAssured*groupParameter.FCLMaximumCoverScalingFactor)
+			if fclOverrideTolerance > 0 {
+				rawFCL = math.Min(rawFCL, (1+fclOverrideTolerance)*maximumSumAssured)
 			}
 		default:
 			// Percentile method (existing behaviour, default).
@@ -1807,7 +1807,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		if groupQuote.FreeCoverLimit > 0 {
 			switch GetFCLMethod() {
 			case models.FCLMethodOutlier:
-				maxthreshold1 := math.Max(statisticalOutlierThreshold, maximumSumAssured*groupParameter.FCLMaximumCoverScalingFactor)
+				maxthreshold1 := math.Max(statisticalOutlierThreshold, (1+fclOverrideTolerance)*maximumSumAssured)
 				maxthrehold2 := math.Max(scalingTerm, maxthreshold1)
 
 				if groupQuote.FreeCoverLimit > (1+fclOverrideTolerance)*maxthrehold2 {
