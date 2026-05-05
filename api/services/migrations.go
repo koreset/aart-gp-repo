@@ -449,6 +449,7 @@ func MigrateGroupPricingTables() error {
 		&models.BordereauxTimeline{},
 		&models.BordereauxConfiguration{},
 		&models.BordereauxConfirmation{},
+		&models.BordereauxConfirmationNote{},
 		&models.BordereauxConfirmationRecord{},
 		&models.BordereauxReconciliationResult{},
 		&models.SchemeType{},
@@ -470,6 +471,12 @@ func MigrateGroupPricingTables() error {
 		&models.EmailTemplate{},
 		&models.EmailOutbox{},
 		&models.GroupPricingSetting{},
+		// Generic table-requirement framework (also auto-migrated lazily by
+		// services.EnsureTableConfigurations on every boot). Listed here so a
+		// fresh install creates these in the same bootstrap pass as everything
+		// else, instead of relying on the post-SetupTables call.
+		&models.TableConfiguration{},
+		&models.TableConfigurationAuditLog{},
 	)
 
 	if err != nil {
@@ -566,6 +573,10 @@ func MigratePhiValuationTables() error {
 		&models.PhiScopedAggregatedProjections{},
 		&models.PhiRunParameters{},
 		&models.PhiRunConfig{},
+		// Job envelope for PHI projection runs. Holds the user, the AppUser
+		// snapshot, and the list of PhiRunParameters that the engine iterates
+		// over. Used by services.RunPhiProjection (see services/phi_valuations.go).
+		&models.RunPhiJob{},
 	)
 
 	if err != nil {
