@@ -1048,6 +1048,14 @@ type MemberRatingResult struct {
 	PhiVoluntaryLoading float64 `json:"phi_voluntary_loading" csv:"phi_voluntary_loading"`
 	FunVoluntaryLoading float64 `json:"fun_voluntary_loading" csv:"fun_voluntary_loading"`
 
+	// Scheme-size loadings (resolved per quote from SchemeSizeLevel table by member-count band)
+	GlaSchemeSizeLoading float64 `json:"gla_scheme_size_loading" csv:"gla_scheme_size_loading"`
+	PtdSchemeSizeLoading float64 `json:"ptd_scheme_size_loading" csv:"ptd_scheme_size_loading"`
+	CiSchemeSizeLoading  float64 `json:"ci_scheme_size_loading" csv:"ci_scheme_size_loading"`
+	TtdSchemeSizeLoading float64 `json:"ttd_scheme_size_loading" csv:"ttd_scheme_size_loading"`
+	PhiSchemeSizeLoading float64 `json:"phi_scheme_size_loading" csv:"phi_scheme_size_loading"`
+	FunSchemeSizeLoading float64 `json:"fun_scheme_size_loading" csv:"fun_scheme_size_loading"`
+
 	GlaTerminalIllnessLoading float64 `json:"gla_terminal_illness_loading" csv:"gla_terminal_illness_loading"`
 	TaxSaverLoading           float64 `json:"tax_saver_loading" csv:"tax_saver_loading"`
 	SpouseGlaLoading          float64 `json:"spouse_gla_loading" csv:"spouse_gla_loading"`
@@ -1215,6 +1223,10 @@ type MemberRatingResult struct {
 	GlaContinuityDuringDisabilityRiskPremium       float64 `json:"gla_continuity_during_disability_risk_premium" csv:"gla_continuity_during_disability_risk_premium" gorm:"column:gla_cont_dur_dis_risk_premium"`
 	ExpAdjGlaContinuityDuringDisabilityRiskPremium float64 `json:"exp_adj_gla_continuity_during_disability_risk_premium" csv:"exp_adj_gla_continuity_during_disability_risk_premium" gorm:"column:exp_adj_gla_cont_dur_dis_risk_premium"`
 
+	// Educator base loading — folded into the educator multiplier alongside
+	// the educator conversion / continuity slice loadings in computeEducatorLoadedRates.
+	GlaEducatorLoading float64 `json:"gla_educator_loading" csv:"gla_educator_loading"`
+
 	GlaEducatorConversionOnWithdrawalLoading           float64 `json:"gla_educator_conversion_on_withdrawal_loading" csv:"gla_educator_conversion_on_withdrawal_loading" gorm:"column:gla_ed_conv_on_wdr_loading"`
 	GlaEducatorConversionOnWithdrawalRiskPremium       float64 `json:"gla_educator_conversion_on_withdrawal_risk_premium" csv:"gla_educator_conversion_on_withdrawal_risk_premium" gorm:"column:gla_ed_conv_on_wdr_risk_premium"`
 	ExpAdjGlaEducatorConversionOnWithdrawalRiskPremium float64 `json:"exp_adj_gla_educator_conversion_on_withdrawal_risk_premium" csv:"exp_adj_gla_educator_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_gla_ed_conv_on_wdr_risk_prem"`
@@ -1230,6 +1242,10 @@ type MemberRatingResult struct {
 	PtdConversionOnWithdrawalLoading           float64 `json:"ptd_conversion_on_withdrawal_loading" csv:"ptd_conversion_on_withdrawal_loading" gorm:"column:ptd_conv_on_wdr_loading"`
 	PtdConversionOnWithdrawalRiskPremium       float64 `json:"ptd_conversion_on_withdrawal_risk_premium" csv:"ptd_conversion_on_withdrawal_risk_premium" gorm:"column:ptd_conv_on_wdr_risk_premium"`
 	ExpAdjPtdConversionOnWithdrawalRiskPremium float64 `json:"exp_adj_ptd_conversion_on_withdrawal_risk_premium" csv:"exp_adj_ptd_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_ptd_conv_on_wdr_risk_premium"`
+
+	// Educator base loading — folded into the PTD educator multiplier in
+	// computeEducatorLoadedRates.
+	PtdEducatorLoading float64 `json:"ptd_educator_loading" csv:"ptd_educator_loading"`
 
 	PtdEducatorConversionOnWithdrawalLoading           float64 `json:"ptd_educator_conversion_on_withdrawal_loading" csv:"ptd_educator_conversion_on_withdrawal_loading" gorm:"column:ptd_ed_conv_on_wdr_loading"`
 	PtdEducatorConversionOnWithdrawalRiskPremium       float64 `json:"ptd_educator_conversion_on_withdrawal_risk_premium" csv:"ptd_educator_conversion_on_withdrawal_risk_premium" gorm:"column:ptd_ed_conv_on_wdr_risk_premium"`
@@ -2528,14 +2544,14 @@ const (
 // group-pricing configuration toggles. Today it carries the discount
 // calculation method; future system-wide flags can be added here.
 type GroupPricingSetting struct {
-	ID                      int        `json:"id" gorm:"primaryKey"`
-	DiscountMethod          string     `json:"discount_method" gorm:"size:32;not null;default:loading_adjustment"`
-	DiscountMethodUpdatedAt *time.Time `json:"discount_method_updated_at"`
-	DiscountMethodUpdatedBy string     `json:"discount_method_updated_by"`
-	FCLMethod               string     `json:"fcl_method" gorm:"size:32;not null;default:percentile"`
-	FCLMethodUpdatedAt      *time.Time `json:"fcl_method_updated_at"`
-	FCLMethodUpdatedBy      string     `json:"fcl_method_updated_by"`
-	FCLOverrideTolerance    float64    `json:"fcl_override_tolerance" gorm:"not null;default:0.2"`
+	ID                              int        `json:"id" gorm:"primaryKey"`
+	DiscountMethod                  string     `json:"discount_method" gorm:"size:32;not null;default:loading_adjustment"`
+	DiscountMethodUpdatedAt         *time.Time `json:"discount_method_updated_at"`
+	DiscountMethodUpdatedBy         string     `json:"discount_method_updated_by"`
+	FCLMethod                       string     `json:"fcl_method" gorm:"size:32;not null;default:percentile"`
+	FCLMethodUpdatedAt              *time.Time `json:"fcl_method_updated_at"`
+	FCLMethodUpdatedBy              string     `json:"fcl_method_updated_by"`
+	FCLOverrideTolerance            float64    `json:"fcl_override_tolerance" gorm:"not null;default:0.2"`
 	MedicalAidWaiverMethod          string     `json:"medical_aid_waiver_method" gorm:"size:32;not null;default:formula"`
 	MedicalAidWaiverMethodUpdatedAt *time.Time `json:"medical_aid_waiver_method_updated_at"`
 	MedicalAidWaiverMethodUpdatedBy string     `json:"medical_aid_waiver_method_updated_by"`
@@ -2552,8 +2568,8 @@ type GroupPricingSetting struct {
 	RiskProfileVariationTolerancePct float64    `json:"risk_profile_variation_tolerance_pct" gorm:"not null;default:7"`
 	RiskThresholdsUpdatedAt          *time.Time `json:"risk_thresholds_updated_at"`
 	RiskThresholdsUpdatedBy          string     `json:"risk_thresholds_updated_by"`
-	UpdatedAt               time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
-	UpdatedBy               string     `json:"updated_by"`
+	UpdatedAt                        time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
+	UpdatedBy                        string     `json:"updated_by"`
 }
 
 // InsurerQuoteTemplate represents a custom DOCX template uploaded by an insurer
@@ -2780,6 +2796,12 @@ type GeneralLoading struct {
 	ContinuationLoadingRate    float64 `json:"continuation_loading_rate" csv:"continuation_loading_rate"`
 	TerminalIllnessLoadingRate float64 `json:"terminal_illness_loading_rate" csv:"terminal_illness_loading_rate"`
 	TaxSaverLoadingRate        float64 `json:"tax_saver_loading_rate" csv:"tax_saver_loading_rate"`
+
+	// Educator base loadings — folded into the educator multiplier in
+	// computeEducatorLoadedRates alongside the educator conversion / continuity
+	// slice loadings. Per-(risk_rate_code, age, gender) like the rest of the row.
+	GlaEducatorLoadingRate float64 `json:"gla_educator_loading_rate" csv:"gla_educator_loading_rate"`
+	PtdEducatorLoadingRate float64 `json:"ptd_educator_loading_rate" csv:"ptd_educator_loading_rate"`
 
 	// Conversion / continuity slice loading rates. Each is added to its
 	// respective Loaded*Rate chain only when the corresponding SchemeCategory
@@ -3080,11 +3102,17 @@ type PremiumLoading struct {
 }
 
 type SchemeSizeLevel struct {
-	ID           int       `json:"id" gorm:"primary_key"`
-	RiskRateCode string    `json:"risk_rate_code" csv:"risk_rate_code"`
-	MinCount     int       `json:"min_count" csv:"min_count"`
-	MaxCount     int       `json:"max_count" csv:"max_count"`
-	SizeLevel    int       `json:"size_level" csv:"size_level"`
+	ID             int       `json:"id" gorm:"primary_key"`
+	RiskRateCode   string    `json:"risk_rate_code" csv:"risk_rate_code"`
+	MinCount       int       `json:"min_count" csv:"min_count"`
+	MaxCount       int       `json:"max_count" csv:"max_count"`
+	SizeLevel      int       `json:"size_level" csv:"size_level"`
+	GlaLoading   float64   `json:"gla_loading" csv:"gla_loading"`
+	PtdLoading   float64   `json:"ptd_loading" csv:"ptd_loading"`
+	CiLoading    float64   `json:"ci_loading" csv:"ci_loading"`
+	PhiLoading   float64   `json:"phi_loading" csv:"phi_loading"`
+	TtdLoading   float64   `json:"ttd_loading" csv:"ttd_loading"`
+	FunLoading   float64   `json:"funeral_loading" csv:"funeral_loading"`
 	CreationDate time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy    string    `json:"created_by" csv:"created_by"`
 }

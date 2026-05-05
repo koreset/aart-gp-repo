@@ -1056,7 +1056,8 @@ func CalculateGroupPricingQuote(quoteId string, basis string, credibility float6
 
 	// Determine scheme size level once for this quote before spawning category workers.
 	tempParam := models.GroupPricingParameters{RiskRateCode: groupQuote.RiskRateCode}
-	schemeSizeLevel := GetSchemeSizeLevel(tempParam, groupQuote.MemberDataCount)
+	schemeSizeRow := GetSchemeSizeLoading(tempParam, groupQuote.MemberDataCount)
+	schemeSizeLevel := schemeSizeRow.SizeLevel
 	logger.WithField("scheme_size_level", schemeSizeLevel).Debug("Determined scheme size level")
 
 	totalCategories := len(groupQuote.SelectedSchemeCategories)
@@ -1083,7 +1084,7 @@ func CalculateGroupPricingQuote(quoteId string, basis string, credibility float6
 	for _, selectedSchemeCategory := range groupQuote.SelectedSchemeCategories {
 		selectedSchemeCategory := selectedSchemeCategory // capture range variable
 		categoryWorkerPool.Submit(func() {
-			err2 := calculateForCategory(quoteId, basis, credibility, user, logger, groupQuote, dbStartTime, dbElapsed, selectedSchemeCategory, taxTable, taxRetirementBands, tieredIncomeTiers, customTieredIncomeTiers, schemeSizeLevel, emitProgress)
+			err2 := calculateForCategory(quoteId, basis, credibility, user, logger, groupQuote, dbStartTime, dbElapsed, selectedSchemeCategory, taxTable, taxRetirementBands, tieredIncomeTiers, customTieredIncomeTiers, schemeSizeLevel, schemeSizeRow, emitProgress)
 			if err2 != nil {
 				logger.WithField("error", err2.Error()).Error("Error calculating for scheme category")
 			}
@@ -1129,7 +1130,7 @@ func CalculateGroupPricingQuote(quoteId string, basis string, credibility float6
 	return nil
 }
 
-func calculateForCategory(quoteId string, basis string, credibility float64, user models.AppUser, logger *logrus.Entry, groupQuote models.GroupPricingQuote, dbStartTime time.Time, dbElapsed time.Duration, selectedSchemeCategory string, taxTable []models.TaxTable, taxRetirementBands []models.TaxRetirementTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, schemeSizeLevel int, emitProgress func(category, phase string)) error {
+func calculateForCategory(quoteId string, basis string, credibility float64, user models.AppUser, logger *logrus.Entry, groupQuote models.GroupPricingQuote, dbStartTime time.Time, dbElapsed time.Duration, selectedSchemeCategory string, taxTable []models.TaxTable, taxRetirementBands []models.TaxRetirementTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, schemeSizeLevel int, schemeSizeRow models.SchemeSizeLevel, emitProgress func(category, phase string)) error {
 	var memberMps []models.GPricingMemberData
 	var indicativeMemberMps []models.MemberIndicativeDataSet
 	var experienceMemberMps []models.GPricingMemberData
@@ -1863,7 +1864,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	for idx, mp := range memberMps {
 		idx, mp := idx, mp
 		rateWorkerPool.Submit(func() {
-			rateResults[idx] = PopulateRatesPerMember(categoryIndex, indicativeRatesCount, indicativeMemberMps, selectedSchemeCategory, mp, groupQuote, groupParameter, groupPricingReinsuranceStructure, incomeLevels, ageBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit, educatorBenefitStructure, credibility, glaTheoreticalRate, insurerYearEndMonth, user, restriction, reinsCoverCaps, taxTable, taxRetirementBands, tieredIncomeTiers, customTieredIncomeTiers, premiumLoading, regionLoadingByGender, industryLoadingByGender, reinsRegionLoadingByGender, categoryExperienceOverrides)
+			rateResults[idx] = PopulateRatesPerMember(categoryIndex, indicativeRatesCount, indicativeMemberMps, selectedSchemeCategory, mp, groupQuote, groupParameter, groupPricingReinsuranceStructure, incomeLevels, ageBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit, educatorBenefitStructure, credibility, glaTheoreticalRate, insurerYearEndMonth, user, restriction, reinsCoverCaps, taxTable, taxRetirementBands, tieredIncomeTiers, customTieredIncomeTiers, premiumLoading, regionLoadingByGender, industryLoadingByGender, reinsRegionLoadingByGender, categoryExperienceOverrides, schemeSizeRow)
 		})
 	}
 	rateWorkerPool.StopWait()
@@ -2645,6 +2646,7 @@ func resolveConvContLoadings(m *models.MemberRatingResult, sc *models.SchemeCate
 			m.GlaContinuityDuringDisabilityLoading = gl.GlaContinuityDuringDisabilityLoadingRate
 		}
 		if sc.GlaEducatorBenefit == "Yes" {
+			m.GlaEducatorLoading = gl.GlaEducatorLoadingRate
 			if sc.GlaEducatorConversionOnWithdrawal {
 				m.GlaEducatorConversionOnWithdrawalLoading = gl.GlaEducatorConversionOnWithdrawalLoadingRate
 			}
@@ -2661,6 +2663,7 @@ func resolveConvContLoadings(m *models.MemberRatingResult, sc *models.SchemeCate
 			m.PtdConversionOnWithdrawalLoading = gl.PtdConversionOnWithdrawalLoadingRate
 		}
 		if sc.PtdEducatorBenefit == "Yes" {
+			m.PtdEducatorLoading = gl.PtdEducatorLoadingRate
 			if sc.PtdEducatorConversionOnWithdrawal {
 				m.PtdEducatorConversionOnWithdrawalLoading = gl.PtdEducatorConversionOnWithdrawalLoadingRate
 			}
@@ -2691,13 +2694,15 @@ func resolveConvContLoadings(m *models.MemberRatingResult, sc *models.SchemeCate
 // Must be called after LoadedGlaRate, ExpAdjLoadedGlaRate, LoadedPtdRate
 // and ExpAdjLoadedPtdRate are set for the member.
 func computeEducatorLoadedRates(m *models.MemberRatingResult) {
-	edGlaMul := 1.0 + m.GlaEducatorConversionOnWithdrawalLoading +
+	edGlaMul := 1.0 + m.GlaEducatorLoading +
+		m.GlaEducatorConversionOnWithdrawalLoading +
 		m.GlaEducatorConversionOnRetirementLoading +
 		m.GlaEducatorContinuityDuringDisabilityLoading
 	m.LoadedGlaEducatorRate = m.LoadedGlaRate * edGlaMul
 	m.ExpAdjLoadedGlaEducatorRate = m.ExpAdjLoadedGlaRate * edGlaMul
 
-	edPtdMul := 1.0 + m.PtdEducatorConversionOnWithdrawalLoading +
+	edPtdMul := 1.0 + m.PtdEducatorLoading +
+		m.PtdEducatorConversionOnWithdrawalLoading +
 		m.PtdEducatorConversionOnRetirementLoading
 	m.LoadedPtdEducatorRate = m.LoadedPtdRate * edPtdMul
 	m.ExpAdjLoadedPtdEducatorRate = m.ExpAdjLoadedPtdRate * edPtdMul
@@ -3801,7 +3806,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	}
 }
 
-func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMemberMps []models.MemberIndicativeDataSet, selectedSchemeCategory string, mp models.GPricingMemberData, groupQuote models.GroupPricingQuote, groupParameter models.GroupPricingParameters, groupPricingReinsuranceStructure models.GroupPricingReinsuranceStructure, incomeLevels []models.IncomeLevel, ageBands []models.GroupPricingAgeBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit float64, educatorBenefitStructure models.EducatorBenefitStructure, credibility, glatheoreticalRate float64, insurerYearEndMonth int, user models.AppUser, restriction models.Restriction, reinsCoverCaps map[string]float64, taxTable []models.TaxTable, taxRetirementBands []models.TaxRetirementTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, premiumLoading models.PremiumLoading, regionLoadingByGender map[string]models.RegionLoading, industryLoadingByGender map[string]models.IndustryLoading, reinsRegionLoadingByGender map[string]models.ReinsuranceRegionLoading, experienceRateOverrides map[string]models.GroupPricingExperienceRateOverride) MemberRateResult {
+func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMemberMps []models.MemberIndicativeDataSet, selectedSchemeCategory string, mp models.GPricingMemberData, groupQuote models.GroupPricingQuote, groupParameter models.GroupPricingParameters, groupPricingReinsuranceStructure models.GroupPricingReinsuranceStructure, incomeLevels []models.IncomeLevel, ageBands []models.GroupPricingAgeBands, credibilityRate, annualGlaExperienceWeightedRate, annualPtdExperienceWeightedRate, annualCiExperienceWeightedRate, calculatedFreeCoverLimit float64, educatorBenefitStructure models.EducatorBenefitStructure, credibility, glatheoreticalRate float64, insurerYearEndMonth int, user models.AppUser, restriction models.Restriction, reinsCoverCaps map[string]float64, taxTable []models.TaxTable, taxRetirementBands []models.TaxRetirementTable, tieredIncomeTiers []models.TieredIncomeReplacement, customTieredIncomeTiers []models.TieredIncomeReplacement, premiumLoading models.PremiumLoading, regionLoadingByGender map[string]models.RegionLoading, industryLoadingByGender map[string]models.IndustryLoading, reinsRegionLoadingByGender map[string]models.ReinsuranceRegionLoading, experienceRateOverrides map[string]models.GroupPricingExperienceRateOverride, schemeSizeRow models.SchemeSizeLevel) MemberRateResult {
 
 	var memberDataPointResult models.MemberRatingResult
 	var memberPremiumScheduleDatapoint models.MemberPremiumSchedule
@@ -4101,6 +4106,16 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.PhiContingencyLoading = gl3.PhiContigencyLoadingRate
 	memberDataPointResult.FunContingencyLoading = gl3.FunContigencyLoadingRate
 
+	// Scheme-size loadings (resolved once per quote from the SchemeSizeLevel
+	// row matching the quote's MemberDataCount). Folded into each benefit's
+	// LoadedRate multiplier below.
+	memberDataPointResult.GlaSchemeSizeLoading = schemeSizeRow.GlaLoading
+	memberDataPointResult.PtdSchemeSizeLoading = schemeSizeRow.PtdLoading
+	memberDataPointResult.CiSchemeSizeLoading = schemeSizeRow.CiLoading
+	memberDataPointResult.TtdSchemeSizeLoading = schemeSizeRow.TtdLoading
+	memberDataPointResult.PhiSchemeSizeLoading = schemeSizeRow.PhiLoading
+	memberDataPointResult.FunSchemeSizeLoading = schemeSizeRow.FunLoading
+
 	// Voluntary loadings only apply when the quote's obligation type is
 	// Voluntary; otherwise they stay zero.
 	if groupQuote.ObligationType == "Voluntary" {
@@ -4117,7 +4132,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	}
 	resolveConvContLoadings(&memberDataPointResult, &groupQuote.SchemeCategories[i], &gl3)
 
-	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.GlaContinuityDuringDisabilityLoading + memberDataPointResult.GlaConversionOnWithdrawalLoading + memberDataPointResult.GlaConversionOnRetirementLoading)
+	memberDataPointResult.LoadedGlaRate = memberDataPointResult.BaseGlaRate * (1 + memberDataPointResult.GlaContingencyLoading + memberDataPointResult.GlaVoluntaryLoading + memberDataPointResult.GlaTerminalIllnessLoading + memberDataPointResult.GlaContinuityDuringDisabilityLoading + memberDataPointResult.GlaConversionOnWithdrawalLoading + memberDataPointResult.GlaConversionOnRetirementLoading + memberDataPointResult.GlaSchemeSizeLoading)
 
 	if groupQuote.SchemeCategories[i].PtdBenefit {
 		ptdRate := applyCoverAgeLimit(GetPtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel), memberDataPointResult.AgeNextBirthday, restriction.PtdMaxCoverAge)
@@ -4126,20 +4141,20 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		} else {
 			memberDataPointResult.BasePtdRate = ptdRate * (1 + memberDataPointResult.PtdIndustryLoading + memberDataPointResult.PtdRegionLoading)
 		}
-		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate * (1 + memberDataPointResult.PtdContingencyLoading + memberDataPointResult.PtdVoluntaryLoading + memberDataPointResult.PtdConversionOnWithdrawalLoading)
+		memberDataPointResult.LoadedPtdRate = memberDataPointResult.BasePtdRate * (1 + memberDataPointResult.PtdContingencyLoading + memberDataPointResult.PtdVoluntaryLoading + memberDataPointResult.PtdConversionOnWithdrawalLoading + memberDataPointResult.PtdSchemeSizeLoading)
 	}
 
 	if groupQuote.SchemeCategories[i].TtdBenefit {
 		ttdRate := applyCoverAgeLimit(GetTtdRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel), memberDataPointResult.AgeNextBirthday, restriction.TtdMaxCoverAge)
 		memberDataPointResult.BaseTtdRate = ttdRate * (1 + memberDataPointResult.TtdIndustryLoading + memberDataPointResult.TtdRegionLoading)
-		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate * (1 + memberDataPointResult.TtdContingencyLoading + memberDataPointResult.TtdVoluntaryLoading + memberDataPointResult.TtdConversionOnWithdrawalLoading)
+		memberDataPointResult.LoadedTtdRate = memberDataPointResult.BaseTtdRate * (1 + memberDataPointResult.TtdContingencyLoading + memberDataPointResult.TtdVoluntaryLoading + memberDataPointResult.TtdConversionOnWithdrawalLoading + memberDataPointResult.TtdSchemeSizeLoading)
 	}
 
 	if groupQuote.SchemeCategories[i].PhiBenefit {
 		phiRate := applyCoverAgeLimit(GetPhiRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel), memberDataPointResult.AgeNextBirthday, restriction.PhiMaxCoverAge)
 		memberDataPointResult.PhiSalaryLevel = float64(mpIncomeLevel)
 		memberDataPointResult.BasePhiRate = phiRate * (1 + memberDataPointResult.PhiIndustryLoading + memberDataPointResult.PhiRegionLoading)
-		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate * (1 + memberDataPointResult.PhiContingencyLoading + memberDataPointResult.PhiVoluntaryLoading + memberDataPointResult.PhiConversionOnWithdrawalLoading)
+		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate * (1 + memberDataPointResult.PhiContingencyLoading + memberDataPointResult.PhiVoluntaryLoading + memberDataPointResult.PhiConversionOnWithdrawalLoading + memberDataPointResult.PhiSchemeSizeLoading)
 	}
 
 	if groupQuote.SchemeCategories[i].CiBenefit {
@@ -4149,7 +4164,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		} else {
 			memberDataPointResult.BaseCiRate = ciRate * (1 + memberDataPointResult.CiIndustryLoading + memberDataPointResult.CiRegionLoading)
 		}
-		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate * (1 + memberDataPointResult.CiContingencyLoading + memberDataPointResult.CiVoluntaryLoading + memberDataPointResult.CiConversionOnWithdrawalLoading)
+		memberDataPointResult.LoadedCiRate = memberDataPointResult.BaseCiRate * (1 + memberDataPointResult.CiContingencyLoading + memberDataPointResult.CiVoluntaryLoading + memberDataPointResult.CiConversionOnWithdrawalLoading + memberDataPointResult.CiSchemeSizeLoading)
 	}
 
 	if groupQuote.SchemeCategories[i].SglaBenefit && len(memberDataPointResult.SpouseGender) > 0 {
@@ -4331,7 +4346,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.ChildFuneralRiskPremium = memberDataPointResult.ChildFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralChildrenFuneralSumAssured * math.Min(memberDataPointResult.AverageNumberChildren, float64(groupQuote.SchemeCategories[i].FamilyFuneralMaxNumberChildren))
 	memberDataPointResult.ParentFuneralRiskPremium = memberDataPointResult.ParentFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured * memberDataPointResult.AverageNumberDependants
 
-	memberDataPointResult.TotalFuneralRiskPremium = (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
+	memberDataPointResult.TotalFuneralRiskPremium = (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading + memberDataPointResult.FunSchemeSizeLoading)
 	memberDataPointResult.TotalFuneralOfficePremium = memberDataPointResult.TotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
 
 	// Derive LoadedGla/PtdEducatorRate now that the parent LoadedRates are
@@ -4391,7 +4406,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.ExpAdjCiRiskPremium = memberDataPointResult.ExpAdjLoadedCiRate * memberDataPointResult.CiCappedSumAssured
 	memberDataPointResult.ExpAdjSpouseGlaRiskPremium = memberDataPointResult.ExpAdjLoadedSpouseGlaRate * memberDataPointResult.SpouseGlaCappedSumAssured
 
-	memberDataPointResult.ExpAdjTotalFuneralRiskPremium = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
+	memberDataPointResult.ExpAdjTotalFuneralRiskPremium = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading + memberDataPointResult.FunSchemeSizeLoading)
 	memberDataPointResult.ExpAdjTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
 	memberDataPointResult.FinalTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - (memberDataPointResult.TotalPremiumLoading + discountFraction))
 
@@ -8771,7 +8786,12 @@ func applyBinderOutsourceAmounts(r *models.MemberRatingResult, quote *models.Gro
 		r.GlaEducatorOutsourcedAmount + r.PtdEducatorOutsourcedAmount
 }
 
-func GetSchemeSizeLevel(groupPricingParameter models.GroupPricingParameters, memberCount int) int {
+// GetSchemeSizeLoading returns the SchemeSizeLevel row matching the quote's
+// member count band for the given risk_rate_code. Caches the full row so the
+// per-benefit loadings (gla_loading, ptd_loading, …) and the size_level can be
+// read with a single DB hit. Returns a zero-value struct when no band matches —
+// callers can read SizeLevel and the *Loading fields safely (they'll be 0).
+func GetSchemeSizeLoading(groupPricingParameter models.GroupPricingParameters, memberCount int) models.SchemeSizeLevel {
 	tableName := "scheme_size_levels"
 
 	var keyString strings.Builder
@@ -8779,9 +8799,9 @@ func GetSchemeSizeLevel(groupPricingParameter models.GroupPricingParameters, mem
 	keyString.WriteString(strconv.Itoa(memberCount) + "_")
 	key := keyString.String()
 
-	cacheKey := tableName + "_" + key
+	cacheKey := tableName + "_row_" + key
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
-		return cached.(int)
+		return cached.(models.SchemeSizeLevel)
 	}
 
 	var schemeSizeLevel models.SchemeSizeLevel
@@ -8794,12 +8814,16 @@ func GetSchemeSizeLevel(groupPricingParameter models.GroupPricingParameters, mem
 		First(&schemeSizeLevel).Error
 	if err != nil {
 		fmt.Println(err)
-		GroupPricingCache.Set(cacheKey, 0, 1)
-		return 0
+		GroupPricingCache.Set(cacheKey, models.SchemeSizeLevel{}, 1)
+		return models.SchemeSizeLevel{}
 	}
 
-	GroupPricingCache.Set(cacheKey, schemeSizeLevel.SizeLevel, 1)
-	return schemeSizeLevel.SizeLevel
+	GroupPricingCache.Set(cacheKey, schemeSizeLevel, 1)
+	return schemeSizeLevel
+}
+
+func GetSchemeSizeLevel(groupPricingParameter models.GroupPricingParameters, memberCount int) int {
+	return GetSchemeSizeLoading(groupPricingParameter, memberCount).SizeLevel
 }
 
 // GetDiscountAuthorityForUser returns the DiscountAuthority row for the user's GP role
