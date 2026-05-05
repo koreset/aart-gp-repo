@@ -3107,14 +3107,14 @@ type SchemeSizeLevel struct {
 	MinCount       int       `json:"min_count" csv:"min_count"`
 	MaxCount       int       `json:"max_count" csv:"max_count"`
 	SizeLevel      int       `json:"size_level" csv:"size_level"`
-	GlaLoading   float64   `json:"gla_loading" csv:"gla_loading"`
-	PtdLoading   float64   `json:"ptd_loading" csv:"ptd_loading"`
-	CiLoading    float64   `json:"ci_loading" csv:"ci_loading"`
-	PhiLoading   float64   `json:"phi_loading" csv:"phi_loading"`
-	TtdLoading   float64   `json:"ttd_loading" csv:"ttd_loading"`
-	FunLoading   float64   `json:"funeral_loading" csv:"funeral_loading"`
-	CreationDate time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
-	CreatedBy    string    `json:"created_by" csv:"created_by"`
+	GlaLoading     float64   `json:"gla_loading" csv:"gla_loading"`
+	PtdLoading     float64   `json:"ptd_loading" csv:"ptd_loading"`
+	CiLoading      float64   `json:"ci_loading" csv:"ci_loading"`
+	PhiLoading     float64   `json:"phi_loading" csv:"phi_loading"`
+	TtdLoading     float64   `json:"ttd_loading" csv:"ttd_loading"`
+	FuneralLoading float64   `json:"funeral_loading" csv:"funeral_loading"`
+	CreationDate   time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy      string    `json:"created_by" csv:"created_by"`
 }
 
 type TaxTable struct {

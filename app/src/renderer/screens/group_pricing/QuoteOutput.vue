@@ -2184,30 +2184,31 @@ const buildSystemPdf = async (): Promise<any> => {
       educatorBenefitsData.push(
         [
           'Grade 0',
-          catEducatorItem?.educator_benefit_structure.grade0_max_tuition_per_year ||
-            'n.a',
-          catEducatorItem?.educator_benefit_structure.grade0_max_coverage_years || 'n.a'
+          catEducatorItem?.educator_benefit_structure
+            .grade0_max_tuition_per_year || 'n.a',
+          catEducatorItem?.educator_benefit_structure
+            .grade0_max_coverage_years || 'n.a'
         ],
         [
           'Grade  1 - 7',
-          catEducatorItem?.educator_benefit_structure.grade17_max_tuition_per_year ||
-            'n.a',
-          catEducatorItem?.educator_benefit_structure.grade17_max_coverage_years ||
-            'n.a'
+          catEducatorItem?.educator_benefit_structure
+            .grade17_max_tuition_per_year || 'n.a',
+          catEducatorItem?.educator_benefit_structure
+            .grade17_max_coverage_years || 'n.a'
         ],
         [
           'Grade  8 - 12',
-          catEducatorItem?.educator_benefit_structure.grade812_max_tuition_per_year ||
-            'n.a',
-          catEducatorItem?.educator_benefit_structure.grade812_max_coverage_years ||
-            'n.a'
+          catEducatorItem?.educator_benefit_structure
+            .grade812_max_tuition_per_year || 'n.a',
+          catEducatorItem?.educator_benefit_structure
+            .grade812_max_coverage_years || 'n.a'
         ],
         [
           'Tertiary Education',
-          catEducatorItem?.educator_benefit_structure.tertiary_max_tuition_per_year ||
-            'n.a',
-          catEducatorItem?.educator_benefit_structure.tertiary_max_coverage_years ||
-            'n.a'
+          catEducatorItem?.educator_benefit_structure
+            .tertiary_max_tuition_per_year || 'n.a',
+          catEducatorItem?.educator_benefit_structure
+            .tertiary_max_coverage_years || 'n.a'
         ]
       )
 
@@ -2249,9 +2250,15 @@ const buildSystemPdf = async (): Promise<any> => {
     // Conversion Options subsection — only rendered if at least one toggle is selected
     const conversionOptions: any[] = []
     if (item.gla_conversion_on_withdrawal)
-      conversionOptions.push([glaBenefitTitle.value, 'Conversion on Withdrawal'])
+      conversionOptions.push([
+        glaBenefitTitle.value,
+        'Conversion on Withdrawal'
+      ])
     if (item.gla_conversion_on_retirement)
-      conversionOptions.push([glaBenefitTitle.value, 'Conversion on Retirement'])
+      conversionOptions.push([
+        glaBenefitTitle.value,
+        'Conversion on Retirement'
+      ])
     if (item.gla_continuity_during_disability)
       conversionOptions.push([
         glaBenefitTitle.value,
@@ -2263,13 +2270,22 @@ const buildSystemPdf = async (): Promise<any> => {
         'Conversion on Withdrawal'
       ])
     if (item.ptd_conversion_on_withdrawal)
-      conversionOptions.push([ptdBenefitTitle.value, 'Conversion on Withdrawal'])
+      conversionOptions.push([
+        ptdBenefitTitle.value,
+        'Conversion on Withdrawal'
+      ])
     if (item.ci_conversion_on_withdrawal)
       conversionOptions.push([ciBenefitTitle.value, 'Conversion on Withdrawal'])
     if (item.phi_conversion_on_withdrawal)
-      conversionOptions.push([phiBenefitTitle.value, 'Conversion on Withdrawal'])
+      conversionOptions.push([
+        phiBenefitTitle.value,
+        'Conversion on Withdrawal'
+      ])
     if (item.ttd_conversion_on_withdrawal)
-      conversionOptions.push([ttdBenefitTitle.value, 'Conversion on Withdrawal'])
+      conversionOptions.push([
+        ttdBenefitTitle.value,
+        'Conversion on Withdrawal'
+      ])
     if (item.fun_conversion_on_withdrawal)
       conversionOptions.push(['Group Funeral', 'Conversion on Withdrawal'])
     if (item.gla_educator_conversion_on_withdrawal)

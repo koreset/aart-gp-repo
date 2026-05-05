@@ -134,9 +134,7 @@ const rangeWarning = computed(() => {
     profileVariationTolerance.value < 1 ||
     profileVariationTolerance.value > 25
   ) {
-    issues.push(
-      'Profile variation tolerance outside the typical 1–25% range'
-    )
+    issues.push('Profile variation tolerance outside the typical 1–25% range')
   }
   return issues.length > 0
     ? `${issues.join('; ')}. Save anyway if intentional.`

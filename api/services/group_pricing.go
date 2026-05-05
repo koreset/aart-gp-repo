@@ -4114,7 +4114,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.CiSchemeSizeLoading = schemeSizeRow.CiLoading
 	memberDataPointResult.TtdSchemeSizeLoading = schemeSizeRow.TtdLoading
 	memberDataPointResult.PhiSchemeSizeLoading = schemeSizeRow.PhiLoading
-	memberDataPointResult.FunSchemeSizeLoading = schemeSizeRow.FunLoading
+	memberDataPointResult.FunSchemeSizeLoading = schemeSizeRow.FuneralLoading
 
 	// Voluntary loadings only apply when the quote's obligation type is
 	// Voluntary; otherwise they stay zero.
