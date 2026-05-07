@@ -55,9 +55,7 @@ const router = createRouter({
       path: '/group-pricing/dashboard/brokers/:brokerId/year/:year',
       name: 'group-pricing-broker-performance',
       component: () =>
-        import(
-          '../screens/group_pricing/dashboard/BrokerPerformanceDetail.vue'
-        ),
+        import('../screens/group_pricing/dashboard/BrokerPerformanceDetail.vue'),
       props: true,
       meta: { required_permission: 'navigation:view_gp_dashboard' },
       beforeEnter: (to, from) => checkPermissions(to, from)

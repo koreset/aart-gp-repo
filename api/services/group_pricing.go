@@ -14352,6 +14352,14 @@ type brokerExposureRawRow struct {
 // dimension must be one of: "age", "sum_assured", "occupation_class".
 // Sum-assured band edges live here, not in SQL strings, so the query stays
 // portable across MySQL/PostgreSQL/MSSQL.
+//
+// Sums (total/male/female) come from group_scheme_exposures because that's
+// the only place the gender split is aggregated. Counts for the age and
+// occupation_class dimensions come from member_rating_results because gse
+// stores one row per (quote × age band × benefit) — including zero-valued
+// rows for bands with no members — which would over-count by the number of
+// benefits per quote and inflate empty bands. The sum_assured dimension
+// keeps its gse-sourced count because the bucketing happens per gse row.
 func GetBrokerExposureBreakdown(brokerID int, year int, dimension string, benefit string) ([]BrokerExposureBucket, error) {
 	base := DB.Table("group_scheme_exposures gse").
 		Joins("JOIN group_pricing_quotes q ON q.id = gse.quote_id").
@@ -14369,7 +14377,7 @@ func GetBrokerExposureBreakdown(brokerID int, year int, dimension string, benefi
 	case "age":
 		if err := base.
 			Select(`MIN(gse.min_age) as sort_order, gse.age_band as label_str, 0 as label_int,
-				COUNT(*) as record_count,
+				0 as record_count,
 				COALESCE(SUM(gse.total_sum_assured), 0) as total_sum_assured,
 				COALESCE(SUM(gse.male_sum_assured), 0) as male_sum_assured,
 				COALESCE(SUM(gse.female_sum_assured), 0) as female_sum_assured`).
@@ -14379,12 +14387,33 @@ func GetBrokerExposureBreakdown(brokerID int, year int, dimension string, benefi
 			return nil, err
 		}
 
+		type ageCount struct {
+			AgeBand     string `gorm:"column:age_band"`
+			RecordCount int64  `gorm:"column:record_count"`
+		}
+		var counts []ageCount
+		if err := DB.Table("member_rating_results m").
+			Joins("JOIN group_pricing_quotes q ON q.id = m.quote_id").
+			Where("m.financial_year = ? AND q.broker_id = ?", year, brokerID).
+			Select("m.age_band as age_band, COUNT(*) as record_count").
+			Group("m.age_band").
+			Scan(&counts).Error; err != nil {
+			return nil, err
+		}
+		countByBand := make(map[string]int64, len(counts))
+		for _, c := range counts {
+			countByBand[c.AgeBand] = c.RecordCount
+		}
+		for i := range rows {
+			rows[i].RecordCount = countByBand[rows[i].LabelStr]
+		}
+
 	case "occupation_class":
 		useIntLabel = true
 		if err := base.
 			Where("gse.occupation_class IS NOT NULL AND gse.occupation_class > 0").
 			Select(`gse.occupation_class as sort_order, '' as label_str, gse.occupation_class as label_int,
-				COUNT(*) as record_count,
+				0 as record_count,
 				COALESCE(SUM(gse.total_sum_assured), 0) as total_sum_assured,
 				COALESCE(SUM(gse.male_sum_assured), 0) as male_sum_assured,
 				COALESCE(SUM(gse.female_sum_assured), 0) as female_sum_assured`).
@@ -14392,6 +14421,28 @@ func GetBrokerExposureBreakdown(brokerID int, year int, dimension string, benefi
 			Order("gse.occupation_class ASC").
 			Scan(&rows).Error; err != nil {
 			return nil, err
+		}
+
+		type occCount struct {
+			OccupationClass int   `gorm:"column:occupation_class"`
+			RecordCount     int64 `gorm:"column:record_count"`
+		}
+		var counts []occCount
+		if err := DB.Table("member_rating_results m").
+			Joins("JOIN group_pricing_quotes q ON q.id = m.quote_id").
+			Where("m.financial_year = ? AND q.broker_id = ?", year, brokerID).
+			Where("m.occupation_class IS NOT NULL AND m.occupation_class > 0").
+			Select("m.occupation_class as occupation_class, COUNT(*) as record_count").
+			Group("m.occupation_class").
+			Scan(&counts).Error; err != nil {
+			return nil, err
+		}
+		countByClass := make(map[int]int64, len(counts))
+		for _, c := range counts {
+			countByClass[c.OccupationClass] = c.RecordCount
+		}
+		for i := range rows {
+			rows[i].RecordCount = countByClass[rows[i].LabelInt]
 		}
 
 	case "sum_assured":

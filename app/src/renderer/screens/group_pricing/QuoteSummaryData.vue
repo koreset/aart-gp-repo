@@ -37,8 +37,8 @@
                   </div>
                   <div class="text-caption mb-2">
                     The Free Cover Limit is also subject to these per-benefit
-                    caps, computed as the lower of the restriction limit and
-                    the reinsurer limit (which depends on scheme size).
+                    caps, computed as the lower of the restriction limit and the
+                    reinsurer limit (which depends on scheme size).
                   </div>
                   <table v-if="coverCaps.length" class="caps-table">
                     <tr v-for="r in coverCaps" :key="r.benefit">

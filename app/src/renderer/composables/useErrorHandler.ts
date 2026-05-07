@@ -8,7 +8,7 @@ export function useErrorHandler() {
 
     const body = error?.data ?? error?.response?.data
     const serverMessage =
-      body && typeof body === 'object' ? body.error ?? body.message : null
+      body && typeof body === 'object' ? (body.error ?? body.message) : null
     if (serverMessage) {
       return serverMessage
     }

@@ -208,7 +208,9 @@
                           :key="b.broker_id"
                           class="broker-row"
                           :class="{ 'broker-row--clickable': b.broker_id }"
-                          @click="b.broker_id ? openBrokerDetail(b.broker_id) : null"
+                          @click="
+                            b.broker_id ? openBrokerDetail(b.broker_id) : null
+                          "
                         >
                           <td>{{ b.broker_name || 'Direct' }}</td>
                           <td class="text-center">{{ b.total_quotes }}</td>
@@ -1446,10 +1448,7 @@
                       </v-chip>
                     </v-expansion-panel-title>
                     <v-expansion-panel-text>
-                      <ul
-                        v-if="ind.categories.length"
-                        class="text-body-2 pl-4"
-                      >
+                      <ul v-if="ind.categories.length" class="text-body-2 pl-4">
                         <li
                           v-for="cat in ind.categories"
                           :key="cat"
