@@ -2253,6 +2253,7 @@ type GlaRate struct {
 	AgeNextBirthday int       `json:"age_next_birthday" csv:"age_next_birthday"`
 	IncomeLevel     string    `json:"income_level" csv:"income_level"`
 	Gender          string    `json:"gender" csv:"gender"`
+	OccupationClass int       `json:"occupation_class" csv:"occupation_class"`
 	WaitingPeriod   int       `json:"waiting_period" csv:"waiting_period"`
 	BenefitType     string    `json:"benefit_type" csv:"benefit_type"`
 	Qx              float64   `json:"qx" csv:"qx"`
@@ -2348,6 +2349,7 @@ type IndustryLoading struct {
 	RiskRateCode           string    `json:"risk_rate_code" csv:"risk_rate_code"`
 	OccupationClass        int       `json:"occupation_class" csv:"occupation_class"`
 	Gender                 string    `json:"gender" csv:"gender"`
+	IncomeLevel            int       `json:"income_level" csv:"income_level"`
 	GlaIndustryLoadingRate float64   `json:"gla_industry_loading_rate" csv:"gla_industry_loading_rate"`
 	PtdIndustryLoadingRate float64   `json:"ptd_industry_loading_rate" csv:"ptd_industry_loading_rate"`
 	CiIndustryLoadingRate  float64   `json:"ci_industry_loading_rate" csv:"ci_industry_loading_rate"`
@@ -2844,6 +2846,7 @@ type GlaAidsRate struct {
 	RiskRateCode    string    `json:"risk_rate_code" csv:"risk_rate_code"`
 	AgeNextBirthday int       `json:"age_next_birthday" csv:"age_next_birthday"`
 	Gender          string    `json:"gender" csv:"gender"`
+	OccupationClass int       `json:"occupation_class" csv:"occupation_class"`
 	GlaAidsQx       float64   `json:"gla_aids_qx" csv:"gla_aids_qx"`
 	CreationDate    time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy       string    `json:"created_by" csv:"created_by"`
@@ -2854,6 +2857,8 @@ type RegionLoading struct {
 	RiskRateCode             string    `json:"risk_rate_code" csv:"risk_rate_code"`
 	Region                   string    `json:"region" csv:"region"`
 	Gender                   string    `json:"gender" csv:"gender"`
+	IncomeLevel              int       `json:"income_level" csv:"income_level"`
+	OccupationClass          int       `json:"occupation_class" csv:"occupation_class"`
 	GlaRegionLoadingRate     float64   `json:"gla_region_loading_rate" csv:"gla_region_loading_rate"`
 	GlaAidsRegionLoadingRate float64   `json:"gla_aids_region_loading_rate" csv:"gla_aids_region_loading_rate"`
 	PtdRegionLoadingRate     float64   `json:"ptd_region_loading_rate" csv:"ptd_region_loading_rate"`
@@ -2955,6 +2960,7 @@ type ReinsuranceGlaRate struct {
 	AgeNextBirthday int       `json:"age_next_birthday" csv:"age_next_birthday"`
 	IncomeLevel     string    `json:"income_level" csv:"income_level"`
 	Gender          string    `json:"gender" csv:"gender"`
+	OccupationClass int       `json:"occupation_class" csv:"occupation_class"`
 	WaitingPeriod   int       `json:"waiting_period" csv:"waiting_period"`
 	ReQx            float64   `json:"re_qx" csv:"re_qx"`
 	CreationDate    time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
@@ -3034,6 +3040,7 @@ type ReinsuranceGlaAidsRate struct {
 	RiskRateCode    string    `json:"risk_rate_code" csv:"risk_rate_code"`
 	AgeNextBirthday int       `json:"age_next_birthday" csv:"age_next_birthday"`
 	Gender          string    `json:"gender" csv:"gender"`
+	OccupationClass int       `json:"occupation_class" csv:"occupation_class"`
 	GlaAidsQx       float64   `json:"gla_aids_qx" csv:"gla_aids_qx"`
 	CreationDate    time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy       string    `json:"created_by" csv:"created_by"`
@@ -3069,6 +3076,7 @@ type ReinsuranceIndustryLoading struct {
 	RiskRateCode           string    `json:"risk_rate_code" csv:"risk_rate_code"`
 	OccupationClass        int       `json:"occupation_class" csv:"occupation_class"`
 	Gender                 string    `json:"gender" csv:"gender"`
+	IncomeLevel            int       `json:"income_level" csv:"income_level"`
 	GlaIndustryLoadingRate float64   `json:"gla_industry_loading_rate" csv:"gla_industry_loading_rate"`
 	PtdIndustryLoadingRate float64   `json:"ptd_industry_loading_rate" csv:"ptd_industry_loading_rate"`
 	CiIndustryLoadingRate  float64   `json:"ci_industry_loading_rate" csv:"ci_industry_loading_rate"`
@@ -3083,6 +3091,8 @@ type ReinsuranceRegionLoading struct {
 	RiskRateCode             string    `json:"risk_rate_code" csv:"risk_rate_code"`
 	Region                   string    `json:"region" csv:"region"`
 	Gender                   string    `json:"gender" csv:"gender"`
+	IncomeLevel              int       `json:"income_level" csv:"income_level"`
+	OccupationClass          int       `json:"occupation_class" csv:"occupation_class"`
 	GlaRegionLoadingRate     float64   `json:"gla_region_loading_rate" csv:"gla_region_loading_rate"`
 	GlaAidsRegionLoadingRate float64   `json:"gla_aids_region_loading_rate" csv:"gla_aids_region_loading_rate"`
 	PtdRegionLoadingRate     float64   `json:"ptd_region_loading_rate" csv:"ptd_region_loading_rate"`
@@ -3276,8 +3286,8 @@ type GroupPricingIncomeComponent struct {
 
 type GroupSchemeExposure struct {
 	SchemeName       string    `json:"scheme_name"`
-	QuoteId          int       `json:"-" csv:"quote_id"`
-	FinancialYear    int       `json:"financial_year"`
+	QuoteId          int       `json:"-" csv:"quote_id" gorm:"index:idx_gse_year_quote,priority:2"`
+	FinancialYear    int       `json:"financial_year" gorm:"index:idx_gse_year_quote,priority:1;index:idx_gse_year_status,priority:1;index:idx_gse_year_occclass,priority:1"`
 	Industry         string    `json:"industry"`
 	Benefit          string    `json:"benefit"`
 	AgeBand          string    `json:"age_band"`
@@ -3286,7 +3296,8 @@ type GroupSchemeExposure struct {
 	MaleSumAssured   float64   `json:"male_sum_assured"`
 	FemaleSumAssured float64   `json:"female_sum_assured"`
 	TotalSumAssured  float64   `json:"total_sum_assured"`
-	QuoteStatus      string    `json:"quote_status" csv:"quote_status"`
+	QuoteStatus      string    `json:"quote_status" csv:"quote_status" gorm:"size:64;index:idx_gse_year_status,priority:2"`
+	OccupationClass  int       `json:"occupation_class" csv:"occupation_class" gorm:"index:idx_gse_year_occclass,priority:2"`
 	CreationDate     time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy        string    `json:"created_by" csv:"created_by"`
 }
@@ -4020,12 +4031,14 @@ type MonthlyQuoteTrend struct {
 }
 
 type BrokerMetric struct {
-	BrokerID       int     `json:"broker_id"`
-	BrokerName     string  `json:"broker_name"`
-	TotalQuotes    int64   `json:"total_quotes"`
-	AcceptedQuotes int64   `json:"accepted_quotes"`
-	ConversionRate float64 `json:"conversion_rate"`
-	TotalPremium   float64 `json:"total_premium"`
+	BrokerID         int     `json:"broker_id"`
+	BrokerName       string  `json:"broker_name"`
+	TotalQuotes      int64   `json:"total_quotes"`
+	AcceptedQuotes   int64   `json:"accepted_quotes"`
+	ConversionRate   float64 `json:"conversion_rate"`
+	TotalPremium     float64 `json:"total_premium"`
+	ApprovedClaims   float64 `json:"approved_claims"`
+	ActualLossRatio  float64 `json:"actual_loss_ratio"`
 }
 
 type QuoteFunnelStage struct {

@@ -532,6 +532,9 @@ export default {
       `/group-pricing/dashboard/year/${year}?data_source=${dataSource}&benefit=${encodeURIComponent(benefit)}`
     )
   },
+  getOccupationClassHierarchy() {
+    return Api.get('/group-pricing/occupation-classes')
+  },
   getSchemePerformance() {
     return Api.get('/group-pricing/dashboard/scheme-performance')
   },
@@ -552,6 +555,21 @@ export default {
   getExposureTrend(benefit = 'All', dataSource = 'inforce') {
     return Api.get(
       `/group-pricing/dashboard/exposures/trend?benefit=${benefit}&data_source=${dataSource}`
+    )
+  },
+  getBrokerPerformanceSummary(brokerId, year) {
+    return Api.get(
+      `/group-pricing/dashboard/brokers/${brokerId}/year/${year}/summary`
+    )
+  },
+  getBrokerExposureBreakdown(
+    brokerId,
+    year,
+    dimension: 'age' | 'sum_assured' | 'occupation_class',
+    benefit = 'All'
+  ) {
+    return Api.get(
+      `/group-pricing/dashboard/brokers/${brokerId}/year/${year}/exposures?dimension=${dimension}&benefit=${encodeURIComponent(benefit)}`
     )
   },
   getFinancialYearInfo(year) {

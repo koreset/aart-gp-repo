@@ -52,6 +52,17 @@ const router = createRouter({
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {
+      path: '/group-pricing/dashboard/brokers/:brokerId/year/:year',
+      name: 'group-pricing-broker-performance',
+      component: () =>
+        import(
+          '../screens/group_pricing/dashboard/BrokerPerformanceDetail.vue'
+        ),
+      props: true,
+      meta: { required_permission: 'navigation:view_gp_dashboard' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
       path: '/group-pricing/quote-generation',
       name: 'group-pricing-quote-generation',
       component: () => import('../screens/group_pricing/QuoteGeneration.vue'),

@@ -809,7 +809,7 @@ func CreateBroker(c *gin.Context) {
 	err = services.CreateBroker(broker, appUser)
 	if err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
-			c.JSON(http.StatusConflict, err.Error())
+			c.JSON(http.StatusConflict, gin.H{"error": "A broker with this contact email already exists. Please use a different email."})
 		} else {
 			c.JSON(http.StatusInternalServerError, err.Error())
 		}
@@ -850,7 +850,11 @@ func EditBroker(c *gin.Context) {
 	updated, err := services.EditBroker(id, input)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "beneficiary not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "broker not found"})
+			return
+		}
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			c.JSON(http.StatusConflict, gin.H{"error": "A broker with this contact email already exists. Please use a different email."})
 			return
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -1763,6 +1767,51 @@ func GetGroupSchemeExposureData(c *gin.Context) {
 	c.JSON(http.StatusOK, data)
 }
 
+// GetBrokerPerformanceSummary returns the headline metrics for one broker in
+// one calendar year: quote volume, conversion, premium, ELR, ALR.
+func GetBrokerPerformanceSummary(c *gin.Context) {
+	brokerID, err := strconv.Atoi(c.Param("broker_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, "invalid broker_id")
+		return
+	}
+	year, err := strconv.Atoi(c.Param("year"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, "invalid year")
+		return
+	}
+	data, err := services.GetBrokerPerformanceSummary(brokerID, year)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, data)
+}
+
+// GetBrokerExposureBreakdown returns exposure aggregations for one broker
+// bucketed along a single dimension (?dimension=age|sum_assured|occupation_class).
+// One dimension per call so the drill-down UI can fetch tabs lazily.
+func GetBrokerExposureBreakdown(c *gin.Context) {
+	brokerID, err := strconv.Atoi(c.Param("broker_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, "invalid broker_id")
+		return
+	}
+	year, err := strconv.Atoi(c.Param("year"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, "invalid year")
+		return
+	}
+	dimension := c.DefaultQuery("dimension", "age")
+	benefit := c.DefaultQuery("benefit", "All")
+	data, err := services.GetBrokerExposureBreakdown(brokerID, year, dimension, benefit)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, data)
+}
+
 func RebuildExposureData(c *gin.Context) {
 	year, err := strconv.Atoi(c.Param("year"))
 	if err != nil {
@@ -2616,6 +2665,15 @@ func GetGroupPricingIndustriesForQuotes(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, industries)
+}
+
+func GetGroupPricingOccupationClasses(c *gin.Context) {
+	groups, err := services.GetOccupationClassHierarchy()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, groups)
 }
 
 func GetBenefitEscalationOptions(c *gin.Context) {

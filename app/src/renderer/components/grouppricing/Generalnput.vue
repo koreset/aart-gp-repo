@@ -35,6 +35,7 @@
             :items="groupStore.distributionChannels"
             item-title="title"
             item-value="value"
+            @update:model-value="onDistributionChannelChange"
           ></v-select>
         </v-col>
         <v-col v-if="quoteType" cols="4">
@@ -126,10 +127,15 @@
             v-bind="quoteBrokerAttrs"
             variant="outlined"
             density="compact"
-            placeholder="Choose a broker"
+            :placeholder="
+              filteredBrokers.length
+                ? 'Choose a broker'
+                : 'No brokers match this distribution channel'
+            "
             label="Broker"
             :error-messages="errors.quote_broker"
-            :items="groupStore.brokers"
+            :items="filteredBrokers"
+            :no-data-text="brokerNoDataText"
             item-title="name"
             item-value="id"
             return-object
@@ -581,6 +587,59 @@ const [riskRateCode, riskRateCodeAttrs] = defineField('risk_rate_code')
 const chooseQuoteFlow = (value: string | null) => {
   if (value !== null) {
     groupStore.group_pricing_quote.quote_type = value
+  }
+}
+
+// Broker list filtered by the selected distribution channel:
+// - 'binder'     → only brokers with a binder_agreement_ref
+// - 'tied_agent' → only brokers with a tied_agent_ref
+// - 'broker'     → only brokers with neither (i.e. plain brokers)
+// - 'direct'     → broker field is hidden upstream, no filtering needed
+const hasRef = (v: unknown): boolean =>
+  typeof v === 'string' ? v.trim().length > 0 : false
+
+const filteredBrokers = computed(() => {
+  const all = (groupStore.brokers as any[]) || []
+  const channel = String(distributionChannel.value ?? '')
+  switch (channel) {
+    case 'binder':
+      return all.filter((b) => hasRef(b?.binder_agreement_ref))
+    case 'tied_agent':
+      return all.filter((b) => hasRef(b?.tied_agent_ref))
+    case 'broker':
+      return all.filter(
+        (b) => !hasRef(b?.binder_agreement_ref) && !hasRef(b?.tied_agent_ref)
+      )
+    default:
+      return all
+  }
+})
+
+const brokerNoDataText = computed(() => {
+  const channel = String(distributionChannel.value ?? '')
+  switch (channel) {
+    case 'binder':
+      return 'No brokers with a binder agreement reference. Add one in Broker Management.'
+    case 'tied_agent':
+      return 'No brokers with a tied agent reference. Add one in Broker Management.'
+    case 'broker':
+      return 'No plain brokers found. A broker with no binder/tied-agent ref is required for this channel.'
+    default:
+      return 'No brokers found.'
+  }
+})
+
+// On user-driven channel change, drop a stale broker selection that no
+// longer matches the new channel's filter so the form can't submit an
+// inconsistent (channel, broker) pair.
+const onDistributionChannelChange = () => {
+  const current = quoteBroker.value as { id?: number } | null | undefined
+  if (!current?.id) return
+  const stillValid = filteredBrokers.value.some(
+    (b: any) => b?.id === current.id
+  )
+  if (!stillValid) {
+    quoteBroker.value = null
   }
 }
 

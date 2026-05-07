@@ -254,7 +254,7 @@ import ConfirmationDialog from '@/renderer/components/ConfirmDialog.vue'
 import DataGrid from '@/renderer/components/tables/GroupPricingDataGrid.vue'
 import { useBrokers } from '@/renderer/composables/useBrokers'
 import { useBrokerGrid } from '@/renderer/composables/useBrokerGrid'
-import { useNotifications } from '@/renderer/composables/useNotifications'
+import { useFlashStore } from '@/renderer/store/flash'
 import { useErrorHandler } from '@/renderer/composables/useErrorHandler'
 import BaseCard from '../BaseCard.vue'
 
@@ -300,7 +300,7 @@ const {
   clearSelection
 } = useBrokerGrid()
 
-const { showSuccess, showError } = useNotifications()
+const flash = useFlashStore()
 const { handleApiError } = useErrorHandler()
 
 const handleRowSelection = (event: any) => {
@@ -320,11 +320,11 @@ const handleAddBroker = async () => {
     await refreshBrokers()
     resetBrokerForm()
     addForm.value.resetValidation()
-    showSuccess('Broker added successfully')
+    flash.show('Broker added successfully', 'success')
     emit('brokerAdded')
   } catch (error: any) {
     const errorMessage = handleApiError(error)
-    showError(errorMessage)
+    flash.show(errorMessage, 'error')
   }
 }
 
@@ -338,11 +338,11 @@ const handleUpdateBroker = async () => {
     await updateBroker(selectedBroker.value.id, editBrokerData.value)
     await refreshBrokers()
     closeEditDialog()
-    showSuccess('Broker updated successfully')
+    flash.show('Broker updated successfully', 'success')
     emit('brokerUpdated')
   } catch (error: any) {
     const errorMessage = handleApiError(error)
-    showError(errorMessage)
+    flash.show(errorMessage, 'error')
   }
 }
 
@@ -360,11 +360,11 @@ const handleDeleteBroker = async () => {
     await deleteBroker(selectedBroker.value.id)
     await refreshBrokers()
     closeEditDialog()
-    showSuccess('Broker deleted successfully')
+    flash.show('Broker deleted successfully', 'success')
     emit('brokerDeleted')
   } catch (error: any) {
     const errorMessage = handleApiError(error)
-    showError(errorMessage)
+    flash.show(errorMessage, 'error')
   }
 }
 

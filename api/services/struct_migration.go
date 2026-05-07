@@ -403,6 +403,8 @@ func getStructType(structName string) (reflect.Type, error) {
 		return reflect.TypeOf(models.ReinsuranceCoverRestriction{}), nil
 	case "ReinsuranceGlaRate":
 		return reflect.TypeOf(models.ReinsuranceGlaRate{}), nil
+	case "ReinsuranceGlaAidsRate":
+		return reflect.TypeOf(models.ReinsuranceGlaAidsRate{}), nil
 	case "ReinsuranceCiRate":
 		return reflect.TypeOf(models.ReinsuranceCiRate{}), nil
 	case "ReinsurancePtdRate":
@@ -921,6 +923,10 @@ func getStructType(structName string) (reflect.Type, error) {
 		return reflect.TypeOf(models.ChildMortality{}), nil
 	case "IndustryLoading":
 		return reflect.TypeOf(models.IndustryLoading{}), nil
+	case "ReinsuranceIndustryLoading":
+		return reflect.TypeOf(models.ReinsuranceIndustryLoading{}), nil
+	case "ReinsuranceRegionLoading":
+		return reflect.TypeOf(models.ReinsuranceRegionLoading{}), nil
 	case "FuneralParameters":
 		return reflect.TypeOf(models.FuneralParameters{}), nil
 	case "GroupPricingReinsuranceStructure":

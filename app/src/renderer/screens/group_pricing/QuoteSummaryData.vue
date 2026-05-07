@@ -1,19 +1,70 @@
 <template>
   <v-container>
-    <v-row class="mb-4">
-      <v-col v-for="item in keyInfo" :key="item.label" cols="12" sm="6" md="2">
-        <v-card variant="outlined">
-          <v-card-text>
-            <div class="text-overline text-grey-darken-1">{{ item.label }}</div>
+    <v-row class="mb-4" dense>
+      <v-col v-for="item in keyInfo" :key="item.label" cols="4" md="2">
+        <v-card variant="outlined" height="100%" class="summary-tile">
+          <v-card-text class="tile-body">
+            <div class="tile-label-row">
+              <span class="text-overline text-grey-darken-1 tile-label">{{
+                item.label
+              }}</span>
+              <v-tooltip v-if="item.info" location="bottom" max-width="420">
+                <template #activator="{ props: tipProps }">
+                  <v-icon
+                    v-bind="tipProps"
+                    size="small"
+                    color="info"
+                    class="tile-info-icon"
+                  >
+                    mdi-information-outline
+                  </v-icon>
+                </template>
+                <div>
+                  <template v-if="fclSourceLabel">
+                    <div class="font-weight-medium mb-1">FCL source</div>
+                    <div class="text-caption mb-1">{{ fclSourceLabel }}</div>
+                    <div
+                      v-if="overrideFcl > 0 && overrideFcl > appliedFcl"
+                      class="text-caption mb-2"
+                    >
+                      Original override: {{ quoteData.currency }}
+                      {{ overrideFcl.toLocaleString() }}.
+                    </div>
+                    <v-divider class="my-2"></v-divider>
+                  </template>
+                  <div class="font-weight-medium mb-1">
+                    Maximum cover allowed per benefit
+                  </div>
+                  <div class="text-caption mb-2">
+                    The Free Cover Limit is also subject to these per-benefit
+                    caps, computed as the lower of the restriction limit and
+                    the reinsurer limit (which depends on scheme size).
+                  </div>
+                  <table v-if="coverCaps.length" class="caps-table">
+                    <tr v-for="r in coverCaps" :key="r.benefit">
+                      <td class="pe-3">{{ r.benefit }}</td>
+                      <td class="text-right">{{ r.cap }}</td>
+                    </tr>
+                  </table>
+                  <div v-else class="text-caption">
+                    No per-benefit caps recorded on this quote yet.
+                  </div>
+                </div>
+              </v-tooltip>
+            </div>
             <div class="quote-summary-value">{{ item.value }}</div>
           </v-card-text>
         </v-card>
       </v-col>
       <!-- Win Probability card -->
-      <v-col cols="12" sm="6" md="2">
-        <v-card variant="outlined">
-          <v-card-text>
-            <div class="text-overline text-grey-darken-1">Win Probability</div>
+      <v-col cols="4" md="2">
+        <v-card variant="outlined" height="100%" class="summary-tile">
+          <v-card-text class="tile-body">
+            <div class="tile-label-row">
+              <span class="text-overline text-grey-darken-1 tile-label"
+                >Win Probability</span
+              >
+            </div>
             <div class="quote-summary-value">
               <ProbabilityBadge
                 :score="winProb"
@@ -211,7 +262,6 @@ const quoteData = ref({
   startDate: props.quote.commencement_date
     ? formatDateString(props.quote.commencement_date, true, true, true)
     : 'Not Provided',
-  freeCoverLimit: 300000,
   contact: {
     name: props.quote.scheme_contact || 'Not Provided',
     email: props.quote.scheme_email || 'Not Provided'
@@ -338,13 +388,124 @@ const updateBenefitsActivated = () => {
 
 // --- COMPUTED PROPERTIES ---
 // Using computed properties makes the template cleaner and more readable.
-const keyInfo = computed(() => [
+const distributionChannelLabel = (channel: string): string => {
+  switch (channel) {
+    case 'broker':
+      return 'Broker'
+    case 'direct':
+      return 'Direct'
+    case 'binder':
+      return 'Binder'
+    case 'tied_agent':
+      return 'Tied Agent'
+    default:
+      return channel || '—'
+  }
+}
+
+// Pick the smaller positive cap, treating 0 as "no cap on this side".
+// Per-benefit max cover allowed is min(restriction, reinsurer); if either
+// half is unconfigured (0) the other one wins; if both are 0 the benefit
+// has no cap on this scheme.
+const minNonZero = (a: number, b: number): number => {
+  if (a > 0 && b > 0) return Math.min(a, b)
+  if (a > 0) return a
+  if (b > 0) return b
+  return 0
+}
+
+// Per-benefit caps shown in the FCL info tooltip. Sourced from the first
+// MemberRatingResultSummary row (scheme-level fields are mirrored across
+// every category row, same convention used by `firstSummary` below).
+const coverCaps = computed(() => {
+  const s: any = (props.resultSummaries as any[])[0] || {}
+  const ccy = quoteData.value.currency
+  const fmt = (n: number, suffix = ''): string =>
+    `${ccy} ${n.toLocaleString()}${suffix}`
+
+  const rows: { benefit: string; cap: string }[] = []
+  const push = (
+    benefit: string,
+    restriction: number,
+    reins: number,
+    suffix = ''
+  ) => {
+    const cap = minNonZero(Number(restriction) || 0, Number(reins) || 0)
+    if (cap > 0) rows.push({ benefit, cap: fmt(cap, suffix) })
+  }
+
+  push('GLA', s.maximum_gla_cover, s.reins_max_gla_cover)
+  push('PTD', s.maximum_ptd_cover, s.reins_max_ptd_cover)
+  push('CI', s.severe_illness_maximum_benefit, s.reins_max_ci_cover)
+  push('Spouse GLA', s.spouse_gla_maximum_benefit, s.reins_max_sgla_cover)
+  push('TTD', s.ttd_maximum_monthly_benefit, s.reins_max_ttd_cover, '/mo')
+  push('PHI', s.phi_maximum_monthly_benefit, s.reins_max_phi_cover, '/mo')
+  push('Funeral', 0, s.reins_max_fun_cover)
+
+  return rows
+})
+
+// FCL is computed/applied per scheme_category by the rating engine. The
+// quote-level `free_cover_limit` is the optional user override (only set
+// when "Enforce FCL" was ticked on the General Input form); the engine
+// always populates `scheme_categories[i].free_cover_limit` regardless,
+// clamping the override to MaximumAllowedFCL when it exceeds the cap.
+// We trust the per-category applied value as the source of truth.
+const overrideFcl = computed<number>(
+  () => Number(props.quote.free_cover_limit) || 0
+)
+
+const selectedSchemeCategoryData = computed<any | null>(() => {
+  if (!selectedCategory.value) return null
+  return (
+    (props.quote.scheme_categories as any[])?.find(
+      (cat: any) => cat.scheme_category === selectedCategory.value
+    ) ?? null
+  )
+})
+
+const appliedFcl = computed<number>(() => {
+  const cat = selectedSchemeCategoryData.value
+  return cat ? Number(cat.free_cover_limit) || 0 : 0
+})
+
+const fclSourceLabel = computed<string>(() => {
+  if (!selectedSchemeCategoryData.value || appliedFcl.value <= 0) return ''
+  if (overrideFcl.value > 0) {
+    if (overrideFcl.value > appliedFcl.value) {
+      return 'User-enforced override (clamped to maximum allowed FCL)'
+    }
+    return 'User-enforced override'
+  }
+  return 'Calculated by FCL method (percentile / outlier)'
+})
+
+const fclDisplayValue = computed<string>(() => {
+  if (!selectedCategory.value) return 'Select a category'
+  if (appliedFcl.value > 0) {
+    return `${quoteData.value.currency} ${appliedFcl.value.toLocaleString()}`
+  }
+  return 'No FCL enforced'
+})
+
+interface KeyInfoItem {
+  label: string
+  value: string
+  info?: boolean
+}
+
+const keyInfo = computed<KeyInfoItem[]>(() => [
   { label: 'Industry', value: quoteData.value.industry },
+  {
+    label: 'Distribution Channel',
+    value: distributionChannelLabel(quoteData.value.distributionChannel)
+  },
   { label: 'Broker', value: quoteData.value.broker },
   { label: 'Start Date', value: quoteData.value.startDate },
   {
     label: 'Free Cover Limit',
-    value: `${quoteData.value.currency} ${quoteData.value.freeCoverLimit.toLocaleString()}`
+    value: fclDisplayValue.value,
+    info: true
   }
 ])
 
@@ -392,16 +553,65 @@ const categoryItems = computed(() => {
 </script>
 
 <style scoped>
-/* Shared value row for the top "Quote Summary" cards. The min-height matches
-   the v-chip used by ProbabilityBadge (small chip ≈ 24px) so the chip and
-   plain text values sit at the same vertical centre. Without this the chip
-   extends below the text baseline and looks misaligned next to its
-   neighbours. */
+/* Top "Quote Summary" tiles. Layout target: 3 cards per row on small
+   screens (two rows total), 6 cards per row on md+ (one row). Card height
+   is unified so neighbours match regardless of label/value length, and
+   the label/value/extras stack predictably via flex inside v-card-text. */
+.summary-tile {
+  border-radius: 10px;
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.18s ease,
+    border-color 0.18s ease;
+}
+.summary-tile:hover {
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.18);
+  transform: translateY(-1px);
+}
+
+.tile-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 6px;
+  padding: 14px 16px;
+}
+
+.tile-label-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 32px;
+}
+
+.tile-label {
+  flex: 1;
+  line-height: 1.25;
+  letter-spacing: 0.6px;
+  word-break: break-word;
+}
+
+.tile-info-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* The min-height matches the v-chip used by ProbabilityBadge (small chip ≈
+   24px) so the chip and plain text values sit at the same vertical centre. */
 .quote-summary-value {
   display: flex;
   align-items: center;
   min-height: 28px;
   font-weight: 500;
-  line-height: 1.2;
+  font-size: 0.95rem;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.caps-table td {
+  padding: 2px 0;
+  white-space: nowrap;
 }
 </style>

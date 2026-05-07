@@ -60,9 +60,28 @@
                           : undefined
                       "
                     >
-                      <v-card-subtitle
-                        ><h5>{{ card.title }}</h5></v-card-subtitle
-                      >
+                      <v-card-subtitle>
+                        <div class="d-flex align-center">
+                          <h5>{{ card.title }}</h5>
+                          <v-tooltip
+                            v-if="card.info"
+                            location="bottom"
+                            max-width="360"
+                          >
+                            <template #activator="{ props: tipProps }">
+                              <v-icon
+                                v-bind="tipProps"
+                                size="small"
+                                color="info"
+                                class="ml-1"
+                              >
+                                mdi-information-outline
+                              </v-icon>
+                            </template>
+                            <span>{{ card.info }}</span>
+                          </v-tooltip>
+                        </div>
+                      </v-card-subtitle>
                       <v-card-text>
                         <v-row>
                           <v-col class="d-flex justify-center">
@@ -180,10 +199,17 @@
                           <th class="text-center">Accepted</th>
                           <th class="text-center">Conversion Rate</th>
                           <th class="text-right">Total Premium</th>
+                          <th class="text-center">Loss Ratio</th>
                         </tr>
                       </thead>
                       <tbody>
-                        <tr v-for="b in brokerMetrics" :key="b.broker_id">
+                        <tr
+                          v-for="b in brokerMetrics"
+                          :key="b.broker_id"
+                          class="broker-row"
+                          :class="{ 'broker-row--clickable': b.broker_id }"
+                          @click="b.broker_id ? openBrokerDetail(b.broker_id) : null"
+                        >
                           <td>{{ b.broker_name || 'Direct' }}</td>
                           <td class="text-center">{{ b.total_quotes }}</td>
                           <td class="text-center">{{ b.accepted_quotes }}</td>
@@ -204,9 +230,26 @@
                           <td class="text-right"
                             >R{{ formatNumber(b.total_premium) }}</td
                           >
+                          <td class="text-center">
+                            <template v-if="b.total_premium > 0">
+                              <v-chip
+                                size="small"
+                                :color="
+                                  b.actual_loss_ratio < 70
+                                    ? 'success'
+                                    : b.actual_loss_ratio < 100
+                                      ? 'warning'
+                                      : 'error'
+                                "
+                                variant="tonal"
+                                >{{ b.actual_loss_ratio }}%</v-chip
+                              >
+                            </template>
+                            <span v-else class="text-grey">—</span>
+                          </td>
                         </tr>
                         <tr v-if="!brokerMetrics || brokerMetrics.length === 0">
-                          <td colspan="5" class="text-center text-grey py-4">
+                          <td colspan="6" class="text-center text-grey py-4">
                             No broker data for selected year
                           </td>
                         </tr>
@@ -573,14 +616,24 @@
                   </v-col>
                 </v-row>
 
-                <!-- Industry Mix & Scheme Size row -->
+                <!-- Pipeline Mix & Scheme Size row -->
                 <v-row class="mt-4">
                   <v-col cols="6" class="card-bg mx-1">
-                    <ChartMenu
-                      :chart-ref="industryPipelineCharts"
-                      title="Industry Mix of Active Pipeline"
-                      :data="industryPipelineOptions?.data ?? []"
-                    />
+                    <div class="d-flex align-center">
+                      <ChartMenu
+                        :chart-ref="industryPipelineCharts"
+                        title="Pipeline Mix by Occupation Class"
+                        :data="industryPipelineOptions?.data ?? []"
+                      />
+                      <v-btn
+                        icon="mdi-information-outline"
+                        variant="text"
+                        size="small"
+                        density="compact"
+                        aria-label="View occupation classes"
+                        @click="openOccupationDrawer()"
+                      />
+                    </div>
                     <ag-charts
                       v-if="industryPipelineOptions"
                       ref="industryPipelineCharts"
@@ -857,8 +910,22 @@
                         label="View by"
                       />
                     </div>
+                    <div
+                      v-if="refreshLoadingQuoting"
+                      class="d-flex align-center justify-center py-6"
+                      style="min-height: 220px"
+                    >
+                      <v-progress-circular
+                        indeterminate
+                        color="primary"
+                        size="36"
+                      />
+                      <span class="text-grey text-body-2 ml-3">
+                        Loading region data…
+                      </span>
+                    </div>
                     <ag-charts
-                      v-if="rawProvinceDataQuoting.length"
+                      v-else-if="rawProvinceDataQuoting.length"
                       ref="provinceChartsQuoting"
                       :options="provinceBarOptionsQuoting"
                     ></ag-charts>
@@ -870,11 +937,21 @@
                     <div
                       class="d-flex align-center justify-space-between pr-2 pt-2"
                     >
-                      <ChartMenu
-                        :chart-ref="industryAgeChartsQuoting"
-                        title="Exposure by Industry & Age Band"
-                        :data="industryAgeOptionsQuoting?.data ?? []"
-                      />
+                      <div class="d-flex align-center">
+                        <ChartMenu
+                          :chart-ref="industryAgeChartsQuoting"
+                          title="Exposure by Occupation Class & Age Band"
+                          :data="industryAgeOptionsQuoting?.data ?? []"
+                        />
+                        <v-btn
+                          icon="mdi-information-outline"
+                          variant="text"
+                          size="small"
+                          density="compact"
+                          aria-label="View occupation classes"
+                          @click="openOccupationDrawer()"
+                        />
+                      </div>
                       <v-select
                         v-model="industryAgeViewByQuoting"
                         :items="viewByOptions"
@@ -885,8 +962,22 @@
                         label="View by"
                       />
                     </div>
+                    <div
+                      v-if="refreshLoadingQuoting"
+                      class="d-flex align-center justify-center py-6"
+                      style="min-height: 220px"
+                    >
+                      <v-progress-circular
+                        indeterminate
+                        color="primary"
+                        size="36"
+                      />
+                      <span class="text-grey text-body-2 ml-3">
+                        Loading industry data…
+                      </span>
+                    </div>
                     <ag-charts
-                      v-if="rawIndustryAgeDataQuoting.length"
+                      v-else-if="rawIndustryAgeDataQuoting.length"
                       ref="industryAgeChartsQuoting"
                       :options="industryAgeOptionsQuoting"
                     ></ag-charts>
@@ -1141,8 +1232,22 @@
                         label="View by"
                       />
                     </div>
+                    <div
+                      v-if="refreshLoadingInforce"
+                      class="d-flex align-center justify-center py-6"
+                      style="min-height: 220px"
+                    >
+                      <v-progress-circular
+                        indeterminate
+                        color="primary"
+                        size="36"
+                      />
+                      <span class="text-grey text-body-2 ml-3">
+                        Loading region data…
+                      </span>
+                    </div>
                     <ag-charts
-                      v-if="rawProvinceData.length"
+                      v-else-if="rawProvinceData.length"
                       ref="provinceCharts"
                       :options="provinceBarOptions"
                     ></ag-charts>
@@ -1154,11 +1259,21 @@
                     <div
                       class="d-flex align-center justify-space-between pr-2 pt-2"
                     >
-                      <ChartMenu
-                        :chart-ref="industryAgeCharts"
-                        title="Exposure by Industry & Age Band"
-                        :data="industryAgeOptions?.data ?? []"
-                      />
+                      <div class="d-flex align-center">
+                        <ChartMenu
+                          :chart-ref="industryAgeCharts"
+                          title="Exposure by Occupation Class & Age Band"
+                          :data="industryAgeOptions?.data ?? []"
+                        />
+                        <v-btn
+                          icon="mdi-information-outline"
+                          variant="text"
+                          size="small"
+                          density="compact"
+                          aria-label="View occupation classes"
+                          @click="openOccupationDrawer()"
+                        />
+                      </div>
                       <v-select
                         v-model="industryAgeViewBy"
                         :items="viewByOptions"
@@ -1169,8 +1284,22 @@
                         label="View by"
                       />
                     </div>
+                    <div
+                      v-if="refreshLoadingInforce"
+                      class="d-flex align-center justify-center py-6"
+                      style="min-height: 220px"
+                    >
+                      <v-progress-circular
+                        indeterminate
+                        color="primary"
+                        size="36"
+                      />
+                      <span class="text-grey text-body-2 ml-3">
+                        Loading industry data…
+                      </span>
+                    </div>
                     <ag-charts
-                      v-if="rawIndustryAgeData.length"
+                      v-else-if="rawIndustryAgeData.length"
                       ref="industryAgeCharts"
                       :options="industryAgeOptions"
                     ></ag-charts>
@@ -1241,6 +1370,106 @@
         </base-card>
       </v-col>
     </v-row>
+
+    <v-navigation-drawer
+      v-model="occupationDrawer"
+      location="right"
+      width="420"
+      temporary
+    >
+      <v-card flat>
+        <v-card-title class="d-flex align-center justify-space-between pa-3">
+          <span>Occupation classes</span>
+          <v-btn
+            icon="mdi-close"
+            variant="plain"
+            size="small"
+            @click="occupationDrawer = false"
+          />
+        </v-card-title>
+        <v-divider />
+        <v-card-text>
+          <v-text-field
+            v-model="occupationSearch"
+            density="compact"
+            variant="outlined"
+            hide-details
+            clearable
+            placeholder="Filter class, industry or category"
+            prepend-inner-icon="mdi-magnify"
+            class="mb-3"
+          />
+          <div
+            v-if="occupationLoading"
+            class="d-flex align-center justify-center py-6"
+          >
+            <v-progress-circular indeterminate color="primary" size="28" />
+            <span class="text-grey text-body-2 ml-3">Loading…</span>
+          </div>
+          <div
+            v-else-if="!filteredOccupationGroups.length"
+            class="text-grey text-body-2 text-center py-6"
+          >
+            No occupation classes match your filter.
+          </div>
+          <v-expansion-panels
+            v-else
+            v-model="drawerExpandedClass"
+            multiple
+            variant="accordion"
+          >
+            <v-expansion-panel
+              v-for="grp in filteredOccupationGroups"
+              :key="grp.class"
+              :value="grp.class"
+            >
+              <v-expansion-panel-title>
+                <span class="font-weight-bold">Class {{ grp.class }}</span>
+                <v-chip size="x-small" class="ml-2">
+                  {{ grp.industries.length }} industries
+                </v-chip>
+              </v-expansion-panel-title>
+              <v-expansion-panel-text>
+                <v-expansion-panels variant="accordion" class="ml-n2">
+                  <v-expansion-panel
+                    v-for="ind in grp.industries"
+                    :key="ind.industry"
+                  >
+                    <v-expansion-panel-title>
+                      <span>{{ ind.industry }}</span>
+                      <v-chip
+                        v-if="ind.categories.length"
+                        size="x-small"
+                        class="ml-2"
+                      >
+                        {{ ind.categories.length }}
+                      </v-chip>
+                    </v-expansion-panel-title>
+                    <v-expansion-panel-text>
+                      <ul
+                        v-if="ind.categories.length"
+                        class="text-body-2 pl-4"
+                      >
+                        <li
+                          v-for="cat in ind.categories"
+                          :key="cat"
+                          class="mb-1"
+                        >
+                          {{ cat }}
+                        </li>
+                      </ul>
+                      <div v-else class="text-caption text-grey">
+                        No categories defined.
+                      </div>
+                    </v-expansion-panel-text>
+                  </v-expansion-panel>
+                </v-expansion-panels>
+              </v-expansion-panel-text>
+            </v-expansion-panel>
+          </v-expansion-panels>
+        </v-card-text>
+      </v-card>
+    </v-navigation-drawer>
   </v-container>
 </template>
 
@@ -1322,6 +1551,61 @@ const convRateCharts: any = ref(null)
 const industryPipelineCharts: any = ref(null)
 const schemeSizeCharts: any = ref(null)
 const newQuoteCharts: any = ref(null)
+
+// ── Occupation-class side drawer ─────────────────────────────────────────────
+type OccupationClassIndustry = { industry: string; categories: string[] }
+type OccupationClassGroup = {
+  class: number
+  industries: OccupationClassIndustry[]
+}
+
+const occupationDrawer = ref(false)
+const occupationLoading = ref(false)
+const occupationGroups = ref<OccupationClassGroup[]>([])
+const occupationLoaded = ref(false)
+const occupationSearch = ref('')
+const drawerExpandedClass = ref<number[]>([])
+
+const openOccupationDrawer = async (cls?: number) => {
+  if (typeof cls === 'number') {
+    drawerExpandedClass.value = [cls]
+  }
+  occupationDrawer.value = true
+  if (occupationLoaded.value) return
+  occupationLoading.value = true
+  try {
+    const res = await GroupPricingService.getOccupationClassHierarchy()
+    occupationGroups.value = (res.data ?? []) as OccupationClassGroup[]
+    occupationLoaded.value = true
+  } catch (e) {
+    occupationGroups.value = []
+  } finally {
+    occupationLoading.value = false
+  }
+}
+
+const filteredOccupationGroups = computed<OccupationClassGroup[]>(() => {
+  const q = occupationSearch.value?.trim().toLowerCase() ?? ''
+  if (!q) return occupationGroups.value
+  const result: OccupationClassGroup[] = []
+  for (const g of occupationGroups.value) {
+    const classMatches = `class ${g.class}`.includes(q) || `${g.class}` === q
+    const industries: OccupationClassIndustry[] = []
+    for (const ind of g.industries) {
+      const indMatches = ind.industry.toLowerCase().includes(q)
+      const cats = ind.categories.filter((c) => c.toLowerCase().includes(q))
+      if (classMatches || indMatches) {
+        industries.push({ industry: ind.industry, categories: ind.categories })
+      } else if (cats.length) {
+        industries.push({ industry: ind.industry, categories: cats })
+      }
+    }
+    if (classMatches || industries.length) {
+      result.push({ class: g.class, industries })
+    }
+  }
+  return result
+})
 const renewalsCharts: any = ref(null)
 const conversionCharts: any = ref(null)
 const inForceCharts: any = ref(null)
@@ -1443,6 +1727,15 @@ const availableYears = computed(() => {
 
 const benefitList = ['All', 'GLA', 'SGLA', 'PTD', 'CI', 'PHI', 'TTD']
 const inForceInnerLabel: any = ref<string>('')
+
+const openBrokerDetail = (brokerId: number) => {
+  const year = selectedYearQuoting.value
+  if (!brokerId || !year) return
+  router.push({
+    name: 'group-pricing-broker-performance',
+    params: { brokerId: String(brokerId), year }
+  })
+}
 
 onMounted(() => {
   const currentYear = new Date().getFullYear().toString()
@@ -1967,26 +2260,31 @@ const industryAgeOptions = computed<any>(() => {
     if (!bandSet.includes(r.age_band)) bandSet.push(r.age_band)
   }
 
-  // Unique industries — become the grouped bar series (one colour per industry)
-  const industrySet: string[] = []
+  // Unique occupation classes — become the grouped bar series
+  const classSet: number[] = []
   for (const r of raw) {
-    if (r.industry && !industrySet.includes(r.industry))
-      industrySet.push(r.industry)
+    if (
+      typeof r.occupation_class === 'number' &&
+      !classSet.includes(r.occupation_class)
+    )
+      classSet.push(r.occupation_class)
   }
+  classSet.sort((a, b) => a - b)
+  const classKey = (n: number) => `class_${n}`
 
-  // Pivot: one row per age band, one column per industry
+  // Pivot: one row per age band, one column per class
   const pivotData = bandSet.map((band) => {
     const row: any = { age_band: band }
-    for (const ind of industrySet) {
+    for (const cls of classSet) {
       const match = raw.find(
-        (r: any) => r.age_band === band && r.industry === ind
+        (r: any) => r.age_band === band && r.occupation_class === cls
       )
-      row[ind] = match?.[valueKey] ?? 0
+      row[classKey(cls)] = match?.[valueKey] ?? 0
     }
     return row
   })
 
-  const industryColors = [
+  const classColors = [
     '#006f9b',
     '#ff7f00',
     '#00994d',
@@ -1994,15 +2292,13 @@ const industryAgeOptions = computed<any>(() => {
     '#9467bd',
     '#8c564b',
     '#e377c2',
-    '#7f7f7f',
-    '#bcbd22',
-    '#17becf'
+    '#7f7f7f'
   ]
   const yTitle = isCount ? 'Number of Lives Exposed' : 'Total Sum Assured (R)'
   return {
     data: pivotData,
     title: {
-      text: 'Exposure by Industry & Age Band',
+      text: 'Exposure by Occupation Class & Age Band',
       fontSize: 14,
       fontWeight: 'bold'
     },
@@ -2016,14 +2312,17 @@ const industryAgeOptions = computed<any>(() => {
         paddingY: 6
       }
     },
-    series: industrySet.map((ind, i) => ({
+    series: classSet.map((cls, i) => ({
       type: 'bar',
       xKey: 'age_band',
-      yKey: ind,
-      yName: ind,
-      fill: industryColors[i % industryColors.length],
+      yKey: classKey(cls),
+      yName: `Class ${cls}`,
+      fill: classColors[i % classColors.length],
       stroke: '#000000',
-      strokeWidth: 1
+      strokeWidth: 1,
+      listeners: {
+        nodeClick: () => openOccupationDrawer(cls)
+      }
     })),
     axes: [
       {
@@ -2136,24 +2435,29 @@ const industryAgeOptionsQuoting = computed<any>(() => {
     if (!bandSet.includes(r.age_band)) bandSet.push(r.age_band)
   }
 
-  const industrySet: string[] = []
+  const classSet: number[] = []
   for (const r of raw) {
-    if (r.industry && !industrySet.includes(r.industry))
-      industrySet.push(r.industry)
+    if (
+      typeof r.occupation_class === 'number' &&
+      !classSet.includes(r.occupation_class)
+    )
+      classSet.push(r.occupation_class)
   }
+  classSet.sort((a, b) => a - b)
+  const classKey = (n: number) => `class_${n}`
 
   const pivotData = bandSet.map((band) => {
     const row: any = { age_band: band }
-    for (const ind of industrySet) {
+    for (const cls of classSet) {
       const match = raw.find(
-        (r: any) => r.age_band === band && r.industry === ind
+        (r: any) => r.age_band === band && r.occupation_class === cls
       )
-      row[ind] = match?.[valueKey] ?? 0
+      row[classKey(cls)] = match?.[valueKey] ?? 0
     }
     return row
   })
 
-  const industryColors = [
+  const classColors = [
     '#006f9b',
     '#ff7f00',
     '#00994d',
@@ -2161,15 +2465,13 @@ const industryAgeOptionsQuoting = computed<any>(() => {
     '#9467bd',
     '#8c564b',
     '#e377c2',
-    '#7f7f7f',
-    '#bcbd22',
-    '#17becf'
+    '#7f7f7f'
   ]
   const yTitle = isCount ? 'Number of Lives Exposed' : 'Total Sum Assured (R)'
   return {
     data: pivotData,
     title: {
-      text: 'Exposure by Industry & Age Band',
+      text: 'Exposure by Occupation Class & Age Band',
       fontSize: 14,
       fontWeight: 'bold'
     },
@@ -2183,14 +2485,17 @@ const industryAgeOptionsQuoting = computed<any>(() => {
         paddingY: 6
       }
     },
-    series: industrySet.map((ind, i) => ({
+    series: classSet.map((cls, i) => ({
       type: 'bar',
       xKey: 'age_band',
-      yKey: ind,
-      yName: ind,
-      fill: industryColors[i % industryColors.length],
+      yKey: classKey(cls),
+      yName: `Class ${cls}`,
+      fill: classColors[i % classColors.length],
       stroke: '#000000',
-      strokeWidth: 1
+      strokeWidth: 1,
+      listeners: {
+        nodeClick: () => openOccupationDrawer(cls)
+      }
     })),
     axes: [
       {
@@ -2212,27 +2517,39 @@ const industryAgeOptionsQuoting = computed<any>(() => {
 
 // ── KPI cards default ─────────────────────────────────────────────────────────
 
+const QUOTED_ANNUAL_PREMIUM_INFO =
+  'Sums the annual premium of quotes in Approved or Accepted status for the selected year. Quotes still In Progress or Pending Review are excluded.'
+
+const NEW_QUOTES_INFO =
+  'Counts all New Business quotes created in the selected year, across every status — In Progress, Pending Review, Approved, Accepted, and In Force. Renewals are excluded.'
+
+const CONVERSION_RATE_INFO =
+  'Accepted quotes ÷ (Approved + In Force + Accepted) for the selected year, expressed as a percentage. Includes both New Business and Renewal. Quotes still In Progress or Pending Review are excluded.'
+
 const cardsQuoting = ref<any[]>([
   {
     title: 'New Quotes',
     value: 0,
     flex: 4,
     route: null,
-    data_type: 'number'
+    data_type: 'number',
+    info: NEW_QUOTES_INFO
   },
   {
     title: 'Quoted Annual Premium',
     value: 0,
     flex: 4,
     route: null,
-    data_type: 'currency'
+    data_type: 'currency',
+    info: QUOTED_ANNUAL_PREMIUM_INFO
   },
   {
     title: 'Conversion Rate',
     value: '0%',
     flex: 4,
     route: null,
-    data_type: 'plain'
+    data_type: 'plain',
+    info: CONVERSION_RATE_INFO
   }
 ])
 
@@ -2814,7 +3131,7 @@ const refreshQuotingInner = async () => {
   // Region & industry/age data for the Quoting tab — filtered by the
   // Quoting tab's data source toggle (All Quotes vs Quotes Only)
   rawProvinceDataQuoting.value = data.exposure_by_province ?? []
-  rawIndustryAgeDataQuoting.value = data.industry_by_age ?? []
+  rawIndustryAgeDataQuoting.value = data.occupation_class_by_age ?? []
 
   changeConversionDataSource()
   changeChartDataSource()
@@ -2841,21 +3158,24 @@ const refreshQuotingInner = async () => {
       value: newQuotesCount,
       flex: 4,
       route: null,
-      data_type: 'number'
+      data_type: 'number',
+      info: NEW_QUOTES_INFO
     },
     {
       title: 'Quoted Annual Premium',
       value: quotedPremium,
       flex: 4,
       route: null,
-      data_type: 'currency'
+      data_type: 'currency',
+      info: QUOTED_ANNUAL_PREMIUM_INFO
     },
     {
       title: 'Conversion Rate',
       value: `${convPct}%`,
       flex: 4,
       route: null,
-      data_type: 'plain'
+      data_type: 'plain',
+      info: CONVERSION_RATE_INFO
     }
   ]
 
@@ -2970,13 +3290,16 @@ const refreshQuotingInner = async () => {
     convRateTrendOptions.value = null
   }
 
-  // ── Industry Mix of Active Pipeline ──────────────────────────────────────
-  if (data.industry_pipeline?.length) {
-    const ipRows: any[] = data.industry_pipeline
+  // ── Pipeline Mix by Occupation Class ─────────────────────────────────────
+  if (data.occupation_class_pipeline?.length) {
+    const ipRows: any[] = data.occupation_class_pipeline.map((r: any) => ({
+      ...r,
+      class_label: `Class ${r.occupation_class}`
+    }))
     industryPipelineOptions.value = {
       data: ipRows,
       title: {
-        text: 'Industry Mix — Active Pipeline (Quote Count & Annual Premium)',
+        text: 'Pipeline Mix by Occupation Class (Quote Count & Annual Premium)',
         fontSize: 14,
         fontWeight: 'bold'
       },
@@ -2985,18 +3308,26 @@ const refreshQuotingInner = async () => {
         {
           type: 'bar',
           direction: 'horizontal',
-          xKey: 'industry',
+          xKey: 'class_label',
           yKey: 'quote_count',
           yName: 'Quote Count',
-          fill: '#006f9b'
+          fill: '#006f9b',
+          listeners: {
+            nodeClick: (e: any) =>
+              openOccupationDrawer(e?.datum?.occupation_class)
+          }
         },
         {
           type: 'bar',
           direction: 'horizontal',
-          xKey: 'industry',
+          xKey: 'class_label',
           yKey: 'total_premium',
           yName: 'Annual Premium (R)',
-          fill: '#00994d'
+          fill: '#00994d',
+          listeners: {
+            nodeClick: (e: any) =>
+              openOccupationDrawer(e?.datum?.occupation_class)
+          }
         }
       ],
       axes: [
@@ -3156,7 +3487,7 @@ const refreshInforceInner = async () => {
 
   // Raw data feeds Exposure-by-Region and Industry-by-Age computed charts
   rawProvinceData.value = data.exposure_by_province ?? []
-  rawIndustryAgeData.value = data.industry_by_age ?? []
+  rawIndustryAgeData.value = data.occupation_class_by_age ?? []
 
   getExposureData()
   getExposureTrendData()
@@ -3220,5 +3551,13 @@ const refreshInforceInner = async () => {
 .broker-table thead th {
   font-weight: 600;
   background-color: #eaf3fb;
+}
+
+.broker-row--clickable {
+  cursor: pointer;
+}
+
+.broker-row--clickable:hover {
+  background-color: #f5fafd;
 }
 </style>

@@ -1215,9 +1215,10 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	groupQuote.OccupationClass = GetOccupationClass(groupParameter, groupQuote, selectedSchemeCategory)
 	logger.WithField("occupation_class", groupQuote.OccupationClass).Debug("Updated group quote with basis and occupation class")
 
-	// Pre-load region loadings for this category at the category level (single DB hit, keyed by gender).
-	// Skipped when the table is configured as not required — downstream variables resolve to zero
-	// via the existing graceful-degradation path.
+	// Pre-load region loadings for this category at the category level (single DB hit).
+	// Now keyed by (gender, income_level, occupation_class) — see regionLoadingMapKey.
+	// Skipped when the table is configured as not required — downstream variables resolve
+	// to zero via the existing graceful-degradation path.
 	regionLoadingByGender := make(map[string]models.RegionLoading)
 	if IsTableRequired("regionLoading") && category != nil && category.Region != "" {
 		var categoryRegionLoadings []models.RegionLoading
@@ -1227,13 +1228,14 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		).Find(&categoryRegionLoadings)
 		for _, r := range categoryRegionLoadings {
 			if len(r.Gender) > 0 {
-				regionLoadingByGender[strings.ToUpper(r.Gender[:1])] = r
+				regionLoadingByGender[regionLoadingMapKey(r.Gender, r.IncomeLevel, r.OccupationClass)] = r
 			}
 		}
 	}
 
-	// Pre-load reinsurance region loadings for this category (single DB hit, keyed by gender).
-	// Skipped when the table is configured as not required.
+	// Pre-load reinsurance region loadings for this category (single DB hit).
+	// Keyed by (gender, income_level, occupation_class). Skipped when the table is
+	// configured as not required.
 	reinsRegionLoadingByGender := make(map[string]models.ReinsuranceRegionLoading)
 	if IsTableRequired("reinsuranceRegionLoading") && category != nil && category.Region != "" {
 		var categoryReinsRegionLoadings []models.ReinsuranceRegionLoading
@@ -1243,13 +1245,14 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		).Find(&categoryReinsRegionLoadings)
 		for _, r := range categoryReinsRegionLoadings {
 			if len(r.Gender) > 0 {
-				reinsRegionLoadingByGender[strings.ToUpper(r.Gender[:1])] = r
+				reinsRegionLoadingByGender[regionLoadingMapKey(r.Gender, r.IncomeLevel, r.OccupationClass)] = r
 			}
 		}
 	}
 
-	// Pre-load industry loadings for this category (single DB hit, keyed by gender).
-	// Skipped when the table is configured as not required.
+	// Pre-load industry loadings for this category (single DB hit).
+	// Keyed by (gender, income_level) — occupation_class is still filtered at the
+	// quote level via the WHERE clause. Skipped when the table is not required.
 	industryLoadingByGender := make(map[string]models.IndustryLoading)
 	if IsTableRequired("industryLoading") {
 		var categoryIndustryLoadings []models.IndustryLoading
@@ -1259,7 +1262,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		).Find(&categoryIndustryLoadings)
 		for _, il := range categoryIndustryLoadings {
 			if len(il.Gender) > 0 {
-				industryLoadingByGender[strings.ToUpper(il.Gender[:1])] = il
+				industryLoadingByGender[industryLoadingMapKey(il.Gender, il.IncomeLevel)] = il
 			}
 		}
 	}
@@ -3051,8 +3054,8 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 
 	data, _ := json.Marshal(memberDataPointResult)
 	json.Unmarshal(data, &originalMemberDataPointResult)
-	memberIndustryLoading := industryLoadingByGender[strings.ToUpper(originalMemberDataPointResult.Gender[:1])]
-	memberRegionLoading := regionLoadingByGender[strings.ToUpper(originalMemberDataPointResult.Gender[:1])]
+	memberIndustryLoading := industryLoadingByGender[industryLoadingMapKey(originalMemberDataPointResult.Gender, mpIncomeLevel)]
+	memberRegionLoading := regionLoadingByGender[regionLoadingMapKey(originalMemberDataPointResult.Gender, mpIncomeLevel, originalMemberDataPointResult.OccupationClass)]
 
 	// Persist the per-member region and industry loadings so formulas below
 	// can read them directly from MemberRatingResult.
@@ -3080,7 +3083,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		funAidsQx := applyCoverAgeLimit(GetFuneralAidsRate(memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
 		memberDataPointResult.MainMemberFuneralBaseRate = funQx*(1+memberDataPointResult.FunRegionLoading) + funAidsQx*(1+memberDataPointResult.FunAidsRegionLoading)
 		if len(memberDataPointResult.SpouseGender) > 0 {
-			spouseRegionLoading := regionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+			spouseRegionLoading := regionLoadingByGender[regionLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
 			spouseFunQx := applyCoverAgeLimit(GetSpouseFuneralRate(memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
 			spouseFunAidsQx := applyCoverAgeLimit(GetSpouseFuneralAidsRate(memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
 			memberDataPointResult.SpouseFuneralBaseRate = spouseFunQx*(1+spouseRegionLoading.FunRegionLoadingRate) + spouseFunAidsQx*(1+spouseRegionLoading.FunAidsRegionLoadingRate)
@@ -3184,8 +3187,8 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	}
 
 	if schemeCategory.SglaBenefit && len(memberDataPointResult.SpouseGender) > 0 {
-		spouseIndustryLoading := industryLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
-		spouseRegionLoading := regionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+		spouseIndustryLoading := industryLoadingByGender[industryLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel)]
+		spouseRegionLoading := regionLoadingByGender[regionLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
 		memberDataPointResult.SpouseGlaQx = applyCoverAgeLimit(GetSpouseGlaRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, schemeCategory), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.SpouseGlaAidsQx = applyCoverAgeLimit(GetSpouseGlaAidsRate(memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.SpouseGlaLoading = spouseIndustryLoading.GlaIndustryLoadingRate
@@ -3235,7 +3238,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	// reinsurance_region_loadings). If any reinsurance table is empty for
 	// this risk code the getters return zero values, leaving reinsurance
 	// rates at 0 so non-reinsured schemes are unaffected.
-	reinsIndustryLoadingMain := GetReinsuranceIndustryLoading(groupParameter.RiskRateCode, groupQuote.OccupationClass, memberDataPointResult.Gender[:1])
+	reinsIndustryLoadingMain := GetReinsuranceIndustryLoading(groupParameter.RiskRateCode, groupQuote.OccupationClass, memberDataPointResult.Gender[:1], mpIncomeLevel)
 	memberDataPointResult.ReinsGlaIndustryLoading = reinsIndustryLoadingMain.GlaIndustryLoadingRate
 	memberDataPointResult.ReinsPtdIndustryLoading = reinsIndustryLoadingMain.PtdIndustryLoadingRate
 	memberDataPointResult.ReinsCiIndustryLoading = reinsIndustryLoadingMain.CiIndustryLoadingRate
@@ -3243,7 +3246,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	memberDataPointResult.ReinsPhiIndustryLoading = reinsIndustryLoadingMain.PhiIndustryLoadingRate
 
 	// Reinsurance region loadings (pre-loaded per-gender map built once per category).
-	reinsRegionLoadingMain := reinsRegionLoadingByGender[strings.ToUpper(memberDataPointResult.Gender[:1])]
+	reinsRegionLoadingMain := reinsRegionLoadingByGender[regionLoadingMapKey(memberDataPointResult.Gender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
 	memberDataPointResult.ReinsGlaRegionLoading = reinsRegionLoadingMain.GlaRegionLoadingRate
 	memberDataPointResult.ReinsGlaAidsRegionLoading = reinsRegionLoadingMain.GlaAidsRegionLoadingRate
 	memberDataPointResult.ReinsPtdRegionLoading = reinsRegionLoadingMain.PtdRegionLoadingRate
@@ -3324,11 +3327,11 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 
 	// Spouse GLA
 	if schemeCategory.SglaBenefit && len(memberDataPointResult.SpouseGender) > 0 {
-		spouseReinsIndustry := GetReinsuranceIndustryLoading(groupParameter.RiskRateCode, groupQuote.OccupationClass, memberDataPointResult.SpouseGender[:1])
+		spouseReinsIndustry := GetReinsuranceIndustryLoading(groupParameter.RiskRateCode, groupQuote.OccupationClass, memberDataPointResult.SpouseGender[:1], mpIncomeLevel)
 		memberDataPointResult.ReinsSpouseGlaQx = applyCoverAgeLimit(GetReinsuranceSpouseGlaRate(memberDataPointResult, groupParameter, mpIncomeLevel, schemeCategory), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.ReinsSpouseGlaAidsQx = applyCoverAgeLimit(GetReinsuranceSpouseGlaAidsRate(memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.ReinsSpouseGlaLoading = spouseReinsIndustry.GlaIndustryLoadingRate
-		spouseReinsRegion := reinsRegionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+		spouseReinsRegion := reinsRegionLoadingByGender[regionLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
 		memberDataPointResult.BaseReinsSpouseGlaRate = memberDataPointResult.ReinsSpouseGlaQx*(1+memberDataPointResult.ReinsSpouseGlaLoading+spouseReinsRegion.GlaRegionLoadingRate) +
 			memberDataPointResult.ReinsSpouseGlaAidsQx*(1+spouseReinsRegion.GlaAidsRegionLoadingRate)
 		memberDataPointResult.LoadedReinsSpouseGlaRate = memberDataPointResult.BaseReinsSpouseGlaRate
@@ -3347,7 +3350,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		memberDataPointResult.MainMemberReinsuranceBaseRate = reinsFunQx*(1+memberDataPointResult.ReinsFunRegionLoading) + reinsFunAidsQx*(1+memberDataPointResult.ReinsFunAidsRegionLoading)
 		memberDataPointResult.MainMemberReinsuranceRate = memberDataPointResult.MainMemberReinsuranceBaseRate * (1 + memberDataPointResult.ReinsFunContingencyLoading + memberDataPointResult.ReinsFunVoluntaryLoading)
 		if len(memberDataPointResult.SpouseGender) > 0 {
-			spouseReinsRegion := reinsRegionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+			spouseReinsRegion := reinsRegionLoadingByGender[regionLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
 			spouseReinsFunQx := applyCoverAgeLimit(GetReinsuranceSpouseFuneralRate(memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
 			spouseReinsFunAidsQx := applyCoverAgeLimit(GetReinsuranceSpouseFuneralAidsRate(memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
 			memberDataPointResult.SpouseReinsuranceBaseRate = spouseReinsFunQx*(1+spouseReinsRegion.FunRegionLoadingRate) + spouseReinsFunAidsQx*(1+spouseReinsRegion.FunAidsRegionLoadingRate)
@@ -3546,8 +3549,6 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	memberDataPointResult.Gender = mp.Gender
 	memberDataPointResult.DateOfBirth = mp.DateOfBirth
 	memberDataPointResult.AnnualSalary = mp.AnnualSalary
-	// Look up region loading for this member by gender using the category-level pre-loaded map
-	memberRegionLoadingExp := regionLoadingByGender[strings.ToUpper(memberDataPointResult.Gender[:1])]
 	if !groupQuote.UseGlobalSalaryMultiple {
 		memberDataPointResult.GlaSalaryMultiple = mp.Benefits.GlaMultiple
 		if groupQuote.SchemeCategories[i].PtdBenefit {
@@ -3627,6 +3628,10 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 
 	memberDataPointResult.IncomeLevel = mpIncomeLevel
 
+	// Look up region loading for this member using the category-level pre-loaded map.
+	// Keyed by (gender, income_level, occupation_class).
+	memberRegionLoadingExp := regionLoadingByGender[regionLoadingMapKey(memberDataPointResult.Gender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
+
 	memberDataPointResult.GlaExperienceAdjustment = 1
 	memberDataPointResult.PtdExperienceAdjustment = 1
 	memberDataPointResult.CiExperienceAdjustment = 1
@@ -3687,7 +3692,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	memberDataPointResult.PhiContributionWaiver = math.Min(mp.AnnualSalary*mp.ContributionWaiverProportion, restriction.PhiMaximumMonthlyContributionWaiver) * indicativeRatesCount
 	memberDataPointResult.PhiMonthlyBenefit = memberDataPointResult.PhiCappedIncome + memberDataPointResult.PhiContributionWaiver
 
-	memberIndustryLoading := industryLoadingByGender[strings.ToUpper(memberDataPointResult.Gender[:1])]
+	memberIndustryLoading := industryLoadingByGender[industryLoadingMapKey(memberDataPointResult.Gender, mpIncomeLevel)]
 
 	// Persist the per-member region and industry loadings so formulas below
 	// can read them directly from MemberRatingResult.
@@ -3776,8 +3781,8 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	}
 
 	if groupQuote.SchemeCategories[i].SglaBenefit && len(memberDataPointResult.SpouseGender) > 0 {
-		spouseIndustryLoading := industryLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
-		spouseRegionLoading := regionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+		spouseIndustryLoading := industryLoadingByGender[industryLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel)]
+		spouseRegionLoading := regionLoadingByGender[regionLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
 		memberDataPointResult.SpouseGlaQx = applyCoverAgeLimit(GetSpouseGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, groupQuote.SchemeCategories[i]), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.SpouseGlaAidsQx = applyCoverAgeLimit(GetSpouseGlaAidsRate(&memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.SpouseGlaLoading = spouseIndustryLoading.GlaIndustryLoadingRate
@@ -3827,8 +3832,6 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.Gender = mp.Gender
 	memberDataPointResult.DateOfBirth = mp.DateOfBirth
 	memberDataPointResult.AnnualSalary = mp.AnnualSalary
-	// Look up region loading for this member by gender using the category-level pre-loaded map
-	memberRegionLoading := regionLoadingByGender[strings.ToUpper(memberDataPointResult.Gender[:1])]
 	if !groupQuote.UseGlobalSalaryMultiple {
 		memberDataPointResult.GlaSalaryMultiple = mp.Benefits.GlaMultiple
 		if groupQuote.SchemeCategories[i].PtdBenefit {
@@ -3933,6 +3936,10 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 
 	memberDataPointResult.IncomeLevel = mpIncomeLevel
 
+	// Look up region loading for this member using the category-level pre-loaded map.
+	// Keyed by (gender, income_level, occupation_class).
+	memberRegionLoading := regionLoadingByGender[regionLoadingMapKey(memberDataPointResult.Gender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
+
 	if glatheoreticalRate > 0 && groupQuote.ExperienceRating == "Yes" {
 		memberDataPointResult.GlaTheoreticalRate = glatheoreticalRate
 		memberDataPointResult.GlaExperienceAdjustment = (glatheoreticalRate*(1-credibilityRate) + credibilityRate*annualGlaExperienceWeightedRate) / glatheoreticalRate
@@ -3951,7 +3958,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.AverageNumberChildren = groupFuneralParameter.NumberChildren
 	unScaledGlaSumAssured := mp.AnnualSalary * memberDataPointResult.GlaSalaryMultiple
 
-	memberIndustryLoading := industryLoadingByGender[strings.ToUpper(memberDataPointResult.Gender[:1])]
+	memberIndustryLoading := industryLoadingByGender[industryLoadingMapKey(memberDataPointResult.Gender, mpIncomeLevel)]
 
 	// Persist the per-member region and industry loadings so formulas below
 	// can read them directly from MemberRatingResult.
@@ -4085,7 +4092,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		funAidsQx := applyCoverAgeLimit(GetFuneralAidsRate(&memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
 		memberDataPointResult.MainMemberFuneralBaseRate = funQx*(1+memberDataPointResult.FunRegionLoading) + funAidsQx*(1+memberDataPointResult.FunAidsRegionLoading)
 		if len(memberDataPointResult.SpouseGender) > 0 {
-			spouseRegionLoading := regionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+			spouseRegionLoading := regionLoadingByGender[regionLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
 			spouseFunQx := applyCoverAgeLimit(GetSpouseFuneralRate(&memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
 			spouseFunAidsQx := applyCoverAgeLimit(GetSpouseFuneralAidsRate(&memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
 			memberDataPointResult.SpouseFuneralBaseRate = spouseFunQx*(1+spouseRegionLoading.FunRegionLoadingRate) + spouseFunAidsQx*(1+spouseRegionLoading.FunAidsRegionLoadingRate)
@@ -4181,8 +4188,8 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	}
 
 	if groupQuote.SchemeCategories[i].SglaBenefit && len(memberDataPointResult.SpouseGender) > 0 {
-		spouseIndustryLoading := industryLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
-		spouseRegionLoading := regionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+		spouseIndustryLoading := industryLoadingByGender[industryLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel)]
+		spouseRegionLoading := regionLoadingByGender[regionLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
 		memberDataPointResult.SpouseGlaQx = applyCoverAgeLimit(GetSpouseGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, groupQuote.SchemeCategories[i]), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.SpouseGlaAidsQx = applyCoverAgeLimit(GetSpouseGlaAidsRate(&memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.SpouseGlaLoading = spouseIndustryLoading.GlaIndustryLoadingRate
@@ -4197,14 +4204,14 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	// general loadings from the cached reinsurance getters. Each benefit is
 	// guarded the same way as the direct block so reinsurance fields stay
 	// zero when the relevant benefit is not enabled for this category.
-	reinsIndustryLoadingMain := GetReinsuranceIndustryLoading(groupParameter.RiskRateCode, groupQuote.OccupationClass, memberDataPointResult.Gender)
+	reinsIndustryLoadingMain := GetReinsuranceIndustryLoading(groupParameter.RiskRateCode, groupQuote.OccupationClass, memberDataPointResult.Gender, mpIncomeLevel)
 	memberDataPointResult.ReinsGlaIndustryLoading = reinsIndustryLoadingMain.GlaIndustryLoadingRate
 	memberDataPointResult.ReinsPtdIndustryLoading = reinsIndustryLoadingMain.PtdIndustryLoadingRate
 	memberDataPointResult.ReinsCiIndustryLoading = reinsIndustryLoadingMain.CiIndustryLoadingRate
 	memberDataPointResult.ReinsTtdIndustryLoading = reinsIndustryLoadingMain.TtdIndustryLoadingRate
 	memberDataPointResult.ReinsPhiIndustryLoading = reinsIndustryLoadingMain.PhiIndustryLoadingRate
 
-	reinsRegionLoadingMain := reinsRegionLoadingByGender[strings.ToUpper(memberDataPointResult.Gender[:1])]
+	reinsRegionLoadingMain := reinsRegionLoadingByGender[regionLoadingMapKey(memberDataPointResult.Gender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
 	memberDataPointResult.ReinsGlaRegionLoading = reinsRegionLoadingMain.GlaRegionLoadingRate
 	memberDataPointResult.ReinsGlaAidsRegionLoading = reinsRegionLoadingMain.GlaAidsRegionLoadingRate
 	memberDataPointResult.ReinsPtdRegionLoading = reinsRegionLoadingMain.PtdRegionLoadingRate
@@ -4281,11 +4288,11 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	}
 
 	if groupQuote.SchemeCategories[i].SglaBenefit && len(memberDataPointResult.SpouseGender) > 0 {
-		spouseReinsIndustry := GetReinsuranceIndustryLoading(groupParameter.RiskRateCode, groupQuote.OccupationClass, memberDataPointResult.SpouseGender)
+		spouseReinsIndustry := GetReinsuranceIndustryLoading(groupParameter.RiskRateCode, groupQuote.OccupationClass, memberDataPointResult.SpouseGender, mpIncomeLevel)
 		memberDataPointResult.ReinsSpouseGlaQx = applyCoverAgeLimit(GetReinsuranceSpouseGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote.SchemeCategories[i]), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.ReinsSpouseGlaAidsQx = applyCoverAgeLimit(GetReinsuranceSpouseGlaAidsRate(&memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.ReinsSpouseGlaLoading = spouseReinsIndustry.GlaIndustryLoadingRate
-		spouseReinsRegion := reinsRegionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+		spouseReinsRegion := reinsRegionLoadingByGender[regionLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
 		memberDataPointResult.BaseReinsSpouseGlaRate = memberDataPointResult.ReinsSpouseGlaQx*(1+memberDataPointResult.ReinsSpouseGlaLoading+spouseReinsRegion.GlaRegionLoadingRate) +
 			memberDataPointResult.ReinsSpouseGlaAidsQx*(1+spouseReinsRegion.GlaAidsRegionLoadingRate)
 		memberDataPointResult.LoadedReinsSpouseGlaRate = memberDataPointResult.BaseReinsSpouseGlaRate
@@ -4303,7 +4310,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		memberDataPointResult.MainMemberReinsuranceBaseRate = reinsFunQx*(1+memberDataPointResult.ReinsFunRegionLoading) + reinsFunAidsQx*(1+memberDataPointResult.ReinsFunAidsRegionLoading)
 		memberDataPointResult.MainMemberReinsuranceRate = memberDataPointResult.MainMemberReinsuranceBaseRate * (1 + memberDataPointResult.ReinsFunContingencyLoading + memberDataPointResult.ReinsFunVoluntaryLoading)
 		if len(memberDataPointResult.SpouseGender) > 0 {
-			spouseReinsRegion := reinsRegionLoadingByGender[strings.ToUpper(memberDataPointResult.SpouseGender[:1])]
+			spouseReinsRegion := reinsRegionLoadingByGender[regionLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
 			spouseReinsFunQx := applyCoverAgeLimit(GetReinsuranceSpouseFuneralRate(&memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
 			spouseReinsFunAidsQx := applyCoverAgeLimit(GetReinsuranceSpouseFuneralAidsRate(&memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
 			memberDataPointResult.SpouseReinsuranceBaseRate = spouseReinsFunQx*(1+spouseReinsRegion.FunRegionLoadingRate) + spouseReinsFunAidsQx*(1+spouseReinsRegion.FunAidsRegionLoadingRate)
@@ -6926,7 +6933,7 @@ func SaveGPTables(v *multipart.FileHeader, tableType string, riskRateCode string
 				return fmt.Errorf("error decoding Commission Structure at row %d: %v", i, err)
 			}
 			pp.Channel = strings.ToLower(strings.TrimSpace(pp.Channel))
-			pp.HolderName = strings.TrimSpace(pp.HolderName)
+			pp.HolderName = strings.ToLower(strings.TrimSpace(pp.HolderName))
 			if pp.Channel == "" {
 				return fmt.Errorf("error decoding Commission Structure at row %d: channel is required", i)
 			}
@@ -7551,6 +7558,7 @@ func GetGlaRate(memberResultData *models.MemberRatingResult, groupPricingParamet
 	keyString.WriteString(strconv.Itoa(memberResultData.AgeNextBirthday) + "_")
 	keyString.WriteString(strconv.Itoa(incomeLevel) + "_") //incomelevel
 	keyString.WriteString(memberResultData.Gender[:1] + "_")
+	keyString.WriteString(strconv.Itoa(memberResultData.OccupationClass) + "_")
 	keyString.WriteString(strconv.Itoa(schemeCategory.GlaWaitingPeriod) + "_")
 	keyString.WriteString(schemeCategory.GlaBenefitType + "_")
 	key := keyString.String()
@@ -7566,8 +7574,8 @@ func GetGlaRate(memberResultData *models.MemberRatingResult, groupPricingParamet
 		//fmt.Println("cache missed: ", key)
 	}
 	var qx float64
-	query := "risk_rate_code=? and age_next_birthday=? and income_level=? and gender=? and waiting_period=? and benefit_type=?"
-	err := DB.Table(tableName).Where(query, groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, incomeLevel, memberResultData.Gender, schemeCategory.GlaWaitingPeriod, schemeCategory.GlaBenefitType).Pluck("qx", &qx).Error //.Select("qx").Row()
+	query := "risk_rate_code=? and age_next_birthday=? and income_level=? and gender=? and occupation_class=? and waiting_period=? and benefit_type=?"
+	err := DB.Table(tableName).Where(query, groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, incomeLevel, memberResultData.Gender, memberResultData.OccupationClass, schemeCategory.GlaWaitingPeriod, schemeCategory.GlaBenefitType).Pluck("qx", &qx).Error //.Select("qx").Row()
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -7620,6 +7628,7 @@ func GetAdditionalAccidentalGlaRate(memberResultData *models.MemberRatingResult,
 	keyString.WriteString(strconv.Itoa(memberResultData.AgeNextBirthday) + "_")
 	keyString.WriteString(strconv.Itoa(incomeLevel) + "_")
 	keyString.WriteString(memberResultData.Gender[:1] + "_")
+	keyString.WriteString(strconv.Itoa(memberResultData.OccupationClass) + "_")
 	keyString.WriteString(strconv.Itoa(schemeCategory.GlaWaitingPeriod) + "_")
 	keyString.WriteString(schemeCategory.AdditionalAccidentalGlaBenefitType + "_")
 	key := keyString.String()
@@ -7631,8 +7640,8 @@ func GetAdditionalAccidentalGlaRate(memberResultData *models.MemberRatingResult,
 		return result
 	}
 	var qx float64
-	query := "risk_rate_code=? and age_next_birthday=? and income_level=? and gender=? and waiting_period=? and benefit_type=?"
-	err := DB.Table(tableName).Where(query, groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, incomeLevel, memberResultData.Gender, schemeCategory.GlaWaitingPeriod, schemeCategory.AdditionalAccidentalGlaBenefitType).Pluck("qx", &qx).Error
+	query := "risk_rate_code=? and age_next_birthday=? and income_level=? and gender=? and occupation_class=? and waiting_period=? and benefit_type=?"
+	err := DB.Table(tableName).Where(query, groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, incomeLevel, memberResultData.Gender, memberResultData.OccupationClass, schemeCategory.GlaWaitingPeriod, schemeCategory.AdditionalAccidentalGlaBenefitType).Pluck("qx", &qx).Error
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -7647,6 +7656,7 @@ func GetGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingPar
 	keyString.WriteString(groupPricingParameter.RiskRateCode + "_")
 	keyString.WriteString(strconv.Itoa(memberResultData.AgeNextBirthday) + "_")
 	keyString.WriteString(memberResultData.Gender[:1] + "_")
+	keyString.WriteString(strconv.Itoa(memberResultData.OccupationClass) + "_")
 	key := keyString.String()
 
 	cacheKey := tableName + "_" + key
@@ -7656,10 +7666,11 @@ func GetGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingPar
 
 	var qx float64
 	err := DB.Table(tableName).
-		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ?",
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ? AND occupation_class = ?",
 			groupPricingParameter.RiskRateCode,
 			memberResultData.AgeNextBirthday,
 			memberResultData.Gender[:1],
+			memberResultData.OccupationClass,
 		).
 		Pluck("gla_aids_qx", &qx).Error
 	if err != nil {
@@ -7678,6 +7689,7 @@ func GetSpouseGlaAidsRate(memberResultData *models.MemberRatingResult, groupPric
 	keyString.WriteString(groupPricingParameter.RiskRateCode + "_")
 	keyString.WriteString(strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_")
 	keyString.WriteString(memberResultData.SpouseGender[:1] + "_")
+	keyString.WriteString(strconv.Itoa(memberResultData.OccupationClass) + "_")
 	key := keyString.String()
 
 	cacheKey := tableName + "_" + key
@@ -7687,10 +7699,11 @@ func GetSpouseGlaAidsRate(memberResultData *models.MemberRatingResult, groupPric
 
 	var qx float64
 	err := DB.Table(tableName).
-		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ?",
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ? AND occupation_class = ?",
 			groupPricingParameter.RiskRateCode,
 			memberResultData.SpouseAgeNextBirthday,
 			memberResultData.SpouseGender[:1],
+			memberResultData.OccupationClass,
 		).
 		Pluck("gla_aids_qx", &qx).Error
 	if err != nil {
@@ -7701,7 +7714,30 @@ func GetSpouseGlaAidsRate(memberResultData *models.MemberRatingResult, groupPric
 	return qx
 }
 
-func GetRegionLoading(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, region string) models.RegionLoading {
+// industryLoadingMapKey builds the composite key used by the pre-loaded
+// industryLoadingByGender / reinsIndustryLoadingByGender maps. The maps now
+// resolve a single (gender, income_level) row, so all read/write sites must
+// build the key the same way.
+func industryLoadingMapKey(gender string, incomeLevel int) string {
+	g := ""
+	if len(gender) > 0 {
+		g = strings.ToUpper(gender[:1])
+	}
+	return g + "_" + strconv.Itoa(incomeLevel)
+}
+
+// regionLoadingMapKey builds the composite key used by the pre-loaded
+// regionLoadingByGender / reinsRegionLoadingByGender maps. Keyed by
+// (gender, income_level, occupation_class).
+func regionLoadingMapKey(gender string, incomeLevel, occupationClass int) string {
+	g := ""
+	if len(gender) > 0 {
+		g = strings.ToUpper(gender[:1])
+	}
+	return g + "_" + strconv.Itoa(incomeLevel) + "_" + strconv.Itoa(occupationClass)
+}
+
+func GetRegionLoading(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, region string, incomeLevel int) models.RegionLoading {
 	// Short-circuit when the table is configured as not required: skip both
 	// the cache lookup and the DB read, returning a zero-value struct so
 	// downstream loadings resolve to 0.
@@ -7715,6 +7751,8 @@ func GetRegionLoading(memberResultData *models.MemberRatingResult, groupPricingP
 	keyString.WriteString(groupPricingParameter.RiskRateCode + "_")
 	keyString.WriteString(memberResultData.Gender[:1] + "_")
 	keyString.WriteString(strings.TrimSpace(region) + "_")
+	keyString.WriteString(strconv.Itoa(incomeLevel) + "_")
+	keyString.WriteString(strconv.Itoa(memberResultData.OccupationClass) + "_")
 	key := keyString.String()
 
 	cacheKey := tableName + "_" + key
@@ -7724,10 +7762,12 @@ func GetRegionLoading(memberResultData *models.MemberRatingResult, groupPricingP
 
 	var regionLoading models.RegionLoading
 	err := DB.Table(tableName).
-		Where("risk_rate_code = ? AND gender = ? AND region = ?",
+		Where("risk_rate_code = ? AND gender = ? AND region = ? AND income_level = ? AND occupation_class = ?",
 			groupPricingParameter.RiskRateCode,
 			memberResultData.Gender[:1],
 			strings.TrimSpace(region),
+			incomeLevel,
+			memberResultData.OccupationClass,
 		).
 		First(&regionLoading).Error
 	if err != nil {
@@ -9179,14 +9219,14 @@ func GetSpouseFuneralAidsRate(memberResultData *models.MemberRatingResult, group
 // not break pricing for schemes without reinsurance).
 func GetReinsuranceGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
 	tableName := "reinsurance_gla_aids_rates"
-	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + memberResultData.Gender[:1]
+	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + memberResultData.Gender[:1] + "_" + strconv.Itoa(memberResultData.OccupationClass)
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
 		return cached.(float64)
 	}
 	var qx float64
 	DB.Table(tableName).
-		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ?",
-			groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, memberResultData.Gender[:1]).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ? AND occupation_class = ?",
+			groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, memberResultData.Gender[:1], memberResultData.OccupationClass).
 		Pluck("gla_aids_qx", &qx)
 	GroupPricingCache.Set(cacheKey, qx, 1)
 	return qx
@@ -9195,14 +9235,14 @@ func GetReinsuranceGlaAidsRate(memberResultData *models.MemberRatingResult, grou
 // GetReinsuranceSpouseGlaAidsRate — spouse variant of GetReinsuranceGlaAidsRate.
 func GetReinsuranceSpouseGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
 	tableName := "reinsurance_gla_aids_rates"
-	cacheKey := tableName + "_spouse_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_" + memberResultData.SpouseGender[:1]
+	cacheKey := tableName + "_spouse_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_" + memberResultData.SpouseGender[:1] + "_" + strconv.Itoa(memberResultData.OccupationClass)
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
 		return cached.(float64)
 	}
 	var qx float64
 	DB.Table(tableName).
-		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ?",
-			groupPricingParameter.RiskRateCode, memberResultData.SpouseAgeNextBirthday, memberResultData.SpouseGender[:1]).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ? AND occupation_class = ?",
+			groupPricingParameter.RiskRateCode, memberResultData.SpouseAgeNextBirthday, memberResultData.SpouseGender[:1], memberResultData.OccupationClass).
 		Pluck("gla_aids_qx", &qx)
 	GroupPricingCache.Set(cacheKey, qx, 1)
 	return qx
@@ -9302,32 +9342,34 @@ func GetReinsuranceGeneralLoading(riskRateCode string, age int, gender string) m
 // mirroring the normalization done by the direct-pricing industry-loading
 // map built at api/services/group_pricing.go:1157 — the DB can store
 // "Male"/"Female"/"M"/"F"/"m" and the lookup still finds the right row.
-func GetReinsuranceIndustryLoading(riskRateCode string, occupationClass int, gender string) models.ReinsuranceIndustryLoading {
+func GetReinsuranceIndustryLoading(riskRateCode string, occupationClass int, gender string, incomeLevel int) models.ReinsuranceIndustryLoading {
 	if !IsTableRequired("reinsuranceIndustryLoading") {
 		return models.ReinsuranceIndustryLoading{}
 	}
 	tableName := "reinsurance_industry_loadings"
-	mapKey := tableName + "_bygender_" + riskRateCode + "_" + strconv.Itoa(occupationClass)
-	var byGender map[string]models.ReinsuranceIndustryLoading
+	// Cache the (risk, occupation_class) row set, then resolve the right row in
+	// memory by (gender, income_level). One DB hit per (risk, occupation_class).
+	mapKey := tableName + "_bykey_" + riskRateCode + "_" + strconv.Itoa(occupationClass)
+	var byKey map[string]models.ReinsuranceIndustryLoading
 	if cached, found := GroupPricingCache.Get(mapKey); found {
-		byGender = cached.(map[string]models.ReinsuranceIndustryLoading)
+		byKey = cached.(map[string]models.ReinsuranceIndustryLoading)
 	} else {
-		byGender = make(map[string]models.ReinsuranceIndustryLoading)
+		byKey = make(map[string]models.ReinsuranceIndustryLoading)
 		var rows []models.ReinsuranceIndustryLoading
 		DB.Table(tableName).
 			Where("risk_rate_code = ? AND occupation_class = ?", riskRateCode, occupationClass).
 			Find(&rows)
 		for _, r := range rows {
 			if len(r.Gender) > 0 {
-				byGender[strings.ToUpper(r.Gender[:1])] = r
+				byKey[industryLoadingMapKey(r.Gender, r.IncomeLevel)] = r
 			}
 		}
-		GroupPricingCache.Set(mapKey, byGender, 1)
+		GroupPricingCache.Set(mapKey, byKey, 1)
 	}
 	if len(gender) == 0 {
 		return models.ReinsuranceIndustryLoading{}
 	}
-	return byGender[strings.ToUpper(gender[:1])]
+	return byKey[industryLoadingMapKey(gender, incomeLevel)]
 }
 
 // GetReinsuranceRegionLoading returns one row from reinsurance_region_loadings
@@ -9337,19 +9379,19 @@ func GetReinsuranceIndustryLoading(riskRateCode string, occupationClass int, gen
 //
 // Also short-circuits when the table is configured as not required: skips
 // the cache and DB read entirely, returning zero.
-func GetReinsuranceRegionLoading(riskRateCode string, gender string, region string) models.ReinsuranceRegionLoading {
+func GetReinsuranceRegionLoading(riskRateCode string, gender string, region string, incomeLevel, occupationClass int) models.ReinsuranceRegionLoading {
 	if !IsTableRequired("reinsuranceRegionLoading") {
 		return models.ReinsuranceRegionLoading{}
 	}
 	tableName := "reinsurance_region_loadings"
-	cacheKey := tableName + "_" + riskRateCode + "_" + strings.ToUpper(gender) + "_" + strings.TrimSpace(region)
+	cacheKey := tableName + "_" + riskRateCode + "_" + strings.ToUpper(gender) + "_" + strings.TrimSpace(region) + "_" + strconv.Itoa(incomeLevel) + "_" + strconv.Itoa(occupationClass)
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
 		return cached.(models.ReinsuranceRegionLoading)
 	}
 	var loading models.ReinsuranceRegionLoading
 	DB.Table(tableName).
-		Where("risk_rate_code = ? AND gender = ? AND region = ?",
-			riskRateCode, strings.ToUpper(gender), strings.TrimSpace(region)).
+		Where("risk_rate_code = ? AND gender = ? AND region = ? AND income_level = ? AND occupation_class = ?",
+			riskRateCode, strings.ToUpper(gender), strings.TrimSpace(region), incomeLevel, occupationClass).
 		First(&loading)
 	GroupPricingCache.Set(cacheKey, loading, 1)
 	return loading
@@ -9364,14 +9406,14 @@ func GetReinsuranceRegionLoading(riskRateCode string, gender string, region stri
 // reference pattern used by the existing gla_rates table.
 func GetReinsuranceGlaRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, schemeCategory models.SchemeCategory) float64 {
 	tableName := "reinsurance_gla_rates"
-	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + strconv.Itoa(incomeLevel) + "_" + memberResultData.Gender + "_" + strconv.Itoa(schemeCategory.GlaWaitingPeriod)
+	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + strconv.Itoa(incomeLevel) + "_" + memberResultData.Gender + "_" + strconv.Itoa(memberResultData.OccupationClass) + "_" + strconv.Itoa(schemeCategory.GlaWaitingPeriod)
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
 		return cached.(float64)
 	}
 	var qx float64
 	DB.Table(tableName).
-		Where("risk_rate_code = ? AND age_next_birthday = ? AND income_level = ? AND gender = ? AND waiting_period = ?",
-			groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, incomeLevel, memberResultData.Gender, schemeCategory.GlaWaitingPeriod).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND income_level = ? AND gender = ? AND occupation_class = ? AND waiting_period = ?",
+			groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, incomeLevel, memberResultData.Gender, memberResultData.OccupationClass, schemeCategory.GlaWaitingPeriod).
 		Pluck("re_qx", &qx)
 	GroupPricingCache.Set(cacheKey, qx, 1)
 	return qx
@@ -9380,14 +9422,14 @@ func GetReinsuranceGlaRate(memberResultData *models.MemberRatingResult, groupPri
 // GetReinsuranceSpouseGlaRate — spouse variant.
 func GetReinsuranceSpouseGlaRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, schemeCategory models.SchemeCategory) float64 {
 	tableName := "reinsurance_gla_rates"
-	cacheKey := tableName + "_spouse_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_" + strconv.Itoa(incomeLevel) + "_" + memberResultData.SpouseGender + "_" + strconv.Itoa(schemeCategory.GlaWaitingPeriod)
+	cacheKey := tableName + "_spouse_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_" + strconv.Itoa(incomeLevel) + "_" + memberResultData.SpouseGender + "_" + strconv.Itoa(memberResultData.OccupationClass) + "_" + strconv.Itoa(schemeCategory.GlaWaitingPeriod)
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
 		return cached.(float64)
 	}
 	var qx float64
 	DB.Table(tableName).
-		Where("risk_rate_code = ? AND age_next_birthday = ? AND income_level = ? AND gender = ? AND waiting_period = ?",
-			groupPricingParameter.RiskRateCode, memberResultData.SpouseAgeNextBirthday, incomeLevel, memberResultData.SpouseGender, schemeCategory.GlaWaitingPeriod).
+		Where("risk_rate_code = ? AND age_next_birthday = ? AND income_level = ? AND gender = ? AND occupation_class = ? AND waiting_period = ?",
+			groupPricingParameter.RiskRateCode, memberResultData.SpouseAgeNextBirthday, incomeLevel, memberResultData.SpouseGender, memberResultData.OccupationClass, schemeCategory.GlaWaitingPeriod).
 		Pluck("re_qx", &qx)
 	GroupPricingCache.Set(cacheKey, qx, 1)
 	return qx
@@ -9902,6 +9944,7 @@ func GetSpouseGlaRate(memberResultData *models.MemberRatingResult, groupPricingP
 	keyString.WriteString(strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_")
 	keyString.WriteString(strconv.Itoa(incomeLevel) + "_") //incomelevel
 	keyString.WriteString(memberResultData.SpouseGender[:1] + "_")
+	keyString.WriteString(strconv.Itoa(memberResultData.OccupationClass) + "_")
 	keyString.WriteString(strconv.Itoa(schemeCategory.GlaWaitingPeriod) + "_")
 	key := keyString.String()
 	cacheKey := tableName + "_" + key
@@ -9916,8 +9959,8 @@ func GetSpouseGlaRate(memberResultData *models.MemberRatingResult, groupPricingP
 		//fmt.Println("cache missed: ", key)
 	}
 	var qx float64
-	query := "risk_rate_code=? and age_next_birthday=? and income_level=? and gender=? and waiting_period=?"
-	err := DB.Table(tableName).Where(query, groupPricingParameter.RiskRateCode, memberResultData.SpouseAgeNextBirthday, incomeLevel, memberResultData.SpouseGender, schemeCategory.GlaWaitingPeriod).Pluck("qx", &qx).Error
+	query := "risk_rate_code=? and age_next_birthday=? and income_level=? and gender=? and occupation_class=? and waiting_period=?"
+	err := DB.Table(tableName).Where(query, groupPricingParameter.RiskRateCode, memberResultData.SpouseAgeNextBirthday, incomeLevel, memberResultData.SpouseGender, memberResultData.OccupationClass, schemeCategory.GlaWaitingPeriod).Pluck("qx", &qx).Error
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -10217,14 +10260,14 @@ func CalculateAdditionalGlaCoverBandRates(
 	// relies on the DB's implicit conversion; do the same here.
 	var glaRows []models.GlaRate
 	if err := DB.Table("gla_rates").
-		Where("risk_rate_code = ? AND benefit_type = ? AND waiting_period = ? AND income_level = ?",
-			riskRateCode, benefitType, waitingPeriod, incomeLevel).
+		Where("risk_rate_code = ? AND benefit_type = ? AND waiting_period = ? AND income_level = ? AND occupation_class = ?",
+			riskRateCode, benefitType, waitingPeriod, incomeLevel, occupationClass).
 		Find(&glaRows).Error; err != nil {
 		return nil, err
 	}
 	if len(glaRows) == 0 {
-		return nil, fmt.Errorf("no gla_rates found for risk_rate_code=%s, benefit_type=%s, waiting_period=%d, income_level=%d",
-			riskRateCode, benefitType, waitingPeriod, incomeLevel)
+		return nil, fmt.Errorf("no gla_rates found for risk_rate_code=%s, benefit_type=%s, waiting_period=%d, income_level=%d, occupation_class=%d",
+			riskRateCode, benefitType, waitingPeriod, incomeLevel, occupationClass)
 	}
 
 	type genderAgg struct {
@@ -10315,7 +10358,7 @@ func CalculateAdditionalGlaCoverBandRates(
 	// path which simply looks up 0 when nothing is stored).
 	var aidsRows []models.GlaAidsRate
 	if err := DB.Table("gla_aids_rates").
-		Where("risk_rate_code = ?", riskRateCode).
+		Where("risk_rate_code = ? AND occupation_class = ?", riskRateCode, occupationClass).
 		Find(&aidsRows).Error; err != nil {
 		return nil, err
 	}
@@ -10358,7 +10401,8 @@ func CalculateAdditionalGlaCoverBandRates(
 	var regionRows []models.RegionLoading
 	if region != "" {
 		if err := DB.Table("region_loadings").
-			Where("risk_rate_code = ? AND region = ?", riskRateCode, strings.TrimSpace(region)).
+			Where("risk_rate_code = ? AND region = ? AND income_level = ? AND occupation_class = ?",
+				riskRateCode, strings.TrimSpace(region), incomeLevel, occupationClass).
 			Find(&regionRows).Error; err != nil {
 			return nil, err
 		}
@@ -10404,7 +10448,7 @@ func CalculateAdditionalGlaCoverBandRates(
 	// Blend by male prop, uniform across ages.
 	var industryRows []models.IndustryLoading
 	if err := DB.Table("industry_loadings").
-		Where("risk_rate_code = ? AND occupation_class = ?", riskRateCode, occupationClass).
+		Where("risk_rate_code = ? AND occupation_class = ? AND income_level = ?", riskRateCode, occupationClass, incomeLevel).
 		Find(&industryRows).Error; err != nil {
 		return nil, err
 	}
@@ -11082,6 +11126,7 @@ func holderLabel(holder string) string {
 // invariant holds transactionally on a per-holder basis.
 func ValidateCommissionBandsForChannelHolder(channel, holderName string) error {
 	channel = strings.ToLower(strings.TrimSpace(channel))
+	holderName = strings.ToLower(strings.TrimSpace(holderName))
 	if channel == "" {
 		return fmt.Errorf("channel is required")
 	}
@@ -11134,7 +11179,7 @@ func validateBandsSlice(channel, holderName string, bands []models.CommissionStr
 
 func CreateCommissionBand(band models.CommissionStructure, appUser models.AppUser) error {
 	band.Channel = strings.ToLower(strings.TrimSpace(band.Channel))
-	band.HolderName = strings.TrimSpace(band.HolderName)
+	band.HolderName = strings.ToLower(strings.TrimSpace(band.HolderName))
 	if band.Channel == "direct" {
 		return fmt.Errorf("direct channel is always 0%% and cannot have bands")
 	}
@@ -11162,7 +11207,7 @@ func GetCommissionBands(channel, holderName string, holderFilterProvided, allHol
 		q = q.Where("channel = ?", strings.ToLower(strings.TrimSpace(channel)))
 	}
 	if !allHolders && holderFilterProvided {
-		q = q.Where("holder_name = ?", strings.TrimSpace(holderName))
+		q = q.Where("holder_name = ?", strings.ToLower(strings.TrimSpace(holderName)))
 	}
 	if err := q.Find(&bands).Error; err != nil {
 		return nil, err
@@ -11180,7 +11225,7 @@ func GetCommissionBand(id string) (models.CommissionStructure, error) {
 
 func EditCommissionBand(id string, payload models.CommissionStructure) (models.CommissionStructure, error) {
 	payload.Channel = strings.ToLower(strings.TrimSpace(payload.Channel))
-	payload.HolderName = strings.TrimSpace(payload.HolderName)
+	payload.HolderName = strings.ToLower(strings.TrimSpace(payload.HolderName))
 	if payload.Channel == "direct" {
 		return payload, fmt.Errorf("direct channel is always 0%% and cannot have bands")
 	}
@@ -11244,6 +11289,7 @@ func DeleteCommissionBand(id string) error {
 // used inside Create/Edit flows — validates one (channel, holder) group.
 func validateCommissionBandsForChannelHolderTx(tx *gorm.DB, channel, holderName string) error {
 	channel = strings.ToLower(strings.TrimSpace(channel))
+	holderName = strings.ToLower(strings.TrimSpace(holderName))
 	if channel == "" || channel == "direct" {
 		return nil
 	}
@@ -11266,7 +11312,7 @@ func validateCommissionBandsForChannelHolderTx(tx *gorm.DB, channel, holderName 
 // The return value is a decimal fraction (e.g. 0.053 for 5.3%).
 func ComputeProgressiveCommission(channel, holderName string, annualPremium float64) (float64, error) {
 	channel = strings.ToLower(strings.TrimSpace(channel))
-	holderName = strings.TrimSpace(holderName)
+	holderName = strings.ToLower(strings.TrimSpace(holderName))
 	if channel == "direct" || annualPremium <= 0 {
 		return 0, nil
 	}
@@ -13662,20 +13708,31 @@ func GetGroupPricingDashboardData(year int, dataSource string, benefit string) (
 	resultData["quote_funnel"] = funnelStages
 
 	// ── Broker Metrics (top 10 by quote volume) ─────────────────────────────────
+	// Loss ratio is approved claims (joined via group_schemes.broker_id) over
+	// total premium for the year. The claims subquery is left-joined so brokers
+	// with no claims still appear in the listing.
 	type brokerRow struct {
 		BrokerID       int     `gorm:"column:broker_id"`
 		BrokerName     string  `gorm:"column:broker_name"`
 		TotalQuotes    int64   `gorm:"column:total_quotes"`
 		AcceptedQuotes int64   `gorm:"column:accepted_quotes"`
 		TotalPremium   float64 `gorm:"column:total_premium"`
+		ApprovedClaims float64 `gorm:"column:approved_claims"`
 	}
 	var brokerRows []brokerRow
+	claimsSubquery := DB.Table("group_scheme_claims gsc").
+		Select("gs.broker_id, COALESCE(SUM(gsc.claim_amount), 0) AS approved_claims").
+		Joins("JOIN group_schemes gs ON gs.id = gsc.scheme_id").
+		Where("gsc.status = ? AND YEAR(gsc.date_of_event) = ?", models.StatusApproved, year).
+		Group("gs.broker_id")
 	DB.Table("group_pricing_quotes q").
 		Select(`q.broker_id, q.broker_name,
 			COUNT(DISTINCT q.id) as total_quotes,
 			COUNT(DISTINCT CASE WHEN q.status = 'accepted' THEN q.id END) as accepted_quotes,
-			COALESCE(SUM(s.total_annual_premium), 0) as total_premium`).
+			COALESCE(SUM(s.total_annual_premium), 0) as total_premium,
+			COALESCE(MAX(c.approved_claims), 0) as approved_claims`).
 		Joins("LEFT JOIN member_rating_result_summaries s ON s.quote_id = q.id AND YEAR(s.creation_date) = ?", year).
+		Joins("LEFT JOIN (?) c ON c.broker_id = q.broker_id", claimsSubquery).
 		Where("YEAR(q.creation_date) = ?", year).
 		Group("q.broker_id, q.broker_name").
 		Order("total_quotes DESC").
@@ -13688,13 +13745,19 @@ func GetGroupPricingDashboardData(year int, dataSource string, benefit string) (
 		if b.TotalQuotes > 0 {
 			cr = float64(b.AcceptedQuotes) / float64(b.TotalQuotes) * 100
 		}
+		var alr float64
+		if b.TotalPremium > 0 {
+			alr = b.ApprovedClaims / b.TotalPremium * 100
+		}
 		brokerMetrics = append(brokerMetrics, models.BrokerMetric{
-			BrokerID:       b.BrokerID,
-			BrokerName:     b.BrokerName,
-			TotalQuotes:    b.TotalQuotes,
-			AcceptedQuotes: b.AcceptedQuotes,
-			ConversionRate: FloatPrecision(cr, 1),
-			TotalPremium:   FloatPrecision(b.TotalPremium, AccountingPrecision),
+			BrokerID:        b.BrokerID,
+			BrokerName:      b.BrokerName,
+			TotalQuotes:     b.TotalQuotes,
+			AcceptedQuotes:  b.AcceptedQuotes,
+			ConversionRate:  FloatPrecision(cr, 1),
+			TotalPremium:    FloatPrecision(b.TotalPremium, AccountingPrecision),
+			ApprovedClaims:  FloatPrecision(b.ApprovedClaims, AccountingPrecision),
+			ActualLossRatio: FloatPrecision(alr, 1),
 		})
 	}
 	resultData["broker_metrics"] = brokerMetrics
@@ -13818,36 +13881,39 @@ func GetGroupPricingDashboardData(year int, dataSource string, benefit string) (
 	}
 	resultData["exposure_by_province"] = provinceRows
 
-	// ── Industry by Age ───────────────────────────────────────────────────────
-	// Sum assured cross-tabulated by industry and age band.
-	// Uses group_scheme_exposures (filtered by financial_year) for consistency
-	// with the age-band and gender exposure charts.
-	type industryAgeRow struct {
-		Industry        string  `gorm:"column:industry" json:"industry"`
+	// ── Occupation Class by Age ───────────────────────────────────────────────
+	// Sum assured cross-tabulated by occupation class and age band.
+	// JOINs group_scheme_exposures → group_pricing_quotes to grab the quote's
+	// occupation_class (the exposure record itself only carries `industry`).
+	type occClassAgeRow struct {
+		OccupationClass int     `gorm:"column:occupation_class" json:"occupation_class"`
 		AgeBand         string  `gorm:"column:age_band" json:"age_band"`
 		TotalSumAssured float64 `gorm:"column:total_sum_assured" json:"total_sum_assured"`
 		RecordCount     int64   `gorm:"column:record_count" json:"record_count"`
 		MinAge          int     `gorm:"column:min_age" json:"min_age"`
 	}
-	var industryAgeRows []industryAgeRow
-	industryAgeQ := DB.Table("group_scheme_exposures").
-		Select(`industry, age_band, MIN(min_age) as min_age,
-			COUNT(*) as record_count, SUM(total_sum_assured) as total_sum_assured`).
-		Where("financial_year = ? AND industry IS NOT NULL AND industry != ''", year)
+	var occClassAgeRows []occClassAgeRow
+	occClassAgeQ := DB.Table("group_scheme_exposures gse").
+		Select(`q.occupation_class, gse.age_band, MIN(gse.min_age) as min_age,
+			COUNT(*) as record_count, SUM(gse.total_sum_assured) as total_sum_assured`).
+		Joins("JOIN group_pricing_quotes q ON q.id = gse.quote_id").
+		Where("gse.financial_year = ? AND q.occupation_class IS NOT NULL AND q.occupation_class > 0", year)
 	if benefit != "" && benefit != "All" {
-		industryAgeQ = industryAgeQ.Where("benefit = ?", benefit)
+		occClassAgeQ = occClassAgeQ.Where("gse.benefit = ?", benefit)
 	}
 	switch dataSource {
 	case "inforce":
-		industryAgeQ = industryAgeQ.Where("quote_status IN ?", []string{"accepted", "in_force"})
+		occClassAgeQ = occClassAgeQ.Where("gse.quote_status IN ?", []string{"accepted", "in_force"})
 	case "quotes":
-		industryAgeQ = industryAgeQ.Where("quote_status NOT IN ?", []string{"accepted", "in_force"})
+		occClassAgeQ = occClassAgeQ.Where("gse.quote_status NOT IN ?", []string{"accepted", "in_force"})
 	}
-	industryAgeQ.Group("industry, age_band").Order("industry, MIN(min_age) ASC").Scan(&industryAgeRows)
-	if industryAgeRows == nil {
-		industryAgeRows = []industryAgeRow{}
+	occClassAgeQ.Group("q.occupation_class, gse.age_band").
+		Order("q.occupation_class, MIN(gse.min_age) ASC").
+		Scan(&occClassAgeRows)
+	if occClassAgeRows == nil {
+		occClassAgeRows = []occClassAgeRow{}
 	}
-	resultData["industry_by_age"] = industryAgeRows
+	resultData["occupation_class_by_age"] = occClassAgeRows
 
 	// ── Monthly Conversion Rate Trend ─────────────────────────────────────────
 	// For each month compute: accepted / (accepted + not_taken_up + rejected +
@@ -13904,28 +13970,28 @@ func GetGroupPricingDashboardData(year int, dataSource string, benefit string) (
 	}
 	resultData["monthly_conversion_trend"] = monthlyConvRows
 
-	// ── Industry Mix of Active Pipeline ──────────────────────────────────────
+	// ── Occupation Class Mix of Active Pipeline ──────────────────────────────
 	// Active = quotes in a non-terminal stage (in_progress, pending_review, approved).
-	type industryPipelineRow struct {
-		Industry     string  `gorm:"column:industry" json:"industry"`
-		QuoteCount   int64   `gorm:"column:quote_count" json:"quote_count"`
-		TotalPremium float64 `gorm:"column:total_premium" json:"total_premium"`
+	type occClassPipelineRow struct {
+		OccupationClass int     `gorm:"column:occupation_class" json:"occupation_class"`
+		QuoteCount      int64   `gorm:"column:quote_count" json:"quote_count"`
+		TotalPremium    float64 `gorm:"column:total_premium" json:"total_premium"`
 	}
 	activeStatuses := []string{"in_progress", "pending_review", "approved"}
-	var industryPipelineRows []industryPipelineRow
+	var occClassPipelineRows []occClassPipelineRow
 	DB.Table("group_pricing_quotes q").
-		Select(`COALESCE(NULLIF(q.industry, ''), 'Unspecified') as industry,
+		Select(`q.occupation_class,
 			COUNT(*) as quote_count,
 			COALESCE(SUM(s.total_annual_premium), 0) as total_premium`).
 		Joins("LEFT JOIN member_rating_result_summaries s ON s.quote_id = q.id AND YEAR(s.creation_date) = ?", year).
-		Where("YEAR(q.creation_date) = ? AND q.status IN ? AND q.industry IS NOT NULL", year, activeStatuses).
-		Group("COALESCE(NULLIF(q.industry, ''), 'Unspecified')").
+		Where("YEAR(q.creation_date) = ? AND q.status IN ? AND q.occupation_class IS NOT NULL AND q.occupation_class > 0", year, activeStatuses).
+		Group("q.occupation_class").
 		Order("total_premium DESC").
-		Scan(&industryPipelineRows)
-	if industryPipelineRows == nil {
-		industryPipelineRows = []industryPipelineRow{}
+		Scan(&occClassPipelineRows)
+	if occClassPipelineRows == nil {
+		occClassPipelineRows = []occClassPipelineRow{}
 	}
-	resultData["industry_pipeline"] = industryPipelineRows
+	resultData["occupation_class_pipeline"] = occClassPipelineRows
 
 	// ── Scheme Size Distribution ──────────────────────────────────────────────
 	// Bucket active pipeline quotes by number of rated lives into size bands.
@@ -14088,15 +14154,16 @@ func RebuildExposureDataForYear(year int) (int, error) {
 		for _, ageBand := range groupAgeBands {
 			for _, groupBenefit := range groupBenefits {
 				ep := models.GroupSchemeExposure{
-					QuoteId:       quoteID,
-					SchemeName:    scheme.Name,
-					Industry:      quote.Industry,
-					AgeBand:       ageBand.Name,
-					MinAge:        ageBand.MinAge,
-					MaxAge:        ageBand.MaxAge,
-					Benefit:       groupBenefit.Name,
-					FinancialYear: financialYear,
-					QuoteStatus:   string(quote.Status),
+					QuoteId:         quoteID,
+					SchemeName:      scheme.Name,
+					Industry:        quote.Industry,
+					AgeBand:         ageBand.Name,
+					MinAge:          ageBand.MinAge,
+					MaxAge:          ageBand.MaxAge,
+					Benefit:         groupBenefit.Name,
+					FinancialYear:   financialYear,
+					QuoteStatus:     string(quote.Status),
+					OccupationClass: quote.OccupationClass,
 				}
 				maleBS := sumMap[ageBand.Name]["M"]
 				femaleBS := sumMap[ageBand.Name]["F"]
@@ -14175,6 +14242,203 @@ func GetExposureTimeSeries(benefit string, dataSource string) ([]ExposureTimeSer
 		rows = []ExposureTimeSeriesRow{}
 	}
 	return rows, nil
+}
+
+// BrokerPerformanceSummary holds the per-broker, per-year roll-up shown on the
+// broker drill-down page header. ELR uses scheme-level expected_claims; ALR
+// uses approved claims joined back to the broker via group_schemes.broker_id.
+type BrokerPerformanceSummary struct {
+	BrokerID          int     `json:"broker_id"`
+	Year              int     `json:"year"`
+	TotalQuotes       int64   `json:"total_quotes"`
+	AcceptedQuotes    int64   `json:"accepted_quotes"`
+	ConversionRate    float64 `json:"conversion_rate"`
+	TotalPremium      float64 `json:"total_premium"`
+	InForcePremium    float64 `json:"in_force_premium"`
+	ApprovedClaims    float64 `json:"approved_claims"`
+	ExpectedClaims    float64 `json:"expected_claims"`
+	ExpectedLossRatio float64 `json:"expected_loss_ratio"`
+	ActualLossRatio   float64 `json:"actual_loss_ratio"`
+}
+
+// GetBrokerPerformanceSummary returns the headline metrics for one broker in
+// one calendar year. Each metric is a small independent query so callers can
+// render the page header without pulling exposure rows.
+func GetBrokerPerformanceSummary(brokerID int, year int) (BrokerPerformanceSummary, error) {
+	out := BrokerPerformanceSummary{BrokerID: brokerID, Year: year}
+
+	var quoteAgg struct {
+		TotalQuotes    int64   `gorm:"column:total_quotes"`
+		AcceptedQuotes int64   `gorm:"column:accepted_quotes"`
+		TotalPremium   float64 `gorm:"column:total_premium"`
+	}
+	if err := DB.Table("group_pricing_quotes q").
+		Select(`COUNT(DISTINCT q.id) as total_quotes,
+			COUNT(DISTINCT CASE WHEN q.status = 'accepted' THEN q.id END) as accepted_quotes,
+			COALESCE(SUM(s.total_annual_premium), 0) as total_premium`).
+		Joins("LEFT JOIN member_rating_result_summaries s ON s.quote_id = q.id AND YEAR(s.creation_date) = ?", year).
+		Where("q.broker_id = ? AND YEAR(q.creation_date) = ?", brokerID, year).
+		Scan(&quoteAgg).Error; err != nil {
+		return out, err
+	}
+	out.TotalQuotes = quoteAgg.TotalQuotes
+	out.AcceptedQuotes = quoteAgg.AcceptedQuotes
+	out.TotalPremium = FloatPrecision(quoteAgg.TotalPremium, AccountingPrecision)
+	if quoteAgg.TotalQuotes > 0 {
+		out.ConversionRate = FloatPrecision(float64(quoteAgg.AcceptedQuotes)/float64(quoteAgg.TotalQuotes)*100, 1)
+	}
+
+	var schemeAgg struct {
+		InForcePremium float64 `gorm:"column:in_force_premium"`
+		ExpectedClaims float64 `gorm:"column:expected_claims"`
+	}
+	DB.Table("group_schemes").
+		Select(`COALESCE(SUM(annual_premium), 0) as in_force_premium,
+			COALESCE(SUM(expected_claims), 0) as expected_claims`).
+		Where("broker_id = ? AND YEAR(creation_date) = ? AND in_force = ?", brokerID, year, true).
+		Scan(&schemeAgg)
+	out.InForcePremium = FloatPrecision(schemeAgg.InForcePremium, AccountingPrecision)
+	out.ExpectedClaims = FloatPrecision(schemeAgg.ExpectedClaims, AccountingPrecision)
+
+	var approvedClaims float64
+	DB.Table("group_scheme_claims gsc").
+		Joins("JOIN group_schemes gs ON gs.id = gsc.scheme_id").
+		Where("gs.broker_id = ? AND gsc.status = ? AND YEAR(gsc.date_of_event) = ?", brokerID, models.StatusApproved, year).
+		Select("COALESCE(SUM(gsc.claim_amount), 0)").
+		Scan(&approvedClaims)
+	out.ApprovedClaims = FloatPrecision(approvedClaims, AccountingPrecision)
+
+	if out.InForcePremium > 0 {
+		out.ExpectedLossRatio = FloatPrecision(out.ExpectedClaims/out.InForcePremium*100, 1)
+	}
+	if out.TotalPremium > 0 {
+		out.ActualLossRatio = FloatPrecision(out.ApprovedClaims/out.TotalPremium*100, 1)
+	}
+
+	return out, nil
+}
+
+// BrokerExposureBucket is one bucketed row in a broker exposure breakdown.
+// Label and SortOrder give the UI a stable display order without it having
+// to know each dimension's natural ordering.
+type BrokerExposureBucket struct {
+	Label           string  `json:"label"`
+	SortOrder       int     `json:"sort_order"`
+	RecordCount     int64   `json:"record_count"`
+	TotalSumAssured float64 `json:"total_sum_assured"`
+	MaleSumAssured  float64 `json:"male_sum_assured"`
+	FemaleSumAssured float64 `json:"female_sum_assured"`
+}
+
+// brokerExposureRawRow is a unified scan target for all three breakdown
+// dimensions. SortOrder makes the natural display order explicit; LabelStr
+// carries pre-formatted labels (age band) and LabelInt carries integer keys
+// (occupation class). Sum-assured bands are unbucketed in SQL — they're
+// labelled in Go after the scan.
+type brokerExposureRawRow struct {
+	SortOrder        int     `gorm:"column:sort_order"`
+	LabelStr         string  `gorm:"column:label_str"`
+	LabelInt         int     `gorm:"column:label_int"`
+	RecordCount      int64   `gorm:"column:record_count"`
+	TotalSumAssured  float64 `gorm:"column:total_sum_assured"`
+	MaleSumAssured   float64 `gorm:"column:male_sum_assured"`
+	FemaleSumAssured float64 `gorm:"column:female_sum_assured"`
+}
+
+// GetBrokerExposureBreakdown returns exposure aggregations for a single broker,
+// bucketed along one dimension at a time so the drill-down page can lazy-load
+// each tab independently.
+//
+// dimension must be one of: "age", "sum_assured", "occupation_class".
+// Sum-assured band edges live here, not in SQL strings, so the query stays
+// portable across MySQL/PostgreSQL/MSSQL.
+func GetBrokerExposureBreakdown(brokerID int, year int, dimension string, benefit string) ([]BrokerExposureBucket, error) {
+	base := DB.Table("group_scheme_exposures gse").
+		Joins("JOIN group_pricing_quotes q ON q.id = gse.quote_id").
+		Where("gse.financial_year = ? AND q.broker_id = ?", year, brokerID)
+	if benefit != "" && benefit != "All" {
+		base = base.Where("gse.benefit = ?", benefit)
+	}
+
+	var rows []brokerExposureRawRow
+	useIntLabel := false
+	sumAssuredBandLabels := map[int]string{1: "0-100K", 2: "100K-500K", 3: "500K-1M", 4: "1M-5M", 5: "5M+"}
+	relabelSumAssured := false
+
+	switch dimension {
+	case "age":
+		if err := base.
+			Select(`MIN(gse.min_age) as sort_order, gse.age_band as label_str, 0 as label_int,
+				COUNT(*) as record_count,
+				COALESCE(SUM(gse.total_sum_assured), 0) as total_sum_assured,
+				COALESCE(SUM(gse.male_sum_assured), 0) as male_sum_assured,
+				COALESCE(SUM(gse.female_sum_assured), 0) as female_sum_assured`).
+			Group("gse.age_band").
+			Order("MIN(gse.min_age) ASC").
+			Scan(&rows).Error; err != nil {
+			return nil, err
+		}
+
+	case "occupation_class":
+		useIntLabel = true
+		if err := base.
+			Where("gse.occupation_class IS NOT NULL AND gse.occupation_class > 0").
+			Select(`gse.occupation_class as sort_order, '' as label_str, gse.occupation_class as label_int,
+				COUNT(*) as record_count,
+				COALESCE(SUM(gse.total_sum_assured), 0) as total_sum_assured,
+				COALESCE(SUM(gse.male_sum_assured), 0) as male_sum_assured,
+				COALESCE(SUM(gse.female_sum_assured), 0) as female_sum_assured`).
+			Group("gse.occupation_class").
+			Order("gse.occupation_class ASC").
+			Scan(&rows).Error; err != nil {
+			return nil, err
+		}
+
+	case "sum_assured":
+		relabelSumAssured = true
+		bandSort := `CASE
+			WHEN gse.total_sum_assured < 100000 THEN 1
+			WHEN gse.total_sum_assured < 500000 THEN 2
+			WHEN gse.total_sum_assured < 1000000 THEN 3
+			WHEN gse.total_sum_assured < 5000000 THEN 4
+			ELSE 5
+		END`
+		if err := base.
+			Where("gse.total_sum_assured > 0").
+			Select(bandSort+` as sort_order, '' as label_str, 0 as label_int,
+				COUNT(*) as record_count,
+				COALESCE(SUM(gse.total_sum_assured), 0) as total_sum_assured,
+				COALESCE(SUM(gse.male_sum_assured), 0) as male_sum_assured,
+				COALESCE(SUM(gse.female_sum_assured), 0) as female_sum_assured`).
+			Group(bandSort).
+			Order(bandSort + " ASC").
+			Scan(&rows).Error; err != nil {
+			return nil, err
+		}
+
+	default:
+		return nil, fmt.Errorf("invalid dimension %q (expected age, sum_assured, or occupation_class)", dimension)
+	}
+
+	out := make([]BrokerExposureBucket, 0, len(rows))
+	for _, r := range rows {
+		label := r.LabelStr
+		switch {
+		case useIntLabel:
+			label = strconv.Itoa(r.LabelInt)
+		case relabelSumAssured:
+			label = sumAssuredBandLabels[r.SortOrder]
+		}
+		out = append(out, BrokerExposureBucket{
+			Label:            label,
+			SortOrder:        r.SortOrder,
+			RecordCount:      r.RecordCount,
+			TotalSumAssured:  FloatPrecision(r.TotalSumAssured, AccountingPrecision),
+			MaleSumAssured:   FloatPrecision(r.MaleSumAssured, AccountingPrecision),
+			FemaleSumAssured: FloatPrecision(r.FemaleSumAssured, AccountingPrecision),
+		})
+	}
+	return out, nil
 }
 
 // FinancialYearInfo describes the insurer's financial year for a given calendar year.
@@ -16504,6 +16768,47 @@ func GetGroupPricingIndustriesForQuotes() ([]string, error) {
 		return nil, err
 	}
 	return industries, nil
+}
+
+type OccupationClassIndustry struct {
+	Industry   string   `json:"industry"`
+	Categories []string `json:"categories"`
+}
+
+type OccupationClassGroup struct {
+	Class      int                       `json:"class"`
+	Industries []OccupationClassIndustry `json:"industries"`
+}
+
+func GetOccupationClassHierarchy() ([]OccupationClassGroup, error) {
+	var rows []models.OccupationClass
+	if err := DB.Order("class, industry, category").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	classIdx := map[int]int{}
+	industryIdx := map[int]map[string]int{}
+	groups := []OccupationClassGroup{}
+
+	for _, r := range rows {
+		ci, ok := classIdx[r.Class]
+		if !ok {
+			groups = append(groups, OccupationClassGroup{Class: r.Class})
+			ci = len(groups) - 1
+			classIdx[r.Class] = ci
+			industryIdx[r.Class] = map[string]int{}
+		}
+		ii, ok := industryIdx[r.Class][r.Industry]
+		if !ok {
+			groups[ci].Industries = append(groups[ci].Industries, OccupationClassIndustry{Industry: r.Industry})
+			ii = len(groups[ci].Industries) - 1
+			industryIdx[r.Class][r.Industry] = ii
+		}
+		if r.Category != "" {
+			groups[ci].Industries[ii].Categories = append(groups[ci].Industries[ii].Categories, r.Category)
+		}
+	}
+	return groups, nil
 }
 
 func GetBenefitEscalationsOptions() ([]string, error) {

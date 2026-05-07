@@ -6,6 +6,13 @@ export function useErrorHandler() {
     // so status lives directly on `error`, and body lives on `error.data`.
     const status = error?.status ?? error?.response?.status
 
+    const body = error?.data ?? error?.response?.data
+    const serverMessage =
+      body && typeof body === 'object' ? body.error ?? body.message : null
+    if (serverMessage) {
+      return serverMessage
+    }
+
     if (status === 409) {
       return 'This item already exists'
     }
@@ -20,10 +27,6 @@ export function useErrorHandler() {
 
     if (status >= 500) {
       return 'Server error. Please try again later.'
-    }
-
-    if (error?.data?.message) {
-      return error.data.message
     }
 
     if (error?.message) {

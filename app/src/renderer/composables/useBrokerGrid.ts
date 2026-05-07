@@ -2,6 +2,20 @@ import { ref, computed } from 'vue'
 import type { BrokerData, ColumnDef } from '@/renderer/types/metadata'
 import formatValues from '@/renderer/utils/format_values'
 
+const formatCreationDate = (params: { value?: string | null }): string => {
+  const value = params.value
+  if (!value) return ''
+  const d = new Date(value)
+  if (isNaN(d.getTime())) return String(value)
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 export function useBrokerGrid() {
   const brokers = ref<BrokerData[]>([])
   const selectedBroker = ref<BrokerData | null>(null)
@@ -50,6 +64,24 @@ export function useBrokerGrid() {
       field: 'fsp_number',
       valueFormatter: formatValues,
       minWidth: 150,
+      sortable: true,
+      filter: true,
+      resizable: true
+    },
+    {
+      headerName: 'Created By',
+      field: 'created_by',
+      valueFormatter: formatValues,
+      minWidth: 150,
+      sortable: true,
+      filter: true,
+      resizable: true
+    },
+    {
+      headerName: 'Creation Date',
+      field: 'creation_date',
+      valueFormatter: formatCreationDate,
+      minWidth: 180,
       sortable: true,
       filter: true,
       resizable: true

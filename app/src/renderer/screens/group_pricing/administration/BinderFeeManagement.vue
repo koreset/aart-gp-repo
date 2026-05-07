@@ -52,15 +52,26 @@
           <v-form @submit.prevent="saveBinderFee">
             <v-row>
               <v-col cols="12">
-                <v-text-field
+                <v-autocomplete
                   v-model="binderholderName"
                   v-bind="binderholderNameAttrs"
                   variant="outlined"
                   density="compact"
                   label="Binderholder Name"
-                  placeholder="Enter binderholder name"
+                  :placeholder="
+                    binderBrokerNames.length
+                      ? 'Select a binderholder'
+                      : 'No brokers with a binder agreement reference'
+                  "
+                  :items="binderholderItems"
+                  :loading="loadingBrokers"
+                  :no-data-text="
+                    loadingBrokers
+                      ? 'Loading brokers…'
+                      : 'No brokers with a binder agreement reference. Add one in Broker Management.'
+                  "
                   :error-messages="errors.binderholder_name"
-                ></v-text-field>
+                ></v-autocomplete>
               </v-col>
               <v-col cols="12">
                 <v-select
@@ -149,7 +160,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, h, markRaw } from 'vue'
+import { ref, computed, onMounted, h, markRaw } from 'vue'
 import { useForm } from 'vee-validate'
 import * as yup from 'yup'
 import BaseCard from '@/renderer/components/BaseCard.vue'
@@ -168,6 +179,8 @@ interface BinderFee {
 
 const binderFees = ref<BinderFee[]>([])
 const riskRateCodes = ref<string[]>([])
+const binderBrokerNames = ref<string[]>([])
+const loadingBrokers = ref(false)
 
 const formDialog = ref(false)
 const isEditMode = ref(false)
@@ -225,6 +238,19 @@ const [maximumBinderFee, maximumBinderFeeAttrs] =
 const [maximumOutsourceFee, maximumOutsourceFeeAttrs] = defineField(
   'maximum_outsource_fee'
 )
+
+// Items shown in the binderholder dropdown. Always includes the currently
+// selected value, even if it isn't in the broker list — covers edit-mode
+// rows whose broker has since lost (or never had) a binder agreement ref,
+// so the field renders the existing value instead of going blank.
+const binderholderItems = computed<string[]>(() => {
+  const items = [...binderBrokerNames.value]
+  const current = (binderholderName.value ?? '').toString()
+  if (current && !items.includes(current)) {
+    items.unshift(current)
+  }
+  return items
+})
 
 // ---------------------------------------------------------------------------
 // Percent ↔ decimal conversion
@@ -522,8 +548,37 @@ async function loadRiskRateCodes() {
   }
 }
 
+async function loadBinderBrokerNames() {
+  loadingBrokers.value = true
+  try {
+    const response = await GroupPricingService.getBrokers()
+    const brokers: Array<{ name?: string; binder_agreement_ref?: string }> =
+      response.data ?? []
+    const seen = new Set<string>()
+    const names: string[] = []
+    for (const b of brokers) {
+      const name = (b?.name ?? '').trim()
+      const ref = (b?.binder_agreement_ref ?? '').trim()
+      if (!name || !ref) continue
+      if (seen.has(name)) continue
+      seen.add(name)
+      names.push(name)
+    }
+    names.sort((a, b) => a.localeCompare(b))
+    binderBrokerNames.value = names
+  } catch {
+    binderBrokerNames.value = []
+  } finally {
+    loadingBrokers.value = false
+  }
+}
+
 onMounted(async () => {
-  await Promise.all([loadBinderFees(), loadRiskRateCodes()])
+  await Promise.all([
+    loadBinderFees(),
+    loadRiskRateCodes(),
+    loadBinderBrokerNames()
+  ])
 })
 </script>
 

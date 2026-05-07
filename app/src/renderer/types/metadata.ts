@@ -23,6 +23,8 @@ export interface BrokerData {
   fsp_category?: string
   binder_agreement_ref?: string
   tied_agent_ref?: string
+  creation_date?: string
+  created_by?: string
 }
 
 export interface CreateBrokerPayload {

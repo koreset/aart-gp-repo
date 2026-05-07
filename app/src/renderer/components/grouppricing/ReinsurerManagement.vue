@@ -318,6 +318,26 @@ const columnDefs = ref([
     filter: true,
     sortable: true,
     flex: 1
+  },
+  {
+    headerName: 'Creation Date',
+    field: 'creation_date',
+    valueFormatter: (params: { value?: string | null }) => {
+      const value = params.value
+      if (!value) return ''
+      const d = new Date(value)
+      if (isNaN(d.getTime())) return String(value)
+      return d.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    },
+    filter: true,
+    sortable: true,
+    flex: 1
   }
 ])
 
