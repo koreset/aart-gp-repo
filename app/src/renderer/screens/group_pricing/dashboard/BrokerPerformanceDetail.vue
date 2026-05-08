@@ -50,11 +50,7 @@
               class="flex-grow-1"
             >
               <div class="d-flex align-start info-cell">
-                <v-icon
-                  size="small"
-                  color="grey-darken-1"
-                  class="me-2 mt-1"
-                >
+                <v-icon size="small" color="grey-darken-1" class="me-2 mt-1">
                   {{ field.icon }}
                 </v-icon>
                 <div>
@@ -558,7 +554,7 @@ onMounted(async () => {
    hierarchy steps down from the broker header without going pure white. */
 .exposure-card {
   background: rgba(0, 63, 88, 0.04);
-  border: 1px solid rgba(0, 63, 88, 0.10);
+  border: 1px solid rgba(0, 63, 88, 0.1);
 }
 .exposure-card :deep(.v-card-text),
 .exposure-card :deep(.v-table) {

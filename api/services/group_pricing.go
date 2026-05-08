@@ -1803,6 +1803,9 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		} else {
 			calculatedFreeCoverLimit = rawFCL
 		}
+
+		calculatedFreeCoverLimit = applyMaxCoverCap(calculatedFreeCoverLimit, reinsCoverCaps[models.BenefitTypeGla])
+		calculatedFreeCoverLimit = applyMaxCoverCap(calculatedFreeCoverLimit, restriction.MaximumGlaCover)
 	}
 
 	if category != nil {
@@ -7472,8 +7475,21 @@ func LoadReinsuranceCoverCaps(riskRateCode string, memberCount int) map[string]f
 	if err != nil {
 		return caps
 	}
+	var mappers []models.GroupBenefitMapper
+	_ = DB.Find(&mappers).Error
+	aliasToCanonical := map[string]string{}
+	for _, m := range mappers {
+		if m.BenefitAliasCode != "" && m.BenefitCode != "" {
+			aliasToCanonical[strings.ToUpper(m.BenefitAliasCode)] = strings.ToUpper(m.BenefitCode)
+		}
+	}
+
 	for _, r := range rows {
-		caps[strings.ToUpper(r.BenefitType)] = float64(r.MaximumCover)
+		key := strings.ToUpper(strings.TrimSpace(r.BenefitType))
+		caps[key] = float64(r.MaximumCover)
+		if canonical, ok := aliasToCanonical[key]; ok && canonical != key {
+			caps[canonical] = float64(r.MaximumCover)
+		}
 	}
 	return caps
 }
