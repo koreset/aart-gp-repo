@@ -2188,27 +2188,27 @@ const buildSystemPdf = async (): Promise<any> => {
       [
         'Main Member',
         formatCurrency(item.family_funeral_main_member_funeral_sum_assured),
-        1
+        '1'
       ],
       [
         'Spouse',
         formatCurrency(item.family_funeral_spouse_funeral_sum_assured),
-        1
+        '1'
       ],
       [
         'Child',
         formatCurrency(item.family_funeral_children_funeral_sum_assured),
-        item.family_funeral_max_number_children
+        String(item.family_funeral_max_number_children ?? 0)
       ],
       [
         'Parent',
         formatCurrency(item.family_funeral_parent_funeral_sum_assured),
-        item.family_funeral_max_number_parents
+        String(item.family_funeral_max_number_parents ?? 0)
       ],
       [
         'Dependant',
         formatCurrency(item.family_funeral_adult_dependant_sum_assured),
-        item.family_funeral_max_number_adult_dependants
+        String(item.family_funeral_max_number_adult_dependants ?? 0)
       ]
     )
 
