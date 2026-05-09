@@ -18211,7 +18211,10 @@ func GetMemberBenefitSummaryInForce(memberID int) (MemberBenefitSummaryDTO, erro
 				dc := schemeCategory.FamilyFuneralMaxNumberAdultDependants
 				gff.DependantsCount = &dc
 			}
-			// ParentsCount not defined in SchemeCategory; left nil unless added later
+			if schemeCategory.FamilyFuneralMaxNumberParents > 0 {
+				pc := schemeCategory.FamilyFuneralMaxNumberParents
+				gff.ParentsCount = &pc
+			}
 		} else {
 			// Log for observability; keep gff present even if amounts are unknown
 			appLog.WithFields(map[string]interface{}{
@@ -18406,7 +18409,10 @@ func GetMemberBenefitSummaryQuote(quoteID, memberID int) (MemberBenefitSummaryDT
 				dc := schemeCategory.FamilyFuneralMaxNumberAdultDependants
 				gff.DependantsCount = &dc
 			}
-			// No explicit parents count in model; left nil by design
+			if schemeCategory.FamilyFuneralMaxNumberParents > 0 {
+				pc := schemeCategory.FamilyFuneralMaxNumberParents
+				gff.ParentsCount = &pc
+			}
 		}
 
 		dto.GFF = gff

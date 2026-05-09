@@ -670,6 +670,46 @@ const safeGetValue = _safeGetValue
 const roundUpToTwoDecimalsAccounting = _roundUpToTwoDecimalsAccounting
 const dashIfEmpty = _dashIfEmpty
 
+// Currency formatter used for sum-assured, salary, and premium amounts.
+// Prefixes the quote currency (or "R" for ZAR) onto the spaced-thousands
+// number produced by roundUpToTwoDecimalsAccounting.
+const currencySymbol = (): string => {
+  const code = quote.value?.currency || 'ZAR'
+  return code === 'ZAR' ? 'R' : code
+}
+const formatCurrency = (value: number | null | undefined): string => {
+  const num = Number(value) || 0
+  return `${currencySymbol()} ${roundUpToTwoDecimalsAccounting(num)}`
+}
+
+// Rate per 1000 of cover, computed from MONTHLY premium ÷ sum assured × 1000.
+// Returns "n.a" when sum assured is zero/missing so we don't show ∞ or NaN.
+const ratePer1000 = (
+  monthlyPremium: number | null | undefined,
+  sumAssured: number | null | undefined
+): string => {
+  const sa = Number(sumAssured) || 0
+  if (sa <= 0) return 'n.a'
+  const mp = Number(monthlyPremium) || 0
+  return roundUpToTwoDecimalsAccounting((mp / sa) * 1000)
+}
+
+// Total covered (post-cap) sum assured for a result summary, across every
+// benefit. The persisted `total_sum_assured` is GLA-only (and uncapped), so
+// it can't be used as a scheme-wide cover figure. PHI/TTD `*_capped_income`
+// are included here because the rest of this PDF (e.g. the Premium Breakdown
+// per-benefit rows) already treats them as sum-assured-equivalent.
+const totalCoveredSumAssured = (item: any): number => {
+  return (
+    (Number(item.total_gla_capped_sum_assured) || 0) +
+    (Number(item.total_sgla_capped_sum_assured) || 0) +
+    (Number(item.total_ptd_capped_sum_assured) || 0) +
+    (Number(item.total_ci_capped_sum_assured) || 0) +
+    (Number(item.total_phi_capped_income) || 0) +
+    (Number(item.total_ttd_capped_income) || 0)
+  )
+}
+
 // AG Grid event handler
 const onGridReady = (params) => {
   gridApi.value = params.api
@@ -1389,15 +1429,18 @@ const buildSystemPdf = async (): Promise<any> => {
     0
   )
   const totalSumAssured = resultSummaries.value.reduce(
-    (sum, item) => sum + item.total_sum_assured,
+    (sum, item) => sum + totalCoveredSumAssured(item),
     0
   )
   const totalAnnualSalary = resultSummaries.value.reduce(
     (sum, item) => sum + item.total_annual_salary,
     0
   )
+  // Post-commission scheme-wide premium (incl. funeral). Mirrors the
+  // convention used by every other premium in this PDF, which all read
+  // through `finalFieldValue` against the persisted Final* fields.
   const totalAnnualPremium = resultSummaries.value.reduce(
-    (sum, item) => sum + item.total_annual_premium,
+    (sum, item) => sum + finalFieldValue(item, 'final_total_annual_premium'),
     0
   )
 
@@ -1416,18 +1459,9 @@ const buildSystemPdf = async (): Promise<any> => {
     ],
     // ['Coverage Period:', '1 year'],
     ['Number of Lives Covered:', `${totalLivesCovered}`],
-    [
-      'Total Sum Assured:',
-      `${roundUpToTwoDecimalsAccounting(totalSumAssured)}`
-    ],
-    [
-      'Total Annual Salary:',
-      `${roundUpToTwoDecimalsAccounting(totalAnnualSalary)}`
-    ],
-    [
-      'Total Annual Premium:',
-      `${roundUpToTwoDecimalsAccounting(totalAnnualPremium)}`
-    ]
+    ['Total Sum Assured:', formatCurrency(totalSumAssured)],
+    ['Total Annual Salary:', formatCurrency(totalAnnualSalary)],
+    ['Total Monthly Premium:', formatCurrency(totalAnnualPremium / 12)]
   ]
 
   // Add the initial information table with enhanced styling
@@ -1509,9 +1543,10 @@ const buildSystemPdf = async (): Promise<any> => {
       [
         'Category',
         'No of Lives',
-        'Total Salary',
+        'Total Annual Salary',
         'Total Sum Assured',
-        'Annual Premium',
+        'Monthly Premium',
+        'Monthly Rate /1000',
         '%Salary'
       ]
     ]
@@ -1526,60 +1561,53 @@ const buildSystemPdf = async (): Promise<any> => {
         safeGetValue(item, 'total_ttd_capped_income', 0) > 0
 
       if (hasBenefits) {
+        const annualPremium = finalFieldValue(
+          item,
+          'final_total_annual_premium_excl_funeral'
+        )
+        const monthlyPremium = annualPremium / 12
+        const monthlySalary = item.total_annual_salary / 12
+        const coveredSA = totalCoveredSumAssured(item)
         premiumSummaryData.push([
           item.category,
           item.member_count.toString(),
-          roundUpToTwoDecimalsAccounting(item.total_annual_salary),
-          roundUpToTwoDecimalsAccounting(item.total_sum_assured),
-          roundUpToTwoDecimalsAccounting(
-            finalFieldValue(item, 'final_total_annual_premium_excl_funeral')
-          ),
+          formatCurrency(item.total_annual_salary),
+          formatCurrency(coveredSA),
+          formatCurrency(monthlyPremium),
+          ratePer1000(monthlyPremium, coveredSA),
           `${roundUpToTwoDecimalsAccounting(
-            item.total_annual_salary > 0
-              ? (item.exp_total_annual_premium_excl_funeral /
-                  item.total_annual_salary) *
-                  100
-              : 0
+            monthlySalary > 0 ? (monthlyPremium / monthlySalary) * 100 : 0
           )}%`
         ])
       }
     })
 
+    const grandAnnualSalary = resultSummaries.value.reduce(
+      (sum, item) => sum + item.total_annual_salary,
+      0
+    )
+    const grandSumAssured = resultSummaries.value.reduce(
+      (sum, item) => sum + totalCoveredSumAssured(item),
+      0
+    )
+    const grandAnnualPremium = resultSummaries.value.reduce(
+      (sum, item) =>
+        sum + finalFieldValue(item, 'final_total_annual_premium_excl_funeral'),
+      0
+    )
+    const grandMonthlyPremium = grandAnnualPremium / 12
+    const grandMonthlySalary = grandAnnualSalary / 12
     premiumSummaryData.push([
       'Total',
       resultSummaries.value.reduce((sum, item) => sum + item.member_count, 0),
-      roundUpToTwoDecimalsAccounting(
-        resultSummaries.value.reduce(
-          (sum, item) => sum + item.total_annual_salary,
-          0
-        )
-      ),
-      roundUpToTwoDecimalsAccounting(
-        resultSummaries.value.reduce(
-          (sum, item) => sum + item.total_sum_assured,
-          0
-        )
-      ),
-      roundUpToTwoDecimalsAccounting(
-        resultSummaries.value.reduce(
-          (sum, item) =>
-            sum +
-            finalFieldValue(item, 'final_total_annual_premium_excl_funeral'),
-          0
-        )
-      ),
+      formatCurrency(grandAnnualSalary),
+      formatCurrency(grandSumAssured),
+      formatCurrency(grandMonthlyPremium),
+      ratePer1000(grandMonthlyPremium, grandSumAssured),
       `${roundUpToTwoDecimalsAccounting(
-        (resultSummaries.value.reduce(
-          (sum, item) =>
-            sum +
-            finalFieldValue(item, 'final_total_annual_premium_excl_funeral'),
-          0
-        ) /
-          resultSummaries.value.reduce(
-            (sum, item) => sum + item.total_annual_salary,
-            0
-          )) *
-          100
+        grandMonthlySalary > 0
+          ? (grandMonthlyPremium / grandMonthlySalary) * 100
+          : 0
       )}%`
     ])
 
@@ -1609,7 +1637,8 @@ const buildSystemPdf = async (): Promise<any> => {
         2: { halign: 'right' },
         3: { halign: 'right' },
         4: { halign: 'right', fontStyle: 'bold' },
-        5: { halign: 'center' }
+        5: { halign: 'right' },
+        6: { halign: 'center' }
       },
       alternateRowStyles: {
         fillColor: [252, 253, 254]
@@ -1640,45 +1669,33 @@ const buildSystemPdf = async (): Promise<any> => {
     [
       'Category',
       'No of Lives',
-      'Monthly Premium',
-      'Annual Premium',
-      'Total Annual Premium'
+      'Monthly Premium per Member',
+      'Total Monthly Premium'
     ]
   ]
   resultSummaries.value.forEach((item) => {
     groupFuneralData.push([
       item.category,
       item.member_count.toString(),
-      roundUpToTwoDecimalsAccounting(
-        item.exp_total_fun_monthly_premium_per_member
-      ),
-      roundUpToTwoDecimalsAccounting(
-        item.exp_total_fun_annual_premium_per_member
-      ),
-      roundUpToTwoDecimalsAccounting(
-        finalFieldValue(item, 'final_fun_annual_office_premium')
+      formatCurrency(item.exp_total_fun_monthly_premium_per_member),
+      formatCurrency(
+        finalFieldValue(item, 'final_fun_annual_office_premium') / 12
       )
     ])
   })
   groupFuneralData.push([
     'Total',
     resultSummaries.value.reduce((sum, item) => sum + item.member_count, 0),
-    roundUpToTwoDecimalsAccounting(
+    formatCurrency(
       resultSummaries.value.reduce(
         (sum, item) => sum + item.exp_total_fun_monthly_premium_per_member,
         0
       )
     ),
-    roundUpToTwoDecimalsAccounting(
-      resultSummaries.value.reduce(
-        (sum, item) => sum + item.exp_total_fun_annual_premium_per_member,
-        0
-      )
-    ),
-    roundUpToTwoDecimalsAccounting(
+    formatCurrency(
       resultSummaries.value.reduce(
         (sum, item) =>
-          sum + finalFieldValue(item, 'final_fun_annual_office_premium'),
+          sum + finalFieldValue(item, 'final_fun_annual_office_premium') / 12,
         0
       )
     )
@@ -1708,8 +1725,7 @@ const buildSystemPdf = async (): Promise<any> => {
       0: { fontStyle: 'bold', fillColor: [248, 249, 250] },
       1: { halign: 'center' },
       2: { halign: 'right' },
-      3: { halign: 'right' },
-      4: { halign: 'right', fontStyle: 'bold' }
+      3: { halign: 'right', fontStyle: 'bold' }
     },
     alternateRowStyles: {
       fillColor: [252, 253, 254]
@@ -1756,57 +1772,81 @@ const buildSystemPdf = async (): Promise<any> => {
     }
 
     const premiumBreakdownData = [
-      ['Benefit', 'Total Sum Assured', 'Annual Premium', '% Salary']
+      [
+        'Benefit',
+        'Total Sum Assured',
+        'Monthly Premium',
+        'Monthly Rate /1000',
+        '% Salary'
+      ]
     ]
 
-    premiumBreakdownData.push([
-      glaBenefitTitle.value,
-      roundUpToTwoDecimalsAccounting(item.total_gla_capped_sum_assured),
-      roundUpToTwoDecimalsAccounting(
-        finalFieldValue(item, 'final_gla_annual_office_premium')
-      ),
-      `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_gla_annual_risk_premium_salary, item) * 100)}%`
-    ])
-    premiumBreakdownData.push([
-      sglaBenefitTitle.value,
-      roundUpToTwoDecimalsAccounting(item.total_sgla_capped_sum_assured),
-      roundUpToTwoDecimalsAccounting(
-        finalFieldValue(item, 'final_sgla_annual_office_premium')
-      ),
-      `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_sgla_annual_risk_premium_salary, item) * 100)}%`
-    ])
-    premiumBreakdownData.push([
-      ptdBenefitTitle.value,
-      roundUpToTwoDecimalsAccounting(item.total_ptd_capped_sum_assured),
-      roundUpToTwoDecimalsAccounting(
-        finalFieldValue(item, 'final_ptd_annual_office_premium')
-      ),
-      `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_ptd_annual_risk_premium_salary, item) * 100)}%`
-    ])
-    premiumBreakdownData.push([
-      ciBenefitTitle.value,
-      roundUpToTwoDecimalsAccounting(item.total_ci_capped_sum_assured),
-      roundUpToTwoDecimalsAccounting(
-        finalFieldValue(item, 'final_ci_annual_office_premium')
-      ),
-      `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_ci_annual_risk_premium_salary, item) * 100)}%`
-    ])
-    premiumBreakdownData.push([
-      phiBenefitTitle.value,
-      roundUpToTwoDecimalsAccounting(item.total_phi_capped_income),
-      roundUpToTwoDecimalsAccounting(
-        finalFieldValue(item, 'final_phi_annual_office_premium')
-      ),
-      `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_phi_annual_risk_premium_salary, item) * 100)}%`
-    ])
-    premiumBreakdownData.push([
-      ttdBenefitTitle.value,
-      roundUpToTwoDecimalsAccounting(item.total_ttd_capped_income),
-      roundUpToTwoDecimalsAccounting(
-        finalFieldValue(item, 'final_ttd_annual_office_premium')
-      ),
-      `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_ttd_annual_risk_premium_salary, item) * 100)}%`
-    ])
+    // %Salary uses POST-commission monthly premium ÷ monthly salary, matching
+    // the Premium Summary convention. Earlier this cell ran the pre-commission
+    // Exp risk-proportion through officeProportionFromRiskProportion, whose
+    // loadings denominator doesn't include commission — which leaked a
+    // pre-commission rate into an otherwise post-commission row.
+    const itemMonthlySalary = item.total_annual_salary / 12
+
+    const breakdownRow = (
+      title: string,
+      sumAssured: number,
+      annualPremiumField: string
+    ) => {
+      const monthlyPremium = finalFieldValue(item, annualPremiumField) / 12
+      const pctSalary =
+        itemMonthlySalary > 0 ? (monthlyPremium / itemMonthlySalary) * 100 : 0
+      return [
+        title,
+        formatCurrency(sumAssured),
+        formatCurrency(monthlyPremium),
+        ratePer1000(monthlyPremium, sumAssured),
+        `${roundUpToTwoDecimalsAccounting(pctSalary)}%`
+      ]
+    }
+
+    premiumBreakdownData.push(
+      breakdownRow(
+        glaBenefitTitle.value,
+        item.total_gla_capped_sum_assured,
+        'final_gla_annual_office_premium'
+      )
+    )
+    premiumBreakdownData.push(
+      breakdownRow(
+        sglaBenefitTitle.value,
+        item.total_sgla_capped_sum_assured,
+        'final_sgla_annual_office_premium'
+      )
+    )
+    premiumBreakdownData.push(
+      breakdownRow(
+        ptdBenefitTitle.value,
+        item.total_ptd_capped_sum_assured,
+        'final_ptd_annual_office_premium'
+      )
+    )
+    premiumBreakdownData.push(
+      breakdownRow(
+        ciBenefitTitle.value,
+        item.total_ci_capped_sum_assured,
+        'final_ci_annual_office_premium'
+      )
+    )
+    premiumBreakdownData.push(
+      breakdownRow(
+        phiBenefitTitle.value,
+        item.total_phi_capped_income,
+        'final_phi_annual_office_premium'
+      )
+    )
+    premiumBreakdownData.push(
+      breakdownRow(
+        ttdBenefitTitle.value,
+        item.total_ttd_capped_income,
+        'final_ttd_annual_office_premium'
+      )
+    )
 
     if (hasAnyNonFuneralBenefits) {
       currentY += 10
@@ -1834,7 +1874,8 @@ const buildSystemPdf = async (): Promise<any> => {
           0: { fontStyle: 'bold', fillColor: [248, 249, 250] },
           1: { halign: 'right' },
           2: { halign: 'right', fontStyle: 'bold' },
-          3: { halign: 'center' }
+          3: { halign: 'right' },
+          4: { halign: 'center' }
         },
         alternateRowStyles: {
           fillColor: [253, 253, 254]
@@ -1856,20 +1897,12 @@ const buildSystemPdf = async (): Promise<any> => {
     const groupFuneralBreakdownData = [
       [
         'Monthly Premium per Member',
-        roundUpToTwoDecimalsAccounting(
-          item.exp_total_fun_monthly_premium_per_member
-        )
+        formatCurrency(item.exp_total_fun_monthly_premium_per_member)
       ],
       [
-        'Annual Premium per Member',
-        roundUpToTwoDecimalsAccounting(
-          item.exp_total_fun_annual_premium_per_member
-        )
-      ],
-      [
-        'Total Annual Premium',
-        roundUpToTwoDecimalsAccounting(
-          finalFieldValue(item, 'final_fun_annual_office_premium')
+        'Total Monthly Premium',
+        formatCurrency(
+          finalFieldValue(item, 'final_fun_annual_office_premium') / 12
         )
       ]
     ]
@@ -1942,11 +1975,13 @@ const buildSystemPdf = async (): Promise<any> => {
       benefitMaps.value
         .find((b: any) => b.benefit_code === 'PTD_EDU')
         ?.benefit_alias?.trim() || 'PTD Educator'
+    const fclValue = item.free_cover_limit ?? quote.value.free_cover_limit
+
     const categoryBenefitCommonData = [
       ['Terminal Illness', `${item.gla_terminal_illness_benefit}`],
-      ['Free Cover Limit', quote.value.free_cover_limit],
-      [glaEducatorLabel, item.gla_educator_benefit],
-      [ptdEducatorLabel, item.ptd_educator_benefit],
+      ['Free Cover Limit', formatCurrency(fclValue)],
+      [glaEducatorLabel, item.gla_educator_benefit || 'No'],
+      [ptdEducatorLabel, item.ptd_educator_benefit || 'No'],
       ['Retirement Premium Waiver', item.phi_premium_waiver || 'No'],
       [
         'Medical Aid Premium Waiver',
@@ -1976,6 +2011,20 @@ const buildSystemPdf = async (): Promise<any> => {
       currentY = doc.lastAutoTable.finalY + 8
     }
 
+    const formatIncomeReplacement = (
+      percentage: number,
+      isTiered: boolean,
+      tierType: string
+    ) => {
+      if (isTiered) {
+        return tierType === 'custom' ? 'Tiered (Custom)' : 'Tiered (Standard)'
+      }
+      if (percentage > 0) {
+        return `${percentage}%`
+      }
+      return 'n.a'
+    }
+
     const categoryBenefitData = [
       [
         'Benefit',
@@ -1987,67 +2036,99 @@ const buildSystemPdf = async (): Promise<any> => {
         'Risk Type'
       ]
     ]
+    const cell = (selected: boolean, value: any) => {
+      if (!selected) return 'n.a'
+      if (value === null || value === undefined || value === '') return 'n.a'
+      return value
+    }
+
     categoryBenefitData.push([
       glaBenefitTitle.value,
-      quote.value.use_global_salary_multiple
-        ? item.gla_salary_multiple
-        : 'varies',
-      'standalone',
-      item.gla_waiting_period,
+      cell(
+        item.gla_benefit,
+        quote.value.use_global_salary_multiple
+          ? item.gla_salary_multiple
+          : 'varies'
+      ),
+      cell(item.gla_benefit, 'standalone'),
+      cell(item.gla_benefit, item.gla_waiting_period),
       'n.a',
       'n.a',
-      item.gla_benefit_type || 'n.a'
+      cell(item.gla_benefit, item.gla_benefit_type)
     ])
     categoryBenefitData.push([
       sglaBenefitTitle.value,
-      quote.value.use_global_salary_multiple
-        ? item.sgla_salary_multiple
-        : 'varies',
-      'rider',
-      item.sgla_waiting_period,
+      cell(
+        item.sgla_benefit,
+        quote.value.use_global_salary_multiple
+          ? item.sgla_salary_multiple
+          : 'varies'
+      ),
+      cell(item.sgla_benefit, 'rider'),
+      cell(item.sgla_benefit, item.sgla_waiting_period),
       'n.a',
       'n.a',
       'n.a'
     ])
     categoryBenefitData.push([
       ptdBenefitTitle.value,
-      quote.value.use_global_salary_multiple
-        ? item.ptd_salary_multiple
-        : 'varies',
-      item.ptd_benefit_type,
-      '0',
-      item.ptd_deferred_period,
-      item.ptd_disability_definition,
-      item.ptd_risk_type
+      cell(
+        item.ptd_benefit,
+        quote.value.use_global_salary_multiple
+          ? item.ptd_salary_multiple
+          : 'varies'
+      ),
+      cell(item.ptd_benefit, item.ptd_benefit_type),
+      cell(item.ptd_benefit, 0),
+      cell(item.ptd_benefit, item.ptd_deferred_period),
+      cell(item.ptd_benefit, item.ptd_disability_definition),
+      cell(item.ptd_benefit, item.ptd_risk_type)
     ])
     categoryBenefitData.push([
       ciBenefitTitle.value,
-      quote.value.use_global_salary_multiple
-        ? item.ci_critical_illness_salary_multiple
-        : 'varies',
-      item.ci_benefit_structure,
-      item.ci_waiting_period,
-      item.ci_deferred_period,
-      item.ci_benefit_definition,
+      cell(
+        item.ci_benefit,
+        quote.value.use_global_salary_multiple
+          ? item.ci_critical_illness_salary_multiple
+          : 'varies'
+      ),
+      cell(item.ci_benefit, item.ci_benefit_structure),
+      cell(item.ci_benefit, item.ci_waiting_period),
+      cell(item.ci_benefit, item.ci_deferred_period),
+      cell(item.ci_benefit, item.ci_benefit_definition),
       'n.a'
     ])
     categoryBenefitData.push([
       phiBenefitTitle.value,
-      item.phi_income_replacement_percentage / 100,
+      cell(
+        item.phi_benefit,
+        formatIncomeReplacement(
+          item.phi_income_replacement_percentage,
+          item.phi_use_tiered_income_replacement_ratio,
+          item.phi_tiered_income_replacement_type
+        )
+      ),
       'n.a',
-      item.phi_waiting_period,
-      item.phi_deferred_period,
-      item.phi_disability_definition,
-      item.phi_risk_type
+      cell(item.phi_benefit, item.phi_waiting_period),
+      cell(item.phi_benefit, item.phi_deferred_period),
+      cell(item.phi_benefit, item.phi_disability_definition),
+      cell(item.phi_benefit, item.phi_risk_type)
     ])
     categoryBenefitData.push([
       ttdBenefitTitle.value,
-      item.ttd_income_replacement_percentage / 100,
+      cell(
+        item.ttd_benefit,
+        formatIncomeReplacement(
+          item.ttd_income_replacement_percentage,
+          item.ttd_use_tiered_income_replacement_ratio,
+          item.ttd_tiered_income_replacement_type
+        )
+      ),
       'n.a',
-      item.ttd_waiting_period,
-      item.ttd_deferred_period,
-      item.ttd_disability_definition,
-      item.ttd_risk_type
+      cell(item.ttd_benefit, item.ttd_waiting_period),
+      cell(item.ttd_benefit, item.ttd_deferred_period),
+      cell(item.ttd_benefit, item.ttd_disability_definition),
+      cell(item.ttd_benefit, item.ttd_risk_type)
     ])
 
     if (hasAnyNonFuneralBenefits) {
@@ -2104,21 +2185,29 @@ const buildSystemPdf = async (): Promise<any> => {
       ['Member', 'Sum Assured', 'Maximum Number Covered']
     ]
     groupFuneralBenefitData.push(
-      ['Main Member', item.family_funeral_main_member_funeral_sum_assured, 1],
-      ['Spouse', item.family_funeral_spouse_funeral_sum_assured, 1],
+      [
+        'Main Member',
+        formatCurrency(item.family_funeral_main_member_funeral_sum_assured),
+        1
+      ],
+      [
+        'Spouse',
+        formatCurrency(item.family_funeral_spouse_funeral_sum_assured),
+        1
+      ],
       [
         'Child',
-        item.family_funeral_children_funeral_sum_assured,
+        formatCurrency(item.family_funeral_children_funeral_sum_assured),
         item.family_funeral_max_number_children
       ],
       [
         'Parent',
-        item.family_funeral_parent_funeral_sum_assured,
-        item.family_funeral_parent_maximum_number_covered
+        formatCurrency(item.family_funeral_parent_funeral_sum_assured),
+        item.family_funeral_max_number_parents
       ],
       [
         'Dependant',
-        item.family_funeral_adult_dependant_sum_assured,
+        formatCurrency(item.family_funeral_adult_dependant_sum_assured),
         item.family_funeral_max_number_adult_dependants
       ]
     )
@@ -2440,15 +2529,55 @@ const buildSystemPdf = async (): Promise<any> => {
   setFont(8, 'normal', [230, 230, 230])
   doc.text('POPIA Compliant', margin, 18)
 
-  // Logo placeholder
-  doc.setFillColor(255, 255, 255)
-  doc.setDrawColor(255, 255, 255)
-  doc.setLineWidth(0.3)
-  doc.setLineDash([1, 1], 0)
-  doc.roundedRect(pageWidth - margin - 25, 5, 20, 12, 2, 2, 'D')
-  setFont(7, 'normal', [255, 255, 255])
-  doc.text('[LOGO]', pageWidth - margin - 22, 12)
-  doc.setLineDash([], 0)
+  // Company logo — fits the 20x12 mm boundary in the page header.
+  const acceptLogoX = pageWidth - margin - 25
+  const acceptLogoY = 5
+  const acceptLogoW = 20
+  const acceptLogoH = 12
+  if (insurer.value?.logo && insurer.value?.logo_mime_type) {
+    // White plate behind the logo so dark logo elements stay readable on
+    // the navy header. Adds 1 mm padding around the image boundary.
+    const platePad = 1
+    doc.setFillColor(255, 255, 255)
+    doc.roundedRect(
+      acceptLogoX - platePad,
+      acceptLogoY - platePad,
+      acceptLogoW + platePad * 2,
+      acceptLogoH + platePad * 2,
+      2,
+      2,
+      'F'
+    )
+    const acceptLogoUrl = `data:${insurer.value.logo_mime_type};base64,${insurer.value.logo}`
+    const acceptLogoFormat = insurer.value.logo_mime_type
+      .split('/')[1]
+      .toUpperCase()
+    doc.addImage(
+      acceptLogoUrl,
+      acceptLogoFormat,
+      acceptLogoX,
+      acceptLogoY,
+      acceptLogoW,
+      acceptLogoH
+    )
+  } else {
+    doc.setFillColor(255, 255, 255)
+    doc.setDrawColor(255, 255, 255)
+    doc.setLineWidth(0.3)
+    doc.setLineDash([1, 1], 0)
+    doc.roundedRect(
+      acceptLogoX,
+      acceptLogoY,
+      acceptLogoW,
+      acceptLogoH,
+      2,
+      2,
+      'D'
+    )
+    setFont(7, 'normal', [255, 255, 255])
+    doc.text('[LOGO]', acceptLogoX + 3, acceptLogoY + 7)
+    doc.setLineDash([], 0)
+  }
 
   currentY = headerHeight + 8
 

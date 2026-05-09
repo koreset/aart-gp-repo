@@ -217,7 +217,7 @@ func quoteFields(
 		{Key: "use_global_salary_multiple", Label: "Use Global Salary Multiple", Value: quote.UseGlobalSalaryMultiple},
 		{Key: "total_lives", Label: "Total Lives Covered", Value: strconv.Itoa(totals.TotalLives)},
 		{Key: "total_sum_assured", Label: "Total Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(totals.TotalSumAssured)},
-		{Key: "total_salary", Label: "Total Salary", Value: quote_docx.RoundUpToTwoDecimalsAccounting(totals.TotalAnnualSalary)},
+		{Key: "total_salary", Label: "Total Annual Salary", Value: quote_docx.RoundUpToTwoDecimalsAccounting(totals.TotalAnnualSalary)},
 		{Key: "total_premium", Label: "Total Premium", Value: quote_docx.RoundUpToTwoDecimalsAccounting(totals.TotalAnnualPremium)},
 		{Key: "has_non_funeral_benefits", Label: "Has Non-Funeral Benefits (flag)", Value: hasNonFuneral},
 	}
@@ -265,7 +265,7 @@ func categoryScalarFields(
 		{Key: "name", Label: "Category Name", Value: s.Category},
 		{Key: "region", Label: "Region", Value: cat.Region},
 		{Key: "member_count", Label: "Member Count", Value: strconv.Itoa(int(s.MemberCount))},
-		{Key: "total_salary", Label: "Total Salary", Value: money(s.TotalAnnualSalary)},
+		{Key: "total_salary", Label: "Total Annual Salary", Value: money(s.TotalAnnualSalary)},
 		{Key: "total_sum_assured", Label: "Total Sum Assured", Value: money(s.TotalSumAssured)},
 		{Key: "premium", Label: "Premium (excl. funeral)", Value: money(s.FinalTotalAnnualPremiumExclFuneral)},
 		{Key: "percent_salary", Label: "Premium as % of Salary", Value: formatPercent(proportionOfSalary(s.FinalTotalAnnualPremiumExclFuneral, s.TotalAnnualSalary))},
@@ -915,6 +915,7 @@ func funeralFields(s models.MemberRatingResultSummary, cat models.SchemeCategory
 		{Key: "child_sum_assured", Label: "Child Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(cat.FamilyFuneralChildrenFuneralSumAssured)},
 		{Key: "max_children", Label: "Max Children Covered", Value: strconv.Itoa(cat.FamilyFuneralMaxNumberChildren)},
 		{Key: "parent_sum_assured", Label: "Parent Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(cat.FamilyFuneralParentFuneralSumAssured)},
+		{Key: "max_parents", Label: "Max Parents Covered", Value: strconv.Itoa(cat.FamilyFuneralMaxNumberParents)},
 		{Key: "dependant_sum_assured", Label: "Dependant Sum Assured", Value: quote_docx.RoundUpToTwoDecimalsAccounting(cat.FamilyFuneralAdultDependantSumAssured)},
 		{Key: "max_dependants", Label: "Max Dependants Covered", Value: strconv.Itoa(cat.FamilyFuneralMaxNumberAdultDependants)},
 	}

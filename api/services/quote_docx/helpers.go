@@ -371,7 +371,7 @@ func BuildFuneralCoverageRows(cat models.SchemeCategory) []FuneralCoverageRow {
 		{
 			Member:     "Parent",
 			SumAssured: cat.FamilyFuneralParentFuneralSumAssured,
-			MaxCovered: 1, // Safe default per requirements
+			MaxCovered: cat.FamilyFuneralMaxNumberParents,
 		},
 		{
 			Member:     "Dependant",

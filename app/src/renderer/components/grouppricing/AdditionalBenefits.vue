@@ -1210,6 +1210,19 @@
                     ></v-text-field>
                   </v-col>
                   <v-col cols="4">
+                    <v-text-field
+                      v-model:model-value="familyFuneralMaxNumberParents"
+                      v-bind="familyFuneralMaxNumberParentsAttrs"
+                      :error-messages="errors.family_funeral_max_number_parents"
+                      type="number"
+                      variant="outlined"
+                      density="compact"
+                      placeholder="Enter a value"
+                      label="Maximum Number of Parents"
+                      :disabled="!familyFuneralBenefit || !selectedSchemeType"
+                    ></v-text-field>
+                  </v-col>
+                  <v-col cols="4">
                     <v-checkbox
                       v-model="funConversionOnWithdrawal"
                       variant="outlined"
@@ -1751,6 +1764,8 @@ function onSchemeTypeChange(schemeType) {
       data.family_funeral_max_number_children || 0
     familyFuneralMaxNumberAdultDependants.value =
       data.family_funeral_max_number_adult_dependants || 0
+    familyFuneralMaxNumberParents.value =
+      data.family_funeral_max_number_parents || 0
     funConversionOnWithdrawal.value = data.fun_conversion_on_withdrawal || false
     // Extended family
     extendedFamilyBenefit.value = !!data.extended_family_benefit
@@ -2029,6 +2044,9 @@ function saveCurrentSchemeCategory() {
           ),
           family_funeral_max_number_adult_dependants: Number(
             familyFuneralMaxNumberAdultDependants.value
+          ),
+          family_funeral_max_number_parents: Number(
+            familyFuneralMaxNumberParents.value
           ),
           extended_family_benefit: !!extendedFamilyBenefit.value,
           ...(extendedFamilyBenefit.value && {
@@ -2497,6 +2515,24 @@ const validationSchema = yup.object({
           1,
           'Maximum number of adult dependants must be at least 1 when adult dependant sum assured is greater than 0'
         )
+    }),
+  family_funeral_max_number_parents: yup
+    .number()
+    .when('family_funeral_benefit', {
+      is: true,
+      then: (schema) =>
+        schema
+          .required('Maximum number of parents is required')
+          .min(0, 'Maximum number of parents must be at least 0'),
+      otherwise: (schema) => schema.nullable()
+    })
+    .when('family_funeral_parent_funeral_sum_assured', {
+      is: (value) => value > 0,
+      then: (schema) =>
+        schema.min(
+          1,
+          'Maximum number of parents must be at least 1 when parent funeral sum assured is greater than 0'
+        )
     })
 })
 
@@ -2629,7 +2665,9 @@ const { handleSubmit, defineField, errors, validate } = useForm({
       groupStore.scheme_category_template.family_funeral_max_number_children,
     family_funeral_max_number_adult_dependants:
       groupStore.scheme_category_template
-        .family_funeral_max_number_adult_dependants
+        .family_funeral_max_number_adult_dependants,
+    family_funeral_max_number_parents:
+      groupStore.scheme_category_template.family_funeral_max_number_parents
   }
 })
 
@@ -2807,6 +2845,8 @@ const [
   familyFuneralMaxNumberAdultDependants,
   familyFuneralMaxNumberAdultDependantsAttrs
 ] = defineField('family_funeral_max_number_adult_dependants')
+const [familyFuneralMaxNumberParents, familyFuneralMaxNumberParentsAttrs] =
+  defineField('family_funeral_max_number_parents')
 
 // ----- Extended family funeral state (kept outside vee-validate) -----
 interface EfAgeBand {

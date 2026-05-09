@@ -609,7 +609,7 @@ function buildPremiumSummarySection(quote: any, resultSummaries: any[]) {
     const cols = [
       'Category',
       'No of Lives',
-      'Total Salary',
+      'Total Annual Salary',
       'Total Sum Assured',
       'Annual Premium',
       '% Salary'

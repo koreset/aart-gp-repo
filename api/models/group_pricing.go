@@ -478,6 +478,7 @@ type SchemeCategory struct {
 	FamilyFuneralParentFuneralSumAssured     float64                         `json:"family_funeral_parent_funeral_sum_assured"`
 	FamilyFuneralMaxNumberChildren           int                             `json:"family_funeral_max_number_children"`
 	FamilyFuneralMaxNumberAdultDependants    int                             `json:"family_funeral_max_number_adult_dependants"`
+	FamilyFuneralMaxNumberParents            int                             `json:"family_funeral_max_number_parents"`
 
 	ExtendedFamilyBenefit        bool                              `json:"extended_family_benefit"`
 	ExtendedFamilyAgeBandSource  string                            `json:"extended_family_age_band_source"`
@@ -586,6 +587,7 @@ type FamilyFuneral struct {
 	ParentFuneralSumAssured     float64 `json:"parent_funeral_sum_assured"`
 	MaxNumberChildren           int     `json:"max_number_children"`
 	MaxNumberAdultDependants    int     `json:"max_number_adult_dependants"`
+	MaxNumberParents            int     `json:"max_number_parents"`
 
 	// Extended family funeral cover — priced per age band from the funeral rate table.
 	ExtendedFamilyBenefit        bool                           `json:"extended_family_benefit"`

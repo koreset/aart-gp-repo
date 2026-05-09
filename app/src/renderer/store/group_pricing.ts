@@ -139,6 +139,7 @@ export const useGroupPricingStore = defineStore('groupPricing', {
       family_funeral_parent_funeral_sum_assured: 0,
       family_funeral_max_number_children: 0,
       family_funeral_max_number_adult_dependants: 0,
+      family_funeral_max_number_parents: 0,
       extended_family_benefit: false,
       extended_family_age_band_source: 'standard',
       extended_family_age_band_type: '',

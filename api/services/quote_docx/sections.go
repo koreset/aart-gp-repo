@@ -179,7 +179,7 @@ func BuildPremiumSummarySection(quote models.GroupPricingQuote, summaries []mode
 		buf.WriteString(sectionHeadingXML("Premium Summary"))
 
 		premiumRows := BuildPremiumSummaryRows(summaries)
-		labels := []string{"Category", "No of Lives", "Total Salary", "Total Sum Assured", "Annual Premium", "% Salary"}
+		labels := []string{"Category", "No of Lives", "Total Annual Salary", "Total Sum Assured", "Annual Premium", "% Salary"}
 
 		cw := LandscapeContentWidth
 		colWidths := []int{

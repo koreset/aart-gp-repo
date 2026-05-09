@@ -188,11 +188,7 @@ import * as XLSX from 'xlsx'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import GroupPricingDataGrid from '@/renderer/components/tables/GroupPricingDataGrid.vue'
-import {
-  computeOfficePremium,
-  officeRateFromRiskRate,
-  officeProportionFromRiskProportion
-} from '@/renderer/utils/quoteDataHelpers'
+import { computeOfficePremium } from '@/renderer/utils/quoteDataHelpers'
 
 // import all necessary components and services
 
@@ -800,25 +796,29 @@ const convertExcelDataToGridData = () => {
     const category = resultSummary.category
 
     // Add benefit rows
-    gridData.push({
-      category,
-      benefit: glaBenefitTitle.value,
-      annualSalary: isBenefitEnabled('GLA', category)
+    {
+      const glaSalary = isBenefitEnabled('GLA', category)
         ? resultSummary.total_annual_salary
-        : 0,
-      totalSumAssured: resultSummary.total_gla_capped_sum_assured,
-      annualPremium: computeOfficePremium(
-        resultSummary.exp_total_gla_annual_risk_premium,
-        resultSummary
-      ),
-      finalAnnualPremium: resultSummary.final_gla_annual_office_premium,
-      finalAnnualCommission: resultSummary.final_gla_annual_commission_amount,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_gla_annual_risk_premium_salary, resultSummary) * 100)}%`,
-      ratePer1000SA: officeRateFromRiskRate(
-        resultSummary.exp_gla_risk_rate_per_1000_sa,
-        resultSummary
-      )
-    })
+        : 0
+      const glaSA = resultSummary.total_gla_capped_sum_assured || 0
+      const glaFinalPremium = resultSummary.final_gla_annual_office_premium || 0
+      gridData.push({
+        category,
+        benefit: glaBenefitTitle.value,
+        annualSalary: glaSalary,
+        totalSumAssured: resultSummary.total_gla_capped_sum_assured,
+        annualPremium: computeOfficePremium(
+          resultSummary.exp_total_gla_annual_risk_premium,
+          resultSummary
+        ),
+        finalAnnualPremium: resultSummary.final_gla_annual_office_premium,
+        finalAnnualCommission: resultSummary.final_gla_annual_commission_amount,
+        percentSalary: `${roundUpToTwoDecimalsAccounting(
+          glaSalary > 0 ? (glaFinalPremium / glaSalary) * 100 : 0
+        )}%`,
+        ratePer1000SA: glaSA > 0 ? (glaFinalPremium / glaSA) * 1000 : ''
+      })
+    }
 
     // Tax Saver — additive top-up on top of GLA. Salary/SA cells stay 0
     // because Tax Saver rides on the GLA salary basis (showing them would
@@ -830,6 +830,8 @@ const convertExcelDataToGridData = () => {
           resultSummary.exp_total_tax_saver_annual_risk_premium,
           resultSummary
         ) || 0
+      const taxSaverFinalPremium =
+        resultSummary.final_tax_saver_annual_office_premium || 0
       gridData.push({
         category,
         benefit: `${glaBenefitTitle.value} — Tax Saver (of GLA)`,
@@ -840,7 +842,7 @@ const convertExcelDataToGridData = () => {
         finalAnnualCommission:
           resultSummary.final_tax_saver_annual_commission_amount,
         percentSalary: `${roundUpToTwoDecimalsAccounting(
-          (salary > 0 ? taxSaverPremium / salary : 0) * 100
+          salary > 0 ? (taxSaverFinalPremium / salary) * 100 : 0
         )}%`,
         ratePer1000SA: ''
       })
@@ -852,6 +854,11 @@ const convertExcelDataToGridData = () => {
 
     // Additional Accidental GLA rider (per-category opt-in).
     if (schemeCategory?.additional_accidental_gla_benefit === true) {
+      const aaglaSalary = resultSummary.total_annual_salary || 0
+      const aaglaSA =
+        resultSummary.total_additional_accidental_gla_capped_sum_assured || 0
+      const aaglaFinalPremium =
+        resultSummary.final_additional_accidental_gla_annual_office_premium || 0
       gridData.push({
         category,
         benefit: additionalAccidentalGlaBenefitTitle.value,
@@ -866,11 +873,10 @@ const convertExcelDataToGridData = () => {
           resultSummary.final_additional_accidental_gla_annual_office_premium,
         finalAnnualCommission:
           resultSummary.final_additional_accidental_gla_annual_commission_amount,
-        percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_additional_accidental_gla_annual_risk_premium_salary, resultSummary) * 100)}%`,
-        ratePer1000SA: officeRateFromRiskRate(
-          resultSummary.exp_additional_accidental_gla_risk_rate_per_1000_sa,
-          resultSummary
-        )
+        percentSalary: `${roundUpToTwoDecimalsAccounting(
+          aaglaSalary > 0 ? (aaglaFinalPremium / aaglaSalary) * 100 : 0
+        )}%`,
+        ratePer1000SA: aaglaSA > 0 ? (aaglaFinalPremium / aaglaSA) * 1000 : ''
       })
     }
 
@@ -878,6 +884,10 @@ const convertExcelDataToGridData = () => {
     // its displayed Total Sum Assured mirrors the parent GLA covered SA — the
     // rider cannot exceed the main benefit it's attached to.
     if (schemeCategory?.gla_educator_benefit === 'Yes') {
+      const glaEduSalary = resultSummary.total_annual_salary || 0
+      const glaEduSA = resultSummary.total_gla_capped_sum_assured || 0
+      const glaEduFinalPremium =
+        resultSummary.final_gla_educator_annual_office_premium || 0
       gridData.push({
         category,
         benefit: glaEducatorBenefitTitle.value,
@@ -891,37 +901,45 @@ const convertExcelDataToGridData = () => {
           resultSummary.final_gla_educator_annual_office_premium,
         finalAnnualCommission:
           resultSummary.final_gla_educator_annual_commission_amount,
-        percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_adj_proportion_gla_educator_risk_premium_salary, resultSummary) * 100)}%`,
-        ratePer1000SA: officeRateFromRiskRate(
-          resultSummary.exp_gla_educator_risk_rate_per_1000_sa,
-          resultSummary
-        )
+        percentSalary: `${roundUpToTwoDecimalsAccounting(
+          glaEduSalary > 0 ? (glaEduFinalPremium / glaEduSalary) * 100 : 0
+        )}%`,
+        ratePer1000SA:
+          glaEduSA > 0 ? (glaEduFinalPremium / glaEduSA) * 1000 : ''
       })
     }
 
-    gridData.push({
-      category,
-      benefit: ptdBenefitTitle.value,
-      annualSalary: isBenefitEnabled('PTD', category)
+    {
+      const ptdSalary = isBenefitEnabled('PTD', category)
         ? resultSummary.total_annual_salary
-        : 0,
-      totalSumAssured: resultSummary.total_ptd_capped_sum_assured,
-      annualPremium: computeOfficePremium(
-        resultSummary.exp_total_ptd_annual_risk_premium,
-        resultSummary
-      ),
-      finalAnnualPremium: resultSummary.final_ptd_annual_office_premium,
-      finalAnnualCommission: resultSummary.final_ptd_annual_commission_amount,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_ptd_annual_risk_premium_salary, resultSummary) * 100)}%`,
-      ratePer1000SA: officeRateFromRiskRate(
-        resultSummary.exp_ptd_risk_rate_per_1000_sa,
-        resultSummary
-      )
-    })
+        : 0
+      const ptdSA = resultSummary.total_ptd_capped_sum_assured || 0
+      const ptdFinalPremium = resultSummary.final_ptd_annual_office_premium || 0
+      gridData.push({
+        category,
+        benefit: ptdBenefitTitle.value,
+        annualSalary: ptdSalary,
+        totalSumAssured: resultSummary.total_ptd_capped_sum_assured,
+        annualPremium: computeOfficePremium(
+          resultSummary.exp_total_ptd_annual_risk_premium,
+          resultSummary
+        ),
+        finalAnnualPremium: resultSummary.final_ptd_annual_office_premium,
+        finalAnnualCommission: resultSummary.final_ptd_annual_commission_amount,
+        percentSalary: `${roundUpToTwoDecimalsAccounting(
+          ptdSalary > 0 ? (ptdFinalPremium / ptdSalary) * 100 : 0
+        )}%`,
+        ratePer1000SA: ptdSA > 0 ? (ptdFinalPremium / ptdSA) * 1000 : ''
+      })
+    }
 
     // PTD Educator rider (only for categories with the benefit enabled).
     // Rider on PTD — displayed SA mirrors the parent PTD covered SA.
     if (schemeCategory?.ptd_educator_benefit === 'Yes') {
+      const ptdEduSalary = resultSummary.total_annual_salary || 0
+      const ptdEduSA = resultSummary.total_ptd_capped_sum_assured || 0
+      const ptdEduFinalPremium =
+        resultSummary.final_ptd_educator_annual_office_premium || 0
       gridData.push({
         category,
         benefit: ptdEducatorBenefitTitle.value,
@@ -935,93 +953,111 @@ const convertExcelDataToGridData = () => {
           resultSummary.final_ptd_educator_annual_office_premium,
         finalAnnualCommission:
           resultSummary.final_ptd_educator_annual_commission_amount,
-        percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_adj_proportion_ptd_educator_risk_premium_salary, resultSummary) * 100)}%`,
-        ratePer1000SA: officeRateFromRiskRate(
-          resultSummary.exp_ptd_educator_risk_rate_per_1000_sa,
-          resultSummary
-        )
+        percentSalary: `${roundUpToTwoDecimalsAccounting(
+          ptdEduSalary > 0 ? (ptdEduFinalPremium / ptdEduSalary) * 100 : 0
+        )}%`,
+        ratePer1000SA:
+          ptdEduSA > 0 ? (ptdEduFinalPremium / ptdEduSA) * 1000 : ''
       })
     }
 
-    gridData.push({
-      category,
-      benefit: ciBenefitTitle.value,
-      annualSalary: isBenefitEnabled('CI', category)
+    {
+      const ciSalary = isBenefitEnabled('CI', category)
         ? resultSummary.total_annual_salary
-        : 0,
-      totalSumAssured: resultSummary.total_ci_capped_sum_assured,
-      annualPremium: computeOfficePremium(
-        resultSummary.exp_total_ci_annual_risk_premium,
-        resultSummary
-      ),
-      finalAnnualPremium: resultSummary.final_ci_annual_office_premium,
-      finalAnnualCommission: resultSummary.final_ci_annual_commission_amount,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_ci_annual_risk_premium_salary, resultSummary) * 100)}%`,
-      ratePer1000SA: officeRateFromRiskRate(
-        resultSummary.exp_ci_risk_rate_per_1000_sa,
-        resultSummary
-      )
-    })
+        : 0
+      const ciSA = resultSummary.total_ci_capped_sum_assured || 0
+      const ciFinalPremium = resultSummary.final_ci_annual_office_premium || 0
+      gridData.push({
+        category,
+        benefit: ciBenefitTitle.value,
+        annualSalary: ciSalary,
+        totalSumAssured: resultSummary.total_ci_capped_sum_assured,
+        annualPremium: computeOfficePremium(
+          resultSummary.exp_total_ci_annual_risk_premium,
+          resultSummary
+        ),
+        finalAnnualPremium: resultSummary.final_ci_annual_office_premium,
+        finalAnnualCommission: resultSummary.final_ci_annual_commission_amount,
+        percentSalary: `${roundUpToTwoDecimalsAccounting(
+          ciSalary > 0 ? (ciFinalPremium / ciSalary) * 100 : 0
+        )}%`,
+        ratePer1000SA: ciSA > 0 ? (ciFinalPremium / ciSA) * 1000 : ''
+      })
+    }
 
-    gridData.push({
-      category,
-      benefit: sglaBenefitTitle.value,
-      annualSalary: isBenefitEnabled('SGLA', category)
+    {
+      const sglaSalary = isBenefitEnabled('SGLA', category)
         ? resultSummary.total_annual_salary
-        : 0,
-      totalSumAssured: resultSummary.total_sgla_capped_sum_assured,
-      annualPremium: computeOfficePremium(
-        resultSummary.exp_total_sgla_annual_risk_premium,
-        resultSummary
-      ),
-      finalAnnualPremium: resultSummary.final_sgla_annual_office_premium,
-      finalAnnualCommission: resultSummary.final_sgla_annual_commission_amount,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_sgla_annual_risk_premium_salary, resultSummary) * 100)}%`,
-      ratePer1000SA: officeRateFromRiskRate(
-        resultSummary.exp_sgla_risk_rate_per_1000_sa,
-        resultSummary
-      )
-    })
+        : 0
+      const sglaSA = resultSummary.total_sgla_capped_sum_assured || 0
+      const sglaFinalPremium =
+        resultSummary.final_sgla_annual_office_premium || 0
+      gridData.push({
+        category,
+        benefit: sglaBenefitTitle.value,
+        annualSalary: sglaSalary,
+        totalSumAssured: resultSummary.total_sgla_capped_sum_assured,
+        annualPremium: computeOfficePremium(
+          resultSummary.exp_total_sgla_annual_risk_premium,
+          resultSummary
+        ),
+        finalAnnualPremium: resultSummary.final_sgla_annual_office_premium,
+        finalAnnualCommission:
+          resultSummary.final_sgla_annual_commission_amount,
+        percentSalary: `${roundUpToTwoDecimalsAccounting(
+          sglaSalary > 0 ? (sglaFinalPremium / sglaSalary) * 100 : 0
+        )}%`,
+        ratePer1000SA: sglaSA > 0 ? (sglaFinalPremium / sglaSA) * 1000 : ''
+      })
+    }
 
-    gridData.push({
-      category,
-      benefit: phiBenefitTitle.value,
-      annualSalary: isBenefitEnabled('PHI', category)
+    {
+      const phiSalary = isBenefitEnabled('PHI', category)
         ? resultSummary.total_annual_salary
-        : 0,
-      totalSumAssured: resultSummary.total_phi_capped_income,
-      annualPremium: computeOfficePremium(
-        resultSummary.exp_total_phi_annual_risk_premium,
-        resultSummary
-      ),
-      finalAnnualPremium: resultSummary.final_phi_annual_office_premium,
-      finalAnnualCommission: resultSummary.final_phi_annual_commission_amount,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_phi_annual_risk_premium_salary, resultSummary) * 100)}%`,
-      ratePer1000SA: officeRateFromRiskRate(
-        resultSummary.exp_phi_risk_rate_per_1000_sa,
-        resultSummary
-      )
-    })
+        : 0
+      const phiSA = resultSummary.total_phi_capped_income || 0
+      const phiFinalPremium = resultSummary.final_phi_annual_office_premium || 0
+      gridData.push({
+        category,
+        benefit: phiBenefitTitle.value,
+        annualSalary: phiSalary,
+        totalSumAssured: resultSummary.total_phi_capped_income,
+        annualPremium: computeOfficePremium(
+          resultSummary.exp_total_phi_annual_risk_premium,
+          resultSummary
+        ),
+        finalAnnualPremium: resultSummary.final_phi_annual_office_premium,
+        finalAnnualCommission: resultSummary.final_phi_annual_commission_amount,
+        percentSalary: `${roundUpToTwoDecimalsAccounting(
+          phiSalary > 0 ? (phiFinalPremium / phiSalary) * 100 : 0
+        )}%`,
+        ratePer1000SA: phiSA > 0 ? (phiFinalPremium / phiSA) * 1000 : ''
+      })
+    }
 
-    gridData.push({
-      category,
-      benefit: ttdBenefitTitle.value,
-      annualSalary: isBenefitEnabled('TTD', category)
+    {
+      const ttdSalary = isBenefitEnabled('TTD', category)
         ? resultSummary.total_annual_salary
-        : 0,
-      totalSumAssured: resultSummary.total_ttd_capped_income,
-      annualPremium: computeOfficePremium(
-        resultSummary.exp_total_ttd_annual_risk_premium,
-        resultSummary
-      ),
-      finalAnnualPremium: resultSummary.final_ttd_annual_office_premium,
-      finalAnnualCommission: resultSummary.final_ttd_annual_commission_amount,
-      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_ttd_annual_risk_premium_salary, resultSummary) * 100)}%`,
-      ratePer1000SA: officeRateFromRiskRate(
-        resultSummary.exp_ttd_risk_rate_per_1000_sa,
-        resultSummary
-      )
-    })
+        : 0
+      const ttdSA = resultSummary.total_ttd_capped_income || 0
+      const ttdFinalPremium = resultSummary.final_ttd_annual_office_premium || 0
+      gridData.push({
+        category,
+        benefit: ttdBenefitTitle.value,
+        annualSalary: ttdSalary,
+        totalSumAssured: resultSummary.total_ttd_capped_income,
+        annualPremium: computeOfficePremium(
+          resultSummary.exp_total_ttd_annual_risk_premium,
+          resultSummary
+        ),
+        finalAnnualPremium: resultSummary.final_ttd_annual_office_premium,
+        finalAnnualCommission: resultSummary.final_ttd_annual_commission_amount,
+        percentSalary: `${roundUpToTwoDecimalsAccounting(
+          ttdSalary > 0 ? (ttdFinalPremium / ttdSalary) * 100 : 0
+        )}%`,
+        ratePer1000SA: ttdSA > 0 ? (ttdFinalPremium / ttdSA) * 1000 : ''
+      })
+    }
 
     // Add subtotal row. The backend's exp_total_annual_premium_excl_funeral
     // already includes the GLA TaxSaver rider plus GLA Educator and PTD Educator
@@ -1029,6 +1065,8 @@ const convertExcelDataToGridData = () => {
     const anyBenefitEnabled = ['GLA', 'PTD', 'CI', 'SGLA', 'PHI', 'TTD'].some(
       (benefitCode) => isBenefitEnabled(benefitCode, category)
     )
+    const subtotalFinalPremium =
+      resultSummary.final_total_annual_premium_excl_funeral || 0
     gridData.push({
       category,
       benefit: 'Sub Total (Excl. Funeral)',
@@ -1039,9 +1077,7 @@ const convertExcelDataToGridData = () => {
       finalAnnualCommission: sumFinalCommissionExclFuneral(resultSummary),
       percentSalary: `${roundUpToTwoDecimalsAccounting(
         resultSummary.total_annual_salary > 0
-          ? (resultSummary.exp_total_annual_premium_excl_funeral /
-              resultSummary.total_annual_salary) *
-              100
+          ? (subtotalFinalPremium / resultSummary.total_annual_salary) * 100
           : 0
       )}%`,
       ratePer1000SA: '',
@@ -1094,12 +1130,6 @@ const convertExcelDataToGridData = () => {
               resultSummary.exp_total_gla_annual_risk_premium,
               resultSummary
             ) || 0),
-          exp_proportion_gla_office_premium_salary:
-            (acc.exp_proportion_gla_office_premium_salary || 0) +
-            (officeProportionFromRiskProportion(
-              resultSummary.exp_proportion_gla_annual_risk_premium_salary,
-              resultSummary
-            ) || 0),
 
           total_ptd_capped_sum_assured:
             (acc.total_ptd_capped_sum_assured || 0) +
@@ -1108,12 +1138,6 @@ const convertExcelDataToGridData = () => {
             (acc.exp_total_ptd_annual_office_premium || 0) +
             (computeOfficePremium(
               resultSummary.exp_total_ptd_annual_risk_premium,
-              resultSummary
-            ) || 0),
-          exp_proportion_ptd_office_premium_salary:
-            (acc.exp_proportion_ptd_office_premium_salary || 0) +
-            (officeProportionFromRiskProportion(
-              resultSummary.exp_proportion_ptd_annual_risk_premium_salary,
               resultSummary
             ) || 0),
 
@@ -1126,12 +1150,6 @@ const convertExcelDataToGridData = () => {
               resultSummary.exp_total_ci_annual_risk_premium,
               resultSummary
             ) || 0),
-          exp_proportion_ci_office_premium_salary:
-            (acc.exp_proportion_ci_office_premium_salary || 0) +
-            (officeProportionFromRiskProportion(
-              resultSummary.exp_proportion_ci_annual_risk_premium_salary,
-              resultSummary
-            ) || 0),
 
           total_sgla_capped_sum_assured:
             (acc.total_sgla_capped_sum_assured || 0) +
@@ -1140,12 +1158,6 @@ const convertExcelDataToGridData = () => {
             (acc.exp_total_sgla_annual_office_premium || 0) +
             (computeOfficePremium(
               resultSummary.exp_total_sgla_annual_risk_premium,
-              resultSummary
-            ) || 0),
-          exp_proportion_sgla_office_premium_salary:
-            (acc.exp_proportion_sgla_office_premium_salary || 0) +
-            (officeProportionFromRiskProportion(
-              resultSummary.exp_proportion_sgla_annual_risk_premium_salary,
               resultSummary
             ) || 0),
 
@@ -1158,12 +1170,6 @@ const convertExcelDataToGridData = () => {
               resultSummary.exp_total_phi_annual_risk_premium,
               resultSummary
             ) || 0),
-          exp_proportion_phi_office_premium_salary:
-            (acc.exp_proportion_phi_office_premium_salary || 0) +
-            (officeProportionFromRiskProportion(
-              resultSummary.exp_proportion_phi_annual_risk_premium_salary,
-              resultSummary
-            ) || 0),
 
           total_ttd_capped_income:
             (acc.total_ttd_capped_income || 0) +
@@ -1172,12 +1178,6 @@ const convertExcelDataToGridData = () => {
             (acc.exp_total_ttd_annual_office_premium || 0) +
             (computeOfficePremium(
               resultSummary.exp_total_ttd_annual_risk_premium,
-              resultSummary
-            ) || 0),
-          exp_proportion_ttd_office_premium_salary:
-            (acc.exp_proportion_ttd_office_premium_salary || 0) +
-            (officeProportionFromRiskProportion(
-              resultSummary.exp_proportion_ttd_annual_risk_premium_salary,
               resultSummary
             ) || 0),
 
@@ -1294,6 +1294,7 @@ const convertExcelDataToGridData = () => {
     // Add totals category rows
     const totalsCategory = 'Totals'
 
+    const totalsGlaFinalPremium = totals.final_gla_annual_office_premium || 0
     gridData.push({
       category: totalsCategory,
       benefit: glaBenefitTitle.value,
@@ -1303,12 +1304,12 @@ const convertExcelDataToGridData = () => {
       finalAnnualPremium: totals.final_gla_annual_office_premium,
       finalAnnualCommission: totals.final_gla_annual_commission_amount,
       percentSalary: `${roundUpToTwoDecimalsAccounting(
-        (totals.exp_total_gla_annual_office_premium /
-          totals.total_annual_salary || 0) * 100
+        totals.total_annual_salary > 0
+          ? (totalsGlaFinalPremium / totals.total_annual_salary) * 100
+          : 0
       )}%`,
       ratePer1000SA: totals.total_gla_capped_sum_assured
-        ? (totals.exp_total_gla_annual_office_premium * 1000) /
-          totals.total_gla_capped_sum_assured
+        ? (totalsGlaFinalPremium * 1000) / totals.total_gla_capped_sum_assured
         : ''
     })
 
@@ -1316,6 +1317,8 @@ const convertExcelDataToGridData = () => {
       (cat: any) => cat.gla_educator_benefit === 'Yes'
     )
     if (anyCategoryHasGlaEducator) {
+      const totalsGlaEduFinalPremium =
+        totals.final_gla_educator_annual_office_premium || 0
       gridData.push({
         category: totalsCategory,
         benefit: glaEducatorBenefitTitle.value,
@@ -1326,16 +1329,18 @@ const convertExcelDataToGridData = () => {
         finalAnnualCommission:
           totals.final_gla_educator_annual_commission_amount,
         percentSalary: `${roundUpToTwoDecimalsAccounting(
-          (totals.exp_adj_total_gla_educator_office_premium /
-            totals.total_annual_salary || 0) * 100
+          totals.total_annual_salary > 0
+            ? (totalsGlaEduFinalPremium / totals.total_annual_salary) * 100
+            : 0
         )}%`,
         ratePer1000SA: totals.total_gla_capped_sum_assured
-          ? (totals.exp_adj_total_gla_educator_office_premium * 1000) /
+          ? (totalsGlaEduFinalPremium * 1000) /
             totals.total_gla_capped_sum_assured
           : ''
       })
     }
 
+    const totalsPtdFinalPremium = totals.final_ptd_annual_office_premium || 0
     gridData.push({
       category: totalsCategory,
       benefit: ptdBenefitTitle.value,
@@ -1344,10 +1349,13 @@ const convertExcelDataToGridData = () => {
       annualPremium: totals.exp_total_ptd_annual_office_premium,
       finalAnnualPremium: totals.final_ptd_annual_office_premium,
       finalAnnualCommission: totals.final_ptd_annual_commission_amount,
-      percentSalary: `${roundUpToTwoDecimalsAccounting((totals.exp_total_ptd_annual_office_premium / totals.total_annual_salary || 0) * 100)}%`,
+      percentSalary: `${roundUpToTwoDecimalsAccounting(
+        totals.total_annual_salary > 0
+          ? (totalsPtdFinalPremium / totals.total_annual_salary) * 100
+          : 0
+      )}%`,
       ratePer1000SA: totals.total_ptd_capped_sum_assured
-        ? (totals.exp_total_ptd_annual_office_premium * 1000) /
-          totals.total_ptd_capped_sum_assured
+        ? (totalsPtdFinalPremium * 1000) / totals.total_ptd_capped_sum_assured
         : ''
     })
 
@@ -1355,6 +1363,8 @@ const convertExcelDataToGridData = () => {
       (cat: any) => cat.ptd_educator_benefit === 'Yes'
     )
     if (anyCategoryHasPtdEducator) {
+      const totalsPtdEduFinalPremium =
+        totals.final_ptd_educator_annual_office_premium || 0
       gridData.push({
         category: totalsCategory,
         benefit: ptdEducatorBenefitTitle.value,
@@ -1365,16 +1375,18 @@ const convertExcelDataToGridData = () => {
         finalAnnualCommission:
           totals.final_ptd_educator_annual_commission_amount,
         percentSalary: `${roundUpToTwoDecimalsAccounting(
-          (totals.exp_adj_total_ptd_educator_office_premium /
-            totals.total_annual_salary || 0) * 100
+          totals.total_annual_salary > 0
+            ? (totalsPtdEduFinalPremium / totals.total_annual_salary) * 100
+            : 0
         )}%`,
         ratePer1000SA: totals.total_ptd_capped_sum_assured
-          ? (totals.exp_adj_total_ptd_educator_office_premium * 1000) /
+          ? (totalsPtdEduFinalPremium * 1000) /
             totals.total_ptd_capped_sum_assured
           : ''
       })
     }
 
+    const totalsCiFinalPremium = totals.final_ci_annual_office_premium || 0
     gridData.push({
       category: totalsCategory,
       benefit: ciBenefitTitle.value,
@@ -1384,15 +1396,16 @@ const convertExcelDataToGridData = () => {
       finalAnnualPremium: totals.final_ci_annual_office_premium,
       finalAnnualCommission: totals.final_ci_annual_commission_amount,
       percentSalary: `${roundUpToTwoDecimalsAccounting(
-        (totals.exp_total_ci_annual_office_premium /
-          totals.total_annual_salary || 0) * 100
+        totals.total_annual_salary > 0
+          ? (totalsCiFinalPremium / totals.total_annual_salary) * 100
+          : 0
       )}%`,
       ratePer1000SA: totals.total_ci_capped_sum_assured
-        ? (totals.exp_total_ci_annual_office_premium * 1000) /
-          totals.total_ci_capped_sum_assured
+        ? (totalsCiFinalPremium * 1000) / totals.total_ci_capped_sum_assured
         : ''
     })
 
+    const totalsSglaFinalPremium = totals.final_sgla_annual_office_premium || 0
     gridData.push({
       category: totalsCategory,
       benefit: sglaBenefitTitle.value,
@@ -1402,15 +1415,16 @@ const convertExcelDataToGridData = () => {
       finalAnnualPremium: totals.final_sgla_annual_office_premium,
       finalAnnualCommission: totals.final_sgla_annual_commission_amount,
       percentSalary: `${roundUpToTwoDecimalsAccounting(
-        (totals.exp_total_sgla_annual_office_premium /
-          totals.total_annual_salary || 0) * 100
+        totals.total_annual_salary > 0
+          ? (totalsSglaFinalPremium / totals.total_annual_salary) * 100
+          : 0
       )}%`,
       ratePer1000SA: totals.total_sgla_capped_sum_assured
-        ? (totals.exp_total_sgla_annual_office_premium * 1000) /
-          totals.total_sgla_capped_sum_assured
+        ? (totalsSglaFinalPremium * 1000) / totals.total_sgla_capped_sum_assured
         : ''
     })
 
+    const totalsPhiFinalPremium = totals.final_phi_annual_office_premium || 0
     gridData.push({
       category: totalsCategory,
       benefit: phiBenefitTitle.value,
@@ -1420,15 +1434,16 @@ const convertExcelDataToGridData = () => {
       finalAnnualPremium: totals.final_phi_annual_office_premium,
       finalAnnualCommission: totals.final_phi_annual_commission_amount,
       percentSalary: `${roundUpToTwoDecimalsAccounting(
-        (totals.exp_total_phi_annual_office_premium /
-          totals.total_annual_salary || 0) * 100
+        totals.total_annual_salary > 0
+          ? (totalsPhiFinalPremium / totals.total_annual_salary) * 100
+          : 0
       )}%`,
       ratePer1000SA: totals.total_phi_capped_income
-        ? (totals.exp_total_phi_annual_office_premium * 1000) /
-          totals.total_phi_capped_income
+        ? (totalsPhiFinalPremium * 1000) / totals.total_phi_capped_income
         : ''
     })
 
+    const totalsTtdFinalPremium = totals.final_ttd_annual_office_premium || 0
     gridData.push({
       category: totalsCategory,
       benefit: ttdBenefitTitle.value,
@@ -1438,12 +1453,12 @@ const convertExcelDataToGridData = () => {
       finalAnnualPremium: totals.final_ttd_annual_office_premium,
       finalAnnualCommission: totals.final_ttd_annual_commission_amount,
       percentSalary: `${roundUpToTwoDecimalsAccounting(
-        (totals.exp_total_ttd_annual_office_premium /
-          totals.total_annual_salary || 0) * 100
+        totals.total_annual_salary > 0
+          ? (totalsTtdFinalPremium / totals.total_annual_salary) * 100
+          : 0
       )}%`,
       ratePer1000SA: totals.total_ttd_capped_income
-        ? (totals.exp_total_ttd_annual_office_premium * 1000) /
-          totals.total_ttd_capped_income
+        ? (totalsTtdFinalPremium * 1000) / totals.total_ttd_capped_income
         : ''
     })
 
@@ -1469,6 +1484,8 @@ const convertExcelDataToGridData = () => {
       0
     )
 
+    const totalsSubtotalFinalPremium =
+      totals.final_total_annual_premium_excl_funeral || 0
     gridData.push({
       category: totalsCategory,
       benefit: 'Sub Total (Excl. Funeral)',
@@ -1478,8 +1495,10 @@ const convertExcelDataToGridData = () => {
       finalAnnualPremium: totals.final_total_annual_premium_excl_funeral,
       finalAnnualCommission: sumFinalCommissionExclFuneral(totals),
       percentSalary: `${roundUpToTwoDecimalsAccounting(
-        (totals.exp_total_annual_premium_excl_funeral /
-          totalAnnualSalaryForEnabledBenefits || 0) * 100
+        totalAnnualSalaryForEnabledBenefits > 0
+          ? (totalsSubtotalFinalPremium / totalAnnualSalaryForEnabledBenefits) *
+              100
+          : 0
       )}%`,
       ratePer1000SA: '',
       isSubtotal: true

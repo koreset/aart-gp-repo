@@ -99,7 +99,7 @@ const mockQuote = {
       family_funeral_children_funeral_sum_assured: 25000,
       family_funeral_max_number_children: 4,
       family_funeral_parent_funeral_sum_assured: 20000,
-      family_funeral_parent_maximum_number_covered: 2,
+      family_funeral_max_number_parents: 2,
       family_funeral_adult_dependant_sum_assured: 15000,
       family_funeral_max_number_adult_dependants: 2
     }

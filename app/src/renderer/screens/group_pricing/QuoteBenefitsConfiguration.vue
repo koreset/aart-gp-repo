@@ -498,6 +498,14 @@
                   "
                 ></v-list-item>
               </v-col>
+              <v-col cols="6" md="4">
+                <v-list-item
+                  title="Maximum Number of Parents"
+                  :subtitle="
+                    selectedCategoryDetails.family_funeral_max_number_parents
+                  "
+                ></v-list-item>
+              </v-col>
             </v-row>
           </v-expansion-panel-text>
         </v-expansion-panel>

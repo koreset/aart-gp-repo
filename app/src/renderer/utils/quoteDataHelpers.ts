@@ -805,7 +805,7 @@ export function buildFuneralCoverageRows(item: any): FuneralCoverageRow[] {
     {
       member: 'Parent',
       sumAssured: item.family_funeral_parent_funeral_sum_assured,
-      maxCovered: item.family_funeral_parent_maximum_number_covered
+      maxCovered: item.family_funeral_max_number_parents
     },
     {
       member: 'Dependant',
