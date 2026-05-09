@@ -1451,7 +1451,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 				category.ExtendedFamilyBandRates = bandRates
 				if err := DB.Model(&models.SchemeCategory{}).
 					Where("id = ?", category.ID).
-					Update("extended_family_band_rates", bandRates).Error; err != nil {
+					Update("extended_family_band_rates", models.ExtendedFamilyBandRateArray(bandRates)).Error; err != nil {
 					logger.WithField("error", err.Error()).Warn("Failed to persist extended_family_band_rates")
 				}
 				// Mirror into the preloaded slice so downstream code sees it.
