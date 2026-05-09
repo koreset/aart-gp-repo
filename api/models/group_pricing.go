@@ -1173,7 +1173,7 @@ type MemberRatingResult struct {
 	MemberFuneralSumAssured      float64 `json:"member_funeral_sum_assured" csv:"member_funeral_sum_assured"`
 	MainMemberFuneralRiskPremium float64 `json:"main_member_funeral_risk_premium" csv:"main_member_funeral_risk_premium"`
 
-	//MarriageProportion float64 `json:"marriage_proportion" csv:"marriage_proportion"`
+	AverageNumberSpouse float64 `json:"average_number_spouse" csv:"average_number_spouse"`
 
 	SpouseFuneralBaseRate    float64 `json:"spouse_funeral_base_rate" csv:"spouse_funeral_base_rate"`
 	SpouseFuneralSumAssured  float64 `json:"spouse_funeral_sum_assured" csv:"spouse_funeral_sum_assured"`

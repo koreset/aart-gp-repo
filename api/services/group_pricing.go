@@ -3372,7 +3372,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 
 	discountFraction := -(groupQuote.Loadings.Discount / 100.0)
 
-	//memberDataPointResult.MarriageProportion = groupFuneralParameter.ProportionMarried
+	memberDataPointResult.AverageNumberSpouse = groupFuneralParameter.ProportionMarried
 
 	memberDataPointResult.ChildFuneralBaseRate = applyCoverAgeLimit(GetChildFuneralRate(&originalMemberDataPointResult, groupParameter, memberDataPointResult.AverageChildAgeNextBirthday), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
 	memberDataPointResult.ChildFuneralSumAssured = schemeCategory.FamilyFuneralChildrenFuneralSumAssured
@@ -3382,10 +3382,10 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	mainMemberFuneralSA := applyMaxCoverCap(applyCoverAgeLimit(schemeCategory.FamilyFuneralMainMemberFuneralSumAssured, memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge), reinsCoverCaps[benefitTypeKey(schemeCategory.FamilyFuneralAlias, models.BenefitTypeFun)])
 	if schemeCategory.GlaBenefit {
 		memberDataPointResult.MainMemberFuneralRiskPremium = memberDataPointResult.LoadedGlaRate * mainMemberFuneralSA
-		memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.LoadedSpouseGlaRate * schemeCategory.FamilyFuneralSpouseFuneralSumAssured
+		memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.LoadedSpouseGlaRate * schemeCategory.FamilyFuneralSpouseFuneralSumAssured * memberDataPointResult.AverageNumberSpouse
 	} else {
 		memberDataPointResult.MainMemberFuneralRiskPremium = memberDataPointResult.MainMemberFuneralBaseRate * mainMemberFuneralSA
-		memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.SpouseFuneralBaseRate * schemeCategory.FamilyFuneralSpouseFuneralSumAssured
+		memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.SpouseFuneralBaseRate * schemeCategory.FamilyFuneralSpouseFuneralSumAssured * memberDataPointResult.AverageNumberSpouse
 	}
 	memberDataPointResult.ChildFuneralRiskPremium = memberDataPointResult.ChildFuneralBaseRate * schemeCategory.FamilyFuneralChildrenFuneralSumAssured * math.Min(memberDataPointResult.AverageNumberChildren, float64(schemeCategory.FamilyFuneralMaxNumberChildren))
 	memberDataPointResult.ParentFuneralRiskPremium = memberDataPointResult.ParentFuneralBaseRate * schemeCategory.FamilyFuneralAdultDependantSumAssured * memberDataPointResult.AverageNumberDependants
@@ -4332,7 +4332,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 
 	discountFraction := -(groupQuote.Loadings.Discount / 100.0)
 
-	//memberDataPointResult.MarriageProportion = groupFuneralParameter.ProportionMarried
+	memberDataPointResult.AverageNumberSpouse = groupFuneralParameter.ProportionMarried
 
 	memberDataPointResult.ChildFuneralBaseRate = applyCoverAgeLimit(GetChildFuneralRate(&memberDataPointResult, groupParameter, memberDataPointResult.AverageChildAgeNextBirthday), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
 	memberDataPointResult.ChildFuneralBaseRate *= (1 + memberRegionLoading.FunRegionLoadingRate)
@@ -4362,9 +4362,9 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	}
 	memberDataPointResult.SpouseFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured
 	if groupQuote.SchemeCategories[i].GlaBenefit {
-		memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.LoadedSpouseGlaRate * groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured
+		memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.LoadedSpouseGlaRate * groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured * memberDataPointResult.AverageNumberSpouse
 	} else {
-		memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.SpouseFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured
+		memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.SpouseFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured * memberDataPointResult.AverageNumberSpouse
 	}
 	memberDataPointResult.ChildFuneralRiskPremium = memberDataPointResult.ChildFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralChildrenFuneralSumAssured * math.Min(memberDataPointResult.AverageNumberChildren, float64(groupQuote.SchemeCategories[i].FamilyFuneralMaxNumberChildren))
 	memberDataPointResult.ParentFuneralRiskPremium = memberDataPointResult.ParentFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured * memberDataPointResult.AverageNumberDependants
