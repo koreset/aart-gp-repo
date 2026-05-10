@@ -896,8 +896,20 @@ const closeBasisDialog = async (value) => {
 
 const loadQuote = async () => {
   try {
-    const res = await GroupPricingService.getQuote(props.id)
-    quote.value = res.data
+    // Fire all four endpoints in parallel — the HTTP calls have no
+    // inter-request dependencies (only post-processing of the params and
+    // result-summary responses needs the quote, which we apply once all
+    // four have resolved). Cuts wall-clock load to slowest-of-four
+    // instead of sum-of-four. getCustomTirStatus is wrapped so its
+    // failure can't fail the whole batch (preserves original behaviour).
+    const [quoteRes, paramsRes, summaryRes, tirRes] = await Promise.all([
+      GroupPricingService.getQuote(props.id),
+      GroupPricingService.getQuoteTable(props.id, 'group_pricing_parameters'),
+      GroupPricingService.getResultSummary(props.id),
+      GroupPricingService.getCustomTirStatus(props.id).catch(() => null)
+    ])
+
+    quote.value = quoteRes.data
     broker.value = quote.value.quoteBroker
     // Ensure loadings object exists with the new binder/outsource fields so
     // v-model inputs don't trip on undefined when rendering the dialog.
@@ -909,13 +921,8 @@ const loadQuote = async () => {
       quote.value.loadings.outsource_fee = 0
     }
 
-    const res1 = await GroupPricingService.getQuoteTable(
-      quote.value.id,
-      'group_pricing_parameters'
-    )
-
-    if (res1.data !== null && res1.data.data.length > 0) {
-      parameterBases.value = res1.data.data.map((item: any) => {
+    if (paramsRes.data !== null && paramsRes.data.data.length > 0) {
+      parameterBases.value = paramsRes.data.data.map((item: any) => {
         if (
           item.risk_rate_code !== '' &&
           item.risk_rate_code === quote.value.risk_rate_code
@@ -932,29 +939,23 @@ const loadQuote = async () => {
       (item: any) => item !== undefined && item !== null
     )
 
-    const resp = await GroupPricingService.getResultSummary(props.id)
-    if (resp.status === 200) {
+    if (summaryRes.status === 200) {
       // Force a clean remount of the summary children even if the new
       // payload happens to deep-equal the old one (or if Vue reactivity
       // misses the swap for any reason). The :key on each summary panel
       // is bound to resultsRefreshKey, so bumping it guarantees a fresh
       // render against the new data.
-      resultSummaries.value = resp.data
+      resultSummaries.value = summaryRes.data
       resultsRefreshKey.value++
     } else {
       resultSummaries.value = null
     }
 
-    // Pre-flight: check whether the custom TIR table has been uploaded
-    try {
-      const tirCheck = await GroupPricingService.getCustomTirStatus(props.id)
-      const tirData = tirCheck.data?.data
-      customTirMissing.value = !!(
-        tirData?.needs_custom_tir && !tirData?.has_table
-      )
-    } catch {
-      customTirMissing.value = false
-    }
+    // Pre-flight: whether the custom TIR table has been uploaded.
+    const tirData = tirRes?.data?.data
+    customTirMissing.value = !!(
+      tirData?.needs_custom_tir && !tirData?.has_table
+    )
   } catch (error) {
     console.log('Error:', error)
   }

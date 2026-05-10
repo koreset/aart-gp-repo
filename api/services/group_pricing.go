@@ -9850,6 +9850,7 @@ func GetTtdRate(memberResultData *models.MemberRatingResult, groupPricingParamet
 	keyString.WriteString(strconv.Itoa(memberResultData.OccupationClass) + "_")
 	keyString.WriteString(strconv.Itoa(incomeLevel) + "_")
 	keyString.WriteString(strconv.Itoa(schemeCategory.TtdWaitingPeriod) + "_")
+	keyString.WriteString(schemeCategory.TtdBenefitEscalation + "_")
 	keyString.WriteString(schemeCategory.TtdDisabilityDefinition + "_")
 	keyString.WriteString(schemeCategory.TtdRiskType + "_")
 	key := keyString.String()
@@ -9865,8 +9866,8 @@ func GetTtdRate(memberResultData *models.MemberRatingResult, groupPricingParamet
 		//fmt.Println("cache missed: ", key)
 	}
 	var ttdRate float64
-	query := "risk_rate_code=? and age_next_birthday=? and gender=? and occupation_class=? and income_level=?  and waiting_period=? and disability_definition=? and risk_type=?"
-	err := DB.Table(tableName).Where(query, groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, memberResultData.Gender, memberResultData.OccupationClass, incomeLevel, schemeCategory.TtdWaitingPeriod, schemeCategory.TtdDisabilityDefinition, schemeCategory.TtdRiskType).Pluck("ttd_rate", &ttdRate).Error
+	query := "risk_rate_code=? and age_next_birthday=? and gender=? and occupation_class=? and income_level=?  and waiting_period=? and benefit_escalation_option=? and disability_definition=? and risk_type=?"
+	err := DB.Table(tableName).Where(query, groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, memberResultData.Gender, memberResultData.OccupationClass, incomeLevel, schemeCategory.TtdWaitingPeriod, schemeCategory.TtdBenefitEscalation, schemeCategory.TtdDisabilityDefinition, schemeCategory.TtdRiskType).Pluck("ttd_rate", &ttdRate).Error
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -12898,6 +12899,248 @@ func GetMembersPaginated(page, pageSize int, search, schemeId, status string) ([
 func GetGroupPricingQuoteResultSummary(quoteId int) ([]models.MemberRatingResultSummary, error) {
 	summaries := make([]models.MemberRatingResultSummary, 0)
 	err := DB.Where("quote_id = ?", quoteId).Find(&summaries).Error
+	if err != nil {
+		return summaries, err
+	}
+	return summaries, nil
+}
+
+// memberRatingResultSummarySlimColumns is the union of DB columns the
+// HTTP-facing /result-summary endpoint actually needs — derived from a static
+// audit of the frontend consumers (OutputSummary, QuoteSummaryData,
+// QuoteBenefitSummary, AdditionalGlaCoverSummary, ExperienceRateOverrides,
+// quoteDataHelpers, useDocxQuoteGeneration). The full struct has ~360 columns
+// (mostly per-benefit float64s); fetching all of them on a wide row is the
+// dominant cost of the endpoint, even on a tiny table. Keeping this list in
+// sync with frontend usage is a manual chore — if a new field is read on the
+// renderer side and shows up as zero, add it here.
+var memberRatingResultSummarySlimColumns = []string{
+	"additional_gla_cover_age_band_type",
+	"additional_gla_cover_male_prop_used",
+	"admin_loading",
+	"average_ci_capped_sum_assured",
+	"average_gla_capped_sum_assured",
+	"average_phi_capped_income",
+	"average_ptd_capped_sum_assured",
+	"average_sgla_capped_sum_assured",
+	"average_ttd_capped_income",
+	"category",
+	"ci_risk_rate_per1000_sa",
+	"commission_loading",
+	"creation_date",
+	"discount",
+	"exp_adj_total_gla_educator_binder_amount",
+	"exp_adj_total_gla_educator_commission_amount",
+	"exp_adj_total_gla_educator_outsourced_amount",
+	"exp_adj_total_gla_educator_risk_premium",
+	"exp_adj_total_ptd_educator_binder_amount",
+	"exp_adj_total_ptd_educator_commission_amount",
+	"exp_adj_total_ptd_educator_outsourced_amount",
+	"exp_adj_total_ptd_educator_risk_premium",
+	"exp_ci_risk_rate_per1000_sa",
+	"exp_gla_risk_rate_per1000_sa",
+	"exp_phi_risk_rate_per1000_sa",
+	"exp_prop_additional_accidental_gla_annual_risk_premium_salary",
+	"exp_proportion_ci_annual_risk_premium_salary",
+	"exp_proportion_fun_annual_risk_premium_salary",
+	"exp_proportion_gla_annual_risk_premium_salary",
+	"exp_proportion_phi_annual_risk_premium_salary",
+	"exp_proportion_ptd_annual_risk_premium_salary",
+	"exp_proportion_sgla_annual_risk_premium_salary",
+	"exp_proportion_ttd_annual_risk_premium_salary",
+	"exp_ptd_risk_rate_per1000_sa",
+	"exp_sgla_risk_rate_per1000_sa",
+	"exp_total_add_acc_gla_annual_binder_amount",
+	"exp_total_add_acc_gla_annual_commission_amount",
+	"exp_total_add_acc_gla_annual_outsourced_amt",
+	"exp_total_additional_accidental_gla_annual_risk_premium",
+	"exp_total_annual_premium_excl_funeral",
+	"exp_total_ci_annual_binder_amount",
+	"exp_total_ci_annual_commission_amount",
+	"exp_total_ci_annual_outsourced_amount",
+	"exp_total_ci_annual_risk_premium",
+	"exp_total_ci_risk_rate",
+	"exp_total_fun_annual_binder_amount",
+	"exp_total_fun_annual_commission_amount",
+	"exp_total_fun_annual_outsourced_amount",
+	"exp_total_fun_annual_premium_per_member",
+	"exp_total_fun_annual_risk_premium",
+	"exp_total_fun_monthly_premium_per_member",
+	"exp_total_gla_annual_binder_amount",
+	"exp_total_gla_annual_commission_amount",
+	"exp_total_gla_annual_outsourced_amount",
+	"exp_total_gla_annual_risk_premium",
+	"exp_total_gla_risk_rate",
+	"exp_total_phi_annual_binder_amount",
+	"exp_total_phi_annual_commission_amount",
+	"exp_total_phi_annual_outsourced_amount",
+	"exp_total_phi_annual_risk_premium",
+	"exp_total_phi_risk_rate",
+	"exp_total_ptd_annual_binder_amount",
+	"exp_total_ptd_annual_commission_amount",
+	"exp_total_ptd_annual_outsourced_amount",
+	"exp_total_ptd_annual_risk_premium",
+	"exp_total_ptd_risk_rate",
+	"exp_total_sgla_annual_binder_amount",
+	"exp_total_sgla_annual_commission_amount",
+	"exp_total_sgla_annual_outsourced_amount",
+	"exp_total_sgla_annual_risk_premium",
+	"exp_total_sgla_risk_rate",
+	"exp_total_tax_saver_annual_commission_amount",
+	"exp_total_tax_saver_annual_risk_premium",
+	"exp_total_ttd_annual_binder_amount",
+	"exp_total_ttd_annual_commission_amount",
+	"exp_total_ttd_annual_outsourced_amount",
+	"exp_total_ttd_annual_risk_premium",
+	"exp_total_ttd_risk_rate",
+	"exp_ttd_risk_rate_per1000_sa",
+	"expense_loading",
+	"extended_family_age_band_type",
+	"extended_family_pricing_method",
+	"final_add_acc_gla_annual_binder_amount",
+	"final_add_acc_gla_annual_comm_amount",
+	"final_add_acc_gla_annual_office_premium",
+	"final_add_acc_gla_annual_outsourced_amount",
+	"final_ci_annual_binder_amount",
+	"final_ci_annual_commission_amount",
+	"final_ci_annual_office_premium",
+	"final_ci_annual_outsourced_amount",
+	"final_fun_annual_binder_amount",
+	"final_fun_annual_commission_amount",
+	"final_fun_annual_office_premium",
+	"final_fun_annual_outsourced_amount",
+	"final_gla_annual_binder_amount",
+	"final_gla_annual_commission_amount",
+	"final_gla_annual_office_premium",
+	"final_gla_annual_outsourced_amount",
+	"final_gla_educator_annual_binder_amount",
+	"final_gla_educator_annual_comm_amount",
+	"final_gla_educator_annual_office_premium",
+	"final_gla_educator_annual_outsourced_amount",
+	"final_phi_annual_binder_amount",
+	"final_phi_annual_commission_amount",
+	"final_phi_annual_office_premium",
+	"final_phi_annual_outsourced_amount",
+	"final_ptd_annual_binder_amount",
+	"final_ptd_annual_commission_amount",
+	"final_ptd_annual_office_premium",
+	"final_ptd_annual_outsourced_amount",
+	"final_ptd_educator_annual_binder_amount",
+	"final_ptd_educator_annual_comm_amount",
+	"final_ptd_educator_annual_office_premium",
+	"final_ptd_educator_annual_outsourced_amount",
+	"final_scheme_total_commission",
+	"final_sgla_annual_binder_amount",
+	"final_sgla_annual_commission_amount",
+	"final_sgla_annual_office_premium",
+	"final_sgla_annual_outsourced_amount",
+	"final_tax_saver_annual_binder_amount",
+	"final_tax_saver_annual_commission_amount",
+	"final_tax_saver_annual_office_premium",
+	"final_tax_saver_annual_outsourced_amount",
+	"final_total_annual_premium_excl_funeral",
+	"final_ttd_annual_binder_amount",
+	"final_ttd_annual_commission_amount",
+	"final_ttd_annual_office_premium",
+	"final_ttd_annual_outsourced_amount",
+	"financial_year",
+	"gla_risk_rate_per1000_sa",
+	"id",
+	"if_status",
+	"max_ci_capped_sum_assured",
+	"max_ci_sum_assured",
+	"max_gla_capped_sum_assured",
+	"max_gla_sum_assured",
+	"max_phi_capped_income",
+	"max_phi_income",
+	"max_ptd_capped_sum_assured",
+	"max_ptd_sum_assured",
+	"max_sgla_capped_sum_assured",
+	"max_sgla_sum_assured",
+	"max_ttd_capped_income",
+	"max_ttd_income",
+	"maximum_gla_cover",
+	"maximum_ptd_cover",
+	"member_count",
+	"min_ci_sum_assured",
+	"min_gla_sum_assured",
+	"min_phi_income",
+	"min_ptd_sum_assured",
+	"min_sgla_sum_assured",
+	"min_ttd_income",
+	"other_loading",
+	"phi_maximum_monthly_benefit",
+	"phi_risk_rate_per1000_sa",
+	"profit_loading",
+	"proportion_ci_annual_risk_premium_salary",
+	"proportion_fun_annual_risk_premium_salary",
+	"proportion_gla_annual_risk_premium_salary",
+	"proportion_phi_annual_risk_premium_salary",
+	"proportion_ptd_annual_risk_premium_salary",
+	"proportion_sgla_annual_risk_premium_salary",
+	"proportion_ttd_annual_risk_premium_salary",
+	"ptd_risk_rate_per1000_sa",
+	"quote_id",
+	"quote_type",
+	"reins_max_ci_cover",
+	"reins_max_fun_cover",
+	"reins_max_gla_cover",
+	"reins_max_phi_cover",
+	"reins_max_ptd_cover",
+	"reins_max_sgla_cover",
+	"reins_max_ttd_cover",
+	"scheme_id",
+	"severe_illness_maximum_benefit",
+	"sgla_risk_rate_per1000_sa",
+	"spouse_gla_maximum_benefit",
+	"tax_saver_benefit",
+	"total_additional_accidental_gla_capped_sum_assured",
+	"total_annual_premium",
+	"total_annual_salary",
+	"total_ci_annual_commission_amount",
+	"total_ci_annual_risk_premium",
+	"total_ci_capped_sum_assured",
+	"total_ci_risk_rate",
+	"total_educator_sum_assured",
+	"total_fun_annual_commission_amount",
+	"total_fun_annual_risk_premium",
+	"total_gla_annual_commission_amount",
+	"total_gla_annual_risk_premium",
+	"total_gla_capped_sum_assured",
+	"total_gla_risk_rate",
+	"total_phi_annual_commission_amount",
+	"total_phi_annual_risk_premium",
+	"total_phi_capped_income",
+	"total_phi_risk_rate",
+	"total_ptd_annual_commission_amount",
+	"total_ptd_annual_risk_premium",
+	"total_ptd_capped_sum_assured",
+	"total_ptd_risk_rate",
+	"total_sgla_annual_commission_amount",
+	"total_sgla_annual_risk_premium",
+	"total_sgla_capped_sum_assured",
+	"total_sgla_risk_rate",
+	"total_sum_assured",
+	"total_ttd_annual_commission_amount",
+	"total_ttd_annual_risk_premium",
+	"total_ttd_capped_income",
+	"total_ttd_risk_rate",
+	"ttd_maximum_monthly_benefit",
+	"ttd_risk_rate_per1000_sa",
+}
+
+// GetGroupPricingQuoteResultSummarySlim is the read-path counterpart to
+// GetGroupPricingQuoteResultSummary, fetching only the columns the
+// /result-summary HTTP endpoint exposes to the frontend. Everything else on
+// the row (per-benefit conv-on-withdrawal / continuity-during-disability
+// rates and similar internal aggregates) stays unread, which keeps the
+// MySQL row fetch and GORM scan cost down on a very wide table. The DOCX
+// and template generators continue to use the full GetGroupPricingQuoteResultSummary.
+func GetGroupPricingQuoteResultSummarySlim(quoteId int) ([]models.MemberRatingResultSummary, error) {
+	summaries := make([]models.MemberRatingResultSummary, 0)
+	err := DB.Select(memberRatingResultSummarySlimColumns).
+		Where("quote_id = ?", quoteId).
+		Find(&summaries).Error
 	if err != nil {
 		return summaries, err
 	}

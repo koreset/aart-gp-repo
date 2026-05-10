@@ -304,6 +304,7 @@
           :mpLabel="mpLabel"
           :table="'undefined'"
           :uploadTitle="uploadTitle"
+          :note="uploadNote"
           :years="years"
           @upload="handleUpload"
           @update:isDialogOpen="updateDialog"
@@ -385,6 +386,7 @@ const familyFuneralBenefitTitle = ref('Family Funeral')
 const benefitMaps: any = ref([])
 const yearLabel = ref('') // 'Select a year'
 const uploadTitle = ref('')
+const uploadNote = ref('')
 const mpLabel = ref('')
 const showModelPoint = ref(false)
 const indicativeDataEnabled = ref(false)
@@ -739,6 +741,10 @@ const openUploadDialog = (item: any) => {
   selectedTable.value = item
   yearLabel.value = 'Select a year'
   uploadTitle.value = 'Upload Data for ' + item.table_type + ' Table (csv)'
+  uploadNote.value =
+    item.table_type === 'Member Data'
+      ? 'RSA ID numbers must be 13 digits. If your CSV strips a leading zero (e.g. an ID for a 2004 birth year starts with 04 and shows as 12 digits), prefix the value with 0 so the full 13-digit format is preserved.'
+      : ''
   isDialogOpen.value = true
 }
 

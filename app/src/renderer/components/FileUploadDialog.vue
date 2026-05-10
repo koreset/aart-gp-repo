@@ -16,6 +16,15 @@
             :rules="[rules.required, rules.csvOnly]"
             required
           ></v-file-input>
+          <v-alert
+            v-if="note"
+            type="info"
+            variant="tonal"
+            density="compact"
+            class="mb-3 file-upload-note"
+          >
+            {{ note }}
+          </v-alert>
           <v-text-field
             v-if="showModelPoint"
             v-model="fileName"
@@ -58,12 +67,14 @@ interface Props {
   uploadTitle: string
   mpLabel: string
   showModelPoint: boolean
+  note?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   yearLabel: 'Select a year',
   uploadTitle: 'Upload File Data',
-  table: undefined
+  table: undefined,
+  note: ''
 })
 
 const showForTables = () => {

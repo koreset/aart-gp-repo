@@ -471,6 +471,7 @@ type SchemeCategory struct {
 	TtdNumberMonthlyPayments                 float64                         `json:"ttd_number_monthly_payments"`
 	TtdDeferredPeriod                        int                             `json:"ttd_deferred_period"`
 	TtdDisabilityDefinition                  string                          `json:"ttd_disability_definition"`
+	TtdBenefitEscalation                     string                          `json:"ttd_benefit_escalation"`
 	FamilyFuneralMainMemberFuneralSumAssured float64                         `json:"family_funeral_main_member_funeral_sum_assured"`
 	FamilyFuneralSpouseFuneralSumAssured     float64                         `json:"family_funeral_spouse_funeral_sum_assured"`
 	FamilyFuneralChildrenFuneralSumAssured   float64                         `json:"family_funeral_children_funeral_sum_assured"`
@@ -2304,19 +2305,20 @@ type AccidentalTtdRate struct {
 }
 
 type TtdRate struct {
-	ID                   int       `json:"id" gorm:"primary_key"`
-	RiskRateCode         string    `json:"risk_rate_code" csv:"risk_rate_code"`
-	AgeNextBirthday      int       `json:"age_next_birthday" csv:"age_next_birthday"`
-	Gender               string    `json:"gender" csv:"gender"`
-	OccupationClass      int       `json:"occupation_class" csv:"occupation_class"`
-	IncomeLevel          int       `json:"income_level" csv:"income_level"`
-	WaitingPeriod        int       `json:"waiting_period" csv:"waiting_period"`
-	DeferredPeriod       int       `json:"deferred_period" csv:"deferred_period"`
-	DisabilityDefinition string    `json:"disability_definition" csv:"disability_definition"`
-	RiskType             string    `json:"risk_type" csv:"risk_type"`
-	TtdRate              float64   `json:"ttd_rate" csv:"ttd_rate"`
-	CreationDate         time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
-	CreatedBy            string    `json:"created_by" csv:"created_by"`
+	ID                      int       `json:"id" gorm:"primary_key"`
+	RiskRateCode            string    `json:"risk_rate_code" csv:"risk_rate_code"`
+	AgeNextBirthday         int       `json:"age_next_birthday" csv:"age_next_birthday"`
+	Gender                  string    `json:"gender" csv:"gender"`
+	OccupationClass         int       `json:"occupation_class" csv:"occupation_class"`
+	IncomeLevel             int       `json:"income_level" csv:"income_level"`
+	WaitingPeriod           int       `json:"waiting_period" csv:"waiting_period"`
+	DeferredPeriod          int       `json:"deferred_period" csv:"deferred_period"`
+	DisabilityDefinition    string    `json:"disability_definition" csv:"disability_definition"`
+	RiskType                string    `json:"risk_type" csv:"risk_type"`
+	BenefitEscalationOption string    `json:"benefit_escalation_option" csv:"benefit_escalation_option"`
+	TtdRate                 float64   `json:"ttd_rate" csv:"ttd_rate"`
+	CreationDate            time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy               string    `json:"created_by" csv:"created_by"`
 }
 
 type PhiRate struct {

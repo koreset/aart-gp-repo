@@ -132,6 +132,7 @@ export const useGroupPricingStore = defineStore('groupPricing', {
       ttd_waiting_period: null,
       ttd_deferred_period: null,
       ttd_disability_definition: null,
+      ttd_benefit_escalation: null,
       family_funeral_main_member_funeral_sum_assured: 0,
       family_funeral_spouse_funeral_sum_assured: 0,
       family_funeral_children_funeral_sum_assured: 0,

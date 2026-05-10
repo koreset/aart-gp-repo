@@ -1061,6 +1061,19 @@
                     ></v-select>
                   </v-col>
                   <v-col cols="4">
+                    <v-select
+                      v-model:model-value="ttdBenefitEscalation"
+                      v-bind="ttdBenefitEscalationAttrs"
+                      :error-messages="errors.ttd_benefit_escalation"
+                      placeholder="Choose an Escalation Option"
+                      label="Benefit Escalation Option"
+                      variant="outlined"
+                      density="compact"
+                      :items="incomeEscalations"
+                      :disabled="!ttdBenefit || !selectedSchemeType"
+                    ></v-select>
+                  </v-col>
+                  <v-col cols="4">
                     <v-checkbox
                       v-model="ttdConversionOnWithdrawal"
                       variant="outlined"
@@ -1749,6 +1762,7 @@ function onSchemeTypeChange(schemeType) {
     ttdWaitingPeriod.value = data.ttd_waiting_period ?? null
     ttdDeferredPeriod.value = data.ttd_deferred_period ?? null
     ttdDisabilityDefinition.value = data.ttd_disability_definition || ''
+    ttdBenefitEscalation.value = data.ttd_benefit_escalation || ''
     // Populate Family Funeral fields
     familyFuneralMainMemberFuneralSumAssured.value =
       data.family_funeral_main_member_funeral_sum_assured || 0
@@ -1877,6 +1891,7 @@ function onSchemeTypeChange(schemeType) {
     ttdWaitingPeriod.value = null
     ttdDeferredPeriod.value = null
     ttdDisabilityDefinition.value = null
+    ttdBenefitEscalation.value = null
     // reset Family Funeral fields
     familyFuneralMainMemberFuneralSumAssured.value = 0
     familyFuneralSpouseFuneralSumAssured.value = 0
@@ -2021,6 +2036,7 @@ function saveCurrentSchemeCategory() {
           ttd_waiting_period: Number(ttdWaitingPeriod.value),
           ttd_deferred_period: Number(ttdDeferredPeriod.value),
           ttd_disability_definition: ttdDisabilityDefinition.value,
+          ttd_benefit_escalation: ttdBenefitEscalation.value,
           ttd_conversion_on_withdrawal: !!ttdConversionOnWithdrawal.value
         }),
         ...(familyFuneralBenefit.value && {
@@ -2405,6 +2421,12 @@ const validationSchema = yup.object({
     then: (schema) => schema.required('Disability definition is required'),
     otherwise: (schema) => schema.nullable()
   }),
+  ttd_benefit_escalation: yup.string().when('ttd_benefit', {
+    is: true,
+    then: (schema) =>
+      schema.required('Benefit escalation option is required'),
+    otherwise: (schema) => schema.nullable()
+  }),
   ttd_risk_type: yup.string().when('ttd_benefit', {
     is: true,
     then: (schema) => schema.required('Risk type is required'),
@@ -2645,6 +2667,8 @@ const { handleSubmit, defineField, errors, validate } = useForm({
       groupStore.scheme_category_template.ttd_deferred_period,
     ttd_disability_definition:
       groupStore.scheme_category_template.ttd_disability_definition,
+    ttd_benefit_escalation:
+      groupStore.scheme_category_template.ttd_benefit_escalation,
     ttd_risk_type: groupStore.scheme_category_template.ttd_risk_type,
     family_funeral_main_member_funeral_sum_assured:
       groupStore.scheme_category_template
@@ -2817,6 +2841,9 @@ const [ttdDeferredPeriod, ttdDeferredPeriodAttrs] = defineField(
 )
 const [ttdDisabilityDefinition, ttdDisabilityDefinitionAttrs] = defineField(
   'ttd_disability_definition'
+)
+const [ttdBenefitEscalation, ttdBenefitEscalationAttrs] = defineField(
+  'ttd_benefit_escalation'
 )
 const [ttdRiskType, ttdRiskTypeAttrs] = defineField('ttd_risk_type')
 const [

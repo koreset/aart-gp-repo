@@ -1560,7 +1560,7 @@ func GetGroupPricingQuoteResultSummary(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
-	results, err := services.GetGroupPricingQuoteResultSummary(quoteId)
+	results, err := services.GetGroupPricingQuoteResultSummarySlim(quoteId)
 	if err != nil {
 		c.JSON(http.StatusNotFound, err.Error())
 		return
