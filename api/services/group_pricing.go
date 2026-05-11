@@ -2744,10 +2744,9 @@ func computeConvContSlicePremiums(m *models.MemberRatingResult, groupParameter m
 	m.PhiConversionOnWithdrawalRiskPremium = m.LoadedPhiRate * m.PhiConversionOnWithdrawalLoading * m.PhiMonthlyBenefit
 	m.ExpAdjPhiConversionOnWithdrawalRiskPremium = m.ExpAdjLoadedPhiRate * m.PhiConversionOnWithdrawalLoading * m.PhiMonthlyBenefit
 
-	// Slice: TTD conversion on withdrawal (base = TtdCappedIncome × TtdNumberMonthlyPayments, parallels parent TTD premium)
-	ttdIncomeBase := m.TtdCappedIncome * groupParameter.TtdNumberMonthlyPayments
-	m.TtdConversionOnWithdrawalRiskPremium = m.LoadedTtdRate * m.TtdConversionOnWithdrawalLoading * ttdIncomeBase
-	m.ExpAdjTtdConversionOnWithdrawalRiskPremium = m.ExpAdjLoadedTtdRate * m.TtdConversionOnWithdrawalLoading * ttdIncomeBase
+	// Slice: TTD conversion on withdrawal (base = TtdCappedIncome, parallels parent TTD premium)
+	m.TtdConversionOnWithdrawalRiskPremium = m.LoadedTtdRate * m.TtdConversionOnWithdrawalLoading * m.TtdCappedIncome
+	m.ExpAdjTtdConversionOnWithdrawalRiskPremium = m.ExpAdjLoadedTtdRate * m.TtdConversionOnWithdrawalLoading * m.TtdCappedIncome
 
 	// Slice 6: CI conversion on withdrawal
 	m.CiConversionOnWithdrawalRiskPremium = m.LoadedCiRate * m.CiConversionOnWithdrawalLoading * m.CiCappedSumAssured
@@ -3222,8 +3221,8 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	memberDataPointResult.ExpAdjPtdRiskPremium = memberDataPointResult.ExpAdjLoadedPtdRate * memberDataPointResult.PtdCappedSumAssured
 
 	memberDataPointResult.TtdNumberOfMonthlyPayments = groupParameter.TtdNumberMonthlyPayments
-	memberDataPointResult.TtdRiskPremium = memberDataPointResult.LoadedTtdRate * memberDataPointResult.TtdCappedIncome * groupParameter.TtdNumberMonthlyPayments
-	memberDataPointResult.ExpAdjTtdRiskPremium = memberDataPointResult.ExpAdjLoadedTtdRate * memberDataPointResult.TtdCappedIncome * groupParameter.TtdNumberMonthlyPayments
+	memberDataPointResult.TtdRiskPremium = memberDataPointResult.LoadedTtdRate * memberDataPointResult.TtdCappedIncome
+	memberDataPointResult.ExpAdjTtdRiskPremium = memberDataPointResult.ExpAdjLoadedTtdRate * memberDataPointResult.TtdCappedIncome
 
 	memberDataPointResult.PhiRiskPremium = memberDataPointResult.LoadedPhiRate * memberDataPointResult.PhiMonthlyBenefit
 	memberDataPointResult.ExpAdjPhiRiskPremium = memberDataPointResult.ExpAdjLoadedPhiRate * memberDataPointResult.PhiMonthlyBenefit
@@ -3486,8 +3485,8 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	bordereauxDatapoint.TtdReplacementMultiple = schemeCategory.TtdIncomeReplacementPercentage
 	bordereauxDatapoint.TtdMonthlyBenefit = memberDataPointResult.TtdCappedIncome
 	bordereauxDatapoint.LoadedTtdRiskRate = memberDataPointResult.LoadedTtdRate
-	bordereauxDatapoint.TtdRetainedRiskPremium = bordereauxDatapoint.TtdRetainedMonthlyBenefit * memberDataPointResult.LoadedTtdRate * groupParameter.TtdNumberMonthlyPayments
-	bordereauxDatapoint.TtdCededRiskPremium = bordereauxDatapoint.TtdCededMonthlyBenefit * memberDataPointResult.LoadedReinsTtdRate * groupParameter.TtdNumberMonthlyPayments
+	bordereauxDatapoint.TtdRetainedRiskPremium = bordereauxDatapoint.TtdRetainedMonthlyBenefit * memberDataPointResult.LoadedTtdRate
+	bordereauxDatapoint.TtdCededRiskPremium = bordereauxDatapoint.TtdCededMonthlyBenefit * memberDataPointResult.LoadedReinsTtdRate
 	memberDataPointResult.TtdReinsurancePremium = bordereauxDatapoint.TtdCededRiskPremium
 
 	bordereauxDatapoint.PhiReplacementMultiple = schemeCategory.PhiIncomeReplacementPercentage
@@ -3796,7 +3795,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	memberDataPointResult.GlaRiskPremium = memberDataPointResult.LoadedGlaRate * memberDataPointResult.GlaCappedSumAssured
 	memberDataPointResult.PtdRiskPremium = memberDataPointResult.LoadedPtdRate * memberDataPointResult.PtdCappedSumAssured
 	memberDataPointResult.TtdNumberOfMonthlyPayments = groupParameter.TtdNumberMonthlyPayments
-	memberDataPointResult.TtdRiskPremium = memberDataPointResult.LoadedTtdRate * memberDataPointResult.TtdCappedIncome * groupParameter.TtdNumberMonthlyPayments
+	memberDataPointResult.TtdRiskPremium = memberDataPointResult.LoadedTtdRate * memberDataPointResult.TtdCappedIncome
 	memberDataPointResult.PhiRiskPremium = memberDataPointResult.LoadedPhiRate * memberDataPointResult.PhiMonthlyBenefit
 	memberDataPointResult.CiRiskPremium = memberDataPointResult.LoadedCiRate * memberDataPointResult.CiCappedSumAssured
 
@@ -3808,7 +3807,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 		CiSumRiskPremium:  memberDataPointResult.CiRiskPremium,
 		GlaSumAssured:     memberDataPointResult.GlaCappedSumAssured,
 		PtdSumAssured:     memberDataPointResult.PtdCappedSumAssured,
-		TtdSumAssured:     memberDataPointResult.TtdCappedIncome * groupParameter.TtdNumberMonthlyPayments,
+		TtdSumAssured:     memberDataPointResult.TtdCappedIncome,
 		PhiSumAssured:     memberDataPointResult.PhiCappedIncome,
 		CiSumAssured:      memberDataPointResult.CiCappedSumAssured,
 	}
@@ -4325,7 +4324,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.TaxSaverRiskPremium = memberDataPointResult.LoadedGlaRate * memberDataPointResult.TaxSaverSumAssured
 	memberDataPointResult.PtdRiskPremium = memberDataPointResult.LoadedPtdRate * memberDataPointResult.PtdCappedSumAssured
 	memberDataPointResult.TtdNumberOfMonthlyPayments = groupParameter.TtdNumberMonthlyPayments
-	memberDataPointResult.TtdRiskPremium = memberDataPointResult.LoadedTtdRate * memberDataPointResult.TtdCappedIncome * groupParameter.TtdNumberMonthlyPayments
+	memberDataPointResult.TtdRiskPremium = memberDataPointResult.LoadedTtdRate * memberDataPointResult.TtdCappedIncome
 	memberDataPointResult.PhiRiskPremium = memberDataPointResult.LoadedPhiRate * memberDataPointResult.PhiMonthlyBenefit
 	memberDataPointResult.CiRiskPremium = memberDataPointResult.LoadedCiRate * memberDataPointResult.CiCappedSumAssured
 	memberDataPointResult.SpouseGlaRiskPremium = memberDataPointResult.LoadedSpouseGlaRate * memberDataPointResult.SpouseGlaCappedSumAssured
@@ -4424,7 +4423,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.ExpAdjGlaRiskPremium = memberDataPointResult.ExpAdjLoadedGlaRate * memberDataPointResult.GlaCappedSumAssured
 	memberDataPointResult.ExpAdjTaxSaverRiskPremium = memberDataPointResult.ExpAdjLoadedGlaRate * memberDataPointResult.TaxSaverSumAssured
 	memberDataPointResult.ExpAdjPtdRiskPremium = memberDataPointResult.ExpAdjLoadedPtdRate * memberDataPointResult.PtdCappedSumAssured
-	memberDataPointResult.ExpAdjTtdRiskPremium = memberDataPointResult.ExpAdjLoadedTtdRate * memberDataPointResult.TtdCappedIncome * groupParameter.TtdNumberMonthlyPayments
+	memberDataPointResult.ExpAdjTtdRiskPremium = memberDataPointResult.ExpAdjLoadedTtdRate * memberDataPointResult.TtdCappedIncome
 	memberDataPointResult.ExpAdjPhiRiskPremium = memberDataPointResult.ExpAdjLoadedPhiRate * memberDataPointResult.PhiMonthlyBenefit
 	memberDataPointResult.ExpAdjCiRiskPremium = memberDataPointResult.ExpAdjLoadedCiRate * memberDataPointResult.CiCappedSumAssured
 	memberDataPointResult.ExpAdjSpouseGlaRiskPremium = memberDataPointResult.ExpAdjLoadedSpouseGlaRate * memberDataPointResult.SpouseGlaCappedSumAssured
@@ -4556,8 +4555,8 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	bordereauxDatapoint.TtdReplacementMultiple = groupQuote.SchemeCategories[i].TtdIncomeReplacementPercentage
 	bordereauxDatapoint.TtdMonthlyBenefit = memberDataPointResult.TtdCappedIncome
 	bordereauxDatapoint.LoadedTtdRiskRate = memberDataPointResult.LoadedTtdRate
-	bordereauxDatapoint.TtdRetainedRiskPremium = bordereauxDatapoint.TtdRetainedMonthlyBenefit * memberDataPointResult.LoadedTtdRate * groupParameter.TtdNumberMonthlyPayments
-	bordereauxDatapoint.TtdCededRiskPremium = bordereauxDatapoint.TtdCededMonthlyBenefit * memberDataPointResult.LoadedReinsTtdRate * groupParameter.TtdNumberMonthlyPayments
+	bordereauxDatapoint.TtdRetainedRiskPremium = bordereauxDatapoint.TtdRetainedMonthlyBenefit * memberDataPointResult.LoadedTtdRate
+	bordereauxDatapoint.TtdCededRiskPremium = bordereauxDatapoint.TtdCededMonthlyBenefit * memberDataPointResult.LoadedReinsTtdRate
 	memberDataPointResult.TtdReinsurancePremium = bordereauxDatapoint.TtdCededRiskPremium
 
 	bordereauxDatapoint.PhiReplacementMultiple = groupQuote.SchemeCategories[i].PhiIncomeReplacementPercentage
@@ -4794,8 +4793,8 @@ func BuildBordereauxFromRatingResult(
 	b.TtdMonthlyBenefit = mrr.TtdCappedIncome
 	b.LoadedTtdRiskRate = mrr.LoadedTtdRate
 	b.ExpAdjLoadedTtdRiskRate = mrr.ExpAdjLoadedTtdRate
-	b.TtdRetainedRiskPremium = b.TtdRetainedMonthlyBenefit * mrr.LoadedTtdRate * groupParameter.TtdNumberMonthlyPayments
-	b.TtdCededRiskPremium = b.TtdCededMonthlyBenefit * mrr.LoadedReinsTtdRate * groupParameter.TtdNumberMonthlyPayments
+	b.TtdRetainedRiskPremium = b.TtdRetainedMonthlyBenefit * mrr.LoadedTtdRate
+	b.TtdCededRiskPremium = b.TtdCededMonthlyBenefit * mrr.LoadedReinsTtdRate
 
 	// PHI
 	b.PhiReplacementMultiple = schemeCategory.PhiIncomeReplacementPercentage
