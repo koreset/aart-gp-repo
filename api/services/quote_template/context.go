@@ -80,7 +80,7 @@ func buildCategoryMap(
 ) map[string]interface{} {
 	flags := deriveBenefitFlags(s, cat)
 
-	m := fieldsToMap(categoryScalarFields(s, cat, naming))
+	m := fieldsToMap(categoryScalarFields(s, cat, quote, naming))
 	for k, v := range fieldsToMap(categoryBoolFields(s, flags, naming)) {
 		m[k] = v
 	}

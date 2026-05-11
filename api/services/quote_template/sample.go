@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"io"
+	"sort"
 	"strings"
 
 	"api/models"
@@ -146,7 +147,37 @@ func buildSampleBodyXML(naming benefitNaming) string {
 	b.WriteString(bodyPara("The categories list contains one entry per scheme category in the quote. Wrap content you want repeated inside {{#categories}}…{{/categories}}. The fields below are available for each category."))
 
 	b.WriteString(subheading("Category-level tokens"))
-	b.WriteString(keyValueTable(rowsFromFields("", categoryScalarFields(zs, zc, naming))))
+	categoryFs := categoryScalarFields(zs, zc, zq, naming)
+	b.WriteString(keyValueTable(rowsFromFields("", filterScalars(categoryFs))))
+
+	// Nested-list category fields (e.g. extended_family_bands) are referenced
+	// in templates as iteration blocks, not bare scalars — show the syntax
+	// alongside the per-item fields each one exposes.
+	b.WriteString(subheading("Category-level iteration blocks"))
+	b.WriteString(bodyPara("Some category fields are lists. Wrap content in {{#key}}…{{/key}} to repeat once per item. Inside the block, the per-item fields below are available without any prefix."))
+	for _, f := range categoryFs {
+		items, ok := f.Value.([]map[string]interface{})
+		if !ok {
+			continue
+		}
+		b.WriteString(bulletPara("{{#" + f.Key + "}}…{{/" + f.Key + "}} — " + f.Label))
+		// Item shape inferred from a one-row fixture so per-item fields are
+		// always discoverable in the sample even when the live data is empty.
+		var sample map[string]interface{}
+		if len(items) > 0 {
+			sample = items[0]
+		} else {
+			sample = sampleBandItem(f.Key)
+		}
+		keys := make([]string, 0, len(sample))
+		for k := range sample {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			b.WriteString(bulletPara("    {{" + k + "}}"))
+		}
+	}
 
 	b.WriteString(subheading("Category-level flags (true/false)"))
 	b.WriteString(bodyPara("Use these as conditional blocks to include content only when the category has that benefit. Wrap your content inside the open/close tags below:"))
@@ -179,6 +210,25 @@ func buildSampleBodyXML(naming benefitNaming) string {
 	b.WriteString(bulletPara("Missing tokens resolve to empty strings, so a template that references a token not populated for a given quote simply shows nothing rather than breaking."))
 
 	return b.String()
+}
+
+// sampleBandItem returns the per-item field shape for a known nested-list
+// category field, so the sample can enumerate "{{key}}" tokens available
+// inside a {{#listKey}}…{{/listKey}} block even when the live category has
+// no items. Add a new key here when introducing a new nested-list field.
+func sampleBandItem(listKey string) map[string]interface{} {
+	switch {
+	case strings.HasSuffix(listKey, "_bands"):
+		// Extended family bands shape — keep in sync with extendedFamilyCategoryTokens.
+		return map[string]interface{}{
+			"min_age":                "",
+			"max_age":                "",
+			"sum_assured":            "",
+			"monthly_premium":        "",
+			"office_monthly_premium": "",
+		}
+	}
+	return map[string]interface{}{}
 }
 
 // rowsFromFields converts a []Field into the [][2]string rows expected by

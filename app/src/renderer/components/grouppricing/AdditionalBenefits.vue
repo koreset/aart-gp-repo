@@ -2423,8 +2423,7 @@ const validationSchema = yup.object({
   }),
   ttd_benefit_escalation: yup.string().when('ttd_benefit', {
     is: true,
-    then: (schema) =>
-      schema.required('Benefit escalation option is required'),
+    then: (schema) => schema.required('Benefit escalation option is required'),
     otherwise: (schema) => schema.nullable()
   }),
   ttd_risk_type: yup.string().when('ttd_benefit', {

@@ -57,7 +57,7 @@ func TestSchema_BuildContextAgreesWithSchema(t *testing.T) {
 	schemaCtx["insurer"] = fieldsToMap(insurerFields(zi))
 	// One synthetic category built from the schema — has=true for every
 	// benefit so all sub-keys are exercised.
-	cat := fieldsToMap(categoryScalarFields(zs, zc, zNaming))
+	cat := fieldsToMap(categoryScalarFields(zs, zc, zq, zNaming))
 	for k, v := range fieldsToMap(categoryBoolFields(zs, benefitFlags{GLA: true, SGLA: true, PTD: true, CI: true, PHI: true, TTD: true, Funeral: true}, zNaming)) {
 		cat[k] = v
 	}
@@ -119,7 +119,14 @@ func expectedTokenSet() []string {
 		out = append(out, "{{insurer."+f.Key+"}}")
 	}
 	zNaming := defaultBenefitNaming()
-	for _, f := range categoryScalarFields(zs, zc, zNaming) {
+	for _, f := range categoryScalarFields(zs, zc, zq, zNaming) {
+		// Nested-array Fields (e.g. extended_family_bands) are referenced
+		// in templates as section blocks ({{#key}}…{{/key}}), not bare
+		// {{key}} substitutions.
+		if _, isList := f.Value.([]map[string]interface{}); isList {
+			out = append(out, "{{#"+f.Key+"}}")
+			continue
+		}
 		out = append(out, "{{"+f.Key+"}}")
 	}
 	for _, f := range categoryBoolFields(zs, benefitFlags{}, zNaming) {
