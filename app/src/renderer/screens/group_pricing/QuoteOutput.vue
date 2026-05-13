@@ -453,7 +453,9 @@ import {
   roundUpToTwoDecimalsAccounting as _roundUpToTwoDecimalsAccounting,
   dashIfEmpty as _dashIfEmpty,
   officeProportionFromRiskProportion,
-  finalFieldValue
+  finalFieldValue,
+  funAnnualPremiumPerMember,
+  funMonthlyPremiumPerMember
 } from '@/renderer/utils/quoteDataHelpers'
 import { useDocxQuoteGeneration } from '@/renderer/composables/useDocxQuoteGeneration'
 
@@ -694,22 +696,6 @@ const ratePer1000 = (
   return roundUpToTwoDecimalsAccounting((mp / sa) * 1000)
 }
 
-// Total covered (post-cap) sum assured for a result summary, across every
-// benefit. The persisted `total_sum_assured` is GLA-only (and uncapped), so
-// it can't be used as a scheme-wide cover figure. PHI/TTD `*_capped_income`
-// are included here because the rest of this PDF (e.g. the Premium Breakdown
-// per-benefit rows) already treats them as sum-assured-equivalent.
-const totalCoveredSumAssured = (item: any): number => {
-  return (
-    (Number(item.total_gla_capped_sum_assured) || 0) +
-    (Number(item.total_sgla_capped_sum_assured) || 0) +
-    (Number(item.total_ptd_capped_sum_assured) || 0) +
-    (Number(item.total_ci_capped_sum_assured) || 0) +
-    (Number(item.total_phi_capped_income) || 0) +
-    (Number(item.total_ttd_capped_income) || 0)
-  )
-}
-
 // AG Grid event handler
 const onGridReady = (params) => {
   gridApi.value = params.api
@@ -840,7 +826,7 @@ const convertExcelDataToGridData = () => {
       benefit: 'Monthly Premium per Member',
       totalSumAssured: '',
       annualPremium: roundUpToTwoDecimalsAccounting(
-        resultSummary.exp_total_fun_monthly_premium_per_member
+        funMonthlyPremiumPerMember(resultSummary)
       ),
       percentSalary: ''
     })
@@ -850,7 +836,7 @@ const convertExcelDataToGridData = () => {
       benefit: 'Annual Premium per Member',
       totalSumAssured: '',
       annualPremium: roundUpToTwoDecimalsAccounting(
-        resultSummary.exp_total_fun_annual_premium_per_member
+        funAnnualPremiumPerMember(resultSummary)
       ),
       percentSalary: ''
     })
@@ -1175,7 +1161,7 @@ const exportBenefitDataToExcel = () => {
         'Monthly Premium',
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            resultSummary.exp_total_fun_monthly_premium_per_member
+            funMonthlyPremiumPerMember(resultSummary)
           )
         )
       ],
@@ -1183,7 +1169,7 @@ const exportBenefitDataToExcel = () => {
         'Annual Premium',
         dashIfEmpty(
           roundUpToTwoDecimalsAccounting(
-            resultSummary.exp_total_fun_annual_premium_per_member
+            funAnnualPremiumPerMember(resultSummary)
           )
         )
       ],
@@ -1428,19 +1414,20 @@ const buildSystemPdf = async (): Promise<any> => {
     (sum, item) => sum + item.member_count,
     0
   )
-  const totalSumAssured = resultSummaries.value.reduce(
-    (sum, item) => sum + totalCoveredSumAssured(item),
-    0
-  )
   const totalAnnualSalary = resultSummaries.value.reduce(
     (sum, item) => sum + item.total_annual_salary,
     0
   )
-  // Post-commission scheme-wide premium (incl. funeral). Mirrors the
-  // convention used by every other premium in this PDF, which all read
-  // through `finalFieldValue` against the persisted Final* fields.
+  // Post-commission scheme-wide premium (incl. funeral). Sum the
+  // excl-funeral and funeral office-premium fields directly — the rolled-up
+  // `final_total_annual_premium` rollup is only refreshed when
+  // recomputeFinalPremiumsAndCommission runs, so composing from the
+  // per-benefit fields keeps this cell in sync with the rest of the PDF.
   const totalAnnualPremium = resultSummaries.value.reduce(
-    (sum, item) => sum + finalFieldValue(item, 'final_total_annual_premium'),
+    (sum, item) =>
+      sum +
+      finalFieldValue(item, 'final_total_annual_premium_excl_funeral') +
+      finalFieldValue(item, 'final_fun_annual_office_premium'),
     0
   )
 
@@ -1459,7 +1446,6 @@ const buildSystemPdf = async (): Promise<any> => {
     ],
     // ['Coverage Period:', '1 year'],
     ['Number of Lives Covered:', `${totalLivesCovered}`],
-    ['Total Sum Assured:', formatCurrency(totalSumAssured)],
     ['Total Annual Salary:', formatCurrency(totalAnnualSalary)],
     ['Total Monthly Premium:', formatCurrency(totalAnnualPremium / 12)]
   ]
@@ -1544,9 +1530,7 @@ const buildSystemPdf = async (): Promise<any> => {
         'Category',
         'No of Lives',
         'Total Annual Salary',
-        'Total Sum Assured',
         'Monthly Premium',
-        'Monthly Rate /1000',
         '%Salary'
       ]
     ]
@@ -1567,14 +1551,11 @@ const buildSystemPdf = async (): Promise<any> => {
         )
         const monthlyPremium = annualPremium / 12
         const monthlySalary = item.total_annual_salary / 12
-        const coveredSA = totalCoveredSumAssured(item)
         premiumSummaryData.push([
           item.category,
           item.member_count.toString(),
           formatCurrency(item.total_annual_salary),
-          formatCurrency(coveredSA),
           formatCurrency(monthlyPremium),
-          ratePer1000(monthlyPremium, coveredSA),
           `${roundUpToTwoDecimalsAccounting(
             monthlySalary > 0 ? (monthlyPremium / monthlySalary) * 100 : 0
           )}%`
@@ -1584,10 +1565,6 @@ const buildSystemPdf = async (): Promise<any> => {
 
     const grandAnnualSalary = resultSummaries.value.reduce(
       (sum, item) => sum + item.total_annual_salary,
-      0
-    )
-    const grandSumAssured = resultSummaries.value.reduce(
-      (sum, item) => sum + totalCoveredSumAssured(item),
       0
     )
     const grandAnnualPremium = resultSummaries.value.reduce(
@@ -1601,9 +1578,7 @@ const buildSystemPdf = async (): Promise<any> => {
       'Total',
       resultSummaries.value.reduce((sum, item) => sum + item.member_count, 0),
       formatCurrency(grandAnnualSalary),
-      formatCurrency(grandSumAssured),
       formatCurrency(grandMonthlyPremium),
-      ratePer1000(grandMonthlyPremium, grandSumAssured),
       `${roundUpToTwoDecimalsAccounting(
         grandMonthlySalary > 0
           ? (grandMonthlyPremium / grandMonthlySalary) * 100
@@ -1635,10 +1610,8 @@ const buildSystemPdf = async (): Promise<any> => {
         0: { fontStyle: 'bold', fillColor: [248, 249, 250] },
         1: { halign: 'center' },
         2: { halign: 'right' },
-        3: { halign: 'right' },
-        4: { halign: 'right', fontStyle: 'bold' },
-        5: { halign: 'right' },
-        6: { halign: 'center' }
+        3: { halign: 'right', fontStyle: 'bold' },
+        4: { halign: 'center' }
       },
       alternateRowStyles: {
         fillColor: [252, 253, 254]

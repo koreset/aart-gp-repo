@@ -125,6 +125,40 @@ export function computeOfficePremium(
   return denom <= 0 ? 0 : asFiniteNumber(riskPremium) / denom
 }
 
+// Funeral office premium per member, derived client-side from the funeral
+// risk premium and member_count for parity with the "Group Funeral Annual
+// Premium" row (also derived). The backend persists this on the rating
+// summary but is gated by `MemberCount > 0` and can arrive as 0/undefined.
+export function funAnnualPremiumPerMember(s: any): number {
+  const mc = asFiniteNumber(s?.member_count)
+  if (mc <= 0) return 0
+  return (
+    computeOfficePremium(asFiniteNumber(s?.exp_total_fun_annual_risk_premium), s) /
+    mc
+  )
+}
+
+export function funMonthlyPremiumPerMember(s: any): number {
+  return funAnnualPremiumPerMember(s) / 12
+}
+
+// Post-discount (Final) funeral office premium per member. The Summary tab's
+// "Annual Premium" column binds to finalAnnualPremium, so the per-member row
+// needs the post-discount figure derived from final_fun_annual_office_premium.
+export function finalFunAnnualPremiumPerMember(s: any): number {
+  const mc = asFiniteNumber(s?.member_count)
+  if (mc <= 0) return 0
+  return asFiniteNumber(s?.final_fun_annual_office_premium) / mc
+}
+
+// Funeral commission per member — final_fun_annual_commission_amount split
+// across members for the per-member display row.
+export function finalFunAnnualCommissionPerMember(s: any): number {
+  const mc = asFiniteNumber(s?.member_count)
+  if (mc <= 0) return 0
+  return asFiniteNumber(s?.final_fun_annual_commission_amount) / mc
+}
+
 /**
  * Convert a risk-rate-per-1000-SA into the equivalent pre-commission office
  * rate by scaling by 1 / (1 - schemeTotalLoading).
@@ -295,6 +329,25 @@ export function proportionOfSalary(
   const denom = asFiniteNumber(totalAnnualSalary)
   if (denom <= 0) return 0
   return asFiniteNumber(officePremium) / denom
+}
+
+/**
+ * Office-premium %-of-salary derived from the matching Risk%/Salary and the
+ * office:risk ratio:
+ *   Office/Salary = (Office / Risk) * (Risk / Salary)
+ * Using this identity sidesteps the question of which salary denominator the
+ * backend used (e.g. benefit-filtered total_annual_salary_gla scaled by the
+ * indicative rates count), so the displayed Office Premium %, Risk Premium %,
+ * and Annual Office Premium cells reconcile by construction.
+ */
+export function officeProportionOfSalary(
+  officePremium: number,
+  riskPremium: number,
+  riskProportion: number
+): number {
+  const risk = asFiniteNumber(riskPremium)
+  if (risk <= 0) return 0
+  return (asFiniteNumber(officePremium) / risk) * asFiniteNumber(riskProportion)
 }
 
 /**
@@ -498,10 +551,10 @@ export function buildGroupFuneralRows(
       category: item.category,
       memberCount: item.member_count.toString(),
       monthlyPremium: roundUpToTwoDecimalsAccounting(
-        item.exp_total_fun_monthly_premium_per_member
+        funMonthlyPremiumPerMember(item)
       ),
       annualPremium: roundUpToTwoDecimalsAccounting(
-        item.exp_total_fun_annual_premium_per_member
+        funAnnualPremiumPerMember(item)
       ),
       totalAnnualPremium: roundUpToTwoDecimalsAccounting(
         computeOfficePremium(item.exp_total_fun_annual_risk_premium, item)
@@ -517,13 +570,13 @@ export function buildGroupFuneralRows(
       .toString(),
     monthlyPremium: roundUpToTwoDecimalsAccounting(
       resultSummaries.reduce(
-        (sum, item) => sum + item.exp_total_fun_monthly_premium_per_member,
+        (sum, item) => sum + funMonthlyPremiumPerMember(item),
         0
       )
     ),
     annualPremium: roundUpToTwoDecimalsAccounting(
       resultSummaries.reduce(
-        (sum, item) => sum + item.exp_total_fun_annual_premium_per_member,
+        (sum, item) => sum + funAnnualPremiumPerMember(item),
         0
       )
     ),
@@ -624,15 +677,11 @@ export function buildGroupFuneralBreakdownRows(item: any): LabelValueRow[] {
   return [
     {
       label: 'Monthly Premium per Member',
-      value: roundUpToTwoDecimalsAccounting(
-        item.exp_total_fun_monthly_premium_per_member
-      )
+      value: roundUpToTwoDecimalsAccounting(funMonthlyPremiumPerMember(item))
     },
     {
       label: 'Annual Premium per Member',
-      value: roundUpToTwoDecimalsAccounting(
-        item.exp_total_fun_annual_premium_per_member
-      )
+      value: roundUpToTwoDecimalsAccounting(funAnnualPremiumPerMember(item))
     },
     {
       label: 'Total Annual Premium',

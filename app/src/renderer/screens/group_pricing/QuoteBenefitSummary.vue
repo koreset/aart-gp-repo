@@ -188,7 +188,13 @@ import * as XLSX from 'xlsx'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import GroupPricingDataGrid from '@/renderer/components/tables/GroupPricingDataGrid.vue'
-import { computeOfficePremium } from '@/renderer/utils/quoteDataHelpers'
+import {
+  computeOfficePremium,
+  funAnnualPremiumPerMember,
+  funMonthlyPremiumPerMember,
+  finalFunAnnualPremiumPerMember,
+  finalFunAnnualCommissionPerMember
+} from '@/renderer/utils/quoteDataHelpers'
 
 // import all necessary components and services
 
@@ -1089,9 +1095,9 @@ const convertExcelDataToGridData = () => {
       benefit: 'Group Funeral Annual Premium per Member',
       annualSalary: '',
       totalSumAssured: '',
-      annualPremium: resultSummary.exp_total_fun_annual_premium_per_member,
-      finalAnnualPremium: '',
-      finalAnnualCommission: '',
+      annualPremium: funAnnualPremiumPerMember(resultSummary),
+      finalAnnualPremium: finalFunAnnualPremiumPerMember(resultSummary),
+      finalAnnualCommission: finalFunAnnualCommissionPerMember(resultSummary),
       percentSalary: '',
       ratePer1000SA: ''
     })
@@ -1187,10 +1193,16 @@ const convertExcelDataToGridData = () => {
 
           exp_total_fun_monthly_premium_per_member:
             (acc.exp_total_fun_monthly_premium_per_member || 0) +
-            (resultSummary.exp_total_fun_monthly_premium_per_member || 0),
+            funMonthlyPremiumPerMember(resultSummary),
           exp_total_fun_annual_premium_per_member:
             (acc.exp_total_fun_annual_premium_per_member || 0) +
-            (resultSummary.exp_total_fun_annual_premium_per_member || 0),
+            funAnnualPremiumPerMember(resultSummary),
+          final_fun_annual_premium_per_member:
+            (acc.final_fun_annual_premium_per_member || 0) +
+            finalFunAnnualPremiumPerMember(resultSummary),
+          final_fun_annual_commission_per_member:
+            (acc.final_fun_annual_commission_per_member || 0) +
+            finalFunAnnualCommissionPerMember(resultSummary),
           exp_total_fun_annual_office_premium:
             (acc.exp_total_fun_annual_office_premium || 0) +
             (computeOfficePremium(
@@ -1510,8 +1522,8 @@ const convertExcelDataToGridData = () => {
       annualSalary: '',
       totalSumAssured: '',
       annualPremium: totals.exp_total_fun_annual_premium_per_member,
-      finalAnnualPremium: '',
-      finalAnnualCommission: '',
+      finalAnnualPremium: totals.final_fun_annual_premium_per_member,
+      finalAnnualCommission: totals.final_fun_annual_commission_per_member,
       percentSalary: '',
       ratePer1000SA: ''
     })

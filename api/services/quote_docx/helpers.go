@@ -113,7 +113,6 @@ func BuildInitialInfoRows(quote models.GroupPricingQuote, totals QuoteTotals) []
 		{Label: "Scheme Name:", Value: quote.SchemeName},
 		{Label: "Inception Date:", Value: FormatQuoteDate(quote.CommencementDate)},
 		{Label: "Number of Lives Covered:", Value: fmt.Sprintf("%d", totals.TotalLives)},
-		{Label: "Total Sum Assured:", Value: RoundUpToTwoDecimalsAccounting(totals.TotalSumAssured)},
 		{Label: "Total Annual Salary:", Value: RoundUpToTwoDecimalsAccounting(totals.TotalAnnualSalary)},
 		{Label: "Total Annual Premium:", Value: RoundUpToTwoDecimalsAccounting(totals.TotalAnnualPremium)},
 	}
@@ -134,25 +133,22 @@ func BuildPremiumSummaryRows(summaries []models.MemberRatingResultSummary) []Pre
 			percentSalary = item.ExpTotalAnnualPremiumExclFuneral / item.TotalAnnualSalary
 		}
 		rows = append(rows, PremiumSummaryRow{
-			Category:        item.Category,
-			MemberCount:     fmt.Sprintf("%.0f", item.MemberCount),
-			TotalSalary:     RoundUpToTwoDecimalsAccounting(item.TotalAnnualSalary),
-			TotalSumAssured: RoundUpToTwoDecimalsAccounting(item.TotalSumAssured),
-			AnnualPremium:   RoundUpToTwoDecimalsAccounting(item.ExpTotalAnnualPremiumExclFuneral),
-			PercentSalary:   fmt.Sprintf("%s%%", RoundUpToTwoDecimalsAccounting(percentSalary*100)),
+			Category:      item.Category,
+			MemberCount:   fmt.Sprintf("%.0f", item.MemberCount),
+			TotalSalary:   RoundUpToTwoDecimalsAccounting(item.TotalAnnualSalary),
+			AnnualPremium: RoundUpToTwoDecimalsAccounting(item.ExpTotalAnnualPremiumExclFuneral),
+			PercentSalary: fmt.Sprintf("%s%%", RoundUpToTwoDecimalsAccounting(percentSalary*100)),
 		})
 	}
 
 	// Calculate totals row
 	totalLives := 0.0
 	totalSalary := 0.0
-	totalSumAssured := 0.0
 	totalPremium := 0.0
 
 	for _, item := range summaries {
 		totalLives += item.MemberCount
 		totalSalary += item.TotalAnnualSalary
-		totalSumAssured += item.TotalSumAssured
 		totalPremium += item.ExpTotalAnnualPremiumExclFuneral
 	}
 
@@ -162,12 +158,11 @@ func BuildPremiumSummaryRows(summaries []models.MemberRatingResultSummary) []Pre
 	}
 
 	rows = append(rows, PremiumSummaryRow{
-		Category:        "Total",
-		MemberCount:     fmt.Sprintf("%.0f", totalLives),
-		TotalSalary:     RoundUpToTwoDecimalsAccounting(totalSalary),
-		TotalSumAssured: RoundUpToTwoDecimalsAccounting(totalSumAssured),
-		AnnualPremium:   RoundUpToTwoDecimalsAccounting(totalPremium),
-		PercentSalary:   percentSalaryStr,
+		Category:      "Total",
+		MemberCount:   fmt.Sprintf("%.0f", totalLives),
+		TotalSalary:   RoundUpToTwoDecimalsAccounting(totalSalary),
+		AnnualPremium: RoundUpToTwoDecimalsAccounting(totalPremium),
+		PercentSalary: percentSalaryStr,
 	})
 
 	return rows

@@ -109,10 +109,12 @@
               :text="
                 customTirMissing
                   ? 'Custom tiered income replacement table is missing. The administrator must upload the table before calculations can be run.'
-                  : quote.experience_rating === 'Override' &&
-                      (quote.experience_rate_overrides_count || 0) === 0
-                    ? 'Run with no overrides to see the baseline loaded rates per benefit, then add overrides and re-run.'
-                    : 'Requires member data and (if Yes) a claims-experience upload.'
+                  : indicativeDataIncomplete
+                    ? 'Indicative data is enabled but no rows have been saved for every selected scheme category. Add a row per category and click Save before running calculations.'
+                    : quote.experience_rating === 'Override' &&
+                        (quote.experience_rate_overrides_count || 0) === 0
+                      ? 'Run with no overrides to see the baseline loaded rates per benefit, then add overrides and re-run.'
+                      : 'Requires member data and (if Yes) a claims-experience upload.'
               "
             >
               <template #activator="{ props: tooltipProps }">
@@ -120,7 +122,9 @@
                   <v-btn
                     :disabled="
                       customTirMissing ||
-                      quote.member_data_count === 0 ||
+                      (quote.member_data_count === 0 &&
+                        !quote.member_indicative_data) ||
+                      indicativeDataIncomplete ||
                       (quote.experience_rating === 'Yes' &&
                         quote.claims_experience_count === 0) ||
                       quote.status === 'in_force' ||
@@ -837,10 +841,22 @@ watch(basisDialog, (open) => {
 })
 
 // Computed properties (can be simplified if child components manage their own data)
+const indicativeDataIncomplete = computed(() => {
+  if (!quote.value?.member_indicative_data) return false
+  const categories = quote.value.selected_scheme_categories || []
+  if (categories.length === 0) return true
+  const rows = quote.value.member_indicative_data_set || []
+  const covered = new Set(rows.map((r: any) => r.scheme_category))
+  return categories.some((c: string) => !covered.has(c))
+})
+
 const hasEmptyQuoteTables = computed(() => {
   if (!quote.value) return true
+  const noMemberData =
+    quote.value.member_data_count === 0 && !quote.value.member_indicative_data
   return (
-    quote.value.member_data_count === 0 ||
+    noMemberData ||
+    indicativeDataIncomplete.value ||
     (quote.value.experience_rating === 'Yes' &&
       quote.value.claims_experience_count === 0) ||
     quote.value.member_rating_result_count === 0

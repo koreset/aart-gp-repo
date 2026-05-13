@@ -1324,17 +1324,20 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	// Member data loading (runs concurrently with the above)
 	eg.Go(func() error {
 		if groupQuote.MemberIndicativeData {
-			var membermp models.GPricingMemberData
 			if err := DB.Where("quote_id = ? and scheme_category = ?", groupQuote.ID, selectedSchemeCategory).Find(&indicativeMemberMps).Error; err != nil {
 				memberDataErr = err
 				return nil
 			}
-			membermp.AnnualSalary = indicativeMemberMps[0].MemberAverageIncome
-			membermp.SchemeName = groupQuote.SchemeName
-			membermp.SchemeId = groupQuote.SchemeID
-			membermp.QuoteId = groupQuote.ID
-			membermp.Gender = "M"
-			memberMps = append(memberMps, membermp)
+			if len(indicativeMemberMps) == 0 {
+				return nil
+			}
+			memberMps = append(memberMps, models.GPricingMemberData{
+				AnnualSalary: indicativeMemberMps[0].MemberAverageIncome,
+				SchemeName:   groupQuote.SchemeName,
+				SchemeId:     groupQuote.SchemeID,
+				QuoteId:      groupQuote.ID,
+				Gender:       "M",
+			})
 		} else {
 			if groupQuote.QuoteType == "Renewal" {
 				memberDataErr = DB.Model(&models.GPricingMemberDataInForce{}).Where("scheme_id = ? and scheme_category=?", groupQuote.SchemeID, selectedSchemeCategory).Scan(&memberMps).Error
@@ -1370,6 +1373,14 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	logger.WithField("member_count", len(memberMps)).Debug("Retrieved member data")
 
 	if !groupQuote.MemberIndicativeData && len(memberMps) == 0 {
+		return nil
+	}
+
+	if groupQuote.MemberIndicativeData && len(indicativeMemberMps) == 0 {
+		logger.WithFields(map[string]interface{}{
+			"quote_id":        groupQuote.ID,
+			"scheme_category": selectedSchemeCategory,
+		}).Warn("Indicative member data requested but no row found for scheme category; skipping")
 		return nil
 	}
 
@@ -1978,7 +1989,17 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.TotalTtdCappedIncome += mr.TtdCappedIncome
 		mdrs.TotalPhiIncome += mr.PhiIncome
 		mdrs.TotalPhiCappedIncome += mr.PhiCappedIncome
-		mdrs.TotalAnnualSalary += mr.AnnualSalary
+		// Indicative mode: mr.AnnualSalary is the per-member category average
+		// and the reduce loop only iterates once, so multiply by the rates count
+		// to recover the scheme-wide gross salary. Per-benefit *AnnualSalary
+		// fields below are scaled later via glaDenomSalary etc.; this scaling
+		// applies only to the unfiltered TotalAnnualSalary surfaced to the
+		// frontend and used by ExpTotalAnnualPremiumExclFuneral / salary.
+		if groupQuote.MemberIndicativeData {
+			mdrs.TotalAnnualSalary += mr.AnnualSalary * indicativeRatesCount
+		} else {
+			mdrs.TotalAnnualSalary += mr.AnnualSalary
+		}
 
 		// Per-benefit annual-salary totals exclude members whose age has
 		// passed the benefit's max cover age (their covered SA / income is
@@ -2085,37 +2106,70 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.TotalAnnualBinderAmount += mr.TotalBinderAmount
 		mdrs.TotalAnnualOutsourcedAmount += mr.TotalOutsourcedAmount
 
-		if mdrs.MemberCount == 1 {
-			mdrs.MinGlaSumAssured = mr.GlaSumAssured
-			mdrs.MinAdditionalAccidentalGlaSumAssured = mr.AdditionalAccidentalGlaSumAssured
-			mdrs.MinPtdSumAssured = mr.PtdSumAssured
-			mdrs.MinCiSumAssured = mr.CiSumAssured
-			mdrs.MinSglaSumAssured = mr.SpouseGlaSumAssured
-			mdrs.MinPhiIncome = mr.PhiIncome
-			mdrs.MinTtdIncome = mr.TtdIncome
+		if groupQuote.MemberIndicativeData {
+			// Indicative mode: this reduce loop runs exactly once with a single
+			// synthetic member whose Sum Assured / Income fields are pre-scaled
+			// by indicativeRatesCount (see PopulateRatesPerMember*). The category
+			// only has one average per benefit, so per-member Min == Max ==
+			// Average. Divide out the scaling so these cells display per-member
+			// figures rather than the scheme total.
+			scale := indicativeRatesCount
+			if scale > 0 {
+				mdrs.MinGlaSumAssured = mr.GlaSumAssured / scale
+				mdrs.MinAdditionalAccidentalGlaSumAssured = mr.AdditionalAccidentalGlaSumAssured / scale
+				mdrs.MinPtdSumAssured = mr.PtdSumAssured / scale
+				mdrs.MinCiSumAssured = mr.CiSumAssured / scale
+				mdrs.MinSglaSumAssured = mr.SpouseGlaSumAssured / scale
+				mdrs.MinPhiIncome = mr.PhiIncome / scale
+				mdrs.MinTtdIncome = mr.TtdIncome / scale
+				mdrs.MaxGlaSumAssured = mr.GlaSumAssured / scale
+				mdrs.MaxGlaCappedSumAssured = mr.GlaCappedSumAssured / scale
+				mdrs.MaxAdditionalAccidentalGlaSumAssured = mr.AdditionalAccidentalGlaSumAssured / scale
+				mdrs.MaxAdditionalAccidentalGlaCappedSumAssured = mr.AdditionalAccidentalGlaCappedSumAssured / scale
+				mdrs.MaxPtdSumAssured = mr.PtdSumAssured / scale
+				mdrs.MaxPtdCappedSumAssured = mr.PtdCappedSumAssured / scale
+				mdrs.MaxCiSumAssured = mr.CiSumAssured / scale
+				mdrs.MaxCiCappedSumAssured = mr.CiCappedSumAssured / scale
+				mdrs.MaxSglaSumAssured = mr.SpouseGlaSumAssured / scale
+				mdrs.MaxSglaCappedSumAssured = mr.SpouseGlaCappedSumAssured / scale
+				mdrs.MaxPhiIncome = mr.PhiIncome / scale
+				mdrs.MaxPhiCappedIncome = mr.PhiCappedIncome / scale
+				mdrs.MaxTtdIncome = mr.TtdIncome / scale
+				mdrs.MaxTtdCappedIncome = mr.TtdCappedIncome / scale
+			}
 		} else {
-			mdrs.MinGlaSumAssured = math.Min(mdrs.MinGlaSumAssured, mr.GlaSumAssured)
-			mdrs.MinAdditionalAccidentalGlaSumAssured = math.Min(mdrs.MinAdditionalAccidentalGlaSumAssured, mr.AdditionalAccidentalGlaSumAssured)
-			mdrs.MinPtdSumAssured = math.Min(mdrs.MinPtdSumAssured, mr.PtdSumAssured)
-			mdrs.MinCiSumAssured = math.Min(mdrs.MinCiSumAssured, mr.CiSumAssured)
-			mdrs.MinSglaSumAssured = math.Min(mdrs.MinSglaSumAssured, mr.SpouseGlaSumAssured)
-			mdrs.MinPhiIncome = math.Min(mdrs.MinPhiIncome, mr.PhiIncome)
-			mdrs.MinTtdIncome = math.Min(mdrs.MinTtdIncome, mr.TtdIncome)
+			if mdrs.MemberCount == 1 {
+				mdrs.MinGlaSumAssured = mr.GlaSumAssured
+				mdrs.MinAdditionalAccidentalGlaSumAssured = mr.AdditionalAccidentalGlaSumAssured
+				mdrs.MinPtdSumAssured = mr.PtdSumAssured
+				mdrs.MinCiSumAssured = mr.CiSumAssured
+				mdrs.MinSglaSumAssured = mr.SpouseGlaSumAssured
+				mdrs.MinPhiIncome = mr.PhiIncome
+				mdrs.MinTtdIncome = mr.TtdIncome
+			} else {
+				mdrs.MinGlaSumAssured = math.Min(mdrs.MinGlaSumAssured, mr.GlaSumAssured)
+				mdrs.MinAdditionalAccidentalGlaSumAssured = math.Min(mdrs.MinAdditionalAccidentalGlaSumAssured, mr.AdditionalAccidentalGlaSumAssured)
+				mdrs.MinPtdSumAssured = math.Min(mdrs.MinPtdSumAssured, mr.PtdSumAssured)
+				mdrs.MinCiSumAssured = math.Min(mdrs.MinCiSumAssured, mr.CiSumAssured)
+				mdrs.MinSglaSumAssured = math.Min(mdrs.MinSglaSumAssured, mr.SpouseGlaSumAssured)
+				mdrs.MinPhiIncome = math.Min(mdrs.MinPhiIncome, mr.PhiIncome)
+				mdrs.MinTtdIncome = math.Min(mdrs.MinTtdIncome, mr.TtdIncome)
+			}
+			mdrs.MaxGlaSumAssured = math.Max(mdrs.MaxGlaSumAssured, mr.GlaSumAssured)
+			mdrs.MaxGlaCappedSumAssured = math.Max(mdrs.MaxGlaCappedSumAssured, mr.GlaCappedSumAssured)
+			mdrs.MaxAdditionalAccidentalGlaSumAssured = math.Max(mdrs.MaxAdditionalAccidentalGlaSumAssured, mr.AdditionalAccidentalGlaSumAssured)
+			mdrs.MaxAdditionalAccidentalGlaCappedSumAssured = math.Max(mdrs.MaxAdditionalAccidentalGlaCappedSumAssured, mr.AdditionalAccidentalGlaCappedSumAssured)
+			mdrs.MaxPtdSumAssured = math.Max(mdrs.MaxPtdSumAssured, mr.PtdSumAssured)
+			mdrs.MaxPtdCappedSumAssured = math.Max(mdrs.MaxPtdCappedSumAssured, mr.PtdCappedSumAssured)
+			mdrs.MaxCiSumAssured = math.Max(mdrs.MaxCiSumAssured, mr.CiSumAssured)
+			mdrs.MaxCiCappedSumAssured = math.Max(mdrs.MaxCiCappedSumAssured, mr.CiCappedSumAssured)
+			mdrs.MaxSglaSumAssured = math.Max(mdrs.MaxSglaSumAssured, mr.SpouseGlaSumAssured)
+			mdrs.MaxSglaCappedSumAssured = math.Max(mdrs.MaxSglaCappedSumAssured, mr.SpouseGlaCappedSumAssured)
+			mdrs.MaxPhiIncome = math.Max(mdrs.MaxPhiIncome, mr.PhiIncome)
+			mdrs.MaxPhiCappedIncome = math.Max(mdrs.MaxPhiCappedIncome, mr.PhiCappedIncome)
+			mdrs.MaxTtdIncome = math.Max(mdrs.MaxTtdIncome, mr.TtdIncome)
+			mdrs.MaxTtdCappedIncome = math.Max(mdrs.MaxTtdCappedIncome, mr.TtdCappedIncome)
 		}
-		mdrs.MaxGlaSumAssured = math.Max(mdrs.MaxGlaSumAssured, mr.GlaSumAssured)
-		mdrs.MaxGlaCappedSumAssured = math.Max(mdrs.MaxGlaCappedSumAssured, mr.GlaCappedSumAssured)
-		mdrs.MaxAdditionalAccidentalGlaSumAssured = math.Max(mdrs.MaxAdditionalAccidentalGlaSumAssured, mr.AdditionalAccidentalGlaSumAssured)
-		mdrs.MaxAdditionalAccidentalGlaCappedSumAssured = math.Max(mdrs.MaxAdditionalAccidentalGlaCappedSumAssured, mr.AdditionalAccidentalGlaCappedSumAssured)
-		mdrs.MaxPtdSumAssured = math.Max(mdrs.MaxPtdSumAssured, mr.PtdSumAssured)
-		mdrs.MaxPtdCappedSumAssured = math.Max(mdrs.MaxPtdCappedSumAssured, mr.PtdCappedSumAssured)
-		mdrs.MaxCiSumAssured = math.Max(mdrs.MaxCiSumAssured, mr.CiSumAssured)
-		mdrs.MaxCiCappedSumAssured = math.Max(mdrs.MaxCiCappedSumAssured, mr.CiCappedSumAssured)
-		mdrs.MaxSglaSumAssured = math.Max(mdrs.MaxSglaSumAssured, mr.SpouseGlaSumAssured)
-		mdrs.MaxSglaCappedSumAssured = math.Max(mdrs.MaxSglaCappedSumAssured, mr.SpouseGlaCappedSumAssured)
-		mdrs.MaxPhiIncome = math.Max(mdrs.MaxPhiIncome, mr.PhiIncome)
-		mdrs.MaxPhiCappedIncome = math.Max(mdrs.MaxPhiCappedIncome, mr.PhiCappedIncome)
-		mdrs.MaxTtdIncome = math.Max(mdrs.MaxTtdIncome, mr.TtdIncome)
-		mdrs.MaxTtdCappedIncome = math.Max(mdrs.MaxTtdCappedIncome, mr.TtdCappedIncome)
 	}
 
 	// Compute derived summary fields after the reduce loop
@@ -2624,6 +2678,17 @@ func applyMaxCoverCap(value, maxCap float64) float64 {
 	return value
 }
 
+// applyFCLCap caps value at the free cover limit, unless the quote is running
+// on indicative data — in indicative mode there is no member-level distribution
+// to justify an FCL, so we skip this cap. Restrictions-table maxima and
+// reinsurance cover restrictions still apply downstream.
+func applyFCLCap(value, fcl float64, indicative bool) float64 {
+	if indicative {
+		return value
+	}
+	return math.Min(value, fcl)
+}
+
 // benefitTypeKey returns the customised benefit code (alias) when set,
 // otherwise the standard fallback code. Used so reinsurance cover-restriction
 // lookups key by the same code the scheme uses for the benefit. Aliases are
@@ -3015,7 +3080,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	memberDataPointResult.AverageNumberDependants = groupFuneralParameter.NumberDependants
 	memberDataPointResult.AverageNumberChildren = groupFuneralParameter.NumberChildren
 	memberDataPointResult.GlaSumAssured = addedMemberInForce.AnnualSalary * memberDataPointResult.GlaSalaryMultiple
-	memberDataPointResult.GlaCappedSumAssured = applyMaxCoverCap(applyMaxCoverCap(math.Min(memberDataPointResult.GlaSumAssured, groupQuote.FreeCoverLimit), restriction.MaximumGlaCover), reinsCoverCaps[benefitTypeKey(schemeCategory.GlaAlias, models.BenefitTypeGla)])
+	memberDataPointResult.GlaCappedSumAssured = applyMaxCoverCap(applyMaxCoverCap(applyFCLCap(memberDataPointResult.GlaSumAssured, groupQuote.FreeCoverLimit, groupQuote.MemberIndicativeData), restriction.MaximumGlaCover), reinsCoverCaps[benefitTypeKey(schemeCategory.GlaAlias, models.BenefitTypeGla)])
 	memberDataPointResult.PtdSumAssured = addedMemberInForce.AnnualSalary * memberDataPointResult.PtdSalaryMultiple
 	memberDataPointResult.PtdCappedSumAssured = applyMaxCoverCap(applyMaxCoverCap(math.Min(memberDataPointResult.PtdSumAssured, memberDataPointResult.GlaCappedSumAssured), restriction.MaximumPtdCover), reinsCoverCaps[benefitTypeKey(schemeCategory.PtdAlias, models.BenefitTypePtd)])
 	memberDataPointResult.CiSumAssured = addedMemberInForce.AnnualSalary * memberDataPointResult.CiSalaryMultiple
@@ -3593,10 +3658,11 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	memberDataPointResult.TotalPremiumLoading = math.Max(premiumLoading.ExpenseLoading+premiumLoading.AdminLoading+premiumLoading.ProfitLoading+premiumLoading.OtherLoading+binderFeeRate2+outsourceFeeRate2, premiumLoading.MinimumPremiumLoading)
 
 	memberDataPointResult.CalculatedFreeCoverLimit = calculatedFreeCoverLimit
-	if groupQuote.FreeCoverLimit > 0 {
+	if groupQuote.MemberIndicativeData {
+		memberDataPointResult.AppliedFreeCoverLimit = 0
+	} else if groupQuote.FreeCoverLimit > 0 {
 		memberDataPointResult.AppliedFreeCoverLimit = groupQuote.FreeCoverLimit
-	}
-	if groupQuote.FreeCoverLimit == 0 {
+	} else {
 		memberDataPointResult.AppliedFreeCoverLimit = calculatedFreeCoverLimit
 	}
 
@@ -3645,7 +3711,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	memberDataPointResult.AverageNumberDependants = groupFuneralParameter.NumberDependants
 	memberDataPointResult.AverageNumberChildren = groupFuneralParameter.NumberChildren
 	memberDataPointResult.GlaSumAssured = mp.AnnualSalary * memberDataPointResult.GlaSalaryMultiple * indicativeRatesCount
-	unScaledGlaCappedSumAssured := applyMaxCoverCap(applyMaxCoverCap(math.Min(mp.AnnualSalary*memberDataPointResult.GlaSalaryMultiple, memberDataPointResult.AppliedFreeCoverLimit), restriction.MaximumGlaCover), reinsCoverCaps[benefitTypeKey(groupQuote.SchemeCategories[i].GlaAlias, models.BenefitTypeGla)])
+	unScaledGlaCappedSumAssured := applyMaxCoverCap(applyMaxCoverCap(applyFCLCap(mp.AnnualSalary*memberDataPointResult.GlaSalaryMultiple, memberDataPointResult.AppliedFreeCoverLimit, groupQuote.MemberIndicativeData), restriction.MaximumGlaCover), reinsCoverCaps[benefitTypeKey(groupQuote.SchemeCategories[i].GlaAlias, models.BenefitTypeGla)])
 	memberDataPointResult.GlaCappedSumAssured = unScaledGlaCappedSumAssured * indicativeRatesCount
 	memberDataPointResult.PtdSumAssured = mp.AnnualSalary * memberDataPointResult.PtdSalaryMultiple * indicativeRatesCount
 	memberDataPointResult.PtdCappedSumAssured = applyMaxCoverCap(applyMaxCoverCap(math.Min(mp.AnnualSalary*memberDataPointResult.PtdSalaryMultiple, unScaledGlaCappedSumAssured), restriction.MaximumPtdCover), reinsCoverCaps[benefitTypeKey(groupQuote.SchemeCategories[i].PtdAlias, models.BenefitTypePtd)]) * indicativeRatesCount
@@ -3981,7 +4047,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 
 	if groupQuote.SchemeCategories[i].GlaBenefit {
 		memberDataPointResult.GlaSumAssured = mp.AnnualSalary * memberDataPointResult.GlaSalaryMultiple * indicativeRatesCount
-		memberDataPointResult.GlaCappedSumAssured = applyMaxCoverCap(applyMaxCoverCap(math.Min(unScaledGlaSumAssured, memberDataPointResult.AppliedFreeCoverLimit), restriction.MaximumGlaCover), reinsCoverCaps[benefitTypeKey(groupQuote.SchemeCategories[i].GlaAlias, models.BenefitTypeGla)]) * indicativeRatesCount
+		memberDataPointResult.GlaCappedSumAssured = applyMaxCoverCap(applyMaxCoverCap(applyFCLCap(unScaledGlaSumAssured, memberDataPointResult.AppliedFreeCoverLimit, groupQuote.MemberIndicativeData), restriction.MaximumGlaCover), reinsCoverCaps[benefitTypeKey(groupQuote.SchemeCategories[i].GlaAlias, models.BenefitTypeGla)]) * indicativeRatesCount
 
 		// TaxSaver grosses up the GLA covered sum assured so the post-retirement
 		// payout net of the retirement-fund lump-sum tax matches the covered SA.
@@ -3995,10 +4061,10 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	if groupQuote.SchemeCategories[i].PtdBenefit {
 		memberDataPointResult.PtdSumAssured = mp.AnnualSalary * memberDataPointResult.PtdSalaryMultiple * indicativeRatesCount
 		if groupQuote.SchemeCategories[i].GlaBenefit {
-			memberDataPointResult.PtdCappedSumAssured = applyMaxCoverCap(applyMaxCoverCap(math.Min(mp.AnnualSalary*memberDataPointResult.PtdSalaryMultiple, math.Min(unScaledGlaSumAssured, memberDataPointResult.AppliedFreeCoverLimit)), restriction.MaximumPtdCover), reinsCoverCaps[benefitTypeKey(groupQuote.SchemeCategories[i].PtdAlias, models.BenefitTypePtd)]) * indicativeRatesCount
+			memberDataPointResult.PtdCappedSumAssured = applyMaxCoverCap(applyMaxCoverCap(math.Min(mp.AnnualSalary*memberDataPointResult.PtdSalaryMultiple, applyFCLCap(unScaledGlaSumAssured, memberDataPointResult.AppliedFreeCoverLimit, groupQuote.MemberIndicativeData)), restriction.MaximumPtdCover), reinsCoverCaps[benefitTypeKey(groupQuote.SchemeCategories[i].PtdAlias, models.BenefitTypePtd)]) * indicativeRatesCount
 		}
 		if !groupQuote.SchemeCategories[i].GlaBenefit {
-			memberDataPointResult.PtdCappedSumAssured = applyMaxCoverCap(applyMaxCoverCap(math.Min(mp.AnnualSalary*memberDataPointResult.PtdSalaryMultiple, memberDataPointResult.AppliedFreeCoverLimit), restriction.MaximumPtdCover), reinsCoverCaps[benefitTypeKey(groupQuote.SchemeCategories[i].PtdAlias, models.BenefitTypePtd)]) * indicativeRatesCount
+			memberDataPointResult.PtdCappedSumAssured = applyMaxCoverCap(applyMaxCoverCap(applyFCLCap(mp.AnnualSalary*memberDataPointResult.PtdSalaryMultiple, memberDataPointResult.AppliedFreeCoverLimit, groupQuote.MemberIndicativeData), restriction.MaximumPtdCover), reinsCoverCaps[benefitTypeKey(groupQuote.SchemeCategories[i].PtdAlias, models.BenefitTypePtd)]) * indicativeRatesCount
 		}
 	}
 	if groupQuote.SchemeCategories[i].CiBenefit {
@@ -4008,7 +4074,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	}
 	if groupQuote.SchemeCategories[i].SglaBenefit {
 		memberDataPointResult.SpouseGlaSumAssured = mp.AnnualSalary * memberDataPointResult.SglaSalaryMultiple * indicativeRatesCount
-		memberDataPointResult.SpouseGlaCappedSumAssured = applyMaxCoverCap(math.Min(math.Min(mp.AnnualSalary*memberDataPointResult.SglaSalaryMultiple, restriction.SpouseGlaMaximumBenefit), math.Min(unScaledGlaSumAssured, memberDataPointResult.AppliedFreeCoverLimit)), reinsCoverCaps[benefitTypeKey(groupQuote.SchemeCategories[i].SglaAlias, models.BenefitTypeSgla)]) * indicativeRatesCount
+		memberDataPointResult.SpouseGlaCappedSumAssured = applyMaxCoverCap(math.Min(math.Min(mp.AnnualSalary*memberDataPointResult.SglaSalaryMultiple, restriction.SpouseGlaMaximumBenefit), applyFCLCap(unScaledGlaSumAssured, memberDataPointResult.AppliedFreeCoverLimit, groupQuote.MemberIndicativeData)), reinsCoverCaps[benefitTypeKey(groupQuote.SchemeCategories[i].SglaAlias, models.BenefitTypeSgla)]) * indicativeRatesCount
 
 	}
 
@@ -4335,12 +4401,12 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 
 	memberDataPointResult.ChildFuneralBaseRate = applyCoverAgeLimit(GetChildFuneralRate(&memberDataPointResult, groupParameter, memberDataPointResult.AverageChildAgeNextBirthday), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
 	memberDataPointResult.ChildFuneralBaseRate *= (1 + memberRegionLoading.FunRegionLoadingRate)
-	memberDataPointResult.ChildFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralChildrenFuneralSumAssured
+	memberDataPointResult.ChildFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralChildrenFuneralSumAssured * indicativeRatesCount
 	memberDataPointResult.ParentFuneralBaseRate = applyCoverAgeLimit(GetDependantMortalityRate(&memberDataPointResult, groupParameter, memberDataPointResult.AverageDependantAgeNextBirthday, mpIncomeLevel), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
 	memberDataPointResult.ParentFuneralBaseRate *= (1 + memberRegionLoading.FunRegionLoadingRate)
-	memberDataPointResult.ParentFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralParentFuneralSumAssured
-	memberDataPointResult.ParentFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured
-	memberDataPointResult.MemberFuneralSumAssured = applyMaxCoverCap(applyCoverAgeLimit(groupQuote.SchemeCategories[i].FamilyFuneralMainMemberFuneralSumAssured, memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge), reinsCoverCaps[benefitTypeKey(groupQuote.SchemeCategories[i].FamilyFuneralAlias, models.BenefitTypeFun)])
+	memberDataPointResult.ParentFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralParentFuneralSumAssured * indicativeRatesCount
+	memberDataPointResult.ParentFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured * indicativeRatesCount
+	memberDataPointResult.MemberFuneralSumAssured = applyMaxCoverCap(applyCoverAgeLimit(groupQuote.SchemeCategories[i].FamilyFuneralMainMemberFuneralSumAssured, memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge), reinsCoverCaps[benefitTypeKey(groupQuote.SchemeCategories[i].FamilyFuneralAlias, models.BenefitTypeFun)]) * indicativeRatesCount
 
 	// Child / parent / dependant reinsurance rates. No dedicated per-life
 	// reinsurance rate tables exist for these relationships, so we fall back
@@ -4359,14 +4425,14 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	} else {
 		memberDataPointResult.MainMemberFuneralRiskPremium = memberDataPointResult.MainMemberFuneralBaseRate * memberDataPointResult.MemberFuneralSumAssured
 	}
-	memberDataPointResult.SpouseFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured
+	memberDataPointResult.SpouseFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured * indicativeRatesCount
 	if groupQuote.SchemeCategories[i].GlaBenefit {
-		memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.LoadedSpouseGlaRate * groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured * memberDataPointResult.AverageNumberSpouse
+		memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.LoadedSpouseGlaRate * groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured * memberDataPointResult.AverageNumberSpouse * indicativeRatesCount
 	} else {
-		memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.SpouseFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured * memberDataPointResult.AverageNumberSpouse
+		memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.SpouseFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured * memberDataPointResult.AverageNumberSpouse * indicativeRatesCount
 	}
-	memberDataPointResult.ChildFuneralRiskPremium = memberDataPointResult.ChildFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralChildrenFuneralSumAssured * math.Min(memberDataPointResult.AverageNumberChildren, float64(groupQuote.SchemeCategories[i].FamilyFuneralMaxNumberChildren))
-	memberDataPointResult.ParentFuneralRiskPremium = memberDataPointResult.ParentFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured * memberDataPointResult.AverageNumberDependants
+	memberDataPointResult.ChildFuneralRiskPremium = memberDataPointResult.ChildFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralChildrenFuneralSumAssured * math.Min(memberDataPointResult.AverageNumberChildren, float64(groupQuote.SchemeCategories[i].FamilyFuneralMaxNumberChildren)) * indicativeRatesCount
+	memberDataPointResult.ParentFuneralRiskPremium = memberDataPointResult.ParentFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured * memberDataPointResult.AverageNumberDependants * indicativeRatesCount
 
 	memberDataPointResult.TotalFuneralRiskPremium = (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading + memberDataPointResult.FunSchemeSizeLoading)
 	memberDataPointResult.TotalFuneralOfficePremium = memberDataPointResult.TotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
@@ -4498,9 +4564,9 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberPremiumScheduleDatapoint.PhiAnnualPremium = computeMemberOfficePremium(memberDataPointResult.ExpAdjPhiRiskPremium, &groupQuote)
 	memberPremiumScheduleDatapoint.SpouseGlaCoveredSumAssured = memberDataPointResult.SpouseGlaCappedSumAssured
 	memberPremiumScheduleDatapoint.SpouseGlaAnnualPremium = computeMemberOfficePremium(memberDataPointResult.ExpAdjSpouseGlaRiskPremium, &groupQuote)
-	memberPremiumScheduleDatapoint.MainMemberFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralMainMemberFuneralSumAssured
+	memberPremiumScheduleDatapoint.MainMemberFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralMainMemberFuneralSumAssured * indicativeRatesCount
 	memberPremiumScheduleDatapoint.MainMemberFuneralAnnualPremium = computeMemberOfficePremium(memberDataPointResult.MainMemberFuneralRiskPremium, &groupQuote)
-	memberPremiumScheduleDatapoint.SpouseFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured
+	memberPremiumScheduleDatapoint.SpouseFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured * indicativeRatesCount
 	memberPremiumScheduleDatapoint.SpouseFuneralAnnualPremium = computeMemberOfficePremium(memberDataPointResult.SpouseFuneralRiskPremium, &groupQuote)
 	memberPremiumScheduleDatapoint.ChildFuneralSumAssured = memberDataPointResult.ChildFuneralSumAssured
 	memberPremiumScheduleDatapoint.ChildrenFuneralAnnualPremium = computeMemberOfficePremium(memberDataPointResult.ChildFuneralRiskPremium, &groupQuote)

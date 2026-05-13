@@ -446,9 +446,27 @@ describe('buildGroupFuneralRows', () => {
     expect(rows[rows.length - 1].category).toBe('Total')
   })
 
-  it('formats monthly premium correctly', () => {
+  it('derives monthly premium from risk premium / member_count / 12', () => {
+    // exp_total_fun_annual_risk_premium = 43680, scheme loading = 0.10,
+    // member_count = 100 ⇒ annual office = 43680 / 0.9 = 48533.333…,
+    // per member annual = 485.333…, monthly = 40.444… → rounded up to 40.45.
     const rows = buildGroupFuneralRows([makeSummary()])
-    expect(rows[0].monthlyPremium).toBe('45.50')
+    expect(rows[0].monthlyPremium).toBe('40.45')
+    expect(rows[0].annualPremium).toBe('485.34')
+  })
+
+  it('ignores the persisted exp_total_fun_*_premium_per_member fields', () => {
+    // The persisted per-member figures on the summary are stale / can arrive
+    // as 0 from the backend when the MemberCount gate trips. The row must
+    // still display the correct value derived from the risk premium.
+    const rows = buildGroupFuneralRows([
+      makeSummary({
+        exp_total_fun_annual_premium_per_member: 0,
+        exp_total_fun_monthly_premium_per_member: 0
+      })
+    ])
+    expect(rows[0].annualPremium).toBe('485.34')
+    expect(rows[0].monthlyPremium).toBe('40.45')
   })
 })
 

@@ -641,19 +641,20 @@
                     </v-row>
                     <v-row class="mb-n8">
                       <v-col cols="3"
-                        ><p
-                          >Office Premium Premium as % of Annual Salary</p
-                        ></v-col
+                        ><p>Office Premium as % of Annual Salary</p></v-col
                       >
                       <v-col cols="3"
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              expOfficeProportionFromRiskProportion(
-                                resultSummary.proportion_gla_annual_risk_premium_salary,
-                                resultSummary.total_gla_annual_commission_amount,
-                                resultSummary.total_annual_salary,
-                                resultSummary
+                              officeProportionOfSalary(
+                                officePremiumWithCommission(
+                                  resultSummary.total_gla_annual_risk_premium,
+                                  resultSummary.total_gla_annual_commission_amount,
+                                  resultSummary
+                                ),
+                                resultSummary.total_gla_annual_risk_premium,
+                                resultSummary.proportion_gla_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -663,11 +664,14 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              expOfficeProportionFromRiskProportion(
-                                resultSummary.exp_proportion_gla_annual_risk_premium_salary,
-                                resultSummary.exp_total_gla_annual_commission_amount,
-                                resultSummary.total_annual_salary,
-                                resultSummary
+                              officeProportionOfSalary(
+                                officePremiumWithCommission(
+                                  resultSummary.exp_total_gla_annual_risk_premium,
+                                  resultSummary.exp_total_gla_annual_commission_amount,
+                                  resultSummary
+                                ),
+                                resultSummary.exp_total_gla_annual_risk_premium,
+                                resultSummary.exp_proportion_gla_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -677,9 +681,13 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              proportionOfSalary(
-                                resultSummary.final_gla_annual_office_premium,
-                                resultSummary.total_annual_salary
+                              officeProportionOfSalary(
+                                finalFieldValue(
+                                  resultSummary,
+                                  'final_gla_annual_office_premium'
+                                ),
+                                resultSummary.exp_total_gla_annual_risk_premium,
+                                resultSummary.exp_proportion_gla_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -1161,19 +1169,20 @@
                     </v-row>
                     <v-row class="mb-n8">
                       <v-col cols="3"
-                        ><p
-                          >Office Premium Premium as % of Annual Salary</p
-                        ></v-col
+                        ><p>Office Premium as % of Annual Salary</p></v-col
                       >
                       <v-col cols="3"
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              expOfficeProportionFromRiskProportion(
-                                resultSummary.proportion_ptd_annual_risk_premium_salary,
-                                resultSummary.total_ptd_annual_commission_amount,
-                                resultSummary.total_annual_salary,
-                                resultSummary
+                              officeProportionOfSalary(
+                                officePremiumWithCommission(
+                                  resultSummary.total_ptd_annual_risk_premium,
+                                  resultSummary.total_ptd_annual_commission_amount,
+                                  resultSummary
+                                ),
+                                resultSummary.total_ptd_annual_risk_premium,
+                                resultSummary.proportion_ptd_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -1183,11 +1192,14 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              expOfficeProportionFromRiskProportion(
-                                resultSummary.exp_proportion_ptd_annual_risk_premium_salary,
-                                resultSummary.exp_total_ptd_annual_commission_amount,
-                                resultSummary.total_annual_salary,
-                                resultSummary
+                              officeProportionOfSalary(
+                                officePremiumWithCommission(
+                                  resultSummary.exp_total_ptd_annual_risk_premium,
+                                  resultSummary.exp_total_ptd_annual_commission_amount,
+                                  resultSummary
+                                ),
+                                resultSummary.exp_total_ptd_annual_risk_premium,
+                                resultSummary.exp_proportion_ptd_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -1197,9 +1209,13 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              proportionOfSalary(
-                                resultSummary.final_ptd_annual_office_premium,
-                                resultSummary.total_annual_salary
+                              officeProportionOfSalary(
+                                finalFieldValue(
+                                  resultSummary,
+                                  'final_ptd_annual_office_premium'
+                                ),
+                                resultSummary.exp_total_ptd_annual_risk_premium,
+                                resultSummary.exp_proportion_ptd_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -1679,19 +1695,20 @@
                     </v-row>
                     <v-row class="mb-n8">
                       <v-col cols="3"
-                        ><p
-                          >Office Premium Premium as % of Annual Salary</p
-                        ></v-col
+                        ><p>Office Premium as % of Annual Salary</p></v-col
                       >
                       <v-col cols="3"
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              expOfficeProportionFromRiskProportion(
-                                resultSummary.proportion_ci_annual_risk_premium_salary,
-                                resultSummary.total_ci_annual_commission_amount,
-                                resultSummary.total_annual_salary,
-                                resultSummary
+                              officeProportionOfSalary(
+                                officePremiumWithCommission(
+                                  resultSummary.total_ci_annual_risk_premium,
+                                  resultSummary.total_ci_annual_commission_amount,
+                                  resultSummary
+                                ),
+                                resultSummary.total_ci_annual_risk_premium,
+                                resultSummary.proportion_ci_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -1701,11 +1718,14 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              expOfficeProportionFromRiskProportion(
-                                resultSummary.exp_proportion_ci_annual_risk_premium_salary,
-                                resultSummary.exp_total_ci_annual_commission_amount,
-                                resultSummary.total_annual_salary,
-                                resultSummary
+                              officeProportionOfSalary(
+                                officePremiumWithCommission(
+                                  resultSummary.exp_total_ci_annual_risk_premium,
+                                  resultSummary.exp_total_ci_annual_commission_amount,
+                                  resultSummary
+                                ),
+                                resultSummary.exp_total_ci_annual_risk_premium,
+                                resultSummary.exp_proportion_ci_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -1715,9 +1735,13 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              proportionOfSalary(
-                                resultSummary.final_ci_annual_office_premium,
-                                resultSummary.total_annual_salary
+                              officeProportionOfSalary(
+                                finalFieldValue(
+                                  resultSummary,
+                                  'final_ci_annual_office_premium'
+                                ),
+                                resultSummary.exp_total_ci_annual_risk_premium,
+                                resultSummary.exp_proportion_ci_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -2154,19 +2178,20 @@
                     </v-row>
                     <v-row class="mb-n8">
                       <v-col cols="3"
-                        ><p
-                          >Office Premium Premium as % of Annual Salary</p
-                        ></v-col
+                        ><p>Office Premium as % of Annual Salary</p></v-col
                       >
                       <v-col cols="3"
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              expOfficeProportionFromRiskProportion(
-                                resultSummary.proportion_phi_annual_risk_premium_salary,
-                                resultSummary.total_phi_annual_commission_amount,
-                                resultSummary.total_annual_salary,
-                                resultSummary
+                              officeProportionOfSalary(
+                                officePremiumWithCommission(
+                                  resultSummary.total_phi_annual_risk_premium,
+                                  resultSummary.total_phi_annual_commission_amount,
+                                  resultSummary
+                                ),
+                                resultSummary.total_phi_annual_risk_premium,
+                                resultSummary.proportion_phi_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -2176,11 +2201,14 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              expOfficeProportionFromRiskProportion(
-                                resultSummary.exp_proportion_phi_annual_risk_premium_salary,
-                                resultSummary.exp_total_phi_annual_commission_amount,
-                                resultSummary.total_annual_salary,
-                                resultSummary
+                              officeProportionOfSalary(
+                                officePremiumWithCommission(
+                                  resultSummary.exp_total_phi_annual_risk_premium,
+                                  resultSummary.exp_total_phi_annual_commission_amount,
+                                  resultSummary
+                                ),
+                                resultSummary.exp_total_phi_annual_risk_premium,
+                                resultSummary.exp_proportion_phi_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -2190,9 +2218,13 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              proportionOfSalary(
-                                resultSummary.final_phi_annual_office_premium,
-                                resultSummary.total_annual_salary
+                              officeProportionOfSalary(
+                                finalFieldValue(
+                                  resultSummary,
+                                  'final_phi_annual_office_premium'
+                                ),
+                                resultSummary.exp_total_phi_annual_risk_premium,
+                                resultSummary.exp_proportion_phi_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -2629,19 +2661,20 @@
                     </v-row>
                     <v-row class="mb-n8">
                       <v-col cols="3"
-                        ><p
-                          >Office Premium Premium as % of Annual Salary</p
-                        ></v-col
+                        ><p>Office Premium as % of Annual Salary</p></v-col
                       >
                       <v-col cols="3"
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              expOfficeProportionFromRiskProportion(
-                                resultSummary.proportion_ttd_annual_risk_premium_salary,
-                                resultSummary.total_ttd_annual_commission_amount,
-                                resultSummary.total_annual_salary,
-                                resultSummary
+                              officeProportionOfSalary(
+                                officePremiumWithCommission(
+                                  resultSummary.total_ttd_annual_risk_premium,
+                                  resultSummary.total_ttd_annual_commission_amount,
+                                  resultSummary
+                                ),
+                                resultSummary.total_ttd_annual_risk_premium,
+                                resultSummary.proportion_ttd_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -2651,11 +2684,14 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              expOfficeProportionFromRiskProportion(
-                                resultSummary.exp_proportion_ttd_annual_risk_premium_salary,
-                                resultSummary.exp_total_ttd_annual_commission_amount,
-                                resultSummary.total_annual_salary,
-                                resultSummary
+                              officeProportionOfSalary(
+                                officePremiumWithCommission(
+                                  resultSummary.exp_total_ttd_annual_risk_premium,
+                                  resultSummary.exp_total_ttd_annual_commission_amount,
+                                  resultSummary
+                                ),
+                                resultSummary.exp_total_ttd_annual_risk_premium,
+                                resultSummary.exp_proportion_ttd_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -2665,9 +2701,13 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              proportionOfSalary(
-                                resultSummary.final_ttd_annual_office_premium,
-                                resultSummary.total_annual_salary
+                              officeProportionOfSalary(
+                                finalFieldValue(
+                                  resultSummary,
+                                  'final_ttd_annual_office_premium'
+                                ),
+                                resultSummary.exp_total_ttd_annual_risk_premium,
+                                resultSummary.exp_proportion_ttd_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -3151,19 +3191,20 @@
                     </v-row>
                     <v-row class="mb-n8">
                       <v-col cols="3"
-                        ><p
-                          >Office Premium Premium as % of Annual Salary</p
-                        ></v-col
+                        ><p>Office Premium as % of Annual Salary</p></v-col
                       >
                       <v-col cols="3"
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              expOfficeProportionFromRiskProportion(
-                                resultSummary.proportion_sgla_annual_risk_premium_salary,
-                                resultSummary.total_sgla_annual_commission_amount,
-                                resultSummary.total_annual_salary,
-                                resultSummary
+                              officeProportionOfSalary(
+                                officePremiumWithCommission(
+                                  resultSummary.total_sgla_annual_risk_premium,
+                                  resultSummary.total_sgla_annual_commission_amount,
+                                  resultSummary
+                                ),
+                                resultSummary.total_sgla_annual_risk_premium,
+                                resultSummary.proportion_sgla_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -3173,11 +3214,14 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              expOfficeProportionFromRiskProportion(
-                                resultSummary.exp_proportion_sgla_annual_risk_premium_salary,
-                                resultSummary.exp_total_sgla_annual_commission_amount,
-                                resultSummary.total_annual_salary,
-                                resultSummary
+                              officeProportionOfSalary(
+                                officePremiumWithCommission(
+                                  resultSummary.exp_total_sgla_annual_risk_premium,
+                                  resultSummary.exp_total_sgla_annual_commission_amount,
+                                  resultSummary
+                                ),
+                                resultSummary.exp_total_sgla_annual_risk_premium,
+                                resultSummary.exp_proportion_sgla_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -3187,9 +3231,13 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              proportionOfSalary(
-                                resultSummary.final_sgla_annual_office_premium,
-                                resultSummary.total_annual_salary
+                              officeProportionOfSalary(
+                                finalFieldValue(
+                                  resultSummary,
+                                  'final_sgla_annual_office_premium'
+                                ),
+                                resultSummary.exp_total_sgla_annual_risk_premium,
+                                resultSummary.exp_proportion_sgla_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -3474,19 +3522,20 @@
                     </v-row>
                     <v-row class="mb-n8">
                       <v-col cols="3"
-                        ><p
-                          >Office Premium Premium as % of Annual Salary</p
-                        ></v-col
+                        ><p>Office Premium as % of Annual Salary</p></v-col
                       >
                       <v-col cols="3"
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              expOfficeProportionFromRiskProportion(
-                                resultSummary.proportion_fun_annual_risk_premium_salary,
-                                resultSummary.total_fun_annual_commission_amount,
-                                resultSummary.total_annual_salary,
-                                resultSummary
+                              officeProportionOfSalary(
+                                officePremiumWithCommission(
+                                  resultSummary.total_fun_annual_risk_premium,
+                                  resultSummary.total_fun_annual_commission_amount,
+                                  resultSummary
+                                ),
+                                resultSummary.total_fun_annual_risk_premium,
+                                resultSummary.proportion_fun_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -3496,11 +3545,14 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              expOfficeProportionFromRiskProportion(
-                                resultSummary.exp_proportion_fun_annual_risk_premium_salary,
-                                resultSummary.exp_total_fun_annual_commission_amount,
-                                resultSummary.total_annual_salary,
-                                resultSummary
+                              officeProportionOfSalary(
+                                officePremiumWithCommission(
+                                  resultSummary.exp_total_fun_annual_risk_premium,
+                                  resultSummary.exp_total_fun_annual_commission_amount,
+                                  resultSummary
+                                ),
+                                resultSummary.exp_total_fun_annual_risk_premium,
+                                resultSummary.exp_proportion_fun_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -3510,9 +3562,13 @@
                         ><p class="text-center content-bg">{{
                           dashIfEmpty(
                             roundUpToTwoDecimals(
-                              proportionOfSalary(
-                                resultSummary.final_fun_annual_office_premium,
-                                resultSummary.total_annual_salary
+                              officeProportionOfSalary(
+                                finalFieldValue(
+                                  resultSummary,
+                                  'final_fun_annual_office_premium'
+                                ),
+                                resultSummary.exp_total_fun_annual_risk_premium,
+                                resultSummary.exp_proportion_fun_annual_risk_premium_salary
                               ) * 100
                             )
                           ) + '%'
@@ -3540,11 +3596,10 @@ import {
   computeOfficePremium,
   officePremiumWithCommission,
   expOfficeRateFromRiskRate,
-  expOfficeProportionFromRiskProportion,
   officeRateFromRiskRate,
   officeProportionFromRiskProportion,
   ratePer1000,
-  proportionOfSalary,
+  officeProportionOfSalary,
   finalFieldValue
 } from '@/renderer/utils/quoteDataHelpers'
 applyPlugin(jsPDF)
@@ -3738,17 +3793,24 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
         rs
       )
     )
+  // Office %-of-salary derived from Office × RiskProportion / Risk, so the
+  // export uses the same salary denominator the backend used for the matching
+  // Risk Premium %. Office premium is recomputed via officePremiumWithCommission
+  // to match the Annual Office Premium row.
   const exCProp = (
-    riskPropField: string,
+    riskField: string,
     commissionField: string,
-    salaryField: string
+    riskPropField: string
   ) =>
     fmtNum(
-      expOfficeProportionFromRiskProportion(
-        rs[riskPropField] ?? 0,
-        rs[commissionField] ?? 0,
-        rs[salaryField] ?? 0,
-        rs
+      officeProportionOfSalary(
+        officePremiumWithCommission(
+          rs[riskField] ?? 0,
+          rs[commissionField] ?? 0,
+          rs
+        ),
+        rs[riskField] ?? 0,
+        rs[riskPropField] ?? 0
       ),
       true
     )
@@ -3758,8 +3820,19 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
   // (post-discount AND post-commission).
   const fRate = (finalField: string, cappedField: string) =>
     fmtNum(ratePer1000(rs[finalField] ?? 0, rs[cappedField] ?? 0))
-  const fProp = (finalField: string, salaryField: string) =>
-    fmtNum(proportionOfSalary(rs[finalField] ?? 0, rs[salaryField] ?? 0), true)
+  const fProp = (
+    finalField: string,
+    riskField: string,
+    riskPropField: string
+  ) =>
+    fmtNum(
+      officeProportionOfSalary(
+        rs[finalField] ?? 0,
+        rs[riskField] ?? 0,
+        rs[riskPropField] ?? 0
+      ),
+      true
+    )
   const row = (
     label: string,
     thVal: string,
@@ -3847,16 +3920,20 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       row(
         'Office Premium as % of Annual Salary',
         exCProp(
-          'proportion_gla_annual_risk_premium_salary',
+          'total_gla_annual_risk_premium',
           'total_gla_annual_commission_amount',
-          'total_annual_salary'
+          'proportion_gla_annual_risk_premium_salary'
         ),
         exCProp(
-          'exp_proportion_gla_annual_risk_premium_salary',
+          'exp_total_gla_annual_risk_premium',
           'exp_total_gla_annual_commission_amount',
-          'total_annual_salary'
+          'exp_proportion_gla_annual_risk_premium_salary'
         ),
-        fProp('final_gla_annual_office_premium', 'total_annual_salary')
+        fProp(
+          'final_gla_annual_office_premium',
+          'exp_total_gla_annual_risk_premium',
+          'exp_proportion_gla_annual_risk_premium_salary'
+        )
       )
       break
     case 'PTD':
@@ -3937,16 +4014,20 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       row(
         'Office Premium as % of Annual Salary',
         exCProp(
-          'proportion_ptd_annual_risk_premium_salary',
+          'total_ptd_annual_risk_premium',
           'total_ptd_annual_commission_amount',
-          'total_annual_salary'
+          'proportion_ptd_annual_risk_premium_salary'
         ),
         exCProp(
-          'exp_proportion_ptd_annual_risk_premium_salary',
+          'exp_total_ptd_annual_risk_premium',
           'exp_total_ptd_annual_commission_amount',
-          'total_annual_salary'
+          'exp_proportion_ptd_annual_risk_premium_salary'
         ),
-        fProp('final_ptd_annual_office_premium', 'total_annual_salary')
+        fProp(
+          'final_ptd_annual_office_premium',
+          'exp_total_ptd_annual_risk_premium',
+          'exp_proportion_ptd_annual_risk_premium_salary'
+        )
       )
       break
     case 'CI':
@@ -4027,16 +4108,20 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       row(
         'Office Premium as % of Annual Salary',
         exCProp(
-          'proportion_ci_annual_risk_premium_salary',
+          'total_ci_annual_risk_premium',
           'total_ci_annual_commission_amount',
-          'total_annual_salary'
+          'proportion_ci_annual_risk_premium_salary'
         ),
         exCProp(
-          'exp_proportion_ci_annual_risk_premium_salary',
+          'exp_total_ci_annual_risk_premium',
           'exp_total_ci_annual_commission_amount',
-          'total_annual_salary'
+          'exp_proportion_ci_annual_risk_premium_salary'
         ),
-        fProp('final_ci_annual_office_premium', 'total_annual_salary')
+        fProp(
+          'final_ci_annual_office_premium',
+          'exp_total_ci_annual_risk_premium',
+          'exp_proportion_ci_annual_risk_premium_salary'
+        )
       )
       break
     case 'SGLA':
@@ -4120,16 +4205,20 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       row(
         'Office Premium as % of Annual Salary',
         exCProp(
-          'proportion_sgla_annual_risk_premium_salary',
+          'total_sgla_annual_risk_premium',
           'total_sgla_annual_commission_amount',
-          'total_annual_salary'
+          'proportion_sgla_annual_risk_premium_salary'
         ),
         exCProp(
-          'exp_proportion_sgla_annual_risk_premium_salary',
+          'exp_total_sgla_annual_risk_premium',
           'exp_total_sgla_annual_commission_amount',
-          'total_annual_salary'
+          'exp_proportion_sgla_annual_risk_premium_salary'
         ),
-        fProp('final_sgla_annual_office_premium', 'total_annual_salary')
+        fProp(
+          'final_sgla_annual_office_premium',
+          'exp_total_sgla_annual_risk_premium',
+          'exp_proportion_sgla_annual_risk_premium_salary'
+        )
       )
       break
     case 'PHI':
@@ -4194,16 +4283,20 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       row(
         'Office Premium as % of Annual Salary',
         exCProp(
-          'proportion_phi_annual_risk_premium_salary',
+          'total_phi_annual_risk_premium',
           'total_phi_annual_commission_amount',
-          'total_annual_salary'
+          'proportion_phi_annual_risk_premium_salary'
         ),
         exCProp(
-          'exp_proportion_phi_annual_risk_premium_salary',
+          'exp_total_phi_annual_risk_premium',
           'exp_total_phi_annual_commission_amount',
-          'total_annual_salary'
+          'exp_proportion_phi_annual_risk_premium_salary'
         ),
-        fProp('final_phi_annual_office_premium', 'total_annual_salary')
+        fProp(
+          'final_phi_annual_office_premium',
+          'exp_total_phi_annual_risk_premium',
+          'exp_proportion_phi_annual_risk_premium_salary'
+        )
       )
       break
     case 'TTD':
@@ -4268,16 +4361,20 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       row(
         'Office Premium as % of Annual Salary',
         exCProp(
-          'proportion_ttd_annual_risk_premium_salary',
+          'total_ttd_annual_risk_premium',
           'total_ttd_annual_commission_amount',
-          'total_annual_salary'
+          'proportion_ttd_annual_risk_premium_salary'
         ),
         exCProp(
-          'exp_proportion_ttd_annual_risk_premium_salary',
+          'exp_total_ttd_annual_risk_premium',
           'exp_total_ttd_annual_commission_amount',
-          'total_annual_salary'
+          'exp_proportion_ttd_annual_risk_premium_salary'
         ),
-        fProp('final_ttd_annual_office_premium', 'total_annual_salary')
+        fProp(
+          'final_ttd_annual_office_premium',
+          'exp_total_ttd_annual_risk_premium',
+          'exp_proportion_ttd_annual_risk_premium_salary'
+        )
       )
       break
     case 'FUN': {
@@ -4319,16 +4416,20 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
       row(
         'Office Premium as % of Annual Salary',
         exCProp(
-          'proportion_fun_annual_risk_premium_salary',
+          'total_fun_annual_risk_premium',
           'total_fun_annual_commission_amount',
-          'total_annual_salary'
+          'proportion_fun_annual_risk_premium_salary'
         ),
         exCProp(
-          'exp_proportion_fun_annual_risk_premium_salary',
+          'exp_total_fun_annual_risk_premium',
           'exp_total_fun_annual_commission_amount',
-          'total_annual_salary'
+          'exp_proportion_fun_annual_risk_premium_salary'
         ),
-        fProp('final_fun_annual_office_premium', 'total_annual_salary')
+        fProp(
+          'final_fun_annual_office_premium',
+          'exp_total_fun_annual_risk_premium',
+          'exp_proportion_fun_annual_risk_premium_salary'
+        )
       )
       break
     }

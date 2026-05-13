@@ -64,9 +64,10 @@
       </v-col>
       <v-col cols="12" md="4" class="pe-md-2 pb-2">
         <v-text-field
-          v-model="memberAverageIncome"
+          v-model="memberAverageIncomeDisplay"
           label="Average Annual Salary"
-          type="number"
+          type="text"
+          inputmode="decimal"
           density="compact"
           variant="outlined"
           hide-details="auto"
@@ -123,7 +124,7 @@
             <tr v-for="(item, index) in indicativeDataSet" :key="index">
               <td>{{ item.scheme_category }}</td>
               <td>{{ item.member_average_age }}</td>
-              <td>{{ item.member_average_income }}</td>
+              <td>{{ formatAccounting(item.member_average_income) }}</td>
               <td>{{ item.member_data_count }}</td>
               <td>{{ item.member_male_female_distribution }}</td>
               <td>
@@ -141,8 +142,11 @@
         </v-table>
       </v-col>
     </v-row>
-    <v-row v-if="indicativeDataEnabled && indicativeDataSet.length > 0">
-      <v-col cols="12" md="4">
+    <v-row
+      v-if="indicativeDataEnabled && indicativeDataSet.length > 0"
+      align="center"
+    >
+      <v-col cols="12" md="6">
         <v-btn
           rounded
           color="primary"
@@ -158,6 +162,16 @@
           @click="deleteIndicativeData"
           >Delete Data</v-btn
         >
+      </v-col>
+      <v-col
+        v-if="indicativeLastUpdatedLabel"
+        cols="12"
+        md="6"
+        class="text-md-right"
+      >
+        <span class="text-caption text-medium-emphasis">
+          {{ indicativeLastUpdatedLabel }}
+        </span>
       </v-col>
     </v-row>
     <v-divider v-if="indicativeDataEnabled" class="my-4"></v-divider>
@@ -395,6 +409,26 @@ const memberAverageAge = ref<number | null>(null)
 const memberAverageIncome = ref<number | null>(null)
 const memberDataCount = ref<number | null>(null)
 const memberMaleFemaleDistribution = ref<number | null>(null)
+
+const formatAccounting = (n: number | null | undefined): string => {
+  if (n === null || n === undefined || isNaN(Number(n))) return ''
+  return Number(n).toLocaleString('en-US').replace(/,/g, ' ')
+}
+
+const memberAverageIncomeDisplay = computed({
+  get(): string {
+    return formatAccounting(memberAverageIncome.value)
+  },
+  set(v: string) {
+    const cleaned = String(v ?? '').replace(/[^\d.]/g, '')
+    if (cleaned === '') {
+      memberAverageIncome.value = null
+      return
+    }
+    const n = Number(cleaned)
+    memberAverageIncome.value = isNaN(n) ? null : n
+  }
+})
 const malePropRule = (v: number | string | null) => {
   if (v === null || v === '') return true
   const n = Number(v)
@@ -593,6 +627,23 @@ const availableCategories = computed(() => {
     })
   }
   return categories
+})
+
+const indicativeLastUpdatedLabel = computed(() => {
+  const by = props.quote?.modified_by
+  const at = props.quote?.modification_date
+  if (!by && !at) return ''
+  let when = ''
+  if (at) {
+    try {
+      when = new Date(at).toLocaleString()
+    } catch {
+      when = String(at)
+    }
+  }
+  if (by && when) return `Last updated by ${by} on ${when}`
+  if (by) return `Last updated by ${by}`
+  return `Last updated on ${when}`
 })
 
 const deleteTable = async (item) => {
