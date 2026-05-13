@@ -9485,17 +9485,23 @@ func GetReinsuranceCiRate(memberResultData *models.MemberRatingResult, groupPric
 }
 
 // GetReinsurancePhiRate looks up the reinsurance PHI rate.
+//
+// The lookup uses the indexed `lookup_key` generated column on
+// reinsurance_phi_rates. The field order and `|` separator must match the
+// CONCAT in migrations/<dialect>/20260513010000_add_phi_rates_lookup_key.sql.
 func GetReinsurancePhiRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, schemeCategory models.SchemeCategory) float64 {
 	tableName := "reinsurance_phi_rates"
 	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + strconv.Itoa(incomeLevel) + "_" + memberResultData.Gender + "_" + strconv.Itoa(memberResultData.OccupationClass)
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
 		return cached.(float64)
 	}
+	lookupKey := groupPricingParameter.RiskRateCode + "|" +
+		strconv.Itoa(memberResultData.AgeNextBirthday) + "|" +
+		strconv.Itoa(incomeLevel) + "|" +
+		memberResultData.Gender + "|" +
+		strconv.Itoa(memberResultData.OccupationClass)
 	var rate float64
-	DB.Table(tableName).
-		Where("risk_rate_code = ? AND age_next_birthday = ? AND income_level = ? AND gender = ? AND occupation_class = ?",
-			groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, incomeLevel, memberResultData.Gender, memberResultData.OccupationClass).
-		Pluck("phi_rate", &rate)
+	DB.Table(tableName).Where("lookup_key = ?", lookupKey).Pluck("phi_rate", &rate)
 	GroupPricingCache.Set(cacheKey, rate, 1)
 	return rate
 }
@@ -9904,14 +9910,26 @@ func GetPhiRate(memberResultData *models.MemberRatingResult, groupPricingParamet
 	} else {
 		//fmt.Println("cache missed: ", key)
 	}
+	// The lookup uses the indexed `lookup_key` generated column on phi_rates.
+	// The field order and `|` separator must match the CONCAT in
+	// migrations/<dialect>/20260513010000_add_phi_rates_lookup_key.sql.
+	lookupKey := groupPricingParameter.RiskRateCode + "|" +
+		schemeCategory.PhiRiskType + "|" +
+		strconv.Itoa(memberResultData.AgeNextBirthday) + "|" +
+		memberResultData.Gender + "|" +
+		strconv.Itoa(memberResultData.OccupationClass) + "|" +
+		strconv.Itoa(incomeLevel) + "|" +
+		strconv.Itoa(schemeCategory.PhiWaitingPeriod) + "|" +
+		strconv.Itoa(schemeCategory.PhiDeferredPeriod) + "|" +
+		strconv.Itoa(schemeCategory.PhiNormalRetirementAge) + "|" +
+		schemeCategory.PhiBenefitEscalation + "|" +
+		schemeCategory.PhiDisabilityDefinition
 	var phiRate float64
-	query := "risk_rate_code=? and risk_type=? and age_next_birthday=? and gender=? and occupation_class=? and income_level=? and waiting_period=? and deferred_period=? and normal_retirement_age=? and benefit_escalation_option=? and disability_definition=?"
-	err := DB.Table(tableName).Where(query, groupPricingParameter.RiskRateCode, schemeCategory.PhiRiskType, memberResultData.AgeNextBirthday, memberResultData.Gender, memberResultData.OccupationClass, incomeLevel, schemeCategory.PhiWaitingPeriod, schemeCategory.PhiDeferredPeriod, schemeCategory.PhiNormalRetirementAge, schemeCategory.PhiBenefitEscalation, schemeCategory.PhiDisabilityDefinition).Pluck("phi_rate", &phiRate).Error
+	err := DB.Table(tableName).Where("lookup_key = ?", lookupKey).Pluck("phi_rate", &phiRate).Error
 	if err != nil {
 		fmt.Println(err)
 	}
 	GroupPricingCache.Set(cacheKey, phiRate, 1)
-	//time.Sleep(5 * time.Millisecond)
 	return phiRate
 }
 
@@ -17213,14 +17231,21 @@ func getJSONTags(obj interface{}) []string {
 }
 
 // getStructDBColumns returns the DB column names for an object's exported,
-// non-skipped struct fields in declaration order. Honours the gorm:"column:..."
-// override; otherwise falls back to snake_case of the field name (matching
-// GORM's default convention). Fields tagged json:"-" or gorm:"-" are skipped
-// so the output matches what would actually be persisted.
+// non-skipped struct fields in declaration order. Honours gorm:"column:..."
+// overrides and recurses into gorm:"embedded" fields, prepending any
+// embeddedPrefix:... to each child column so the output matches what GORM
+// would persist. Fields tagged gorm:"-" are skipped.
 func getStructDBColumns(obj interface{}) []string {
-	val := reflect.ValueOf(obj)
-	typ := val.Type()
-	cols := make([]string, 0, typ.NumField())
+	return appendStructDBColumns(nil, reflect.TypeOf(obj), "")
+}
+
+func appendStructDBColumns(cols []string, typ reflect.Type, prefix string) []string {
+	if typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
+	}
+	if typ.Kind() != reflect.Struct {
+		return cols
+	}
 	for i := 0; i < typ.NumField(); i++ {
 		field := typ.Field(i)
 		if !field.IsExported() {
@@ -17230,18 +17255,40 @@ func getStructDBColumns(obj interface{}) []string {
 		if gormTag == "-" {
 			continue
 		}
-		colName := ""
+
+		var (
+			isEmbedded     bool
+			embeddedPrefix string
+			colOverride    string
+		)
 		for _, part := range strings.Split(gormTag, ";") {
 			part = strings.TrimSpace(part)
-			if strings.HasPrefix(part, "column:") {
-				colName = strings.TrimPrefix(part, "column:")
-				break
+			switch {
+			case part == "embedded":
+				isEmbedded = true
+			case strings.HasPrefix(part, "embeddedPrefix:"):
+				embeddedPrefix = strings.TrimPrefix(part, "embeddedPrefix:")
+			case strings.HasPrefix(part, "column:"):
+				colOverride = strings.TrimPrefix(part, "column:")
 			}
 		}
+
+		if isEmbedded {
+			ft := field.Type
+			if ft.Kind() == reflect.Ptr {
+				ft = ft.Elem()
+			}
+			if ft.Kind() == reflect.Struct {
+				cols = appendStructDBColumns(cols, ft, prefix+embeddedPrefix)
+				continue
+			}
+		}
+
+		colName := colOverride
 		if colName == "" {
 			colName = DB.NamingStrategy.ColumnName("", field.Name)
 		}
-		cols = append(cols, colName)
+		cols = append(cols, prefix+colName)
 	}
 	return cols
 }

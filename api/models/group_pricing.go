@@ -2335,6 +2335,7 @@ type PhiRate struct {
 	DisabilityDefinition    string    `json:"disability_definition" csv:"disability_definition"`
 	RiskType                string    `json:"risk_type" csv:"risk_type"`
 	PhiRate                 float64   `json:"phi_rate" csv:"phi_rate"`
+	LookupKey               string    `json:"-" csv:"-" gorm:"->;column:lookup_key;-:migration"`
 	CreationDate            time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy               string    `json:"created_by" csv:"created_by"`
 }
@@ -3015,6 +3016,7 @@ type ReinsurancePhiRate struct {
 	BenefitEscalationOption string    `json:"benefit_escalation_option" csv:"benefit_escalation_option"`
 	DisabilityDefinition    string    `json:"disability_definition" csv:"disability_definition"`
 	PhiRate                 float64   `json:"phi_rate" csv:"phi_rate"`
+	LookupKey               string    `json:"-" csv:"-" gorm:"->;column:lookup_key;-:migration"`
 	CreationDate            time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy               string    `json:"created_by" csv:"created_by"`
 }

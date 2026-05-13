@@ -312,7 +312,11 @@
             value="results"
             eager
           >
-            <QuoteResults :quote="quote" @quote-updated="loadQuote" />
+            <QuoteResults
+              :quote="quote"
+              :result-summaries="resultSummaries || []"
+              @quote-updated="loadQuote"
+            />
           </v-window-item>
           <v-window-item value="outputsummary" eager>
             <OutputSummary

@@ -4,6 +4,32 @@
       <span class="headline">Calculation Results & Analysis</span>
     </template>
     <template #default>
+      <v-expansion-panels v-if="zeroRateBenefitWarnings.length > 0" class="mb-3">
+        <v-expansion-panel>
+          <v-expansion-panel-title
+            class="text-warning font-weight-medium"
+            color="warning"
+          >
+            <v-icon class="mr-2" color="warning">mdi-alert</v-icon>
+            <span>
+              {{ zeroRateBenefitWarnings.length }} benefit
+              warning{{ zeroRateBenefitWarnings.length === 1 ? '' : 's' }}
+              — chosen benefit has a zero risk rate
+            </span>
+          </v-expansion-panel-title>
+          <v-expansion-panel-text>
+            <ul class="mb-0 ps-4">
+              <li v-for="(msg, i) in zeroRateWarningsCapped" :key="'zr-' + i">
+                {{ msg }}
+              </li>
+            </ul>
+            <div v-if="zeroRateWarningsOverflow > 0" class="text-caption mt-1">
+              +{{ zeroRateWarningsOverflow }} more — fix the ones above and
+              recalculate.
+            </div>
+          </v-expansion-panel-text>
+        </v-expansion-panel>
+      </v-expansion-panels>
       <v-list lines="two">
         <v-list-item v-for="item in relatedResultTables" :key="item.table_type">
           <template #prepend>
@@ -245,8 +271,47 @@ import GroupPricingDataGrid from '@/renderer/components/tables/GroupPricingDataG
 // import all necessary components and services
 
 const props = defineProps({
-  quote: { type: Object, required: true }
+  quote: { type: Object, required: true },
+  resultSummaries: { type: Array, required: false, default: () => [] }
 })
+
+const zeroRateBenefitWarnings = computed<string[]>(() => {
+  const cats = (props.quote as any)?.scheme_categories ?? []
+  const findCat = (name: string) =>
+    cats.find((c: any) => c.scheme_category === name)
+
+  const checks: Array<{ flag: string; rate: string; label: string }> = [
+    { flag: 'gla_benefit', rate: 'total_gla_risk_rate', label: 'GLA' },
+    { flag: 'ptd_benefit', rate: 'total_ptd_risk_rate', label: 'PTD' },
+    { flag: 'ci_benefit', rate: 'total_ci_risk_rate', label: 'CI' },
+    { flag: 'sgla_benefit', rate: 'total_sgla_risk_rate', label: 'SGLA' },
+    { flag: 'phi_benefit', rate: 'total_phi_risk_rate', label: 'PHI' }
+  ]
+
+  const out: string[] = []
+  for (const rs of (props.resultSummaries ?? []) as any[]) {
+    const cat = findCat(rs.category)
+    if (!cat) continue
+    for (const { flag, rate, label } of checks) {
+      const enabled =
+        cat[flag] === true || cat[flag] === 1 || cat[flag] === '1'
+      const value = Number(rs[rate] ?? 0)
+      if (enabled && (!isFinite(value) || value === 0)) {
+        out.push(
+          `${rs.category}: ${label} benefit is enabled but the risk rate is zero. Check that base rates exist for the scheme's risk rate code.`
+        )
+      }
+    }
+  }
+  return out
+})
+
+const zeroRateWarningsCapped = computed(() =>
+  zeroRateBenefitWarnings.value.slice(0, 5)
+)
+const zeroRateWarningsOverflow = computed(() =>
+  Math.max(0, zeroRateBenefitWarnings.value.length - 5)
+)
 
 const emit = defineEmits(['quote-updated'])
 const rowCount: any = ref(0)
