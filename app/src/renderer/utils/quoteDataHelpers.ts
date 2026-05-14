@@ -133,8 +133,10 @@ export function funAnnualPremiumPerMember(s: any): number {
   const mc = asFiniteNumber(s?.member_count)
   if (mc <= 0) return 0
   return (
-    computeOfficePremium(asFiniteNumber(s?.exp_total_fun_annual_risk_premium), s) /
-    mc
+    computeOfficePremium(
+      asFiniteNumber(s?.exp_total_fun_annual_risk_premium),
+      s
+    ) / mc
   )
 }
 

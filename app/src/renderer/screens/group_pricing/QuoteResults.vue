@@ -4,7 +4,10 @@
       <span class="headline">Calculation Results & Analysis</span>
     </template>
     <template #default>
-      <v-expansion-panels v-if="zeroRateBenefitWarnings.length > 0" class="mb-3">
+      <v-expansion-panels
+        v-if="zeroRateBenefitWarnings.length > 0"
+        class="mb-3"
+      >
         <v-expansion-panel>
           <v-expansion-panel-title
             class="text-warning font-weight-medium"
@@ -12,8 +15,9 @@
           >
             <v-icon class="mr-2" color="warning">mdi-alert</v-icon>
             <span>
-              {{ zeroRateBenefitWarnings.length }} benefit
-              warning{{ zeroRateBenefitWarnings.length === 1 ? '' : 's' }}
+              {{ zeroRateBenefitWarnings.length }} benefit warning{{
+                zeroRateBenefitWarnings.length === 1 ? '' : 's'
+              }}
               — chosen benefit has a zero risk rate
             </span>
           </v-expansion-panel-title>
@@ -293,8 +297,7 @@ const zeroRateBenefitWarnings = computed<string[]>(() => {
     const cat = findCat(rs.category)
     if (!cat) continue
     for (const { flag, rate, label } of checks) {
-      const enabled =
-        cat[flag] === true || cat[flag] === 1 || cat[flag] === '1'
+      const enabled = cat[flag] === true || cat[flag] === 1 || cat[flag] === '1'
       const value = Number(rs[rate] ?? 0)
       if (enabled && (!isFinite(value) || value === 0)) {
         out.push(
