@@ -43,6 +43,7 @@ const sglaBenefitTitle = ref('SGLA')
 const ptdBenefitTitle = ref('PTD')
 const ciBenefitTitle = ref('CI')
 const phiBenefitTitle = ref('PHI')
+const scbBenefitTitle = ref('SCB')
 const ttdBenefitTitle = ref('TTD')
 const familyFuneralBenefitTitle = ref('Group Funeral')
 const benefitMaps = ref([])
@@ -210,6 +211,8 @@ const isBenefitEnabled = (benefitCode: string, categoryName: string) => {
       return sc.sgla_benefit === true
     case 'PHI':
       return sc.phi_benefit === true
+    case 'SCB':
+      return sc.scb_benefit === true
     case 'TTD':
       return sc.ttd_benefit === true
     case 'GFF':
@@ -307,6 +310,23 @@ const buildGridData = () => {
       rs.total_phi_reinsurance_premium,
       rs.phi_reinsurance_premium_proportion
     )
+    // SCB — shares PHI's income base (total_phi_capped_income). Reinsurance
+    // SCB premium is summed at the backend into total_reins_scb_annual_risk_premium;
+    // proportion is reins / direct office premium since no dedicated
+    // ScbReinsurancePremiumProportion is persisted.
+    {
+      const scbOffice = finalFieldValue(rs, 'final_scb_office_premium') || 0
+      const scbReins = rs.total_reins_scb_annual_risk_premium || 0
+      pushRow(
+        'SCB',
+        scbBenefitTitle.value,
+        rs.total_phi_capped_income,
+        scbOffice,
+        0,
+        scbReins,
+        scbOffice > 0 ? scbReins / scbOffice : 0
+      )
+    }
     pushRow(
       'GFF',
       familyFuneralBenefitTitle.value,
@@ -362,6 +382,9 @@ const buildGridData = () => {
       acc.final_phi_annual_office_premium =
         (acc.final_phi_annual_office_premium || 0) +
         (finalFieldValue(rs, 'final_phi_annual_office_premium') || 0)
+      acc.final_scb_office_premium =
+        (acc.final_scb_office_premium || 0) +
+        (finalFieldValue(rs, 'final_scb_office_premium') || 0)
       acc.final_fun_annual_office_premium =
         (acc.final_fun_annual_office_premium || 0) +
         (finalFieldValue(rs, 'final_fun_annual_office_premium') || 0)
@@ -406,6 +429,9 @@ const buildGridData = () => {
       acc.total_phi_reinsurance_premium =
         (acc.total_phi_reinsurance_premium || 0) +
         (rs.total_phi_reinsurance_premium || 0)
+      acc.total_reins_scb_annual_risk_premium =
+        (acc.total_reins_scb_annual_risk_premium || 0) +
+        (rs.total_reins_scb_annual_risk_premium || 0)
       acc.total_fun_reinsurance_premium =
         (acc.total_fun_reinsurance_premium || 0) +
         (rs.total_fun_reinsurance_premium || 0)
@@ -506,6 +532,17 @@ const buildGridData = () => {
       )
     )
     pushTotalRow(
+      scbBenefitTitle.value,
+      totals.total_phi_capped_income,
+      totals.final_scb_office_premium,
+      0,
+      totals.total_reins_scb_annual_risk_premium,
+      ratio(
+        totals.total_reins_scb_annual_risk_premium,
+        totals.final_scb_office_premium
+      )
+    )
+    pushTotalRow(
       familyFuneralBenefitTitle.value,
       '',
       totals.final_fun_annual_office_premium,
@@ -542,6 +579,7 @@ onMounted(() => {
       ptdBenefitTitle.value = pick('PTD', 'PTD')
       ciBenefitTitle.value = pick('CI', 'CI')
       phiBenefitTitle.value = pick('PHI', 'PHI')
+      scbBenefitTitle.value = pick('SCB', 'SCB')
       ttdBenefitTitle.value = pick('TTD', 'TTD')
       familyFuneralBenefitTitle.value = pick('GFF', 'Group Funeral')
     })
@@ -558,6 +596,7 @@ watch(
     ptdBenefitTitle,
     ciBenefitTitle,
     phiBenefitTitle,
+    scbBenefitTitle,
     ttdBenefitTitle,
     familyFuneralBenefitTitle
   ],

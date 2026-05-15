@@ -2239,6 +2239,447 @@
                   ><v-row align="center"
                     ><v-col cols="6">
                       <p
+                        >{{ scbBenefitTitle }}
+                        <v-chip
+                          :color="
+                            selectedCategory[0].scb_benefit ? 'green' : 'grey'
+                          "
+                          :text="
+                            selectedCategory[0].scb_benefit
+                              ? 'Active'
+                              : 'Inactive'
+                          "
+                          size="small"
+                          variant="tonal"
+                        ></v-chip
+                      ></p>
+                    </v-col>
+                    <v-col
+                      cols="6"
+                      class="d-flex justify-end align-center gap-1"
+                    >
+                      <v-btn
+                        icon
+                        size="x-small"
+                        color="success"
+                        variant="tonal"
+                        title="Export to Excel"
+                        :disabled="!selectedCategory[0].scb_benefit"
+                        @click.stop="
+                          exportBenefitToExcel('SCB', scbBenefitTitle)
+                        "
+                        ><v-icon size="small"
+                          >mdi-microsoft-excel</v-icon
+                        ></v-btn
+                      >
+                      <v-btn
+                        icon
+                        size="x-small"
+                        color="error"
+                        variant="tonal"
+                        title="Export to PDF"
+                        :disabled="!selectedCategory[0].scb_benefit"
+                        @click.stop="exportBenefitToPDF('SCB', scbBenefitTitle)"
+                        ><v-icon size="small">mdi-file-pdf-box</v-icon></v-btn
+                      >
+                    </v-col>
+                  </v-row></v-expansion-panel-title
+                >
+                <v-expansion-panel-text>
+                  <v-container>
+                    <v-row>
+                      <v-col cols="3"></v-col>
+                      <v-col cols="3"
+                        ><p class="text-center content-bg"
+                          >Technical Rate</p
+                        ></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg"
+                          >Experience Rated</p
+                        ></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">Discounted</p></v-col
+                      >
+                    </v-row>
+                    <v-row class="mb-n9">
+                      <v-col cols="3"
+                        ><p><b>Regular Income</b></p></v-col
+                      >
+                    </v-row>
+                    <v-row class="mb-n8">
+                      <v-col cols="3"><p>Minimum Income</p></v-col>
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(resultSummary.min_phi_income)
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(resultSummary.min_phi_income)
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(resultSummary.min_phi_income)
+                          )
+                        }}</p></v-col
+                      >
+                    </v-row>
+                    <v-row class="mb-n8">
+                      <v-col cols="3"><p>Maximum Income</p></v-col>
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(resultSummary.max_phi_income)
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(resultSummary.max_phi_income)
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(resultSummary.max_phi_income)
+                          )
+                        }}</p></v-col
+                      >
+                    </v-row>
+                    <v-row class="mb-n8">
+                      <v-col cols="3"><p>Maximum Capped Income</p></v-col>
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.max_phi_capped_income
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.max_phi_capped_income
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.max_phi_capped_income
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                    </v-row>
+                    <v-row class="mb-n8">
+                      <v-col cols="3"><p>Total Capped Income</p></v-col>
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.total_phi_capped_income
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.total_phi_capped_income
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.total_phi_capped_income
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                    </v-row>
+                    <v-row class="mb-n8">
+                      <v-col cols="3"><p>Average Covered Income</p></v-col>
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.average_phi_capped_income
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.average_phi_capped_income
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.average_phi_capped_income
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                    </v-row>
+
+                    <v-row class="mb-n9 mt-8">
+                      <v-col cols="3"
+                        ><p><b>RISK PREMIUM</b></p></v-col
+                      >
+                    </v-row>
+                    <v-row class="mb-n8">
+                      <v-col cols="3"><p>Expected Number of Claims</p></v-col>
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.total_scb_risk_rate
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.exp_adj_total_scb_risk_rate
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.exp_adj_total_scb_risk_rate
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                    </v-row>
+                    <v-row class="mb-n8">
+                      <v-col cols="3"><p>Annual Risk Premium</p></v-col>
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.total_scb_annual_risk_premium
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.exp_adj_total_scb_annual_risk_premium
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.exp_adj_total_scb_annual_risk_premium
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                    </v-row>
+                    <v-row class="mb-n8">
+                      <v-col cols="3"><p>Unit Rate per 1000 Income</p></v-col>
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.scb_risk_rate_per_1000_income
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.exp_scb_risk_rate_per_1000_income
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.exp_scb_risk_rate_per_1000_income
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                    </v-row>
+                    <v-row class="mb-n8">
+                      <v-col cols="3"
+                        ><p>Risk Premium as % of Annual Salary</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.proportion_scb_risk_premium_salary *
+                                100
+                            )
+                          ) + '%'
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.exp_adj_proportion_scb_risk_premium_salary *
+                                100
+                            )
+                          ) + '%'
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.exp_adj_proportion_scb_risk_premium_salary *
+                                100
+                            )
+                          ) + '%'
+                        }}</p></v-col
+                      >
+                    </v-row>
+                    <v-row class="mb-n9 mt-8">
+                      <v-col cols="3"
+                        ><p><b>OFFICE PREMIUM</b></p></v-col
+                      >
+                    </v-row>
+                    <v-row class="mb-n8">
+                      <v-col cols="3"><p>Annual Office Premium</p></v-col>
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.total_scb_annual_risk_premium
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.exp_adj_total_scb_annual_risk_premium
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              finalFieldValue(
+                                resultSummary,
+                                'final_scb_office_premium'
+                              )
+                            )
+                          )
+                        }}</p></v-col
+                      >
+                    </v-row>
+                    <v-row class="mb-n8">
+                      <v-col cols="3"
+                        ><p
+                          >Unit Office Premium Rate per 1000 Covered Income</p
+                        ></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">0.00</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">0.00</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">0.00</p></v-col
+                      >
+                    </v-row>
+                    <v-row class="mb-n8">
+                      <v-col cols="3"
+                        ><p>Office Premium as % of Annual Salary</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.proportion_scb_risk_premium_salary *
+                                100
+                            )
+                          ) + '%'
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              resultSummary.exp_adj_proportion_scb_risk_premium_salary *
+                                100
+                            )
+                          ) + '%'
+                        }}</p></v-col
+                      >
+                      <v-col cols="3"
+                        ><p class="text-center content-bg">{{
+                          dashIfEmpty(
+                            roundUpToTwoDecimals(
+                              officeProportionOfSalary(
+                                finalFieldValue(
+                                  resultSummary,
+                                  'final_scb_office_premium'
+                                ),
+                                resultSummary.exp_adj_total_scb_annual_risk_premium,
+                                resultSummary.exp_adj_proportion_scb_risk_premium_salary
+                              ) * 100
+                            )
+                          ) + '%'
+                        }}</p></v-col
+                      >
+                    </v-row>
+                  </v-container>
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+              <v-expansion-panel elevation="1" tile>
+                <v-expansion-panel-title
+                  ><v-row align="center"
+                    ><v-col cols="6">
+                      <p
                         >{{ ttdBenefitTitle }}
                         <v-chip
                           :color="
@@ -3609,6 +4050,7 @@ const sglaBenefitTitle = ref('Spouse Group Life Assurance (GLA)')
 const ptdBenefitTitle = ref('Permanent Total Disability')
 const ciBenefitTitle = ref('Critical Illness')
 const phiBenefitTitle = ref('Personal Health Insurance')
+const scbBenefitTitle = ref('Salary Continuation Benefit')
 const ttdBenefitTitle = ref('Temporary Total Disability')
 const familyFuneralBenefitTitle = ref('Family Funeral')
 const benefitMaps: any = ref([])
@@ -4299,6 +4741,75 @@ const getBenefitRows = (rs: any, code: string): string[][] => {
         )
       )
       break
+    case 'SCB':
+      // SCB shares PHI's income base (phi_capped_income), so the income
+      // rows below reference phi_* fields. The rate / premium rows use the
+      // dedicated SCB summary fields. No commission is allocated to SCB
+      // (it is not registered in benefitAccessors), so the office premium
+      // is the rate × income product with no commission slice.
+      sec('REGULAR INCOME')
+      row('Minimum Income', th('min_phi_income'), ex('min_phi_income'))
+      row('Maximum Income', th('max_phi_income'), ex('max_phi_income'))
+      row(
+        'Maximum Capped Income',
+        th('max_phi_capped_income'),
+        ex('max_phi_capped_income')
+      )
+      row(
+        'Total Capped Income',
+        th('total_phi_capped_income'),
+        ex('total_phi_capped_income')
+      )
+      row(
+        'Average Covered Income',
+        th('average_phi_capped_income'),
+        ex('average_phi_capped_income')
+      )
+      sec('RISK PREMIUM')
+      row(
+        'Expected Number of Claims',
+        th('total_scb_risk_rate'),
+        ex('exp_adj_total_scb_risk_rate')
+      )
+      row(
+        'Annual Risk Premium',
+        th('total_scb_annual_risk_premium'),
+        ex('exp_adj_total_scb_annual_risk_premium')
+      )
+      row(
+        'Unit Rate per 1000 Income',
+        th('scb_risk_rate_per_1000_income'),
+        ex('exp_scb_risk_rate_per_1000_income')
+      )
+      row(
+        'Risk Premium as % of Annual Salary',
+        thP('proportion_scb_risk_premium_salary'),
+        exP('exp_adj_proportion_scb_risk_premium_salary')
+      )
+      sec('OFFICE PREMIUM')
+      row(
+        'Annual Office Premium',
+        th('total_scb_annual_risk_premium'),
+        ex('exp_adj_total_scb_annual_risk_premium'),
+        f('final_scb_office_premium')
+      )
+      row(
+        'Unit Office Premium Rate per 1000 Covered Income',
+        '0.00',
+        '0.00',
+        '0.00'
+      )
+      row(
+        'Office Premium as % of Annual Salary',
+        thP('proportion_scb_risk_premium_salary'),
+        exP('exp_adj_proportion_scb_risk_premium_salary'),
+        fProp(
+          'final_scb_office_premium',
+          'exp_adj_total_scb_annual_risk_premium',
+          'exp_adj_proportion_scb_risk_premium_salary'
+        )
+      )
+      break
     case 'TTD':
       sec('REGULAR INCOME')
       row('Minimum Income', th('min_ttd_income'), ex('min_ttd_income'))
@@ -4443,6 +4954,7 @@ const BENEFIT_LIST = [
   { code: 'PTD', titleRef: ptdBenefitTitle, flagKey: 'ptd_benefit' },
   { code: 'CI', titleRef: ciBenefitTitle, flagKey: 'ci_benefit' },
   { code: 'PHI', titleRef: phiBenefitTitle, flagKey: 'phi_benefit' },
+  { code: 'SCB', titleRef: scbBenefitTitle, flagKey: 'scb_benefit' },
   { code: 'TTD', titleRef: ttdBenefitTitle, flagKey: 'ttd_benefit' },
   {
     code: 'FUN',
@@ -4635,6 +5147,12 @@ onMounted(async () => {
     )
     if (phiBenefit.benefit_alias !== '') {
       phiBenefitTitle.value = phiBenefit.benefit_alias
+    }
+    const scbBenefit = benefitMaps.value.find(
+      (item) => item.benefit_code === 'SCB'
+    )
+    if (scbBenefit && scbBenefit.benefit_alias !== '') {
+      scbBenefitTitle.value = scbBenefit.benefit_alias
     }
     const ttdBenefit = benefitMaps.value.find(
       (item) => item.benefit_code === 'TTD'

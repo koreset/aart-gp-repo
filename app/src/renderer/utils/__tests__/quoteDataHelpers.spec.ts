@@ -471,9 +471,9 @@ describe('buildGroupFuneralRows', () => {
 })
 
 describe('buildPremiumBreakdownRows', () => {
-  it('returns 6 benefit rows', () => {
+  it('returns 7 benefit rows (GLA, SGLA, PTD, CI, PHI, SCB, TTD)', () => {
     const rows = buildPremiumBreakdownRows(makeSummary(), mockBenefitTitles)
-    expect(rows).toHaveLength(6)
+    expect(rows).toHaveLength(7)
   })
 
   it('uses benefit titles from the maps', () => {
@@ -515,13 +515,13 @@ describe('buildCategoryCommonBenefitRows', () => {
 })
 
 describe('buildBenefitDefinitionRows', () => {
-  it('returns 6 rows (one per benefit type)', () => {
+  it('returns 7 rows (GLA, SGLA, PTD, CI, PHI, SCB, TTD)', () => {
     const rows = buildBenefitDefinitionRows(
       mockSchemeCategory,
       mockQuote,
       mockBenefitTitles
     )
-    expect(rows).toHaveLength(6)
+    expect(rows).toHaveLength(7)
   })
 
   it('uses salary multiples when global flag is set', () => {

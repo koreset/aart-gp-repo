@@ -416,6 +416,7 @@ export function hasAnyNonFuneralBenefits(resultSummaries: any[]): boolean {
       safeGetValue(item, 'total_ci_capped_sum_assured', 0) > 0 ||
       safeGetValue(item, 'total_sgla_capped_sum_assured', 0) > 0 ||
       safeGetValue(item, 'total_phi_capped_income', 0) > 0 ||
+      safeGetValue(item, 'total_scb_annual_risk_premium', 0) > 0 ||
       safeGetValue(item, 'total_ttd_capped_income', 0) > 0
   )
 }
@@ -659,6 +660,16 @@ export function buildPremiumBreakdownRows(
       percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_phi_annual_risk_premium_salary, item) * 100)}%`
     },
     {
+      benefit: benefitTitles.scbBenefitTitle || 'SCB',
+      totalSumAssured: roundUpToTwoDecimalsAccounting(
+        item.total_phi_capped_income
+      ),
+      annualPremium: roundUpToTwoDecimalsAccounting(
+        computeOfficePremium(item.exp_adj_total_scb_annual_risk_premium, item)
+      ),
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_adj_proportion_scb_risk_premium_salary, item) * 100)}%`
+    },
+    {
       benefit: benefitTitles.ttdBenefitTitle,
       totalSumAssured: roundUpToTwoDecimalsAccounting(
         item.total_ttd_capped_income
@@ -816,6 +827,17 @@ export function buildBenefitDefinitionRows(
       salaryMultiple: `${item.phi_income_replacement_percentage / 100}`,
       benefitStructure: 'n.a',
       waitingPeriod: `${item.phi_waiting_period}`,
+      deferredPeriod: `${item.phi_deferred_period}`,
+      coverDefinition: `${item.phi_disability_definition}`,
+      riskType: `${item.phi_risk_type}`
+    },
+    {
+      // SCB shares PHI's salary multiple / waiting / disability definition /
+      // risk type. Its distinguishing parameter is the excess period.
+      benefit: benefitTitles.scbBenefitTitle || 'SCB',
+      salaryMultiple: `${item.phi_income_replacement_percentage / 100}`,
+      benefitStructure: 'n.a',
+      waitingPeriod: `${item.scb_excess_period ?? ''}`,
       deferredPeriod: `${item.phi_deferred_period}`,
       coverDefinition: `${item.phi_disability_definition}`,
       riskType: `${item.phi_risk_type}`

@@ -111,6 +111,24 @@
     "parent_slug": "navigation:view_quotes",
     "display_order": 46
   },
+  {
+    "slug": "quote:view_performance_dashboard",
+    "name": "View Quote Performance Dashboard",
+    "description": "Can view the management dashboard with per-user KPIs, SLA compliance, the funnel/trend charts and the cross-team quote extract.",
+    "category": "Quote",
+    "tier": "special",
+    "parent_slug": "navigation:view_quotes",
+    "display_order": 47
+  },
+  {
+    "slug": "quote:manage_sla_targets",
+    "name": "Manage Quote SLA Targets",
+    "description": "Can create, edit and deactivate the per-transition SLA targets used to score quote turnaround on the performance dashboard.",
+    "category": "Quote",
+    "tier": "special",
+    "parent_slug": "navigation:view_quotes",
+    "display_order": 48
+  },
 
   {
     "slug": "navigation:view_schemes",

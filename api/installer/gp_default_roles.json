@@ -42,7 +42,7 @@
     "permissions": [
       "navigation:view_gp_dashboard", "navigation:view_quotes", "navigation:view_schemes",
       "quote:access_new_business", "quote:access_renewal", "quote:approve", "quote:accept",
-      "quote:experience_rating", "quote:view_results",
+      "quote:experience_rating", "quote:view_results", "quote:view_performance_dashboard",
       "scheme:maintain"
     ]
   },
@@ -52,7 +52,7 @@
     "permissions": [
       "navigation:view_gp_dashboard", "navigation:view_quotes", "navigation:view_schemes",
       "quote:access_new_business", "quote:access_renewal", "quote:approve", "quote:accept",
-      "quote:view_results",
+      "quote:view_results", "quote:view_performance_dashboard",
       "scheme:maintain"
     ]
   },
@@ -67,6 +67,7 @@
       "navigation:view_metadata", "navigation:view_reinsurance",
       "metadata:access",
       "quote:experience_rating", "quote:approve", "quote:accept", "quote:view_results",
+      "quote:view_performance_dashboard",
       "bordereaux:view", "bordereaux:submit_inbound", "bordereaux:generate_outbound",
       "reinsurance:view"
     ]

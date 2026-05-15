@@ -204,6 +204,7 @@ const sglaBenefitTitle = ref('')
 const ptdBenefitTitle = ref('')
 const ciBenefitTitle = ref('')
 const phiBenefitTitle = ref('')
+const scbBenefitTitle = ref('SCB')
 const ttdBenefitTitle = ref('')
 const familyFuneralBenefitTitle = ref('')
 const additionalAccidentalGlaBenefitTitle = ref('Additional Accidental GLA')
@@ -791,6 +792,8 @@ const convertExcelDataToGridData = () => {
         return schemeCategory.sgla_benefit === true
       case 'PHI':
         return schemeCategory.phi_benefit === true
+      case 'SCB':
+        return schemeCategory.scb_benefit === true
       case 'TTD':
         return schemeCategory.ttd_benefit === true
       default:
@@ -1041,6 +1044,30 @@ const convertExcelDataToGridData = () => {
       })
     }
 
+    // SCB — shares PHI's income base (total_phi_capped_income). No commission
+    // is allocated to SCB by the accessor loop, so finalAnnualCommission is 0.
+    if (isBenefitEnabled('SCB', category)) {
+      const scbSalary = resultSummary.total_annual_salary || 0
+      const scbSA = resultSummary.total_phi_capped_income || 0
+      const scbFinalPremium = resultSummary.final_scb_office_premium || 0
+      gridData.push({
+        category,
+        benefit: scbBenefitTitle.value,
+        annualSalary: scbSalary,
+        totalSumAssured: resultSummary.total_phi_capped_income,
+        annualPremium: computeOfficePremium(
+          resultSummary.exp_adj_total_scb_annual_risk_premium,
+          resultSummary
+        ),
+        finalAnnualPremium: resultSummary.final_scb_office_premium,
+        finalAnnualCommission: 0,
+        percentSalary: `${roundUpToTwoDecimalsAccounting(
+          scbSalary > 0 ? (scbFinalPremium / scbSalary) * 100 : 0
+        )}%`,
+        ratePer1000SA: scbSA > 0 ? (scbFinalPremium / scbSA) * 1000 : ''
+      })
+    }
+
     {
       const ttdSalary = isBenefitEnabled('TTD', category)
         ? resultSummary.total_annual_salary
@@ -1068,9 +1095,15 @@ const convertExcelDataToGridData = () => {
     // Add subtotal row. The backend's exp_total_annual_premium_excl_funeral
     // already includes the GLA TaxSaver rider plus GLA Educator and PTD Educator
     // on top of the six core benefits.
-    const anyBenefitEnabled = ['GLA', 'PTD', 'CI', 'SGLA', 'PHI', 'TTD'].some(
-      (benefitCode) => isBenefitEnabled(benefitCode, category)
-    )
+    const anyBenefitEnabled = [
+      'GLA',
+      'PTD',
+      'CI',
+      'SGLA',
+      'PHI',
+      'SCB',
+      'TTD'
+    ].some((benefitCode) => isBenefitEnabled(benefitCode, category))
     const subtotalFinalPremium =
       resultSummary.final_total_annual_premium_excl_funeral || 0
     gridData.push({
@@ -1587,6 +1620,13 @@ onMounted(() => {
     } else {
       phiBenefitTitle.value = phiBenefit.benefit_name
     }
+    const scbBenefit: any = benefitMaps.value.find(
+      (item: any) => item.benefit_code === 'SCB'
+    )
+    if (scbBenefit) {
+      scbBenefitTitle.value =
+        scbBenefit.benefit_alias?.trim() || scbBenefit.benefit_name || 'SCB'
+    }
     const ttdBenefit: any = benefitMaps.value.find(
       (item: any) => item.benefit_code === 'TTD'
     )
@@ -1656,6 +1696,7 @@ watch(
     ptdBenefitTitle,
     ciBenefitTitle,
     phiBenefitTitle,
+    scbBenefitTitle,
     ttdBenefitTitle
   ],
   () => {
@@ -1714,6 +1755,8 @@ function convertResultSummariesToBreakdown(): any[] {
         return schemeCategory.sgla_benefit === true
       case 'PHI':
         return schemeCategory.phi_benefit === true
+      case 'SCB':
+        return schemeCategory.scb_benefit === true
       case 'TTD':
         return schemeCategory.ttd_benefit === true
       default:
@@ -2017,6 +2060,23 @@ function convertResultSummariesToBreakdown(): any[] {
         num(rs.final_phi_annual_binder_amount),
         num(rs.final_phi_annual_outsourced_amount),
         num(rs.final_phi_annual_commission_amount)
+      )
+    }
+
+    // SCB — uses PhiCappedIncome as its income base. No binder/outsource/
+    // commission is allocated specifically to SCB, so those columns are 0.
+    if (isBenefitEnabled('SCB', category)) {
+      pushBenefit(
+        scbBenefitTitle.value,
+        num(rs.exp_adj_total_scb_annual_risk_premium),
+        computeOfficePremium(num(rs.exp_adj_total_scb_annual_risk_premium), rs),
+        0,
+        0,
+        0,
+        num(rs.final_scb_office_premium),
+        0,
+        0,
+        0
       )
     }
 

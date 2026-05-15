@@ -925,6 +925,31 @@
                       :disabled="!phiBenefit || !selectedSchemeType"
                     ></v-checkbox>
                   </v-col>
+
+                  <v-col cols="12"><v-divider class="my-2" /></v-col>
+
+                  <v-col cols="4">
+                    <v-switch
+                      v-model="scbBenefit"
+                      color="primary"
+                      :label="scbLabel"
+                      :disabled="!selectedSchemeType"
+                      density="compact"
+                    ></v-switch>
+                  </v-col>
+                  <v-col v-if="scbBenefit" cols="4">
+                    <v-select
+                      v-model:model-value="scbExcessPeriod"
+                      v-bind="scbExcessPeriodAttrs"
+                      :error-messages="errors.scb_excess_period"
+                      placeholder="Select Excess Period"
+                      label="Excess Period (Months)"
+                      variant="outlined"
+                      density="compact"
+                      :items="scbExcessPeriods"
+                      :disabled="!selectedSchemeType"
+                    ></v-select>
+                  </v-col>
                 </v-row>
               </template>
             </base-card>
@@ -1636,6 +1661,7 @@ function onSchemeTypeChange(schemeType) {
     ciBenefit.value = data.ci_benefit || false
     sglaBenefit.value = data.sgla_benefit || false
     phiBenefit.value = data.phi_benefit || false
+    scbBenefit.value = data.scb_benefit || false
     ttdBenefit.value = data.ttd_benefit || false
     familyFuneralBenefit.value = data.family_funeral_benefit || false
 
@@ -1746,6 +1772,8 @@ function onSchemeTypeChange(schemeType) {
     phiDeferredPeriod.value = data.phi_deferred_period ?? null
     phiDisabilityDefinition.value = data.phi_disability_definition || ''
     phiConversionOnWithdrawal.value = data.phi_conversion_on_withdrawal || false
+    // Populate SCB fields
+    scbExcessPeriod.value = data.scb_excess_period ?? null
     // Populate TTD fields
     ttdRiskType.value = data.ttd_risk_type || ''
     ttdConversionOnWithdrawal.value = data.ttd_conversion_on_withdrawal || false
@@ -1846,6 +1874,7 @@ function onSchemeTypeChange(schemeType) {
     ciBenefit.value = false
     sglaBenefit.value = false
     phiBenefit.value = false
+    scbBenefit.value = false
     ttdBenefit.value = false
     familyFuneralBenefit.value = false
     // ...repeat for all benefit fields as needed
@@ -1881,6 +1910,8 @@ function onSchemeTypeChange(schemeType) {
     phiDeferredPeriod.value = null
     phiDisabilityDefinition.value = null
     phiConversionOnWithdrawal.value = false
+    // reset SCB fields
+    scbExcessPeriod.value = null
     // reset TTD fields
     ttdRiskType.value = null
     ttdConversionOnWithdrawal.value = false
@@ -1931,6 +1962,7 @@ function saveCurrentSchemeCategory() {
         ci_benefit: ciBenefit.value,
         sgla_benefit: sglaBenefit.value,
         phi_benefit: phiBenefit.value,
+        scb_benefit: scbBenefit.value,
         ttd_benefit: ttdBenefit.value,
         family_funeral_benefit: familyFuneralBenefit.value,
         ...(glaBenefit.value && {
@@ -2023,6 +2055,9 @@ function saveCurrentSchemeCategory() {
           phi_normal_retirement_age: Number(phiNormalRetirementAge.value),
           phi_deferred_period: Number(phiDeferredPeriod.value),
           phi_disability_definition: phiDisabilityDefinition.value
+        }),
+        ...(scbBenefit.value && {
+          scb_excess_period: Number(scbExcessPeriod.value)
         }),
         ...(ttdBenefit.value && {
           ttd_risk_type: ttdRiskType.value,
@@ -2118,6 +2153,7 @@ const ciLabel = ref('CI')
 const sglaLabel = ref('SGLA')
 const phiLabel = ref('PHI')
 const ttdLabel = ref('TTD')
+const scbLabel = ref('Salary Continuation Benefit')
 const glaLabel = ref('GLA')
 const familyFuneralLabel = ref('Family Funeral')
 const additionalAccidentalGlaLabel = ref('Additional Accidental GLA')
@@ -2135,6 +2171,7 @@ const phiDeferredPeriods: any = ref([])
 const ptdDeferredPeriods: any = ref([])
 const ttdDeferredPeriods: any = ref([])
 const normalRetirementAges: any = ref([])
+const scbExcessPeriods: any = ref([])
 const ttdRiskTypes: any = ref([])
 const phiRiskTypes: any = ref([])
 const ptdRiskTypes: any = ref([])
@@ -2237,6 +2274,15 @@ const validationSchema = yup.object({
   ci_benefit: yup.boolean().nullable(),
   sgla_benefit: yup.boolean().nullable(),
   phi_benefit: yup.boolean().nullable(),
+  scb_benefit: yup.boolean().nullable(),
+  scb_excess_period: yup.number().when('scb_benefit', {
+    is: true,
+    then: (schema) =>
+      schema
+        .required('Excess period is required')
+        .min(0, 'Excess period must be at least 0'),
+    otherwise: (schema) => schema.nullable()
+  }),
   ttd_benefit: yup.boolean().nullable(),
   phi_use_tiered_income_replacement_ratio: yup.boolean().nullable(),
   phi_tiered_income_replacement_type: yup.string().nullable(),
@@ -2613,6 +2659,8 @@ const { handleSubmit, defineField, errors, validate } = useForm({
     ci_benefit: groupStore.scheme_category_template.ci_benefit,
     sgla_benefit: groupStore.scheme_category_template.sgla_benefit,
     phi_benefit: groupStore.scheme_category_template.phi_benefit,
+    scb_benefit: groupStore.scheme_category_template.scb_benefit,
+    scb_excess_period: groupStore.scheme_category_template.scb_excess_period,
     ttd_benefit: groupStore.scheme_category_template.ttd_benefit,
     family_funeral_benefit:
       groupStore.scheme_category_template.family_funeral_benefit,
@@ -2764,6 +2812,8 @@ const [ptdBenefit] = defineField('ptd_benefit')
 const [ciBenefit] = defineField('ci_benefit')
 const [sglaBenefit] = defineField('sgla_benefit')
 const [phiBenefit] = defineField('phi_benefit')
+const [scbBenefit] = defineField('scb_benefit')
+const [scbExcessPeriod, scbExcessPeriodAttrs] = defineField('scb_excess_period')
 const [ttdBenefit] = defineField('ttd_benefit')
 const [familyFuneralBenefit] = defineField('family_funeral_benefit')
 const [ptdRiskType, ptdRiskTypeAttrs] = defineField('ptd_risk_type')
@@ -3044,6 +3094,7 @@ onBeforeMount(async () => {
   sglaLabel.value = getBenefitAlias('SGLA')
   phiLabel.value = getBenefitAlias('PHI')
   ttdLabel.value = getBenefitAlias('TTD')
+  scbLabel.value = getBenefitAlias('SCB')
   familyFuneralLabel.value = getBenefitAlias('GFF')
   additionalAccidentalGlaLabel.value = getBenefitAlias('AAGLA')
   additionalGlaCoverLabel.value = getBenefitAlias('AGLA')
@@ -3085,6 +3136,7 @@ function getEnabledBenefitsMessage(benefitData: Record<string, any>): string {
     { key: 'ci_benefit', label: ciLabel.value },
     { key: 'sgla_benefit', label: sglaLabel.value },
     { key: 'phi_benefit', label: phiLabel.value },
+    { key: 'scb_benefit', label: scbLabel.value },
     { key: 'ttd_benefit', label: ttdLabel.value },
     { key: 'family_funeral_benefit', label: familyFuneralLabel.value }
   ]
@@ -3250,6 +3302,11 @@ onMounted(() => {
   GroupPricingService.getNormalRetirementAges().then((response) => {
     normalRetirementAges.value = response.data
   })
+  if (rrc) {
+    GroupPricingService.getScbExcessPeriods(rrc).then((response) => {
+      scbExcessPeriods.value = response.data
+    })
+  }
   GroupPricingService.getRiskTypes().then((response) => {
     ttdRiskTypes.value = response.data.ttd_rates
     phiRiskTypes.value = response.data.phi_rates

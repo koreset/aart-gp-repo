@@ -98,6 +98,7 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.GET("rate-tables/gla/risk-rate-code/:risk_rate_code/benefit-types", controllers.GetDistinctGlaBenefitTypes)
 			groupPricing.GET("rate-tables/:table_type/:risk-rate-code/:risk_rate_code/deferred-periods", controllers.GetDistinctDeferredPeriods)
 			groupPricing.GET("rate-tables/phi-rates/normal-retirement-ages", controllers.GetDistinctNormalRetirementAges)
+			groupPricing.GET("rate-tables/scb-rates/:risk_rate_code/excess-periods", controllers.GetDistinctScbExcessPeriods)
 			groupPricing.GET("rate-tables/risk-types", controllers.GetDistinctRiskTypes)
 			groupPricing.GET("historical-credibility-data", controllers.GetHistoricalCredibilityData)
 			groupPricing.GET("custom-tiered-income-replacement/check", controllers.CheckCustomTieredTableExists)
@@ -209,6 +210,20 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.GET("dashboard/exposures/trend", controllers.GetExposureTrend)
 			groupPricing.GET("dashboard/brokers/:broker_id/year/:year/summary", controllers.GetBrokerPerformanceSummary)
 			groupPricing.GET("dashboard/brokers/:broker_id/year/:year/exposures", controllers.GetBrokerExposureBreakdown)
+
+			// Quote Performance Dashboard — management view of per-user
+			// quote generation, SLA compliance and pipeline value.
+			groupPricing.GET("dashboard/kpis", RequirePermission("quote:view_performance_dashboard"), controllers.GetQuotePerformanceKpis)
+			groupPricing.GET("dashboard/funnel", RequirePermission("quote:view_performance_dashboard"), controllers.GetQuotePerformanceFunnel)
+			groupPricing.GET("dashboard/trend", RequirePermission("quote:view_performance_dashboard"), controllers.GetQuotePerformanceTrend)
+			groupPricing.GET("dashboard/sla-breaches", RequirePermission("quote:view_performance_dashboard"), controllers.GetQuotePerformanceSlaBreaches)
+			groupPricing.POST("dashboard/extract", RequirePermission("quote:view_performance_dashboard"), controllers.PostQuoteExtract)
+			groupPricing.GET("dashboard/extract.xlsx", RequirePermission("quote:view_performance_dashboard"), controllers.GetQuoteExtractXlsx)
+			groupPricing.GET("quotes/:id/status-history", RequirePermission("quote:view_performance_dashboard"), controllers.GetGroupPricingQuoteStatusHistory)
+			groupPricing.GET("dashboard/sla-targets", RequirePermission("quote:view_performance_dashboard"), controllers.GetQuoteSlaTargets)
+			groupPricing.POST("dashboard/sla-targets", RequirePermission("quote:manage_sla_targets"), controllers.PostQuoteSlaTarget)
+			groupPricing.DELETE("dashboard/sla-targets/:id", RequirePermission("quote:manage_sla_targets"), controllers.DeleteQuoteSlaTarget)
+
 			groupPricing.GET("metadata/financial-year-info", controllers.GetFinancialYearInfo)
 			groupPricing.GET("quotes/:id/win-probability", controllers.GetQuoteWinProbability)
 			groupPricing.POST("win-probability/train", controllers.TrainWinProbabilityModelHandler)

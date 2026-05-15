@@ -473,6 +473,7 @@ const sglaBenefitTitle = ref('')
 const ptdBenefitTitle = ref('')
 const ciBenefitTitle = ref('')
 const phiBenefitTitle = ref('')
+const scbBenefitTitle = ref('SCB')
 const ttdBenefitTitle = ref('')
 const familyFuneralBenefitTitle = ref('')
 const additionalAccidentalGlaBenefitTitle = ref('Additional Accidental GLA')
@@ -780,6 +781,17 @@ const convertExcelDataToGridData = () => {
       percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_proportion_phi_annual_risk_premium_salary, resultSummary) * 100)}%`
     })
 
+    // SCB — shares PHI's income base. No commission slice; office premium is
+    // final_scb_office_premium (post-discount) and proportion is the
+    // experience-adjusted SCB proportion of salary.
+    gridData.push({
+      category,
+      benefit: scbBenefitTitle.value,
+      totalSumAssured: resultSummary.total_phi_capped_income,
+      annualPremium: finalFieldValue(resultSummary, 'final_scb_office_premium'),
+      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(resultSummary.exp_adj_proportion_scb_risk_premium_salary, resultSummary) * 100)}%`
+    })
+
     gridData.push({
       category,
       benefit: ttdBenefitTitle.value,
@@ -919,6 +931,13 @@ onMounted(async () => {
       phiBenefitTitle.value = phiBenefit.benefit_alias
     } else {
       phiBenefitTitle.value = phiBenefit.benefit_name
+    }
+    const scbBenefit = benefitMaps.value.find(
+      (item) => item.benefit_code === 'SCB'
+    )
+    if (scbBenefit) {
+      scbBenefitTitle.value =
+        scbBenefit.benefit_alias?.trim() || scbBenefit.benefit_name || 'SCB'
     }
     const ttdBenefit = benefitMaps.value.find(
       (item) => item.benefit_code === 'TTD'
@@ -1105,6 +1124,25 @@ const exportBenefitDataToExcel = () => {
           roundUpToTwoDecimalsAccounting(
             officeProportionFromRiskProportion(
               resultSummary.exp_proportion_phi_annual_risk_premium_salary,
+              resultSummary
+            ) * 100
+          ) + '%'
+        )
+      ],
+      [
+        scbBenefitTitle.value,
+        dashIfEmpty(
+          roundUpToTwoDecimalsAccounting(resultSummary.total_phi_capped_income)
+        ),
+        dashIfEmpty(
+          roundUpToTwoDecimalsAccounting(
+            finalFieldValue(resultSummary, 'final_scb_office_premium')
+          )
+        ),
+        dashIfEmpty(
+          roundUpToTwoDecimalsAccounting(
+            officeProportionFromRiskProportion(
+              resultSummary.exp_adj_proportion_scb_risk_premium_salary,
               resultSummary
             ) * 100
           ) + '%'
@@ -1811,6 +1849,13 @@ const buildSystemPdf = async (): Promise<any> => {
         phiBenefitTitle.value,
         item.total_phi_capped_income,
         'final_phi_annual_office_premium'
+      )
+    )
+    premiumBreakdownData.push(
+      breakdownRow(
+        scbBenefitTitle.value,
+        item.total_phi_capped_income,
+        'final_scb_office_premium'
       )
     )
     premiumBreakdownData.push(

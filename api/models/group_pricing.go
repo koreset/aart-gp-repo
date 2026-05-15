@@ -138,6 +138,15 @@ type GroupPricingQuote struct {
 	ModifiedBy                    string                    `json:"modified_by"`
 	ModificationDate              time.Time                 `json:"modification_date"`
 	Status                        Status                    `json:"status"`
+	// Per-status milestone timestamps powering the Quote Performance
+	// Dashboard. Set inside the relevant service functions when the
+	// status transitions; nil for stages a quote hasn't reached.
+	SubmittedAt    *time.Time `json:"submitted_at" gorm:"type:datetime;index"`
+	ApprovedAt     *time.Time `json:"approved_at" gorm:"type:datetime;index"`
+	RejectedAt     *time.Time `json:"rejected_at" gorm:"type:datetime;index"`
+	AcceptedAt     *time.Time `json:"accepted_at" gorm:"type:datetime;index"`
+	InForceAt      *time.Time `json:"in_force_at" gorm:"type:datetime;index"`
+	RejectedReason string     `json:"rejected_reason" gorm:"type:nvarchar(500)"`
 	MemberDataCount               int                       `json:"member_data_count"`
 	ClaimsExperienceCount         int                       `json:"claims_experience_count"`
 	ExperienceRateOverridesCount  int                       `json:"experience_rate_overrides_count" gorm:"-"`
@@ -411,6 +420,7 @@ type SchemeCategory struct {
 	CiBenefit                                bool                            `json:"ci_benefit"`
 	SglaBenefit                              bool                            `json:"sgla_benefit"`
 	PhiBenefit                               bool                            `json:"phi_benefit"`
+	ScbBenefit                               bool                            `json:"scb_benefit"`
 	TtdBenefit                               bool                            `json:"ttd_benefit"`
 	FamilyFuneralBenefit                     bool                            `json:"family_funeral_benefit"`
 	GlaSalaryMultiple                        float64                         `json:"gla_salary_multiple"`
@@ -461,6 +471,7 @@ type SchemeCategory struct {
 	PhiDeferredPeriod                        int                             `json:"phi_deferred_period"`
 	PhiDisabilityDefinition                  string                          `json:"phi_disability_definition"`
 	PhiNormalRetirementAge                   int                             `json:"phi_normal_retirement_age"`
+	ScbExcessPeriod                          int                             `json:"scb_excess_period"`
 	TtdRiskType                              string                          `json:"ttd_risk_type"`
 	TtdMaximumBenefit                        float64                         `json:"ttd_maximum_benefit"`
 	TtdIncomeReplacementPercentage           float64                         `json:"ttd_income_replacement_percentage"`
@@ -494,6 +505,7 @@ type SchemeCategory struct {
 	SglaAlias          string `json:"sgla_alias"`
 	PhiAlias           string `json:"phi_alias"`
 	TtdAlias           string `json:"ttd_alias"`
+	ScbAlias           string `json:"scb_alias"`
 	GlaAlias           string `json:"gla_alias"`
 	FamilyFuneralAlias string `json:"family_funeral_alias"`
 	Region             string `json:"region"`
@@ -1007,6 +1019,12 @@ type MemberRatingResult struct {
 	Occupation                      string    `json:"occupation" csv:"occupation"`
 	OccupationClass                 int       `json:"occupation_class" csv:"occupation_class"`
 	Industry                        string    `json:"industry" csv:"industry"`
+	// AgeNextBirthday stores the calculated member age per the configured
+	// GroupPricingSetting.AgeMethod (age_next_birthday or age_last_birthday).
+	// The field name is retained for backwards compatibility with CSV/DOCX
+	// consumers; the JSON/CSV column name does not change when the method is
+	// switched to age_last_birthday. SpouseAgeNextBirthday and the dependant
+	// average ages follow the same convention.
 	AgeNextBirthday                 int       `json:"age_next_birthday" csv:"age_next_birthday"`
 	AgeBand                         string    `json:"age_band" csv:"age_band"`
 	SpouseGender                    string    `json:"spouse_gender" csv:"spouse_gender"`
@@ -1265,6 +1283,26 @@ type MemberRatingResult struct {
 	PhiConversionOnWithdrawalLoading           float64 `json:"phi_conversion_on_withdrawal_loading" csv:"phi_conversion_on_withdrawal_loading" gorm:"column:phi_conv_on_wdr_loading"`
 	PhiConversionOnWithdrawalRiskPremium       float64 `json:"phi_conversion_on_withdrawal_risk_premium" csv:"phi_conversion_on_withdrawal_risk_premium" gorm:"column:phi_conv_on_wdr_risk_premium"`
 	ExpAdjPhiConversionOnWithdrawalRiskPremium float64 `json:"exp_adj_phi_conversion_on_withdrawal_risk_premium" csv:"exp_adj_phi_conversion_on_withdrawal_risk_premium" gorm:"column:exp_adj_phi_conv_on_wdr_risk_premium"`
+
+	// Salary Continuation Benefit (SCB) — sits under PHI. Tracked as a
+	// reportable slice (NOT added to any group total) with the same field
+	// structure as the conversion-on-withdrawal slices above. Rate comes
+	// from salary_continuation_rates via GetScbRate; loaded with the same
+	// PHI industry/region/contingency/voluntary loadings since SCB shares
+	// PHI's rating dimensions.
+	ScbRate              float64 `json:"scb_rate" csv:"scb_rate" gorm:"column:scb_rate"`
+	BaseScbRate          float64 `json:"base_scb_rate" csv:"base_scb_rate" gorm:"column:base_scb_rate"`
+	LoadedScbRate        float64 `json:"loaded_scb_rate" csv:"loaded_scb_rate" gorm:"column:loaded_scb_rate"`
+	ExpAdjLoadedScbRate  float64 `json:"exp_adj_loaded_scb_rate" csv:"exp_adj_loaded_scb_rate" gorm:"column:exp_adj_loaded_scb_rate"`
+	ScbRiskPremium       float64 `json:"scb_risk_premium" csv:"scb_risk_premium" gorm:"column:scb_risk_premium"`
+	ExpAdjScbRiskPremium float64 `json:"exp_adj_scb_risk_premium" csv:"exp_adj_scb_risk_premium" gorm:"column:exp_adj_scb_risk_premium"`
+
+	// Reinsurance — no ExpAdj variant (mirrors LoadedReinsPhiRate, which
+	// also has no ExpAdj counterpart).
+	ReinsScbRate        float64 `json:"reins_scb_rate" csv:"reins_scb_rate" gorm:"column:reins_scb_rate"`
+	BaseReinsScbRate    float64 `json:"base_reins_scb_rate" csv:"base_reins_scb_rate" gorm:"column:base_reins_scb_rate"`
+	LoadedReinsScbRate  float64 `json:"loaded_reins_scb_rate" csv:"loaded_reins_scb_rate" gorm:"column:loaded_reins_scb_rate"`
+	ReinsScbRiskPremium float64 `json:"reins_scb_risk_premium" csv:"reins_scb_risk_premium" gorm:"column:reins_scb_risk_premium"`
 
 	SglaConversionOnWithdrawalLoading           float64 `json:"sgla_conversion_on_withdrawal_loading" csv:"sgla_conversion_on_withdrawal_loading" gorm:"column:sgla_conv_on_wdr_loading"`
 	SglaConversionOnWithdrawalRiskPremium       float64 `json:"sgla_conversion_on_withdrawal_risk_premium" csv:"sgla_conversion_on_withdrawal_risk_premium" gorm:"column:sgla_conv_on_wdr_risk_premium"`
@@ -1713,6 +1751,23 @@ type MemberRatingResultSummary struct {
 	ExpAdjProportionPhiConversionOnWithdrawalRiskPremiumSalary float64 `json:"exp_adj_proportion_phi_conversion_on_withdrawal_risk_premium_salary" gorm:"column:exp_adj_prop_phi_conv_on_wdr_risk_prem_salary"`
 	PhiConversionOnWithdrawalRiskRatePer1000SA                 float64 `json:"phi_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:phi_conv_on_wdr_risk_rate_per_1000_sa"`
 	ExpPhiConversionOnWithdrawalRiskRatePer1000SA              float64 `json:"exp_phi_conversion_on_withdrawal_risk_rate_per_1000_sa" gorm:"column:exp_phi_conv_on_wdr_risk_rate_per_1000_sa"`
+
+	// Salary Continuation Benefit (SCB). Income base = PhiCappedIncome. The
+	// risk premium aggregates roll into TotalAnnualPremium /
+	// ExpTotalAnnualPremiumExclFuneral. Rate-per-1000 uses TotalPhiCappedIncome
+	// as denominator (SCB and PHI share the same income base per member).
+	TotalScbRiskRate                     float64 `json:"total_scb_risk_rate" gorm:"column:total_scb_risk_rate"`
+	ExpAdjTotalScbRiskRate               float64 `json:"exp_adj_total_scb_risk_rate" gorm:"column:exp_adj_total_scb_risk_rate"`
+	TotalScbAnnualRiskPremium            float64 `json:"total_scb_annual_risk_premium" gorm:"column:total_scb_annual_risk_premium"`
+	ExpAdjTotalScbAnnualRiskPremium      float64 `json:"exp_adj_total_scb_annual_risk_premium" gorm:"column:exp_adj_total_scb_annual_risk_premium"`
+	ProportionScbRiskPremiumSalary       float64 `json:"proportion_scb_risk_premium_salary" gorm:"column:proportion_scb_risk_premium_salary"`
+	ExpAdjProportionScbRiskPremiumSalary float64 `json:"exp_adj_proportion_scb_risk_premium_salary" gorm:"column:exp_adj_proportion_scb_risk_premium_salary"`
+	ScbRiskRatePer1000Income             float64 `json:"scb_risk_rate_per_1000_income" gorm:"column:scb_risk_rate_per_1000_income"`
+	ExpScbRiskRatePer1000Income          float64 `json:"exp_scb_risk_rate_per_1000_income" gorm:"column:exp_scb_risk_rate_per_1000_income"`
+	FinalScbOfficePremium                float64 `json:"final_scb_office_premium" gorm:"column:final_scb_office_premium"`
+
+	TotalReinsScbAnnualRiskPremium float64 `json:"total_reins_scb_annual_risk_premium" gorm:"column:total_reins_scb_annual_risk_premium"`
+	FinalReinsScbOfficePremium     float64 `json:"final_reins_scb_office_premium" gorm:"column:final_reins_scb_office_premium"`
 
 	// Slice: TtdConversionOnWithdrawal (denominator for rate-per-1000 = TotalTtdCappedIncome)
 	TotalTtdConversionOnWithdrawalAnnualRiskPremium            float64 `json:"total_ttd_conversion_on_withdrawal_annual_risk_premium" gorm:"column:total_ttd_conv_on_wdr_annual_risk_prem"`
@@ -2340,6 +2395,24 @@ type PhiRate struct {
 	CreatedBy               string    `json:"created_by" csv:"created_by"`
 }
 
+type SalaryContinuationRate struct {
+	ID                      int       `json:"-" gorm:"primary_key"`
+	RiskRateCode            string    `json:"risk_rate_code" csv:"risk_rate_code"`
+	AgeNextBirthday         int       `json:"age_next_birthday" csv:"age_next_birthday"`
+	Gender                  string    `json:"gender" csv:"gender"`
+	OccupationClass         int       `json:"occupation_class" csv:"occupation_class"`
+	IncomeLevel             int       `json:"income_level" csv:"income_level"`
+	DeferredPeriod          int       `json:"deferred_period" csv:"deferred_period"`
+	ExcessPeriod            int       `json:"excess_period" csv:"excess_period"`
+	BenefitEscalationOption string    `json:"benefit_escalation_option" csv:"benefit_escalation_option"`
+	DisabilityDefinition    string    `json:"disability_definition" csv:"disability_definition"`
+	RiskType                string    `json:"risk_type" csv:"risk_type"`
+	ScbRate                 float64   `json:"scb_rate" csv:"scb_rate"`
+	LookupKey               string    `json:"-" csv:"-" gorm:"->;column:lookup_key;-:migration"`
+	CreationDate            time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy               string    `json:"created_by" csv:"created_by"`
+}
+
 type ChildMortality struct {
 	ID              int       `json:"id" gorm:"primary_key"`
 	RiskRateCode    string    `json:"risk_rate_code" csv:"risk_rate_code"`
@@ -2553,6 +2626,15 @@ const (
 	PtdBaseRateMethodPtdPlusGlaAids = "ptd_plus_gla_aids"
 )
 
+const (
+	// AgeMethodAgeNextBirthday rounds the year-difference up once the
+	// commencement date has crossed the member's birthday — historical behaviour.
+	// AgeMethodAgeLastBirthday uses the floored months-between-dates formula:
+	//   ROUNDDOWN((12*(YEAR(CommenDate)-YEAR(DoB)) + (MONTH(CommenDate)-MONTH(DoB)))/12, 0)
+	AgeMethodAgeNextBirthday = "age_next_birthday"
+	AgeMethodAgeLastBirthday = "age_last_birthday"
+)
+
 // GroupPricingSetting is a singleton table (one row, ID=1) holding global
 // group-pricing configuration toggles. Today it carries the discount
 // calculation method; future system-wide flags can be added here.
@@ -2571,6 +2653,9 @@ type GroupPricingSetting struct {
 	PtdBaseRateMethod               string     `json:"ptd_base_rate_method" gorm:"size:32;not null;default:ptd_only"`
 	PtdBaseRateMethodUpdatedAt      *time.Time `json:"ptd_base_rate_method_updated_at"`
 	PtdBaseRateMethodUpdatedBy      string     `json:"ptd_base_rate_method_updated_by"`
+	AgeMethod                       string     `json:"age_method" gorm:"size:32;not null;default:age_next_birthday"`
+	AgeMethodUpdatedAt              *time.Time `json:"age_method_updated_at"`
+	AgeMethodUpdatedBy              string     `json:"age_method_updated_by"`
 	// Risk watchlist thresholds — drive the Performance & Risk dashboard's
 	// "Deteriorating Schemes" panel. RiskAlrCeilingPct flags any scheme whose
 	// ITD ALR exceeds this percentage; RiskAlrDeltaPp flags schemes where ITD
@@ -2849,6 +2934,7 @@ type GeneralLoading struct {
 type GlaAidsRate struct {
 	ID              int       `json:"id" gorm:"primary_key"`
 	RiskRateCode    string    `json:"risk_rate_code" csv:"risk_rate_code"`
+	Region          string    `json:"region" csv:"region"`
 	AgeNextBirthday int       `json:"age_next_birthday" csv:"age_next_birthday"`
 	Gender          string    `json:"gender" csv:"gender"`
 	OccupationClass int       `json:"occupation_class" csv:"occupation_class"`
@@ -3021,6 +3107,24 @@ type ReinsurancePhiRate struct {
 	CreatedBy               string    `json:"created_by" csv:"created_by"`
 }
 
+type ReinsuranceSalaryContinuationRate struct {
+	ID                      int       `json:"id" gorm:"primary_key"`
+	RiskRateCode            string    `json:"risk_rate_code" csv:"risk_rate_code"`
+	RiskType                string    `json:"risk_type" csv:"risk_type"`
+	AgeNextBirthday         int       `json:"age_next_birthday" csv:"age_next_birthday"`
+	Gender                  string    `json:"gender" csv:"gender"`
+	OccupationClass         string    `json:"occupation_class" csv:"occupation_class"`
+	IncomeLevel             string    `json:"income_level" csv:"income_level"`
+	DeferredPeriod          int       `json:"deferred_period" csv:"deferred_period"`
+	ExcessPeriod            int       `json:"excess_period" csv:"excess_period"`
+	BenefitEscalationOption string    `json:"benefit_escalation_option" csv:"benefit_escalation_option"`
+	DisabilityDefinition    string    `json:"disability_definition" csv:"disability_definition"`
+	ScbRate                 float64   `json:"scb_rate" csv:"scb_rate"`
+	LookupKey               string    `json:"-" csv:"-" gorm:"->;column:lookup_key;-:migration"`
+	CreationDate            time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy               string    `json:"created_by" csv:"created_by"`
+}
+
 type ReinsuranceFuneralAidsRate struct {
 	ID              int       `json:"id" gorm:"primary_key"`
 	RiskRateCode    string    `json:"risk_rate_code" csv:"risk_rate_code"`
@@ -3044,6 +3148,7 @@ type ReinsuranceFuneralRate struct {
 type ReinsuranceGlaAidsRate struct {
 	ID              int       `json:"id" gorm:"primary_key"`
 	RiskRateCode    string    `json:"risk_rate_code" csv:"risk_rate_code"`
+	Region          string    `json:"region" csv:"region"`
 	AgeNextBirthday int       `json:"age_next_birthday" csv:"age_next_birthday"`
 	Gender          string    `json:"gender" csv:"gender"`
 	OccupationClass int       `json:"occupation_class" csv:"occupation_class"`
@@ -3825,6 +3930,167 @@ type GroupSchemeStatusAudit struct {
 	StatusMessage string    `json:"status_message"`
 	ChangedBy     string    `json:"changed_by"`
 	ChangedAt     time.Time `json:"changed_at" gorm:"autoCreateTime"`
+}
+
+// GroupPricingQuoteStatusAudit records every status transition on a quote.
+// DurationFromPrevSecs is computed at write time (seconds since the prior
+// audit row for the same quote) so SLA-breach queries don't need a self-join.
+// Rows with Synthetic = true were backfilled from the existing
+// creation_date / modification_date and must be excluded from SLA-breach
+// statistics — see services.GetQuoteSlaBreaches.
+type GroupPricingQuoteStatusAudit struct {
+	ID                   int       `json:"id" gorm:"primary_key"`
+	QuoteID              int       `json:"quote_id" gorm:"index"`
+	OldStatus            Status    `json:"old_status" gorm:"size:50"`
+	NewStatus            Status    `json:"new_status" gorm:"size:50"`
+	StatusMessage        string    `json:"status_message" gorm:"size:500"`
+	ChangedBy            string    `json:"changed_by" gorm:"size:255;index"`
+	ChangedAt            time.Time `json:"changed_at" gorm:"autoCreateTime;index"`
+	DurationFromPrevSecs int64     `json:"duration_from_prev_secs"`
+	Synthetic            bool      `json:"synthetic"`
+}
+
+// QuoteSlaTarget is the admin-editable per-transition turnaround target
+// that the Quote Performance Dashboard compares against actual durations
+// recorded in GroupPricingQuoteStatusAudit. QuoteType = "" means the row
+// applies to any quote type; type-specific rows take precedence over the
+// default in the breach query.
+type QuoteSlaTarget struct {
+	ID              int       `json:"id" gorm:"primary_key"`
+	FromStatus      Status    `json:"from_status" gorm:"size:50;uniqueIndex:ux_qst_pair"`
+	ToStatus        Status    `json:"to_status" gorm:"size:50;uniqueIndex:ux_qst_pair"`
+	TargetHours     float64   `json:"target_hours"`
+	WarningPctOfSla float64   `json:"warning_pct_of_sla" gorm:"default:0.8"`
+	QuoteType       string    `json:"quote_type" gorm:"size:30;uniqueIndex:ux_qst_pair;default:''"`
+	Active          bool      `json:"active" gorm:"default:true"`
+	UpdatedBy       string    `json:"updated_by" gorm:"size:255"`
+	UpdatedAt       time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
+// QuotePerformanceQuery is the shared filter envelope for the KPI, funnel,
+// trend and SLA-breach dashboard endpoints. Empty slices and nil pointers
+// mean "no filter on this dimension".
+type QuotePerformanceQuery struct {
+	From                *time.Time `json:"from" form:"from"`
+	To                  *time.Time `json:"to" form:"to"`
+	Users               []string   `json:"users" form:"users"`
+	Region              []string   `json:"region" form:"region"`
+	QuoteType           []string   `json:"quote_type" form:"quote_type"`
+	DistributionChannel []string   `json:"distribution_channel" form:"distribution_channel"`
+}
+
+// QuotePerformanceKpis is the per-user summary the dashboard renders as a
+// row in the leaderboard table. All counts are scoped by the active
+// QuotePerformanceQuery filter.
+type QuotePerformanceKpis struct {
+	UserName             string  `json:"user_name"`
+	TotalQuotes          int64   `json:"total_quotes"`
+	DraftCount           int64   `json:"draft_count"`
+	SubmittedCount       int64   `json:"submitted_count"`
+	ApprovedCount        int64   `json:"approved_count"`
+	RejectedCount        int64   `json:"rejected_count"`
+	AcceptedCount        int64   `json:"accepted_count"`
+	InForceCount         int64   `json:"in_force_count"`
+	ApprovalRate         float64 `json:"approval_rate"`
+	AcceptanceRate       float64 `json:"acceptance_rate"`
+	ConversionRate       float64 `json:"conversion_rate"`
+	RejectionRate        float64 `json:"rejection_rate"`
+	AvgTimeToSubmitHrs   float64 `json:"avg_time_to_submit_hours"`
+	AvgTimeToApproveHrs  float64 `json:"avg_time_to_approve_hours"`
+	AvgTimeToAcceptHrs   float64 `json:"avg_time_to_accept_hours"`
+	AvgTotalCycleHrs     float64 `json:"avg_total_cycle_hours"`
+	SlaBreachCount       int64   `json:"sla_breach_count"`
+	SlaTransitionCount   int64   `json:"sla_transition_count"`
+	SlaCompliancePct     float64 `json:"sla_compliance_pct"`
+	TotalAnnualPremium   float64 `json:"total_annual_premium"`
+	PipelineAnnualPremium float64 `json:"pipeline_annual_premium"`
+	AvgQuoteValue        float64 `json:"avg_quote_value"`
+}
+
+// FunnelStage represents one row in the dashboard's volume funnel: how
+// many quotes ever reached this status and the average time they dwelt
+// in the prior stage before reaching it.
+type FunnelStage struct {
+	Stage          string  `json:"stage"`
+	Count          int64   `json:"count"`
+	AvgDwellHours  float64 `json:"avg_dwell_hours"`
+}
+
+// TrendBucket is a single time bucket (daily / weekly / monthly) for the
+// dashboard's submitted-vs-approved-vs-accepted trend chart.
+type TrendBucket struct {
+	Bucket    string `json:"bucket"`
+	Submitted int64  `json:"submitted"`
+	Approved  int64  `json:"approved"`
+	Accepted  int64  `json:"accepted"`
+	Rejected  int64  `json:"rejected"`
+}
+
+// SlaBreachSummary groups SLA-breach counts both per-transition (so we can
+// pinpoint which stage of the workflow is dragging) and per-user.
+type SlaBreachSummary struct {
+	BreachesByTransition []SlaBreachByTransition `json:"breaches_by_transition"`
+	BreachesByUser       []SlaBreachByUser       `json:"breaches_by_user"`
+}
+
+type SlaBreachByTransition struct {
+	FromStatus      Status  `json:"from_status"`
+	ToStatus        Status  `json:"to_status"`
+	BreachCount     int64   `json:"breach_count"`
+	TransitionCount int64   `json:"transition_count"`
+	TargetHours     float64 `json:"target_hours"`
+}
+
+type SlaBreachByUser struct {
+	UserName        string `json:"user_name"`
+	BreachCount     int64  `json:"breach_count"`
+	TransitionCount int64  `json:"transition_count"`
+}
+
+// QuoteExtractFilter is the rich filter posted by the management extract
+// grid. All array fields are OR'd within the dimension and AND'd across
+// dimensions. Page/PageSize/OrderBy drive pagination and sort.
+type QuoteExtractFilter struct {
+	CreatedBy           []string   `json:"created_by"`
+	Reviewer            []string   `json:"reviewer"`
+	Status              []Status   `json:"status"`
+	Region              []string   `json:"region"`
+	QuoteType           []string   `json:"quote_type"`
+	Industry            []string   `json:"industry"`
+	DistributionChannel []string   `json:"distribution_channel"`
+	MinAnnualPremium    *float64   `json:"min_annual_premium"`
+	MaxAnnualPremium    *float64   `json:"max_annual_premium"`
+	From                *time.Time `json:"from"`
+	To                  *time.Time `json:"to"`
+	Page                int        `json:"page"`
+	PageSize            int        `json:"page_size"`
+	OrderBy             string     `json:"order_by"`
+}
+
+// QuoteExtractRow is one row in the management extract grid and the xlsx
+// download. Regions is a comma-separated list because a single quote can
+// span multiple regions via its scheme_categories.
+type QuoteExtractRow struct {
+	ID                  int        `json:"id"`
+	QuoteName           string     `json:"quote_name"`
+	QuoteType           string     `json:"quote_type"`
+	SchemeName          string     `json:"scheme_name"`
+	Industry            string     `json:"industry"`
+	Regions             string     `json:"regions"`
+	DistributionChannel string     `json:"distribution_channel"`
+	Status              Status     `json:"status"`
+	CreatedBy           string     `json:"created_by"`
+	Reviewer            string     `json:"reviewer"`
+	ApprovedBy          string     `json:"approved_by"`
+	CreationDate        time.Time  `json:"creation_date"`
+	SubmittedAt         *time.Time `json:"submitted_at"`
+	ApprovedAt          *time.Time `json:"approved_at"`
+	AcceptedAt          *time.Time `json:"accepted_at"`
+	InForceAt           *time.Time `json:"in_force_at"`
+	RejectedAt          *time.Time `json:"rejected_at"`
+	AnnualPremium       float64    `json:"annual_premium"`
+	MemberCount         int        `json:"member_count"`
+	CycleHours          *float64   `json:"cycle_hours"`
 }
 
 // MemberActivity stores structured history for a scheme member.

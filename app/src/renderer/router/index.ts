@@ -61,6 +61,32 @@ const router = createRouter({
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {
+      path: '/group-pricing/quote-performance',
+      name: 'group-pricing-quote-performance',
+      component: () =>
+        import(
+          '../screens/group_pricing/dashboard/QuotePerformanceDashboard.vue'
+        ),
+      meta: { required_permission: 'quote:view_performance_dashboard' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/quote-performance/extract',
+      name: 'group-pricing-quote-extract',
+      component: () =>
+        import('../screens/group_pricing/dashboard/QuoteExtractView.vue'),
+      meta: { required_permission: 'quote:view_performance_dashboard' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/quote-performance/sla-targets',
+      name: 'group-pricing-sla-targets',
+      component: () =>
+        import('../screens/group_pricing/dashboard/SlaTargetSettings.vue'),
+      meta: { required_permission: 'quote:manage_sla_targets' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
       path: '/group-pricing/quote-generation',
       name: 'group-pricing-quote-generation',
       component: () => import('../screens/group_pricing/QuoteGeneration.vue'),

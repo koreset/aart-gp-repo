@@ -36,6 +36,22 @@
         <v-list-item-title>Quotes</v-list-item-title>
       </v-list-item>
 
+      <!-- Quote Performance Dashboard (management view) -->
+      <v-list-item
+        :class="{
+          'disabled-item': !canAccess('quote:view_performance_dashboard')
+        }"
+        prepend-icon="mdi-chart-timeline-variant"
+        @click="
+          navigate(
+            'group-pricing-quote-performance',
+            'quote:view_performance_dashboard'
+          )
+        "
+      >
+        <v-list-item-title>Quote Performance</v-list-item-title>
+      </v-list-item>
+
       <!-- Tables -->
       <v-list-item
         :class="{ 'disabled-item': !canAccess('navigation:group_tables') }"

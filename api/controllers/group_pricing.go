@@ -2865,6 +2865,40 @@ func GetDistinctNormalRetirementAges(c *gin.Context) {
 	c.JSON(http.StatusOK, normalRetirementAges)
 }
 
+// GetDistinctScbExcessPeriods handles the request to retrieve distinct
+// excess_period values from salary_continuation_rates, used to populate the
+// SCB Excess Period dropdown.
+func GetDistinctScbExcessPeriods(c *gin.Context) {
+	requestID, exists := c.Get("requestID")
+	var ctx context.Context
+	if exists {
+		ctx = context.WithValue(context.Background(), log.RequestIDKey, requestID.(string))
+	} else {
+		ctx = context.Background()
+	}
+
+	userEmail, emailExists := c.Get("userEmail")
+	userName, nameExists := c.Get("userName")
+	if emailExists && nameExists {
+		ctx = log.ContextWithUserInfo(ctx, userEmail.(string), userName.(string))
+	}
+
+	logger := log.WithContext(ctx)
+
+	riskRateCode := c.Param("risk_rate_code")
+	logger.WithField("risk_rate_code", riskRateCode).Info("Processing GetDistinctScbExcessPeriods request")
+
+	excessPeriods, err := services.GetDistinctScbExcessPeriods(riskRateCode)
+	if err != nil {
+		logger.WithField("error", err.Error()).Error("Failed to get distinct SCB excess periods")
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	logger.WithField("count", len(excessPeriods)).Info("Successfully retrieved distinct SCB excess periods")
+	c.JSON(http.StatusOK, excessPeriods)
+}
+
 // GetHistoricalCredibilityData handles the request to retrieve historical credibility data
 func GetHistoricalCredibilityData(c *gin.Context) {
 	// Get request ID from context if available
@@ -3596,6 +3630,7 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 		RiskProfileVariationTolerancePct *float64 `json:"risk_profile_variation_tolerance_pct"`
 		MedicalAidWaiverMethod           *string  `json:"medical_aid_waiver_method"`
 		PtdBaseRateMethod                *string  `json:"ptd_base_rate_method"`
+		AgeMethod                        *string  `json:"age_method"`
 	}
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
@@ -3623,6 +3658,12 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 		*payload.PtdBaseRateMethod != models.PtdBaseRateMethodPtdOnly &&
 		*payload.PtdBaseRateMethod != models.PtdBaseRateMethodPtdPlusGlaAids {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid ptd_base_rate_method"})
+		return
+	}
+	if payload.AgeMethod != nil &&
+		*payload.AgeMethod != models.AgeMethodAgeNextBirthday &&
+		*payload.AgeMethod != models.AgeMethodAgeLastBirthday {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid age_method"})
 		return
 	}
 	if payload.FCLOverrideTolerance != nil &&
@@ -3659,6 +3700,7 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 			RiskProfileVariationTolerancePct: services.RiskProfileVariationToleranceDefault,
 			MedicalAidWaiverMethod:           models.MedicalAidWaiverMethodFormula,
 			PtdBaseRateMethod:                models.PtdBaseRateMethodPtdOnly,
+			AgeMethod:                        models.AgeMethodAgeNextBirthday,
 		}
 	}
 	now := time.Now()
@@ -3681,6 +3723,11 @@ func UpdateGroupPricingSettings(c *gin.Context) {
 		s.PtdBaseRateMethod = *payload.PtdBaseRateMethod
 		s.PtdBaseRateMethodUpdatedAt = &now
 		s.PtdBaseRateMethodUpdatedBy = user.UserEmail
+	}
+	if payload.AgeMethod != nil {
+		s.AgeMethod = *payload.AgeMethod
+		s.AgeMethodUpdatedAt = &now
+		s.AgeMethodUpdatedBy = user.UserEmail
 	}
 	if payload.FCLOverrideTolerance != nil {
 		s.FCLOverrideTolerance = *payload.FCLOverrideTolerance

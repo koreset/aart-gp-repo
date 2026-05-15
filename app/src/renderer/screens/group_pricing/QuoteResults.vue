@@ -10,15 +10,21 @@
       >
         <v-expansion-panel>
           <v-expansion-panel-title
-            class="text-warning font-weight-medium"
-            color="warning"
+            class="warnings-banner-title font-weight-medium"
           >
             <v-icon class="mr-2" color="warning">mdi-alert</v-icon>
+            <v-chip size="small" color="warning" variant="flat" class="mr-3">
+              {{ zeroRateBenefitWarnings.length }}
+            </v-chip>
             <span>
-              {{ zeroRateBenefitWarnings.length }} benefit warning{{
+              Benefit warning{{
                 zeroRateBenefitWarnings.length === 1 ? '' : 's'
               }}
               — chosen benefit has a zero risk rate
+            </span>
+            <v-spacer />
+            <span class="text-caption text-medium-emphasis mr-2">
+              Click to expand
             </span>
           </v-expansion-panel-title>
           <v-expansion-panel-text>
@@ -830,3 +836,9 @@ const createColumnDefs = (data: any) => {
   })
 }
 </script>
+
+<style scoped>
+.warnings-banner-title {
+  background-color: rgb(var(--v-theme-warning) / 0.12);
+}
+</style>

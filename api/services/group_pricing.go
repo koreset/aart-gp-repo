@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -33,6 +34,64 @@ import (
 	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )
+
+// groupPricingCacheChannel is the Redis pub/sub channel every API instance
+// listens on to drop its local GroupPricingCache when any peer mutates the
+// underlying rate/loading/member tables. Without this, a table upload that
+// lands on one load-balanced instance leaves the other instances serving
+// pre-upload rates until their cache happens to be cleared by chance.
+const groupPricingCacheChannel = "group_pricing_cache_invalidate"
+
+var cacheSubscriberOnce sync.Once
+
+// clearGroupPricingCacheLocal empties GroupPricingCache on the current
+// process. The Wait() call drains Ristretto's async write buffer first so
+// Sets enqueued by a just-finished calculation cannot re-populate the cache
+// after Clear() returns — that race is the reason a re-run within ~5s of a
+// table upload could previously return stale results.
+func clearGroupPricingCacheLocal() {
+	if GroupPricingCache == nil {
+		return
+	}
+	GroupPricingCache.Wait()
+	GroupPricingCache.Clear()
+}
+
+// broadcastCacheInvalidation drops the local GroupPricingCache immediately
+// and tells every other API instance to do the same via Redis pub/sub.
+// Call this from any path that mutates a table other instances may have
+// cached — rate-table uploads/deletes, per-quote table replacements, and
+// member create/delete operations. Publish errors are logged but never
+// break the originating request.
+func broadcastCacheInvalidation(reason string) {
+	clearGroupPricingCacheLocal()
+	if redisClient == nil {
+		return
+	}
+	if err := redisClient.Publish(context.Background(), groupPricingCacheChannel, reason).Err(); err != nil {
+		appLog.WithField("error", err.Error()).Warn("Failed to publish group pricing cache invalidation")
+	}
+}
+
+// ensureCacheInvalidationSubscriber lazily starts the Redis subscriber on
+// the first cache-touching call to this instance. sync.Once guarantees one
+// goroutine per process. If Redis is disabled or unreachable the function
+// is a no-op and the instance falls back to local-only invalidation —
+// matching pre-fix behaviour on single-instance dev setups.
+func ensureCacheInvalidationSubscriber() {
+	cacheSubscriberOnce.Do(func() {
+		if redisClient == nil {
+			return
+		}
+		sub := redisClient.Subscribe(context.Background(), groupPricingCacheChannel)
+		go func() {
+			for msg := range sub.Channel() {
+				appLog.WithField("reason", msg.Payload).Debug("Group pricing cache invalidated by peer")
+				clearGroupPricingCacheLocal()
+			}
+		}()
+	})
+}
 
 func validateFamilyFuneralSumAssureds(quote models.GroupPricingQuote) error {
 	for _, sc := range quote.SchemeCategories {
@@ -255,6 +314,15 @@ func UpdateGroupPricingQuote(quote models.GroupPricingQuote, user models.AppUser
 		// Apply updates
 		quote.ModifiedBy = user.UserName
 		quote.ModificationDate = time.Now()
+
+		// Stamp the per-status milestone timestamp for the dashboard so
+		// downstream cycle-time and SLA-breach maths have something to
+		// measure against. Only stamps when the status actually changed.
+		statusChanged := before.Status != quote.Status
+		if statusChanged {
+			applyQuoteStatusTimestamp(&quote, quote.Status)
+		}
+
 		if err := tx.Save(&quote).Error; err != nil {
 			return err
 		}
@@ -275,6 +343,16 @@ func UpdateGroupPricingQuote(quote models.GroupPricingQuote, user models.AppUser
 		}, before, after); err != nil {
 			return err
 		}
+
+		// Write quote-status-specific audit row so the dashboard can
+		// surface SLA breaches per transition without scanning the
+		// generic audit log.
+		if statusChanged {
+			if err := RecordQuoteStatusChange(tx, quote.ID, before.Status, quote.Status, "", user.UserName); err != nil {
+				return err
+			}
+		}
+
 		go func(id int) { ScoreQuote(id) }(quote.ID)
 		return nil
 	})
@@ -282,12 +360,20 @@ func UpdateGroupPricingQuote(quote models.GroupPricingQuote, user models.AppUser
 		return err
 	}
 
-	// Fire notification hooks after successful commit
+	// Fire notification hooks after successful commit. The generic
+	// update-status endpoint can land on Approved / Accepted as well as
+	// Submitted / Rejected, so cover all the user-visible transitions
+	// here — the dedicated approve-quote / accept-quote handlers still
+	// fire their own notifications when invoked directly.
 	switch incomingStatus {
 	case models.StatusSubmitted:
 		go NotifyQuoteSubmitted(quote, user)
 	case models.StatusRejected:
-		go NotifyQuoteRejected(quote, user, "")
+		go NotifyQuoteRejected(quote, user, quote.RejectedReason)
+	case models.StatusApproved:
+		go NotifyQuoteApproved(quote, user)
+	case models.StatusAccepted:
+		go NotifyQuoteAccepted(quote, user)
 	case models.StatusPendingReview, "Pending Review":
 		go NotifyQuoteSubmitted(quote, user) // Reuse submitted notification for pending review status
 	}
@@ -315,6 +401,7 @@ func ApproveGroupPricingQuote(quoteId string, user models.AppUser) error {
 		quote.Status = models.StatusApproved
 		quote.ModifiedBy = user.UserName
 		quote.ModificationDate = time.Now()
+		applyQuoteStatusTimestamp(&quote, models.StatusApproved)
 		if err := tx.Save(&quote).Error; err != nil {
 			return err
 		}
@@ -338,6 +425,14 @@ func ApproveGroupPricingQuote(quoteId string, user models.AppUser) error {
 		}, before, after); err != nil {
 			return err
 		}
+
+		// Write quote-status-specific audit row for the dashboard.
+		if before.Status != models.StatusApproved {
+			if err := RecordQuoteStatusChange(tx, quote.ID, before.Status, models.StatusApproved, "Approved by "+user.UserName, user.UserName); err != nil {
+				return err
+			}
+		}
+
 		go func(id int) { ScoreQuote(id) }(intQuoteID(quoteId))
 		return nil
 	})
@@ -397,10 +492,18 @@ func AcceptGroupPricingQuote(quoteId string, commencementDate string, term strin
 		quote.Status = models.StatusAccepted
 		quote.ModifiedBy = user.UserName
 		quote.ModificationDate = time.Now()
+		applyQuoteStatusTimestamp(&quote, models.StatusAccepted)
 
 		err = tx.Save(&quote).Error
 		if err != nil {
 			return err
+		}
+
+		// Write quote-status-specific audit row for the dashboard.
+		if before.Status != models.StatusAccepted {
+			if err := RecordQuoteStatusChange(tx, quote.ID, before.Status, models.StatusAccepted, "Accepted by "+user.UserName, user.UserName); err != nil {
+				return err
+			}
 		}
 
 		if err := tx.Limit(1).Find(&GroupPricingInsurerDetail).Error; err == nil {
@@ -998,7 +1101,8 @@ func CalculateGroupPricingQuote(quoteId string, basis string, credibility float6
 
 	logger.Info("Starting group pricing quote calculation")
 
-	GroupPricingCache.Clear()
+	ensureCacheInvalidationSubscriber()
+	clearGroupPricingCacheLocal()
 	logger.Debug("Group pricing cache cleared")
 
 	var groupQuote models.GroupPricingQuote
@@ -1094,7 +1198,7 @@ func CalculateGroupPricingQuote(quoteId string, basis string, credibility float6
 	}
 
 	categoryWorkerPool.StopWait()
-	GroupPricingCache.Clear()
+	clearGroupPricingCacheLocal()
 
 	// Scheme-wide commission pass — applied once all category workers have
 	// written their summaries. Commission runs on the aggregate total premium
@@ -2069,6 +2173,15 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.TotalFunConversionOnWithdrawalAnnualRiskPremium += mr.FunConversionOnWithdrawalRiskPremium
 		mdrs.ExpAdjTotalFunConversionOnWithdrawalAnnualRiskPremium += mr.ExpAdjFunConversionOnWithdrawalRiskPremium
 
+		// SCB — premium uses PhiCappedIncome as base. Totals are included in
+		// TotalAnnualPremium / ExpTotalAnnualPremiumExclFuneral below.
+		// Reinsurance has no ExpAdj variant.
+		mdrs.TotalScbAnnualRiskPremium += mr.ScbRiskPremium
+		mdrs.ExpAdjTotalScbAnnualRiskPremium += mr.ExpAdjScbRiskPremium
+		mdrs.TotalReinsScbAnnualRiskPremium += mr.ReinsScbRiskPremium
+		mdrs.TotalScbRiskRate += mr.LoadedScbRate
+		mdrs.ExpAdjTotalScbRiskRate += mr.ExpAdjLoadedScbRate
+
 		// Binder and outsource fee aggregates per benefit (see applyBinderOutsourceAmounts).
 		// Non-zero only when the quote's distribution channel is "binder".
 		mdrs.TotalGlaAnnualBinderAmount += mr.GlaBinderAmount
@@ -2173,7 +2286,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	}
 
 	// Compute derived summary fields after the reduce loop
-	mdrs.TotalAnnualPremium = models.ComputeOfficePremium(mdrs.TotalGlaAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalPtdAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalTtdAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalPhiAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalCiAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalSglaAnnualRiskPremium, &mdrs)
+	mdrs.TotalAnnualPremium = models.ComputeOfficePremium(mdrs.TotalGlaAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalPtdAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalTtdAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalPhiAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalScbAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalCiAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.TotalSglaAnnualRiskPremium, &mdrs)
 	// Sub Total (Excl. Funeral) includes the Additional Accidental GLA rider,
 	// the GLA TaxSaver rider, GLA Educator and PTD Educator components on top
 	// of the six core benefits.
@@ -2182,6 +2295,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		models.ComputeOfficePremium(mdrs.ExpTotalPtdAnnualRiskPremium, &mdrs) +
 		models.ComputeOfficePremium(mdrs.ExpTotalTtdAnnualRiskPremium, &mdrs) +
 		models.ComputeOfficePremium(mdrs.ExpTotalPhiAnnualRiskPremium, &mdrs) +
+		models.ComputeOfficePremium(mdrs.ExpAdjTotalScbAnnualRiskPremium, &mdrs) +
 		models.ComputeOfficePremium(mdrs.ExpTotalCiAnnualRiskPremium, &mdrs) +
 		models.ComputeOfficePremium(mdrs.ExpTotalSglaAnnualRiskPremium, &mdrs) +
 		models.ComputeOfficePremium(mdrs.ExpTotalTaxSaverAnnualRiskPremium, &mdrs) +
@@ -2193,7 +2307,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	// proportional share.
 	mdrs.TotalCommission = 0
 	mdrs.TotalExpenses = (mdrs.ExpTotalAnnualPremiumExclFuneral + models.ComputeOfficePremium(mdrs.ExpTotalFunAnnualRiskPremium, &mdrs)) * premiumLoading.ExpenseLoading
-	mdrs.TotalExpectedClaims = mdrs.ExpTotalGlaAnnualRiskPremium + mdrs.ExpTotalPtdAnnualRiskPremium + mdrs.ExpTotalCiAnnualRiskPremium + mdrs.ExpTotalSglaAnnualRiskPremium + mdrs.ExpTotalTtdAnnualRiskPremium + mdrs.ExpTotalPhiAnnualRiskPremium + mdrs.ExpTotalFunAnnualRiskPremium
+	mdrs.TotalExpectedClaims = mdrs.ExpTotalGlaAnnualRiskPremium + mdrs.ExpTotalPtdAnnualRiskPremium + mdrs.ExpTotalCiAnnualRiskPremium + mdrs.ExpTotalSglaAnnualRiskPremium + mdrs.ExpTotalTtdAnnualRiskPremium + mdrs.ExpTotalPhiAnnualRiskPremium + mdrs.ExpAdjTotalScbAnnualRiskPremium + mdrs.ExpTotalFunAnnualRiskPremium
 
 	// Delete results before saving new set of results
 	emitProgress(selectedSchemeCategory, "saving_results")
@@ -2369,6 +2483,9 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 
 		mdrs.ProportionPhiConversionOnWithdrawalRiskPremiumSalary = mdrs.TotalPhiConversionOnWithdrawalAnnualRiskPremium / phiDenomSalary
 		mdrs.ExpAdjProportionPhiConversionOnWithdrawalRiskPremiumSalary = mdrs.ExpAdjTotalPhiConversionOnWithdrawalAnnualRiskPremium / phiDenomSalary
+
+		mdrs.ProportionScbRiskPremiumSalary = mdrs.TotalScbAnnualRiskPremium / phiDenomSalary
+		mdrs.ExpAdjProportionScbRiskPremiumSalary = mdrs.ExpAdjTotalScbAnnualRiskPremium / phiDenomSalary
 	}
 
 	if ciDenomSalary > 0 {
@@ -2504,6 +2621,8 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		d := mdrs.TotalPhiCappedIncome
 		mdrs.PhiConversionOnWithdrawalRiskRatePer1000SA = mdrs.TotalPhiConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
 		mdrs.ExpPhiConversionOnWithdrawalRiskRatePer1000SA = mdrs.ExpAdjTotalPhiConversionOnWithdrawalAnnualRiskPremium * 1000.0 / d
+		mdrs.ScbRiskRatePer1000Income = mdrs.TotalScbAnnualRiskPremium * 1000.0 / d
+		mdrs.ExpScbRiskRatePer1000Income = mdrs.ExpAdjTotalScbAnnualRiskPremium * 1000.0 / d
 	}
 	if mdrs.TotalTtdCappedIncome > 0 {
 		d := mdrs.TotalTtdCappedIncome
@@ -2518,7 +2637,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 
 	mdrs.IfStatus = groupQuote.Status
 	mdrs.QuoteType = groupQuote.QuoteType
-	mdrs.TotalAnnualPremium = models.ComputeOfficePremium(mdrs.ExpTotalGlaAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalPtdAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalTtdAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalPhiAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalCiAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalSglaAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalFunAnnualRiskPremium, &mdrs)
+	mdrs.TotalAnnualPremium = models.ComputeOfficePremium(mdrs.ExpTotalGlaAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalAdditionalAccidentalGlaAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalPtdAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalTtdAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalPhiAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpAdjTotalScbAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalCiAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalSglaAnnualRiskPremium, &mdrs) + models.ComputeOfficePremium(mdrs.ExpTotalFunAnnualRiskPremium, &mdrs)
 	mdrs.TotalSumAssured = mdrs.TotalGlaSumAssured //+ mdrs.TotalPtdSumAssured + mdrs.TotalCiSumAssured + mdrs.TotalSpouseGlaSumAssured
 	mdrs.PremiumRatesGuaranteedPeriodMonths = groupParameter.PremiumRatesGuaranteedPeriodMonths
 	mdrs.QuoteValidityPeriodMonths = groupParameter.QuoteValidityPeriodMonths
@@ -2658,6 +2777,31 @@ func calculateAgeNextBirthday(commencementDate, dob time.Time) int {
 		return age
 	}
 	return age + 1
+}
+
+// calculateAgeLastBirthday computes the Excel formula
+//   ROUNDDOWN((12*(YEAR(CommenDate)-YEAR(DoB)) + (MONTH(CommenDate)-MONTH(DoB)))/12, 0)
+// treating the birthday as "occurred" once the commencement month has reached
+// the DoB month, with no day-of-month adjustment (matches the user-supplied
+// formula exactly).
+func calculateAgeLastBirthday(commencementDate, dob time.Time) int {
+	months := (commencementDate.Year()-dob.Year())*12 +
+		int(commencementDate.Month()) - int(dob.Month())
+	// Go integer division truncates toward zero. For DoB after commencement
+	// the months value is negative; truncation toward zero matches Excel
+	// ROUNDDOWN for positive results and is bounded by the upstream member
+	// age restrictions for the pathological negative case.
+	return months / 12
+}
+
+// calculateMemberAge dispatches to the configured age methodology. Unknown
+// method strings fall back to AgeNextBirthday so a misconfigured row never
+// produces a zero/negative age that would skew downstream rate lookups.
+func calculateMemberAge(commencementDate, dob time.Time, method string) int {
+	if method == models.AgeMethodAgeLastBirthday {
+		return calculateAgeLastBirthday(commencementDate, dob)
+	}
+	return calculateAgeNextBirthday(commencementDate, dob)
 }
 
 // applyCoverAgeLimit returns 0 when the member has aged past the benefit's
@@ -3051,7 +3195,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	//	fmt.Println("error encountered parsing date of birth: ", err)
 	//	//return err
 	//}
-	memberDataPointResult.AgeNextBirthday = calculateAgeNextBirthday(groupQuote.CommencementDate, addedMemberInForce.DateOfBirth)
+	memberDataPointResult.AgeNextBirthday = calculateMemberAge(groupQuote.CommencementDate, addedMemberInForce.DateOfBirth, GetAgeMethod())
 	mpAgeBand = GetAgeBand(memberDataPointResult.AgeNextBirthday, ageBands)
 	groupFuneralParameter = GetFuneralParameter(groupParameter, memberDataPointResult.AgeNextBirthday)
 	memberDataPointResult.AgeBand = mpAgeBand
@@ -3143,7 +3287,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 
 	if schemeCategory.GlaBenefit {
 		memberDataPointResult.GlaQx = applyCoverAgeLimit(GetGlaRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, schemeCategory), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
-		memberDataPointResult.GlaAidsQx = applyCoverAgeLimit(GetGlaAidsRate(memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
+		memberDataPointResult.GlaAidsQx = applyCoverAgeLimit(GetGlaAidsRate(memberDataPointResult, groupParameter, schemeCategory.Region), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.BaseGlaRate = memberDataPointResult.GlaQx*(1+memberDataPointResult.GlaIndustryLoading+memberDataPointResult.GlaRegionLoading) + memberDataPointResult.GlaAidsQx*(1+memberDataPointResult.GlaAidsRegionLoading)
 	} else if schemeCategory.FamilyFuneralBenefit {
 		funQx := applyCoverAgeLimit(GetFuneralRate(memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
@@ -3242,6 +3386,14 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		memberDataPointResult.ExpAdjLoadedPhiRate = memberDataPointResult.LoadedPhiRate * memberDataPointResult.PhiExperienceAdjustment
 	}
 
+	if schemeCategory.ScbBenefit {
+		scbRate := applyCoverAgeLimit(GetScbRate(&originalMemberDataPointResult, groupParameter, groupQuote, schemeCategory, mpIncomeLevel), memberDataPointResult.AgeNextBirthday, restriction.PhiMaxCoverAge)
+		memberDataPointResult.ScbRate = scbRate
+		memberDataPointResult.BaseScbRate = scbRate * (1 + memberDataPointResult.PhiIndustryLoading + memberDataPointResult.PhiRegionLoading)
+		memberDataPointResult.LoadedScbRate = memberDataPointResult.BaseScbRate * (1 + memberDataPointResult.PhiContingencyLoading + memberDataPointResult.PhiVoluntaryLoading)
+		memberDataPointResult.ExpAdjLoadedScbRate = memberDataPointResult.LoadedScbRate * memberDataPointResult.PhiExperienceAdjustment
+	}
+
 	if schemeCategory.CiBenefit {
 		ciRate := applyCoverAgeLimit(GetCiRate(&originalMemberDataPointResult, groupParameter, groupQuote, schemeCategory, mpIncomeLevel), memberDataPointResult.AgeNextBirthday, restriction.CiMaxCoverAge)
 		if schemeCategory.CiBenefitStructure == "Accelerated" {
@@ -3257,7 +3409,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		spouseIndustryLoading := industryLoadingByGender[industryLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel)]
 		spouseRegionLoading := regionLoadingByGender[regionLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
 		memberDataPointResult.SpouseGlaQx = applyCoverAgeLimit(GetSpouseGlaRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, schemeCategory), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
-		memberDataPointResult.SpouseGlaAidsQx = applyCoverAgeLimit(GetSpouseGlaAidsRate(memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
+		memberDataPointResult.SpouseGlaAidsQx = applyCoverAgeLimit(GetSpouseGlaAidsRate(memberDataPointResult, groupParameter, schemeCategory.Region), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.SpouseGlaLoading = spouseIndustryLoading.GlaIndustryLoadingRate
 		memberDataPointResult.BaseSpouseGlaRate = memberDataPointResult.SpouseGlaQx*(1+memberDataPointResult.SpouseGlaLoading+spouseRegionLoading.GlaRegionLoadingRate) + memberDataPointResult.SpouseGlaAidsQx*(1+spouseRegionLoading.GlaAidsRegionLoadingRate)
 		memberDataPointResult.LoadedSpouseGlaRate = memberDataPointResult.BaseSpouseGlaRate * (1 + memberDataPointResult.SglaConversionOnWithdrawalLoading)
@@ -3291,6 +3443,13 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 
 	memberDataPointResult.PhiRiskPremium = memberDataPointResult.LoadedPhiRate * memberDataPointResult.PhiMonthlyBenefit
 	memberDataPointResult.ExpAdjPhiRiskPremium = memberDataPointResult.ExpAdjLoadedPhiRate * memberDataPointResult.PhiMonthlyBenefit
+
+	// SCB — independent benefit, calculated alongside PHI. Uses PhiCappedIncome
+	// (not PhiMonthlyBenefit) so contribution / medical-aid waivers do not
+	// inflate the salary-continuation base.
+	memberDataPointResult.ScbRiskPremium = memberDataPointResult.LoadedScbRate * memberDataPointResult.PhiCappedIncome
+	memberDataPointResult.ExpAdjScbRiskPremium = memberDataPointResult.ExpAdjLoadedScbRate * memberDataPointResult.PhiCappedIncome
+	memberDataPointResult.ReinsScbRiskPremium = memberDataPointResult.LoadedReinsScbRate * memberDataPointResult.PhiCappedIncome
 
 	memberDataPointResult.CiRiskPremium = memberDataPointResult.LoadedCiRate * memberDataPointResult.CiCappedSumAssured
 	memberDataPointResult.ExpAdjCiRiskPremium = memberDataPointResult.ExpAdjLoadedCiRate * memberDataPointResult.CiCappedSumAssured
@@ -3349,7 +3508,7 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	//                        + ReinsGlaAidsQx × (1 + ReinsGlaAidsRegionLoading)
 	if schemeCategory.GlaBenefit {
 		memberDataPointResult.ReinsGlaQx = applyCoverAgeLimit(GetReinsuranceGlaRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, schemeCategory), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
-		memberDataPointResult.ReinsGlaAidsQx = applyCoverAgeLimit(GetReinsuranceGlaAidsRate(memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
+		memberDataPointResult.ReinsGlaAidsQx = applyCoverAgeLimit(GetReinsuranceGlaAidsRate(memberDataPointResult, groupParameter, schemeCategory.Region), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.BaseReinsGlaRate = memberDataPointResult.ReinsGlaQx*(1+memberDataPointResult.ReinsGlaIndustryLoading+memberDataPointResult.ReinsGlaRegionLoading) +
 			memberDataPointResult.ReinsGlaAidsQx*(1+memberDataPointResult.ReinsGlaAidsRegionLoading)
 		memberDataPointResult.LoadedReinsGlaRate = memberDataPointResult.BaseReinsGlaRate *
@@ -3392,11 +3551,19 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 		memberDataPointResult.LoadedReinsPhiRate = memberDataPointResult.BaseReinsPhiRate * (1 + memberDataPointResult.ReinsPhiContingencyLoading + memberDataPointResult.ReinsPhiVoluntaryLoading)
 	}
 
+	// SCB reinsurance — uses PHI's reinsurance loadings (no SCB-specific
+	// reinsurance loading table exists).
+	if schemeCategory.ScbBenefit {
+		memberDataPointResult.ReinsScbRate = applyCoverAgeLimit(GetReinsuranceScbRate(&originalMemberDataPointResult, groupParameter, mpIncomeLevel, schemeCategory), memberDataPointResult.AgeNextBirthday, restriction.PhiMaxCoverAge)
+		memberDataPointResult.BaseReinsScbRate = memberDataPointResult.ReinsScbRate * (1 + memberDataPointResult.ReinsPhiIndustryLoading + memberDataPointResult.ReinsPhiRegionLoading)
+		memberDataPointResult.LoadedReinsScbRate = memberDataPointResult.BaseReinsScbRate * (1 + memberDataPointResult.ReinsPhiContingencyLoading + memberDataPointResult.ReinsPhiVoluntaryLoading)
+	}
+
 	// Spouse GLA
 	if schemeCategory.SglaBenefit && len(memberDataPointResult.SpouseGender) > 0 {
 		spouseReinsIndustry := GetReinsuranceIndustryLoading(groupParameter.RiskRateCode, groupQuote.OccupationClass, memberDataPointResult.SpouseGender[:1], mpIncomeLevel)
 		memberDataPointResult.ReinsSpouseGlaQx = applyCoverAgeLimit(GetReinsuranceSpouseGlaRate(memberDataPointResult, groupParameter, mpIncomeLevel, schemeCategory), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
-		memberDataPointResult.ReinsSpouseGlaAidsQx = applyCoverAgeLimit(GetReinsuranceSpouseGlaAidsRate(memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
+		memberDataPointResult.ReinsSpouseGlaAidsQx = applyCoverAgeLimit(GetReinsuranceSpouseGlaAidsRate(memberDataPointResult, groupParameter, schemeCategory.Region), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.ReinsSpouseGlaLoading = spouseReinsIndustry.GlaIndustryLoadingRate
 		spouseReinsRegion := reinsRegionLoadingByGender[regionLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
 		memberDataPointResult.BaseReinsSpouseGlaRate = memberDataPointResult.ReinsSpouseGlaQx*(1+memberDataPointResult.ReinsSpouseGlaLoading+spouseReinsRegion.GlaRegionLoadingRate) +
@@ -3676,7 +3843,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	//	fmt.Println("error encountered parsing date of birth: ", err)
 	//	//return err
 	//}
-	memberDataPointResult.AgeNextBirthday = calculateAgeNextBirthday(groupQuote.CommencementDate, mp.DateOfBirth)
+	memberDataPointResult.AgeNextBirthday = calculateMemberAge(groupQuote.CommencementDate, mp.DateOfBirth, GetAgeMethod())
 	groupFuneralParameter = GetFuneralParameter(groupParameter, memberDataPointResult.AgeNextBirthday)
 	mpAgeBand = GetAgeBand(memberDataPointResult.AgeNextBirthday, ageBands)
 	memberDataPointResult.AgeBand = mpAgeBand
@@ -3780,7 +3947,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	memberDataPointResult.PhiIndustryLoading = memberIndustryLoading.PhiIndustryLoadingRate
 
 	memberDataPointResult.GlaQx = applyCoverAgeLimit(GetGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, groupQuote.SchemeCategories[i]), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
-	memberDataPointResult.GlaAidsQx = applyCoverAgeLimit(GetGlaAidsRate(&memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
+	memberDataPointResult.GlaAidsQx = applyCoverAgeLimit(GetGlaAidsRate(&memberDataPointResult, groupParameter, groupQuote.SchemeCategories[i].Region), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 	memberDataPointResult.BaseGlaRate = memberDataPointResult.GlaQx*(1+memberDataPointResult.GlaIndustryLoading+memberDataPointResult.GlaRegionLoading) + memberDataPointResult.GlaAidsQx*(1+memberDataPointResult.GlaAidsRegionLoading)
 
 	gl2 := GetGeneralLoading(groupParameter.RiskRateCode, memberDataPointResult.AgeNextBirthday, memberDataPointResult.Gender)
@@ -3838,6 +4005,13 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate * (1 + memberDataPointResult.PhiContingencyLoading + memberDataPointResult.PhiVoluntaryLoading + memberDataPointResult.PhiConversionOnWithdrawalLoading)
 	}
 
+	if groupQuote.SchemeCategories[i].ScbBenefit {
+		scbRate := applyCoverAgeLimit(GetScbRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel), memberDataPointResult.AgeNextBirthday, restriction.PhiMaxCoverAge)
+		memberDataPointResult.ScbRate = scbRate
+		memberDataPointResult.BaseScbRate = scbRate * (1 + memberDataPointResult.PhiIndustryLoading + memberDataPointResult.PhiRegionLoading)
+		memberDataPointResult.LoadedScbRate = memberDataPointResult.BaseScbRate * (1 + memberDataPointResult.PhiContingencyLoading + memberDataPointResult.PhiVoluntaryLoading)
+	}
+
 	if groupQuote.SchemeCategories[i].CiBenefit {
 		ciRate := applyCoverAgeLimit(GetCiRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel), memberDataPointResult.AgeNextBirthday, restriction.CiMaxCoverAge)
 		if groupQuote.SchemeCategories[i].CiBenefitStructure == "Accelerated" {
@@ -3852,7 +4026,7 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 		spouseIndustryLoading := industryLoadingByGender[industryLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel)]
 		spouseRegionLoading := regionLoadingByGender[regionLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
 		memberDataPointResult.SpouseGlaQx = applyCoverAgeLimit(GetSpouseGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, groupQuote.SchemeCategories[i]), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
-		memberDataPointResult.SpouseGlaAidsQx = applyCoverAgeLimit(GetSpouseGlaAidsRate(&memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
+		memberDataPointResult.SpouseGlaAidsQx = applyCoverAgeLimit(GetSpouseGlaAidsRate(&memberDataPointResult, groupParameter, groupQuote.SchemeCategories[i].Region), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.SpouseGlaLoading = spouseIndustryLoading.GlaIndustryLoadingRate
 		memberDataPointResult.BaseSpouseGlaRate = memberDataPointResult.SpouseGlaQx*(1+memberDataPointResult.SpouseGlaLoading+spouseRegionLoading.GlaRegionLoadingRate) + memberDataPointResult.SpouseGlaAidsQx*(1+spouseRegionLoading.GlaAidsRegionLoadingRate)
 		memberDataPointResult.LoadedSpouseGlaRate = memberDataPointResult.BaseSpouseGlaRate * (1 + memberDataPointResult.SglaConversionOnWithdrawalLoading)
@@ -3863,6 +4037,8 @@ func PopulateRatesPerMemberForExperienceRating(i int, indicativeRatesCount float
 	memberDataPointResult.TtdNumberOfMonthlyPayments = groupParameter.TtdNumberMonthlyPayments
 	memberDataPointResult.TtdRiskPremium = memberDataPointResult.LoadedTtdRate * memberDataPointResult.TtdCappedIncome
 	memberDataPointResult.PhiRiskPremium = memberDataPointResult.LoadedPhiRate * memberDataPointResult.PhiMonthlyBenefit
+	memberDataPointResult.ScbRiskPremium = memberDataPointResult.LoadedScbRate * memberDataPointResult.PhiCappedIncome
+	memberDataPointResult.ReinsScbRiskPremium = memberDataPointResult.LoadedReinsScbRate * memberDataPointResult.PhiCappedIncome
 	memberDataPointResult.CiRiskPremium = memberDataPointResult.LoadedCiRate * memberDataPointResult.CiCappedSumAssured
 
 	return TheoreticalRiskTotal{
@@ -3983,7 +4159,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	}
 
 	if !groupQuote.MemberIndicativeData {
-		memberDataPointResult.AgeNextBirthday = calculateAgeNextBirthday(groupQuote.CommencementDate, mp.DateOfBirth)
+		memberDataPointResult.AgeNextBirthday = calculateMemberAge(groupQuote.CommencementDate, mp.DateOfBirth, GetAgeMethod())
 	}
 	groupFuneralParameter = GetFuneralParameter(groupParameter, memberDataPointResult.AgeNextBirthday)
 	mpAgeBand = GetAgeBand(memberDataPointResult.AgeNextBirthday, ageBands)
@@ -4153,7 +4329,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 
 	if groupQuote.SchemeCategories[i].GlaBenefit {
 		memberDataPointResult.GlaQx = applyCoverAgeLimit(GetGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, groupQuote.SchemeCategories[i]), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
-		memberDataPointResult.GlaAidsQx = applyCoverAgeLimit(GetGlaAidsRate(&memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
+		memberDataPointResult.GlaAidsQx = applyCoverAgeLimit(GetGlaAidsRate(&memberDataPointResult, groupParameter, groupQuote.SchemeCategories[i].Region), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.BaseGlaRate = memberDataPointResult.GlaQx*(1+memberDataPointResult.GlaIndustryLoading+memberDataPointResult.GlaRegionLoading) + memberDataPointResult.GlaAidsQx*(1+memberDataPointResult.GlaAidsRegionLoading)
 	} else if groupQuote.SchemeCategories[i].FamilyFuneralBenefit {
 		funQx := applyCoverAgeLimit(GetFuneralRate(&memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
@@ -4225,7 +4401,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		if GetPtdBaseRateMethod() == models.PtdBaseRateMethodPtdPlusGlaAids {
 			glaAidsQx := memberDataPointResult.GlaAidsQx
 			if glaAidsQx == 0 {
-				glaAidsQx = applyCoverAgeLimit(GetGlaAidsRate(&memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.PtdMaxCoverAge)
+				glaAidsQx = applyCoverAgeLimit(GetGlaAidsRate(&memberDataPointResult, groupParameter, groupQuote.SchemeCategories[i].Region), memberDataPointResult.AgeNextBirthday, restriction.PtdMaxCoverAge)
 			}
 			memberDataPointResult.BasePtdRate += glaAidsQx * (1 + memberDataPointResult.GlaAidsRegionLoading)
 		}
@@ -4245,6 +4421,13 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		memberDataPointResult.LoadedPhiRate = memberDataPointResult.BasePhiRate * (1 + memberDataPointResult.PhiContingencyLoading + memberDataPointResult.PhiVoluntaryLoading + memberDataPointResult.PhiConversionOnWithdrawalLoading + memberDataPointResult.PhiSchemeSizeLoading)
 	}
 
+	if groupQuote.SchemeCategories[i].ScbBenefit {
+		scbRate := applyCoverAgeLimit(GetScbRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel), memberDataPointResult.AgeNextBirthday, restriction.PhiMaxCoverAge)
+		memberDataPointResult.ScbRate = scbRate
+		memberDataPointResult.BaseScbRate = scbRate * (1 + memberDataPointResult.PhiIndustryLoading + memberDataPointResult.PhiRegionLoading)
+		memberDataPointResult.LoadedScbRate = memberDataPointResult.BaseScbRate * (1 + memberDataPointResult.PhiContingencyLoading + memberDataPointResult.PhiVoluntaryLoading + memberDataPointResult.PhiSchemeSizeLoading)
+	}
+
 	if groupQuote.SchemeCategories[i].CiBenefit {
 		ciRate := applyCoverAgeLimit(GetCiRate(&memberDataPointResult, groupParameter, groupQuote, groupQuote.SchemeCategories[i], mpIncomeLevel), memberDataPointResult.AgeNextBirthday, restriction.CiMaxCoverAge)
 		if groupQuote.SchemeCategories[i].CiBenefitStructure == "Accelerated" {
@@ -4259,7 +4442,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		spouseIndustryLoading := industryLoadingByGender[industryLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel)]
 		spouseRegionLoading := regionLoadingByGender[regionLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
 		memberDataPointResult.SpouseGlaQx = applyCoverAgeLimit(GetSpouseGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote, groupQuote.SchemeCategories[i]), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
-		memberDataPointResult.SpouseGlaAidsQx = applyCoverAgeLimit(GetSpouseGlaAidsRate(&memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
+		memberDataPointResult.SpouseGlaAidsQx = applyCoverAgeLimit(GetSpouseGlaAidsRate(&memberDataPointResult, groupParameter, groupQuote.SchemeCategories[i].Region), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.SpouseGlaLoading = spouseIndustryLoading.GlaIndustryLoadingRate
 		memberDataPointResult.BaseSpouseGlaRate = memberDataPointResult.SpouseGlaQx*(1+memberDataPointResult.SpouseGlaLoading+spouseRegionLoading.GlaRegionLoadingRate) + memberDataPointResult.SpouseGlaAidsQx*(1+spouseRegionLoading.GlaAidsRegionLoadingRate)
 		memberDataPointResult.LoadedSpouseGlaRate = memberDataPointResult.BaseSpouseGlaRate * (1 + gl3.GlaContigencyLoadingRate + memberDataPointResult.SglaConversionOnWithdrawalLoading)
@@ -4313,7 +4496,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 
 	if groupQuote.SchemeCategories[i].GlaBenefit {
 		memberDataPointResult.ReinsGlaQx = applyCoverAgeLimit(GetReinsuranceGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote.SchemeCategories[i]), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
-		memberDataPointResult.ReinsGlaAidsQx = applyCoverAgeLimit(GetReinsuranceGlaAidsRate(&memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
+		memberDataPointResult.ReinsGlaAidsQx = applyCoverAgeLimit(GetReinsuranceGlaAidsRate(&memberDataPointResult, groupParameter, groupQuote.SchemeCategories[i].Region), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.BaseReinsGlaRate = memberDataPointResult.ReinsGlaQx*(1+memberDataPointResult.ReinsGlaIndustryLoading+memberDataPointResult.ReinsGlaRegionLoading) +
 			memberDataPointResult.ReinsGlaAidsQx*(1+memberDataPointResult.ReinsGlaAidsRegionLoading)
 		memberDataPointResult.LoadedReinsGlaRate = memberDataPointResult.BaseReinsGlaRate *
@@ -4355,10 +4538,16 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 		memberDataPointResult.LoadedReinsPhiRate = memberDataPointResult.BaseReinsPhiRate * (1 + memberDataPointResult.ReinsPhiContingencyLoading + memberDataPointResult.ReinsPhiVoluntaryLoading)
 	}
 
+	if groupQuote.SchemeCategories[i].ScbBenefit {
+		memberDataPointResult.ReinsScbRate = applyCoverAgeLimit(GetReinsuranceScbRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote.SchemeCategories[i]), memberDataPointResult.AgeNextBirthday, restriction.PhiMaxCoverAge)
+		memberDataPointResult.BaseReinsScbRate = memberDataPointResult.ReinsScbRate * (1 + memberDataPointResult.ReinsPhiIndustryLoading + memberDataPointResult.ReinsPhiRegionLoading)
+		memberDataPointResult.LoadedReinsScbRate = memberDataPointResult.BaseReinsScbRate * (1 + memberDataPointResult.ReinsPhiContingencyLoading + memberDataPointResult.ReinsPhiVoluntaryLoading)
+	}
+
 	if groupQuote.SchemeCategories[i].SglaBenefit && len(memberDataPointResult.SpouseGender) > 0 {
 		spouseReinsIndustry := GetReinsuranceIndustryLoading(groupParameter.RiskRateCode, groupQuote.OccupationClass, memberDataPointResult.SpouseGender, mpIncomeLevel)
 		memberDataPointResult.ReinsSpouseGlaQx = applyCoverAgeLimit(GetReinsuranceSpouseGlaRate(&memberDataPointResult, groupParameter, mpIncomeLevel, groupQuote.SchemeCategories[i]), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
-		memberDataPointResult.ReinsSpouseGlaAidsQx = applyCoverAgeLimit(GetReinsuranceSpouseGlaAidsRate(&memberDataPointResult, groupParameter), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
+		memberDataPointResult.ReinsSpouseGlaAidsQx = applyCoverAgeLimit(GetReinsuranceSpouseGlaAidsRate(&memberDataPointResult, groupParameter, groupQuote.SchemeCategories[i].Region), memberDataPointResult.AgeNextBirthday, restriction.GlaMaxCoverAge)
 		memberDataPointResult.ReinsSpouseGlaLoading = spouseReinsIndustry.GlaIndustryLoadingRate
 		spouseReinsRegion := reinsRegionLoadingByGender[regionLoadingMapKey(memberDataPointResult.SpouseGender, mpIncomeLevel, memberDataPointResult.OccupationClass)]
 		memberDataPointResult.BaseReinsSpouseGlaRate = memberDataPointResult.ReinsSpouseGlaQx*(1+memberDataPointResult.ReinsSpouseGlaLoading+spouseReinsRegion.GlaRegionLoadingRate) +
@@ -4392,6 +4581,8 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.TtdNumberOfMonthlyPayments = groupParameter.TtdNumberMonthlyPayments
 	memberDataPointResult.TtdRiskPremium = memberDataPointResult.LoadedTtdRate * memberDataPointResult.TtdCappedIncome
 	memberDataPointResult.PhiRiskPremium = memberDataPointResult.LoadedPhiRate * memberDataPointResult.PhiMonthlyBenefit
+	memberDataPointResult.ScbRiskPremium = memberDataPointResult.LoadedScbRate * memberDataPointResult.PhiCappedIncome
+	memberDataPointResult.ReinsScbRiskPremium = memberDataPointResult.LoadedReinsScbRate * memberDataPointResult.PhiCappedIncome
 	memberDataPointResult.CiRiskPremium = memberDataPointResult.LoadedCiRate * memberDataPointResult.CiCappedSumAssured
 	memberDataPointResult.SpouseGlaRiskPremium = memberDataPointResult.LoadedSpouseGlaRate * memberDataPointResult.SpouseGlaCappedSumAssured
 
@@ -4472,6 +4663,9 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	if groupQuote.SchemeCategories[i].PhiBenefit {
 		memberDataPointResult.ExpAdjLoadedPhiRate = memberDataPointResult.LoadedPhiRate * memberDataPointResult.PhiExperienceAdjustment
 	}
+	if groupQuote.SchemeCategories[i].ScbBenefit {
+		memberDataPointResult.ExpAdjLoadedScbRate = memberDataPointResult.LoadedScbRate * memberDataPointResult.PhiExperienceAdjustment
+	}
 	if groupQuote.SchemeCategories[i].CiBenefit {
 		memberDataPointResult.ExpAdjLoadedCiRate = memberDataPointResult.LoadedCiRate * memberDataPointResult.CiExperienceAdjustment
 	}
@@ -4491,6 +4685,7 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.ExpAdjPtdRiskPremium = memberDataPointResult.ExpAdjLoadedPtdRate * memberDataPointResult.PtdCappedSumAssured
 	memberDataPointResult.ExpAdjTtdRiskPremium = memberDataPointResult.ExpAdjLoadedTtdRate * memberDataPointResult.TtdCappedIncome
 	memberDataPointResult.ExpAdjPhiRiskPremium = memberDataPointResult.ExpAdjLoadedPhiRate * memberDataPointResult.PhiMonthlyBenefit
+	memberDataPointResult.ExpAdjScbRiskPremium = memberDataPointResult.ExpAdjLoadedScbRate * memberDataPointResult.PhiCappedIncome
 	memberDataPointResult.ExpAdjCiRiskPremium = memberDataPointResult.ExpAdjLoadedCiRate * memberDataPointResult.CiCappedSumAssured
 	memberDataPointResult.ExpAdjSpouseGlaRiskPremium = memberDataPointResult.ExpAdjLoadedSpouseGlaRate * memberDataPointResult.SpouseGlaCappedSumAssured
 
@@ -5246,6 +5441,7 @@ var gpTableSpecs = []gpTableSpec{
 	{"accidentalTtdRate", "Accidental Temporary Total Disability", "accidentaltemporarytotaldisability", "group_pricing", models.AccidentalTtdRate{}},
 	{"ttdRate", "Temporary Total Disability", "temporarytotaldisability", "group_pricing", models.TtdRate{}},
 	{"phiRate", "Permanent Health Insurance", "permanenthealthinsurance", "group_pricing", models.PhiRate{}},
+	{"scbRate", "Salary Continuation Benefit", "salarycontinuationbenefit", "group_pricing", models.SalaryContinuationRate{}},
 	{"childMortality", "Child Mortality", "childmortality", "group_pricing", models.ChildMortality{}},
 	{"industryLoading", "Industry Loading", "industryloading", "group_pricing", models.IndustryLoading{}},
 	{"funeralParameters", "Funeral Parameters", "funeralparameters", "group_pricing", models.FuneralParameters{}},
@@ -5273,6 +5469,7 @@ var gpTableSpecs = []gpTableSpec{
 	{"reinsuranceCiRate", "Reinsurance CI Rate", "reinsurancecirate", "reinsurance", models.ReinsuranceCiRate{}},
 	{"reinsurancePtdRate", "Reinsurance PTD Rate", "reinsuranceptdrate", "reinsurance", models.ReinsurancePtdRate{}},
 	{"reinsurancePhiRate", "Reinsurance PHI Rate", "reinsurancephirate", "reinsurance", models.ReinsurancePhiRate{}},
+	{"reinsuranceScbRate", "Reinsurance Salary Continuation Benefit", "reinsurancesalarycontinuationbenefit", "reinsurance", models.ReinsuranceSalaryContinuationRate{}},
 	{"reinsuranceFuneralAidsRate", "Reinsurance Funeral Aids Rate", "reinsurancefuneralaidsrates", "reinsurance", models.ReinsuranceFuneralAidsRate{}},
 	{"reinsuranceFuneralRate", "Reinsurance Funeral Rate", "reinsurancefuneralrates", "reinsurance", models.ReinsuranceFuneralRate{}},
 	{"reinsuranceGlaAidsRate", "Reinsurance GLA Aids Rate", "reinsuranceglaaidsrates", "reinsurance", models.ReinsuranceGlaAidsRate{}},
@@ -5327,6 +5524,18 @@ func EnsureGPTableStats() {
 	if err := DB.AutoMigrate(&models.GPTableStat{}); err != nil {
 		appLog.WithField("error", err.Error()).Error("Failed to auto-migrate gp_table_stats")
 		return
+	}
+	// Self-heal: rating tables added after their owning SQL migration was
+	// already recorded as applied won't get created by RunMigrationsOnStartup.
+	// AutoMigrating them here ensures the tables exist before we seed stats.
+	// Also covers SchemeCategory so newly-added benefit columns appear on
+	// existing installs without requiring a manual schema fix.
+	if err := DB.AutoMigrate(
+		&models.SalaryContinuationRate{},
+		&models.ReinsuranceSalaryContinuationRate{},
+		&models.SchemeCategory{},
+	); err != nil {
+		appLog.WithField("error", err.Error()).Warn("Failed to auto-migrate salary continuation rate tables")
 	}
 	var count int64
 	DB.Model(&models.GPTableStat{}).Count(&count)
@@ -5932,10 +6141,10 @@ func SaveQuoteTables(v *multipart.FileHeader, tableType string, quoteId int, use
 		DB.Model(&models.GroupPricingClaimsExperience{}).Where("quote_id = ?", quoteId).Count(&count)
 	}
 	// Drop any cached per-quote lookups so the next calculation reads the
-	// freshly-uploaded data rather than the pre-upload snapshot.
-	if GroupPricingCache != nil {
-		GroupPricingCache.Clear()
-	}
+	// freshly-uploaded data rather than the pre-upload snapshot. Broadcasts
+	// to peer instances so a re-run that lands on a different LB target
+	// also sees the new rows.
+	broadcastCacheInvalidation("save_quote_table:" + tableType)
 	return nil, int(count)
 }
 
@@ -5956,14 +6165,18 @@ func DeleteQuoteTableData(tableType string, quoteId int) error {
 		DB.Where("quote_id = ?", quoteId).Delete(&models.GroupSchemeExposure{})
 	}
 	// Drop any cached per-quote lookups so the next calculation cannot
-	// reuse rows that have just been deleted.
-	if GroupPricingCache != nil {
-		GroupPricingCache.Clear()
-	}
+	// reuse rows that have just been deleted. Broadcasts to peers so the
+	// invalidation crosses LB instances.
+	broadcastCacheInvalidation("delete_quote_table:" + tableType)
 	return nil
 }
 
 func SaveGPTables(v *multipart.FileHeader, tableType string, riskRateCode string, user models.AppUser, schemeName string) error {
+	// Deferred so every exit path — including mid-write errors that leave
+	// partial rows in the DB — invalidates this and peer instances'
+	// caches. Cheap on no-op error paths.
+	defer broadcastCacheInvalidation("upload:" + tableType)
+
 	var delimiter rune
 	delimiterFile, err := v.Open()
 	if err != nil {
@@ -7035,19 +7248,70 @@ func SaveGPTables(v *multipart.FileHeader, tableType string, riskRateCode string
 			return fmt.Errorf("failed to save Commission Structure data: %v", err)
 		}
 
+	case "Salary Continuation Benefit":
+		if err := utils.ValidateCSVHeaders(headers, models.SalaryContinuationRate{}); err != nil {
+			return fmt.Errorf("%s validation failed: %v", tableType, err)
+		}
+		DB.Where("risk_rate_code = ?", riskRateCode).Delete(&models.SalaryContinuationRate{})
+		var pps []models.SalaryContinuationRate
+		for i := 1; ; i++ {
+			var pp models.SalaryContinuationRate
+			if err := dec.Decode(&pp); err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("error decoding Salary Continuation Benefit at row %d: %v", i, err)
+			}
+			pp.RiskRateCode = riskRateCode
+			pp.CreatedBy = user.UserName
+			pps = append(pps, pp)
+		}
+
+		err = DB.CreateInBatches(&pps, 100).Error
+		if err != nil {
+			appLog.Error("Save Salary Continuation Benefit error: ", err.Error())
+			return fmt.Errorf("failed to save Salary Continuation Benefit data: %v", err)
+		}
+
+	case "Reinsurance Salary Continuation Benefit":
+		if err := utils.ValidateCSVHeaders(headers, models.ReinsuranceSalaryContinuationRate{}); err != nil {
+			return fmt.Errorf("%s validation failed: %v", tableType, err)
+		}
+		DB.Where("risk_rate_code = ?", riskRateCode).Delete(&models.ReinsuranceSalaryContinuationRate{})
+		var pps []models.ReinsuranceSalaryContinuationRate
+		for i := 1; ; i++ {
+			var pp models.ReinsuranceSalaryContinuationRate
+			if err := dec.Decode(&pp); err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("error decoding Reinsurance Salary Continuation Benefit at row %d: %v", i, err)
+			}
+			pp.RiskRateCode = riskRateCode
+			pp.CreatedBy = user.UserName
+			pps = append(pps, pp)
+		}
+
+		err = DB.CreateInBatches(&pps, 100).Error
+		if err != nil {
+			appLog.Error("Save Reinsurance Salary Continuation Benefit error: ", err.Error())
+			return fmt.Errorf("failed to save Reinsurance Salary Continuation Benefit data: %v", err)
+		}
+
 	}
 	// Update the stats table so GetGPTableMetaData reflects the new upload.
-	go refreshGPTableStatByDisplayName(tableType)
-	// Drop any per-row lookups (region/industry/general/premium loadings,
-	// etc.) cached by previous calculation runs — without this an in-flight
-	// or immediately-following calc could reuse the pre-upload values.
-	if GroupPricingCache != nil {
-		GroupPricingCache.Clear()
-	}
+	// Synchronous: the frontend re-fetches metadata immediately after this
+	// call returns, so racing the upsert behind a goroutine made the status
+	// flip lag behind the upload (or miss entirely under load).
+	refreshGPTableStatByDisplayName(tableType)
+	// Cache invalidation (local + Redis broadcast) is handled by the defer
+	// at the top of this function so every exit path drops stale lookups.
 	return nil
 }
 
 func DeleteGPTableData(tableType, riskCode string) error {
+	// Deferred so every exit path invalidates locally and tells peers,
+	// keeping the 3 load-balanced instances coherent.
+	defer broadcastCacheInvalidation("delete:" + tableType)
+
 	switch tableType {
 	case "grouplifeassurance":
 		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.GlaRate{})
@@ -7135,14 +7399,17 @@ func DeleteGPTableData(tableType, riskCode string) error {
 		}
 	case "medicalwaiver":
 		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.MedicalWaiver{})
+	case "salarycontinuationbenefit":
+		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.SalaryContinuationRate{})
+	case "reinsurancesalarycontinuationbenefit":
+		DB.Where("risk_rate_code = ?", riskCode).Delete(&models.ReinsuranceSalaryContinuationRate{})
 	}
 	// Update the stats table so GetGPTableMetaData reflects the deletion.
-	go refreshGPTableStatByDeleteKey(tableType)
-	// Drop any per-row lookups cached by previous calculation runs so the
-	// next calc cannot reuse rows that have just been deleted.
-	if GroupPricingCache != nil {
-		GroupPricingCache.Clear()
-	}
+	// Synchronous for the same reason as the upload path — the frontend
+	// re-fetches metadata immediately and a goroutine here loses the race.
+	refreshGPTableStatByDeleteKey(tableType)
+	// Cache invalidation (local + Redis broadcast) is handled by the defer
+	// at the top of this function.
 	return nil
 }
 
@@ -7234,6 +7501,10 @@ func GetGPTableRiskCodes(tableType string) []string {
 		DB.Model(&models.GroupPricingAgeBands{}).Select("DISTINCT type").Order("type asc").Find(&riskCodes)
 	case "medicalwaiver":
 		DB.Model(&models.MedicalWaiver{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
+	case "salarycontinuationbenefit":
+		DB.Model(&models.SalaryContinuationRate{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
+	case "reinsurancesalarycontinuationbenefit":
+		DB.Model(&models.ReinsuranceSalaryContinuationRate{}).Select("DISTINCT risk_rate_code").Order("risk_rate_code desc").Find(&riskCodes)
 	}
 	return riskCodes
 }
@@ -7503,6 +7774,14 @@ func GetGPTableData(tableType string) any {
 		var data []models.MedicalWaiver
 		DB.Find(&data)
 		return data
+	case "salarycontinuationbenefit":
+		var data []models.SalaryContinuationRate
+		DB.Find(&data)
+		return data
+	case "reinsurancesalarycontinuationbenefit":
+		var data []models.ReinsuranceSalaryContinuationRate
+		DB.Find(&data)
+		return data
 	}
 	return nil
 }
@@ -7630,6 +7909,9 @@ func GetAgeBand(ageNextBirthday int, ageBand []models.GroupPricingAgeBands) stri
 }
 
 func GetGlaRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, groupQuote models.GroupPricingQuote, schemeCategory models.SchemeCategory) float64 {
+	if !IsTableRequired("glaRate") {
+		return 0
+	}
 	tableName := "gla_rates"
 	var keyString strings.Builder
 
@@ -7670,6 +7952,9 @@ func GetGlaRate(memberResultData *models.MemberRatingResult, groupPricingParamet
 // gender). Returns 0 when no row matches, which the caller treats as a zero
 // PhiMedicalAidWaiver under the table_lookup methodology.
 func GetMedicalWaiverSumAtRisk(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int) float64 {
+	if !IsTableRequired("medicalWaiver") {
+		return 0
+	}
 	tableName := "medical_waivers"
 	var keyString strings.Builder
 	keyString.WriteString(groupPricingParameter.RiskRateCode + "_")
@@ -7701,6 +7986,9 @@ func GetMedicalWaiverSumAtRisk(memberResultData *models.MemberRatingResult, grou
 // The additional layer re-uses every other GLA parameter (risk rate code,
 // waiting period, income level, age, gender); only the benefit_type differs.
 func GetAdditionalAccidentalGlaRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, groupQuote models.GroupPricingQuote, schemeCategory models.SchemeCategory) float64 {
+	if !IsTableRequired("glaRate") {
+		return 0
+	}
 	tableName := "gla_rates"
 	var keyString strings.Builder
 
@@ -7730,11 +8018,15 @@ func GetAdditionalAccidentalGlaRate(memberResultData *models.MemberRatingResult,
 	return qx
 }
 
-func GetGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+func GetGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, region string) float64 {
+	if !IsTableRequired("glaAidsRate") {
+		return 0
+	}
 	tableName := "gla_aids_rates"
 
 	var keyString strings.Builder
 	keyString.WriteString(groupPricingParameter.RiskRateCode + "_")
+	keyString.WriteString(region + "_")
 	keyString.WriteString(strconv.Itoa(memberResultData.AgeNextBirthday) + "_")
 	keyString.WriteString(memberResultData.Gender[:1] + "_")
 	keyString.WriteString(strconv.Itoa(memberResultData.OccupationClass) + "_")
@@ -7747,8 +8039,9 @@ func GetGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingPar
 
 	var qx float64
 	err := DB.Table(tableName).
-		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ? AND occupation_class = ?",
+		Where("risk_rate_code = ? AND region = ? AND age_next_birthday = ? AND gender = ? AND occupation_class = ?",
 			groupPricingParameter.RiskRateCode,
+			region,
 			memberResultData.AgeNextBirthday,
 			memberResultData.Gender[:1],
 			memberResultData.OccupationClass,
@@ -7762,12 +8055,16 @@ func GetGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingPar
 	return qx
 }
 
-func GetSpouseGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+func GetSpouseGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, region string) float64 {
+	if !IsTableRequired("glaAidsRate") {
+		return 0
+	}
 	tableName := "gla_aids_rates"
 
 	var keyString strings.Builder
 	keyString.WriteString("spouse_")
 	keyString.WriteString(groupPricingParameter.RiskRateCode + "_")
+	keyString.WriteString(region + "_")
 	keyString.WriteString(strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_")
 	keyString.WriteString(memberResultData.SpouseGender[:1] + "_")
 	keyString.WriteString(strconv.Itoa(memberResultData.OccupationClass) + "_")
@@ -7780,8 +8077,9 @@ func GetSpouseGlaAidsRate(memberResultData *models.MemberRatingResult, groupPric
 
 	var qx float64
 	err := DB.Table(tableName).
-		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ? AND occupation_class = ?",
+		Where("risk_rate_code = ? AND region = ? AND age_next_birthday = ? AND gender = ? AND occupation_class = ?",
 			groupPricingParameter.RiskRateCode,
+			region,
 			memberResultData.SpouseAgeNextBirthday,
 			memberResultData.SpouseGender[:1],
 			memberResultData.OccupationClass,
@@ -8380,6 +8678,9 @@ func recomputeFinalPremiumsAndCommission(quoteID int, groupQuote models.GroupPri
 		s.FinalCiConversionOnWithdrawalOfficePremium = finalSliceOffice(s, s.ExpAdjTotalCiConversionOnWithdrawalAnnualRiskPremium)
 		s.FinalSglaConversionOnWithdrawalOfficePremium = finalSliceOffice(s, s.ExpAdjTotalSglaConversionOnWithdrawalAnnualRiskPremium)
 		s.FinalFunConversionOnWithdrawalOfficePremium = finalSliceOffice(s, s.ExpAdjTotalFunConversionOnWithdrawalAnnualRiskPremium)
+		s.FinalScbOfficePremium = finalSliceOffice(s, s.ExpAdjTotalScbAnnualRiskPremium)
+		// Reinsurance has no ExpAdj variant — use the non-ExpAdj total.
+		s.FinalReinsScbOfficePremium = finalSliceOffice(s, s.TotalReinsScbAnnualRiskPremium)
 	}
 
 	for i := range summaries {
@@ -8926,6 +9227,9 @@ func applyBinderOutsourceAmounts(r *models.MemberRatingResult, quote *models.Gro
 // read with a single DB hit. Returns a zero-value struct when no band matches —
 // callers can read SizeLevel and the *Loading fields safely (they'll be 0).
 func GetSchemeSizeLoading(groupPricingParameter models.GroupPricingParameters, memberCount int) models.SchemeSizeLevel {
+	if !IsTableRequired("schemeSizeLevel") {
+		return models.SchemeSizeLevel{}
+	}
 	tableName := "scheme_size_levels"
 
 	var keyString strings.Builder
@@ -9036,6 +9340,22 @@ func GetPtdBaseRateMethod() string {
 		return models.PtdBaseRateMethodPtdOnly
 	}
 	return s.PtdBaseRateMethod
+}
+
+// GetAgeMethod returns the globally configured age calculation methodology
+// from the GroupPricingSetting singleton row. Defaults to "age_next_birthday"
+// (historical behaviour) when the row is missing or the column is empty so
+// quotes computed before the setting was introduced behave identically to
+// historical output.
+func GetAgeMethod() string {
+	var s models.GroupPricingSetting
+	if err := DB.First(&s, 1).Error; err != nil {
+		return models.AgeMethodAgeNextBirthday
+	}
+	if s.AgeMethod == "" {
+		return models.AgeMethodAgeNextBirthday
+	}
+	return s.AgeMethod
 }
 
 // FCLOverrideToleranceDefault is the headroom (as a fraction) allowed above
@@ -9174,6 +9494,9 @@ func ApplyDiscountToQuote(quoteId string, discountPct float64, user models.AppUs
 }
 
 func GetFuneralRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+	if !IsTableRequired("funeralRate") {
+		return 0
+	}
 	tableName := "funeral_rates"
 
 	var keyString strings.Builder
@@ -9204,6 +9527,9 @@ func GetFuneralRate(memberResultData *models.MemberRatingResult, groupPricingPar
 }
 
 func GetFuneralAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+	if !IsTableRequired("funeralAidsRate") {
+		return 0
+	}
 	tableName := "funeral_aids_rates"
 
 	var keyString strings.Builder
@@ -9234,6 +9560,9 @@ func GetFuneralAidsRate(memberResultData *models.MemberRatingResult, groupPricin
 }
 
 func GetSpouseFuneralRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+	if !IsTableRequired("funeralRate") {
+		return 0
+	}
 	tableName := "funeral_rates"
 
 	var keyString strings.Builder
@@ -9265,6 +9594,9 @@ func GetSpouseFuneralRate(memberResultData *models.MemberRatingResult, groupPric
 }
 
 func GetSpouseFuneralAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+	if !IsTableRequired("funeralAidsRate") {
+		return 0
+	}
 	tableName := "funeral_aids_rates"
 
 	var keyString strings.Builder
@@ -9298,32 +9630,38 @@ func GetSpouseFuneralAidsRate(memberResultData *models.MemberRatingResult, group
 // GetReinsuranceGlaAidsRate looks up the reinsurance-specific GLA aids Qx
 // for the main member. Returns 0 if no row is found (so missing tables do
 // not break pricing for schemes without reinsurance).
-func GetReinsuranceGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+func GetReinsuranceGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, region string) float64 {
+	if !IsTableRequired("reinsuranceGlaAidsRate") {
+		return 0
+	}
 	tableName := "reinsurance_gla_aids_rates"
-	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + memberResultData.Gender[:1] + "_" + strconv.Itoa(memberResultData.OccupationClass)
+	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + region + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + memberResultData.Gender[:1] + "_" + strconv.Itoa(memberResultData.OccupationClass)
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
 		return cached.(float64)
 	}
 	var qx float64
 	DB.Table(tableName).
-		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ? AND occupation_class = ?",
-			groupPricingParameter.RiskRateCode, memberResultData.AgeNextBirthday, memberResultData.Gender[:1], memberResultData.OccupationClass).
+		Where("risk_rate_code = ? AND region = ? AND age_next_birthday = ? AND gender = ? AND occupation_class = ?",
+			groupPricingParameter.RiskRateCode, region, memberResultData.AgeNextBirthday, memberResultData.Gender[:1], memberResultData.OccupationClass).
 		Pluck("gla_aids_qx", &qx)
 	GroupPricingCache.Set(cacheKey, qx, 1)
 	return qx
 }
 
 // GetReinsuranceSpouseGlaAidsRate — spouse variant of GetReinsuranceGlaAidsRate.
-func GetReinsuranceSpouseGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+func GetReinsuranceSpouseGlaAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, region string) float64 {
+	if !IsTableRequired("reinsuranceGlaAidsRate") {
+		return 0
+	}
 	tableName := "reinsurance_gla_aids_rates"
-	cacheKey := tableName + "_spouse_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_" + memberResultData.SpouseGender[:1] + "_" + strconv.Itoa(memberResultData.OccupationClass)
+	cacheKey := tableName + "_spouse_" + groupPricingParameter.RiskRateCode + "_" + region + "_" + strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_" + memberResultData.SpouseGender[:1] + "_" + strconv.Itoa(memberResultData.OccupationClass)
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
 		return cached.(float64)
 	}
 	var qx float64
 	DB.Table(tableName).
-		Where("risk_rate_code = ? AND age_next_birthday = ? AND gender = ? AND occupation_class = ?",
-			groupPricingParameter.RiskRateCode, memberResultData.SpouseAgeNextBirthday, memberResultData.SpouseGender[:1], memberResultData.OccupationClass).
+		Where("risk_rate_code = ? AND region = ? AND age_next_birthday = ? AND gender = ? AND occupation_class = ?",
+			groupPricingParameter.RiskRateCode, region, memberResultData.SpouseAgeNextBirthday, memberResultData.SpouseGender[:1], memberResultData.OccupationClass).
 		Pluck("gla_aids_qx", &qx)
 	GroupPricingCache.Set(cacheKey, qx, 1)
 	return qx
@@ -9331,6 +9669,9 @@ func GetReinsuranceSpouseGlaAidsRate(memberResultData *models.MemberRatingResult
 
 // GetReinsuranceFuneralRate looks up the reinsurance-specific funeral Qx for the main member.
 func GetReinsuranceFuneralRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+	if !IsTableRequired("reinsuranceFuneralRate") {
+		return 0
+	}
 	tableName := "reinsurance_funeral_rates"
 	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + memberResultData.Gender[:1]
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
@@ -9347,6 +9688,9 @@ func GetReinsuranceFuneralRate(memberResultData *models.MemberRatingResult, grou
 
 // GetReinsuranceSpouseFuneralRate — spouse variant.
 func GetReinsuranceSpouseFuneralRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+	if !IsTableRequired("reinsuranceFuneralRate") {
+		return 0
+	}
 	tableName := "reinsurance_funeral_rates"
 	cacheKey := tableName + "_spouse_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_" + memberResultData.SpouseGender[:1]
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
@@ -9363,6 +9707,9 @@ func GetReinsuranceSpouseFuneralRate(memberResultData *models.MemberRatingResult
 
 // GetReinsuranceFuneralAidsRate looks up the reinsurance-specific funeral aids Qx for the main member.
 func GetReinsuranceFuneralAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+	if !IsTableRequired("reinsuranceFuneralAidsRate") {
+		return 0
+	}
 	tableName := "reinsurance_funeral_aids_rates"
 	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + memberResultData.Gender[:1]
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
@@ -9379,6 +9726,9 @@ func GetReinsuranceFuneralAidsRate(memberResultData *models.MemberRatingResult, 
 
 // GetReinsuranceSpouseFuneralAidsRate — spouse variant.
 func GetReinsuranceSpouseFuneralAidsRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters) float64 {
+	if !IsTableRequired("reinsuranceFuneralAidsRate") {
+		return 0
+	}
 	tableName := "reinsurance_funeral_aids_rates"
 	cacheKey := tableName + "_spouse_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_" + memberResultData.SpouseGender[:1]
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
@@ -9486,6 +9836,9 @@ func GetReinsuranceRegionLoading(riskRateCode string, gender string, region stri
 // type). See api/services/group_pricing.go:6115 (GetGlaRate) for the
 // reference pattern used by the existing gla_rates table.
 func GetReinsuranceGlaRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, schemeCategory models.SchemeCategory) float64 {
+	if !IsTableRequired("reinsuranceGlaRate") {
+		return 0
+	}
 	tableName := "reinsurance_gla_rates"
 	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + strconv.Itoa(incomeLevel) + "_" + memberResultData.Gender + "_" + strconv.Itoa(memberResultData.OccupationClass) + "_" + strconv.Itoa(schemeCategory.GlaWaitingPeriod)
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
@@ -9502,6 +9855,9 @@ func GetReinsuranceGlaRate(memberResultData *models.MemberRatingResult, groupPri
 
 // GetReinsuranceSpouseGlaRate — spouse variant.
 func GetReinsuranceSpouseGlaRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, schemeCategory models.SchemeCategory) float64 {
+	if !IsTableRequired("reinsuranceGlaRate") {
+		return 0
+	}
 	tableName := "reinsurance_gla_rates"
 	cacheKey := tableName + "_spouse_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.SpouseAgeNextBirthday) + "_" + strconv.Itoa(incomeLevel) + "_" + memberResultData.SpouseGender + "_" + strconv.Itoa(memberResultData.OccupationClass) + "_" + strconv.Itoa(schemeCategory.GlaWaitingPeriod)
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
@@ -9520,6 +9876,9 @@ func GetReinsuranceSpouseGlaRate(memberResultData *models.MemberRatingResult, gr
 // GetPtdRate (api/services/group_pricing.go:7040) convention: full gender
 // string and raw int occupation_class.
 func GetReinsurancePtdRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, schemeCategory models.SchemeCategory) float64 {
+	if !IsTableRequired("reinsurancePtdRate") {
+		return 0
+	}
 	tableName := "reinsurance_ptd_rates"
 	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + strconv.Itoa(incomeLevel) + "_" + memberResultData.Gender + "_" + strconv.Itoa(memberResultData.OccupationClass)
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
@@ -9536,6 +9895,9 @@ func GetReinsurancePtdRate(memberResultData *models.MemberRatingResult, groupPri
 
 // GetReinsuranceCiRate looks up the reinsurance CI rate.
 func GetReinsuranceCiRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, schemeCategory models.SchemeCategory) float64 {
+	if !IsTableRequired("reinsuranceCiRate") {
+		return 0
+	}
 	tableName := "reinsurance_ci_rates"
 	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + strconv.Itoa(incomeLevel) + "_" + memberResultData.Gender + "_" + strconv.Itoa(memberResultData.OccupationClass)
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
@@ -9556,6 +9918,9 @@ func GetReinsuranceCiRate(memberResultData *models.MemberRatingResult, groupPric
 // reinsurance_phi_rates. The field order and `|` separator must match the
 // CONCAT in migrations/<dialect>/20260513010000_add_phi_rates_lookup_key.sql.
 func GetReinsurancePhiRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, schemeCategory models.SchemeCategory) float64 {
+	if !IsTableRequired("reinsurancePhiRate") {
+		return 0
+	}
 	tableName := "reinsurance_phi_rates"
 	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + strconv.Itoa(incomeLevel) + "_" + memberResultData.Gender + "_" + strconv.Itoa(memberResultData.OccupationClass)
 	if cached, found := GroupPricingCache.Get(cacheKey); found {
@@ -9568,6 +9933,32 @@ func GetReinsurancePhiRate(memberResultData *models.MemberRatingResult, groupPri
 		strconv.Itoa(memberResultData.OccupationClass)
 	var rate float64
 	DB.Table(tableName).Where("lookup_key = ?", lookupKey).Pluck("phi_rate", &rate)
+	GroupPricingCache.Set(cacheKey, rate, 1)
+	return rate
+}
+
+// GetReinsuranceScbRate looks up the reinsurance Salary Continuation Benefit
+// rate. The lookup uses the indexed `lookup_key` generated column on
+// reinsurance_salary_continuation_rates. Field order matches the CONCAT in
+// migrations/<dialect>/20260519010000_add_salary_continuation_benefit_tables.sql
+// for the reinsurance lookup key:
+// risk_rate_code | age_next_birthday | income_level | gender | occupation_class
+func GetReinsuranceScbRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, schemeCategory models.SchemeCategory) float64 {
+	if !IsTableRequired("reinsuranceScbRate") {
+		return 0
+	}
+	tableName := "reinsurance_salary_continuation_rates"
+	cacheKey := tableName + "_" + groupPricingParameter.RiskRateCode + "_" + strconv.Itoa(memberResultData.AgeNextBirthday) + "_" + strconv.Itoa(incomeLevel) + "_" + memberResultData.Gender + "_" + strconv.Itoa(memberResultData.OccupationClass)
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(float64)
+	}
+	lookupKey := groupPricingParameter.RiskRateCode + "|" +
+		strconv.Itoa(memberResultData.AgeNextBirthday) + "|" +
+		strconv.Itoa(incomeLevel) + "|" +
+		memberResultData.Gender + "|" +
+		strconv.Itoa(memberResultData.OccupationClass)
+	var rate float64
+	DB.Table(tableName).Where("lookup_key = ?", lookupKey).Pluck("scb_rate", &rate)
 	GroupPricingCache.Set(cacheKey, rate, 1)
 	return rate
 }
@@ -9873,6 +10264,9 @@ func GetTakeHomePayFromTaxTable(annualSalary float64, riskRateCode string) (floa
 }
 
 func GetPtdRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, groupQuote models.GroupPricingQuote, schemeCategory models.SchemeCategory, incomeLevel int) float64 {
+	if !IsTableRequired("ptdRate") {
+		return 0
+	}
 	tableName := "ptd_rates"
 
 	var keyString strings.Builder
@@ -9910,6 +10304,9 @@ func GetPtdRate(memberResultData *models.MemberRatingResult, groupPricingParamet
 }
 
 func GetTtdRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, groupQuote models.GroupPricingQuote, schemeCategory models.SchemeCategory, incomeLevel int) float64 {
+	if !IsTableRequired("ttdRate") {
+		return 0
+	}
 	tableName := "ttd_rates"
 
 	var keyString strings.Builder
@@ -9948,6 +10345,9 @@ func GetTtdRate(memberResultData *models.MemberRatingResult, groupPricingParamet
 }
 
 func GetPhiRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, groupQuote models.GroupPricingQuote, schemeCategory models.SchemeCategory, incomeLevel int) float64 {
+	if !IsTableRequired("phiRate") {
+		return 0
+	}
 	tableName := "phi_rates"
 
 	var keyString strings.Builder
@@ -9999,7 +10399,57 @@ func GetPhiRate(memberResultData *models.MemberRatingResult, groupPricingParamet
 	return phiRate
 }
 
+// GetScbRate looks up a single Salary Continuation Benefit rate using the
+// indexed `lookup_key` generated column on salary_continuation_rates. The
+// field order and `|` separator must match the CONCAT in
+// migrations/<dialect>/20260519010000_add_salary_continuation_benefit_tables.sql.
+func GetScbRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, groupQuote models.GroupPricingQuote, schemeCategory models.SchemeCategory, incomeLevel int) float64 {
+	if !IsTableRequired("scbRate") {
+		return 0
+	}
+	tableName := "salary_continuation_rates"
+
+	var keyString strings.Builder
+	keyString.WriteString(schemeCategory.SchemeCategory + "_")
+	keyString.WriteString(groupPricingParameter.RiskRateCode + "_")
+	keyString.WriteString(schemeCategory.PhiRiskType + "_")
+	keyString.WriteString(strconv.Itoa(memberResultData.AgeNextBirthday) + "_")
+	keyString.WriteString(memberResultData.Gender[:1] + "_")
+	keyString.WriteString(strconv.Itoa(memberResultData.OccupationClass) + "_")
+	keyString.WriteString(strconv.Itoa(incomeLevel) + "_")
+	keyString.WriteString(strconv.Itoa(schemeCategory.PhiDeferredPeriod) + "_")
+	keyString.WriteString(strconv.Itoa(schemeCategory.ScbExcessPeriod) + "_")
+	keyString.WriteString(schemeCategory.PhiBenefitEscalation + "_")
+	keyString.WriteString(schemeCategory.PhiDisabilityDefinition + "_")
+	key := keyString.String()
+	cacheKey := tableName + "_" + key
+	if cached, found := GroupPricingCache.Get(cacheKey); found {
+		return cached.(float64)
+	}
+
+	lookupKey := groupPricingParameter.RiskRateCode + "|" +
+		schemeCategory.PhiRiskType + "|" +
+		strconv.Itoa(memberResultData.AgeNextBirthday) + "|" +
+		memberResultData.Gender + "|" +
+		strconv.Itoa(memberResultData.OccupationClass) + "|" +
+		strconv.Itoa(incomeLevel) + "|" +
+		strconv.Itoa(schemeCategory.PhiDeferredPeriod) + "|" +
+		strconv.Itoa(schemeCategory.ScbExcessPeriod) + "|" +
+		schemeCategory.PhiBenefitEscalation + "|" +
+		schemeCategory.PhiDisabilityDefinition
+	var scbRate float64
+	err := DB.Table(tableName).Where("lookup_key = ?", lookupKey).Pluck("scb_rate", &scbRate).Error
+	if err != nil {
+		fmt.Println(err)
+	}
+	GroupPricingCache.Set(cacheKey, scbRate, 1)
+	return scbRate
+}
+
 func GetCiRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, groupQuote models.GroupPricingQuote, schemeCategory models.SchemeCategory, incomeLevel int) float64 {
+	if !IsTableRequired("ciRate") {
+		return 0
+	}
 	tableName := "ci_rates"
 
 	var keyString strings.Builder
@@ -10035,6 +10485,9 @@ func GetCiRate(memberResultData *models.MemberRatingResult, groupPricingParamete
 }
 
 func GetSpouseGlaRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, incomeLevel int, groupQuote models.GroupPricingQuote, schemeCategory models.SchemeCategory) float64 {
+	if !IsTableRequired("glaRate") {
+		return 0
+	}
 	tableName := "gla_rates"
 
 	var keyString strings.Builder
@@ -10070,6 +10523,9 @@ func GetSpouseGlaRate(memberResultData *models.MemberRatingResult, groupPricingP
 }
 
 func GetEducatorRate(groupPricingParameter models.GroupPricingParameters, educatorBenefitCode string, anb int, incomeLevel int) models.EducatorRate {
+	if !IsTableRequired("educatorRiskRates") {
+		return models.EducatorRate{}
+	}
 	tableName := "educator_rates"
 	var educatorRates models.EducatorRate
 	var keyString strings.Builder
@@ -10097,6 +10553,9 @@ func GetEducatorRate(groupPricingParameter models.GroupPricingParameters, educat
 }
 
 func GetFuneralParameters(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, parameterVariable string) float64 {
+	if !IsTableRequired("funeralParameters") {
+		return 0
+	}
 	tableName := "funeral_parameters"
 	var funeralParameter models.FuneralParameters
 	var keyString strings.Builder
@@ -10344,6 +10803,9 @@ func CalculateAdditionalGlaCoverBandRates(
 	if len(bands) == 0 {
 		return nil, nil
 	}
+	// Resolve the age methodology once for the whole band sweep — the
+	// weightedForBand closure below is invoked per band × per member.
+	ageMethod := GetAgeMethod()
 
 	// Clamp male proportion to [0, 1] so a bad UI or DB value can't
 	// produce negative or > 100% weighted rates.
@@ -10453,12 +10915,13 @@ func CalculateAdditionalGlaCoverBandRates(
 		}
 	}
 
-	// 2) Pull gla_aids_rates across all ages for this risk code and blend
-	// male/female. Missing ages are implicitly 0 (matches the per-member
-	// path which simply looks up 0 when nothing is stored).
+	// 2) Pull gla_aids_rates across all ages for this risk code, region and
+	// occupation class, and blend male/female. Missing ages are implicitly
+	// 0 (matches the per-member path which simply looks up 0 when nothing
+	// is stored).
 	var aidsRows []models.GlaAidsRate
 	if err := DB.Table("gla_aids_rates").
-		Where("risk_rate_code = ? AND occupation_class = ?", riskRateCode, occupationClass).
+		Where("risk_rate_code = ? AND region = ? AND occupation_class = ?", riskRateCode, region, occupationClass).
 		Find(&aidsRows).Error; err != nil {
 		return nil, err
 	}
@@ -10665,7 +11128,7 @@ func CalculateAdditionalGlaCoverBandRates(
 			if sa <= 0 {
 				continue
 			}
-			age := calculateAgeNextBirthday(referenceDate, mp.DateOfBirth)
+			age := calculateMemberAge(referenceDate, mp.DateOfBirth, ageMethod)
 			if age < minAge || age > maxAge {
 				continue
 			}
@@ -10999,6 +11462,9 @@ func ResolveAdditionalGlaCoverMaleProp(parameters models.GroupPricingParameters,
 }
 
 func GetChildFuneralRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, childAge float64) float64 {
+	if !IsTableRequired("childMortality") {
+		return 0
+	}
 	tableName := "child_mortalities"
 
 	var keyString strings.Builder
@@ -11028,6 +11494,9 @@ func GetChildFuneralRate(memberResultData *models.MemberRatingResult, groupPrici
 }
 
 func GetDependantMortalityRate(memberResultData *models.MemberRatingResult, groupPricingParameter models.GroupPricingParameters, dependantAverageAge float64, incomeLevel int) float64 {
+	if !IsTableRequired("glaRate") {
+		return 0
+	}
 	tableName := "gla_rates"
 
 	var keyString strings.Builder
@@ -12506,7 +12975,7 @@ func AddMemberToScheme(member models.GPricingMemberDataInForce, user models.AppU
 			PerformedBy:    user.UserName,
 		})
 
-		GroupPricingCache.Clear()
+		broadcastCacheInvalidation("member_enrollment")
 		//var groupParameter models.GroupPricingParameters
 		//var groupPricingReinsuranceStructure models.GroupPricingReinsuranceStructure
 		//var memberRatingResultSummary models.MemberRatingResultSummary
@@ -17094,6 +17563,7 @@ func getBaseBenefitMaps() []models.GroupBenefitMapper {
 		{BenefitName: "Permanent Total Disability", BenefitCode: "PTD", BenefitAlias: ""},
 		{BenefitName: "Temporary Total Disability", BenefitCode: "TTD", BenefitAlias: ""},
 		{BenefitName: "Personal Health Insurance", BenefitCode: "PHI", BenefitAlias: ""},
+		{BenefitName: "Salary Continuation Benefit", BenefitCode: "SCB", BenefitAlias: ""},
 		{BenefitName: "Critical Illness", BenefitCode: "CI", BenefitAlias: ""},
 		{BenefitName: "Group Family Funeral", BenefitCode: "GFF", BenefitAlias: ""},
 		{BenefitName: "GLA Educator", BenefitCode: "GLA_EDU", BenefitAlias: ""},
@@ -17529,6 +17999,12 @@ func addMappers(groupQuote *models.GroupPricingQuote, benefitMaps []models.Group
 					groupQuote.SchemeCategories[i].PhiAlias = benefit.BenefitAlias
 				}
 			}
+			if benefit.BenefitCode == "SCB" {
+				groupQuote.SchemeCategories[i].ScbAlias = benefit.BenefitName
+				if benefit.BenefitAlias != "" {
+					groupQuote.SchemeCategories[i].ScbAlias = benefit.BenefitAlias
+				}
+			}
 			if benefit.BenefitCode == "CI" {
 				groupQuote.SchemeCategories[i].CiAlias = benefit.BenefitName
 				if benefit.BenefitAlias != "" {
@@ -17623,6 +18099,24 @@ func GetDistinctNormalRetirementAges() ([]int, error) {
 	}
 
 	return normalRetirementAges, nil
+}
+
+// GetDistinctScbExcessPeriods returns the distinct excess_period values from
+// salary_continuation_rates, optionally filtered by risk_rate_code, used to
+// populate the SCB Excess Period dropdown in the quote builder.
+func GetDistinctScbExcessPeriods(riskRateCode string) ([]int, error) {
+	var excessPeriods []int
+
+	query := DB.Table("salary_continuation_rates")
+	if riskRateCode != "" {
+		query = query.Where("risk_rate_code = ?", riskRateCode)
+	}
+	err := query.Distinct("excess_period").Pluck("excess_period", &excessPeriods).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return excessPeriods, nil
 }
 
 // RiskTypes holds the distinct risk types from different tables
@@ -17840,8 +18334,8 @@ func DeactivateSchemeMember(schemeId string, member models.GPricingMemberDataInF
 			})
 		}
 
-		// Clear the cache
-		GroupPricingCache.Clear()
+		// Clear the cache on this instance and broadcast to peers.
+		broadcastCacheInvalidation("member_exit")
 
 		logger.Info("Successfully deleted scheme member")
 		return nil

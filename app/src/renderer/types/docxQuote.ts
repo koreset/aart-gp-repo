@@ -50,6 +50,7 @@ export interface BenefitTitles {
   ptdBenefitTitle: string
   ciBenefitTitle: string
   phiBenefitTitle: string
+  scbBenefitTitle?: string
   ttdBenefitTitle: string
   familyFuneralBenefitTitle: string
   additionalAccidentalGlaBenefitTitle?: string
