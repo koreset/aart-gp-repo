@@ -178,7 +178,10 @@
             <v-icon color="primary" class="me-2">mdi-filter-variant</v-icon>
             <div class="text-subtitle-1 font-weight-bold">Quote funnel</div>
           </div>
-          <ag-charts :options="funnelChartOptions" :style="{ height: '280px' }" />
+          <ag-charts
+            :options="funnelChartOptions"
+            :style="{ height: '280px' }"
+          />
         </v-card>
       </v-col>
       <v-col cols="12" md="6">
@@ -200,7 +203,10 @@
               <v-btn value="month" size="x-small">Month</v-btn>
             </v-btn-toggle>
           </div>
-          <ag-charts :options="trendChartOptions" :style="{ height: '280px' }" />
+          <ag-charts
+            :options="trendChartOptions"
+            :style="{ height: '280px' }"
+          />
         </v-card>
       </v-col>
     </v-row>
@@ -210,10 +216,23 @@
       <v-col cols="12" md="6">
         <v-card elevation="1" class="rounded-lg pa-4">
           <div class="d-flex align-center mb-3">
-            <v-icon color="warning" class="me-2">mdi-timer-alert-outline</v-icon>
+            <v-icon color="warning" class="me-2"
+              >mdi-timer-alert-outline</v-icon
+            >
             <div class="text-subtitle-1 font-weight-bold">
               SLA breaches by transition
             </div>
+            <v-icon
+              size="small"
+              class="ms-1 text-medium-emphasis"
+              aria-label="About this table"
+              >mdi-information-outline
+              <v-tooltip activator="parent" location="top" max-width="320">
+                Each row is one status change in the quote lifecycle (e.g. draft
+                → submitted). Compliance is the share of transitions that
+                completed within the configured SLA target.
+              </v-tooltip>
+            </v-icon>
           </div>
           <v-table density="compact" hover>
             <thead>
@@ -230,9 +249,7 @@
                 v-for="row in sla.breaches_by_transition"
                 :key="row.from_status + '|' + row.to_status"
               >
-                <td
-                  >{{ row.from_status }} → {{ row.to_status }}</td
-                >
+                <td>{{ row.from_status }} → {{ row.to_status }}</td>
                 <td class="text-right">{{ row.target_hours }}</td>
                 <td class="text-right">{{ row.transition_count }}</td>
                 <td class="text-right">
@@ -263,8 +280,19 @@
               >mdi-account-multiple-outline</v-icon
             >
             <div class="text-subtitle-1 font-weight-bold">
-              Top users by SLA breaches
+              Users with most SLA breaches
             </div>
+            <v-icon
+              size="small"
+              class="ms-1 text-medium-emphasis"
+              aria-label="About this table"
+              >mdi-information-outline
+              <v-tooltip activator="parent" location="top" max-width="320">
+                Users ranked by the number of transitions that missed their SLA
+                target (worst first). High breach counts flag where coaching or
+                capacity attention is needed.
+              </v-tooltip>
+            </v-icon>
           </div>
           <v-table density="compact" hover>
             <thead>
@@ -307,6 +335,22 @@
         <span class="text-caption text-medium-emphasis"
           >{{ kpis.length }} users in scope</span
         >
+        <v-btn
+          size="small"
+          variant="text"
+          color="primary"
+          density="comfortable"
+          class="ms-2"
+          :disabled="!kpis.length"
+          :loading="leaderboardExporting"
+          aria-label="Download leaderboard"
+          @click="downloadLeaderboard"
+        >
+          <v-icon>mdi-file-excel-outline</v-icon>
+          <v-tooltip activator="parent" location="top"
+            >Download leaderboard (Excel)</v-tooltip
+          >
+        </v-btn>
       </div>
       <v-table density="compact" hover class="leaderboard">
         <thead>
@@ -346,12 +390,12 @@
               >
               <span v-else class="text-medium-emphasis">—</span>
             </td>
-            <td class="text-right"
-              >{{ formatCurrency(row.pipeline_annual_premium) }}</td
-            >
-            <td class="text-right"
-              >{{ formatCurrency(row.total_annual_premium) }}</td
-            >
+            <td class="text-right">{{
+              formatCurrency(row.pipeline_annual_premium)
+            }}</td>
+            <td class="text-right">{{
+              formatCurrency(row.total_annual_premium)
+            }}</td>
           </tr>
           <tr v-if="!kpis.length">
             <td colspan="12" class="text-center text-medium-emphasis py-6"
@@ -365,8 +409,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { AgCharts } from 'ag-charts-vue3'
+import * as ExcelJS from 'exceljs'
 
 import {
   useQuoteDashboard,
@@ -642,6 +687,124 @@ function slaColor(row: QuotePerformanceKpis): string {
   if (row.sla_compliance_pct >= 0.8) return 'warning'
   return 'error'
 }
+
+const leaderboardExporting = ref(false)
+
+async function downloadLeaderboard() {
+  if (!kpis.value.length) return
+  leaderboardExporting.value = true
+  try {
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet('User leaderboard')
+
+    ws.columns = [
+      { header: 'User', key: 'user_name', width: 28 },
+      { header: 'Total quotes', key: 'total_quotes', width: 14 },
+      { header: 'Draft', key: 'draft_count', width: 10 },
+      { header: 'Submitted', key: 'submitted_count', width: 12 },
+      { header: 'Approved', key: 'approved_count', width: 12 },
+      { header: 'Rejected', key: 'rejected_count', width: 12 },
+      { header: 'Accepted', key: 'accepted_count', width: 12 },
+      { header: 'In force', key: 'in_force_count', width: 12 },
+      {
+        header: 'Approval rate',
+        key: 'approval_rate',
+        width: 14,
+        style: { numFmt: '0.0%' }
+      },
+      {
+        header: 'Acceptance rate',
+        key: 'acceptance_rate',
+        width: 16,
+        style: { numFmt: '0.0%' }
+      },
+      {
+        header: 'Conversion rate',
+        key: 'conversion_rate',
+        width: 16,
+        style: { numFmt: '0.0%' }
+      },
+      {
+        header: 'Rejection rate',
+        key: 'rejection_rate',
+        width: 14,
+        style: { numFmt: '0.0%' }
+      },
+      {
+        header: 'Avg time to submit (hrs)',
+        key: 'avg_time_to_submit_hours',
+        width: 22,
+        style: { numFmt: '0.0' }
+      },
+      {
+        header: 'Avg time to approve (hrs)',
+        key: 'avg_time_to_approve_hours',
+        width: 22,
+        style: { numFmt: '0.0' }
+      },
+      {
+        header: 'Avg time to accept (hrs)',
+        key: 'avg_time_to_accept_hours',
+        width: 22,
+        style: { numFmt: '0.0' }
+      },
+      {
+        header: 'Avg total cycle (hrs)',
+        key: 'avg_total_cycle_hours',
+        width: 20,
+        style: { numFmt: '0.0' }
+      },
+      { header: 'SLA breaches', key: 'sla_breach_count', width: 14 },
+      { header: 'SLA transitions', key: 'sla_transition_count', width: 16 },
+      {
+        header: 'SLA compliance',
+        key: 'sla_compliance_pct',
+        width: 14,
+        style: { numFmt: '0.0%' }
+      },
+      {
+        header: 'Won premium',
+        key: 'total_annual_premium',
+        width: 18,
+        style: { numFmt: '"R" #,##0' }
+      },
+      {
+        header: 'Pipeline premium',
+        key: 'pipeline_annual_premium',
+        width: 18,
+        style: { numFmt: '"R" #,##0' }
+      },
+      {
+        header: 'Avg quote value',
+        key: 'avg_quote_value',
+        width: 16,
+        style: { numFmt: '"R" #,##0' }
+      }
+    ]
+
+    ws.getRow(1).font = { bold: true }
+    ws.views = [{ state: 'frozen', ySplit: 1 }]
+
+    for (const row of kpis.value) ws.addRow(row)
+
+    const buf = await wb.xlsx.writeBuffer()
+    const blob = new Blob([buf], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `user-leaderboard-${new Date()
+      .toISOString()
+      .replace(/[:.]/g, '-')}.xlsx`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  } finally {
+    leaderboardExporting.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -713,7 +876,9 @@ function slaColor(row: QuotePerformanceKpis): string {
   padding: 14px 16px 12px;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-  transition: box-shadow 120ms ease, transform 120ms ease;
+  transition:
+    box-shadow 120ms ease,
+    transform 120ms ease;
 }
 .metric-tile::before {
   content: '';
@@ -758,11 +923,21 @@ function slaColor(row: QuotePerformanceKpis): string {
 
 /* Accent palette — keyed off the card.color string from the summaryCards
  * computed in script. */
-.metric-tile--primary { --tile-accent: var(--qp-primary); }
-.metric-tile--success { --tile-accent: var(--qp-success); }
-.metric-tile--warning { --tile-accent: var(--qp-warning); }
-.metric-tile--danger  { --tile-accent: var(--qp-danger);  }
-.metric-tile--info    { --tile-accent: var(--qp-info);    }
+.metric-tile--primary {
+  --tile-accent: var(--qp-primary);
+}
+.metric-tile--success {
+  --tile-accent: var(--qp-success);
+}
+.metric-tile--warning {
+  --tile-accent: var(--qp-warning);
+}
+.metric-tile--danger {
+  --tile-accent: var(--qp-danger);
+}
+.metric-tile--info {
+  --tile-accent: var(--qp-info);
+}
 
 /* ──────────── Tables ──────────── */
 .quote-performance :deep(.v-table) {
