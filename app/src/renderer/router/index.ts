@@ -250,6 +250,15 @@ const router = createRouter({
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {
+      path: '/group-pricing/claims-management/:id/edit',
+      name: 'group-pricing-claim-edit',
+      component: () =>
+        import('../screens/group_pricing/claims_management/ClaimEdit.vue'),
+      props: true,
+      meta: { required_permission: 'claims:lodge' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
       path: '/group-pricing/claims-analytics',
       name: 'group-pricing-claims-analytics',
       component: () =>

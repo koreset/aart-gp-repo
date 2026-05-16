@@ -992,12 +992,22 @@ export default {
   },
 
   updateClaim(claimId, claimData) {
+    const isFormData =
+      typeof FormData !== 'undefined' && claimData instanceof FormData
     return Api.put(`/group-pricing/claims/${claimId}`, claimData, {
       headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json'
+        'Content-Type': isFormData
+          ? 'multipart/form-data'
+          : 'application/json',
+        Accept: isFormData ? 'multipart/form-data' : 'application/json'
       }
     })
+  },
+
+  deleteClaimAttachment(claimId, attachmentId) {
+    return Api.delete(
+      `/group-pricing/claims/${claimId}/attachments/${attachmentId}`
+    )
   },
 
   createClaimDeclineRecord(claimId, declineData) {

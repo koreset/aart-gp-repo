@@ -445,17 +445,41 @@ const claimsColumnDefs = [
   {
     headerName: 'Actions',
     pinned: 'right' as const,
-    width: 90,
+    width: 150,
     sortable: false,
     filter: false,
     resizable: false,
-    cellRenderer: () =>
-      `<button style="
+    cellRenderer: (params: any) => {
+      const baseBtn = `
         background:#1976D2;color:#fff;border:none;border-radius:4px;
         padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;
         line-height:1.6;
-      ">View</button>`,
-    onCellClicked: (params: any) => viewClaimDetails(params)
+      `
+      const editBtn = `
+        background:#fff;color:#1976D2;border:1px solid #1976D2;border-radius:4px;
+        padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;
+        line-height:1.6;margin-left:4px;
+      `
+      const showEdit =
+        params.data?.status === 'pending' ||
+        params.data?.status === 'under_assessment'
+      return (
+        `<button data-action="view" style="${baseBtn}">View</button>` +
+        (showEdit
+          ? `<button data-action="edit" style="${editBtn}">Edit</button>`
+          : '')
+      )
+    },
+    onCellClicked: (params: any) => {
+      const action = (params.event?.target as HTMLElement | undefined)?.getAttribute?.(
+        'data-action'
+      )
+      if (action === 'edit') {
+        editClaim(params)
+      } else {
+        viewClaimDetails(params)
+      }
+    }
   }
 ]
 
@@ -567,6 +591,15 @@ const viewClaimDetails = (claim: any) => {
   if (!claimRow?.id) return
   router.push({
     name: 'group-pricing-claim-details',
+    params: { id: claimRow.id }
+  })
+}
+
+const editClaim = (claim: any) => {
+  const claimRow = claim.data
+  if (!claimRow?.id) return
+  router.push({
+    name: 'group-pricing-claim-edit',
     params: { id: claimRow.id }
   })
 }

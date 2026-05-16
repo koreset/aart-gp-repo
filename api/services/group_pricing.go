@@ -16543,12 +16543,27 @@ func GetGroupSchemeClaimsDashboardData(f ClaimsDashboardFilters) (map[string]int
 	return result, nil
 }
 
+// ErrClaimNotEditable is returned when a caller attempts to modify a claim whose current
+// status is past the editable window (i.e. anything other than "pending" or "under_assessment").
+var ErrClaimNotEditable = errors.New("claim is not editable in its current status")
+
+// claimEditableStatuses lists the statuses in which a claim may be modified through
+// UpdateGroupSchemeClaim / UpdateGroupSchemeClaimWithFiles or attachment deletion.
+var claimEditableStatuses = map[string]bool{
+	"pending":          true,
+	"under_assessment": true,
+}
+
 // UpdateGroupSchemeClaim updates a claim by ID. It preserves immutable fields like ID, CreationDate, and CreatedBy.
 func UpdateGroupSchemeClaim(claimID int, payload models.GroupSchemeClaim, user models.AppUser) (models.GroupSchemeClaim, error) {
 	// Ensure the claim exists
 	var existing models.GroupSchemeClaim
 	if err := DB.First(&existing, claimID).Error; err != nil {
 		return existing, err
+	}
+
+	if !claimEditableStatuses[existing.Status] {
+		return existing, fmt.Errorf("%w: status is %q", ErrClaimNotEditable, existing.Status)
 	}
 
 	// Force IDs to match and protect immutable fields
@@ -16624,7 +16639,8 @@ func UpdateGroupSchemeClaim(claimID int, payload models.GroupSchemeClaim, user m
 
 // UpdateGroupSchemeClaimWithFiles updates a claim and optionally appends new attachments from multipart upload.
 // Immutable fields (id, creation_date, created_by) are preserved. New files are stored under tmp/uploads/group_claims/claim_<id>.
-func UpdateGroupSchemeClaimWithFiles(claimID int, payload models.GroupSchemeClaim, files map[string][]*multipart.FileHeader, user models.AppUser) (models.GroupSchemeClaim, error) {
+// removedAttachmentIDs lists existing attachment IDs to delete in the same transaction (rows and on-disk files).
+func UpdateGroupSchemeClaimWithFiles(claimID int, payload models.GroupSchemeClaim, files map[string][]*multipart.FileHeader, removedAttachmentIDs []int, user models.AppUser) (models.GroupSchemeClaim, error) {
 	// Start a transaction to ensure atomicity for DB updates and attachment rows
 	tx := DB.Begin()
 	if tx.Error != nil {
@@ -16635,6 +16651,11 @@ func UpdateGroupSchemeClaimWithFiles(claimID int, payload models.GroupSchemeClai
 	if err := tx.First(&existing, claimID).Error; err != nil {
 		tx.Rollback()
 		return existing, err
+	}
+
+	if !claimEditableStatuses[existing.Status] {
+		tx.Rollback()
+		return existing, fmt.Errorf("%w: status is %q", ErrClaimNotEditable, existing.Status)
 	}
 
 	// Apply updates while protecting immutable fields
@@ -16702,6 +16723,42 @@ func UpdateGroupSchemeClaimWithFiles(claimID int, payload models.GroupSchemeClai
 		}
 	}
 
+	// Delete any attachments the caller flagged for removal. The claim_id filter
+	// prevents a malicious caller from referencing an attachment that belongs to
+	// another claim.
+	if len(removedAttachmentIDs) > 0 {
+		var toDelete []models.GroupSchemeClaimAttachment
+		if err := tx.Where("claim_id = ? AND id IN ?", existing.ID, removedAttachmentIDs).Find(&toDelete).Error; err != nil {
+			tx.Rollback()
+			return existing, err
+		}
+		if len(toDelete) > 0 {
+			ids := make([]int, 0, len(toDelete))
+			for _, a := range toDelete {
+				ids = append(ids, a.ID)
+			}
+			if err := tx.Where("claim_id = ? AND id IN ?", existing.ID, ids).Delete(&models.GroupSchemeClaimAttachment{}).Error; err != nil {
+				tx.Rollback()
+				return existing, err
+			}
+			// Best-effort remove the underlying files on disk; failure here does
+			// not roll back the transaction since the DB row is the source of truth.
+			for _, a := range toDelete {
+				if a.StoragePath == "" {
+					continue
+				}
+				if err := os.Remove(a.StoragePath); err != nil && !os.IsNotExist(err) {
+					appLog.WithFields(map[string]interface{}{
+						"claim_id":      existing.ID,
+						"attachment_id": a.ID,
+						"path":          a.StoragePath,
+						"error":         err.Error(),
+					}).Warn("failed to delete attachment file on disk")
+				}
+			}
+		}
+	}
+
 	// Handle file uploads (if any)
 	if len(payload.SupportingDocuments) > 0 {
 		baseDir := filepath.Join("tmp", "uploads", "group_claims", fmt.Sprintf("claim_%d", existing.ID))
@@ -16711,12 +16768,25 @@ func UpdateGroupSchemeClaimWithFiles(claimID int, payload models.GroupSchemeClai
 		}
 
 		for i, doc := range payload.SupportingDocuments {
-			key := fmt.Sprintf("file_%d", i)
-			fhList, ok := files[key]
-			if !ok || len(fhList) == 0 {
+			// Resolve the file header for this metadata entry. The frontend may
+			// send files under "files" (with the metadata's FileIndex pointing
+			// into the array — mirrors GroupSchemeSubmitClaimWithFiles) or under
+			// per-index "file_<i>" keys (legacy update format).
+			var fh *multipart.FileHeader
+			if fl, ok := files["files"]; ok {
+				idx := doc.FileIndex
+				if idx >= 0 && idx < len(fl) {
+					fh = fl[idx]
+				}
+			}
+			if fh == nil {
+				if fl, ok := files[fmt.Sprintf("file_%d", i)]; ok && len(fl) > 0 {
+					fh = fl[0]
+				}
+			}
+			if fh == nil {
 				continue
 			}
-			fh := fhList[0]
 
 			name := filepath.Base(fh.Filename)
 			destPath := filepath.Join(baseDir, name)
@@ -16822,6 +16892,40 @@ func UpdateGroupSchemeClaimWithFiles(claimID int, payload models.GroupSchemeClai
 		return updated, err
 	}
 	return updated, nil
+}
+
+// DeleteGroupSchemeClaimAttachment removes a single attachment row (and its on-disk
+// file, best-effort) for a claim. It enforces the same editable-status guard as
+// UpdateGroupSchemeClaim. Returns gorm.ErrRecordNotFound if the claim or attachment
+// does not exist or the attachment does not belong to the given claim.
+func DeleteGroupSchemeClaimAttachment(claimID int, attachmentID int, _ models.AppUser) error {
+	var claim models.GroupSchemeClaim
+	if err := DB.First(&claim, claimID).Error; err != nil {
+		return err
+	}
+	if !claimEditableStatuses[claim.Status] {
+		return fmt.Errorf("%w: status is %q", ErrClaimNotEditable, claim.Status)
+	}
+
+	var att models.GroupSchemeClaimAttachment
+	if err := DB.Where("id = ? AND claim_id = ?", attachmentID, claimID).First(&att).Error; err != nil {
+		return err
+	}
+
+	if err := DB.Delete(&att).Error; err != nil {
+		return err
+	}
+	if att.StoragePath != "" {
+		if err := os.Remove(att.StoragePath); err != nil && !os.IsNotExist(err) {
+			appLog.WithFields(map[string]interface{}{
+				"claim_id":      claimID,
+				"attachment_id": attachmentID,
+				"path":          att.StoragePath,
+				"error":         err.Error(),
+			}).Warn("failed to delete attachment file on disk")
+		}
+	}
+	return nil
 }
 
 // CreateClaimCommunication creates a new communication log linked to a claim
