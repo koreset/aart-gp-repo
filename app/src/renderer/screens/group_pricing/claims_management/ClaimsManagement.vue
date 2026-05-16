@@ -109,16 +109,25 @@
 
             <!-- Quick Stats Cards -->
             <v-row class="mb-4">
-              <v-col cols="12" md="3">
+              <v-col cols="12" sm="6" md="4" lg="2">
                 <stat-card
-                  title="Pending Claims"
-                  :value="String(claimsStats.pending)"
+                  title="Drafts"
+                  :value="String(claimsStats.drafts)"
+                  icon="mdi-file-edit-outline"
+                  color="grey"
+                  :loading="loading"
+                />
+              </v-col>
+              <v-col cols="12" sm="6" md="4" lg="2">
+                <stat-card
+                  title="Pending Assessment"
+                  :value="String(claimsStats.pendingAssessment)"
                   icon="mdi-clock-outline"
                   color="info"
                   :loading="loading"
                 />
               </v-col>
-              <v-col cols="12" md="3">
+              <v-col cols="12" sm="6" md="4" lg="2">
                 <stat-card
                   title="Under Assessment"
                   :value="String(claimsStats.underAssessment)"
@@ -127,7 +136,7 @@
                   :loading="loading"
                 />
               </v-col>
-              <v-col cols="12" md="3">
+              <v-col cols="12" sm="6" md="4" lg="3">
                 <stat-card
                   title="Approved This Month"
                   :value="String(claimsStats.approved)"
@@ -136,7 +145,7 @@
                   :loading="loading"
                 />
               </v-col>
-              <v-col cols="12" md="3">
+              <v-col cols="12" sm="6" md="4" lg="3">
                 <stat-card
                   title="Declined This Month"
                   :value="String(claimsStats.declined)"
@@ -234,6 +243,10 @@ import { statusCellRenderer } from '@/renderer/utils/statusCellRenderer'
 import { currencyFormatter, dateFormatter } from '@/renderer/utils/formatters'
 import { useGridHeight } from '@/renderer/composables/useGridHeight'
 import { useStatusBarStore } from '@/renderer/store/statusBar'
+import {
+  isEditableClaimStatus,
+  isSubmittableClaimStatus
+} from '@/renderer/utils/claimStatus'
 
 const gridHeight = useGridHeight(380)
 const statusBarStore = useStatusBarStore()
@@ -258,7 +271,8 @@ interface Claim {
 }
 
 interface ClaimsStats {
-  pending: number
+  drafts: number
+  pendingAssessment: number
   underAssessment: number
   approved: number
   declined: number
@@ -301,7 +315,8 @@ const snackbarColor = ref('success')
 
 // Options
 const claimStatuses = [
-  { text: 'Pending', value: 'pending' },
+  { text: 'Draft', value: 'draft' },
+  { text: 'Pending Assessment', value: 'pending_assessment' },
   { text: 'Under Assessment', value: 'under_assessment' },
   { text: 'Additional Info Required', value: 'additional_info_required' },
   { text: 'Approved', value: 'approved' },
@@ -425,12 +440,12 @@ const claimsColumnDefs = [
   {
     headerName: 'Actions',
     pinned: 'right' as const,
-    width: 150,
+    width: 220,
     sortable: false,
     filter: false,
     resizable: false,
     cellRenderer: (params: any) => {
-      const baseBtn = `
+      const viewBtn = `
         background:#1976D2;color:#fff;border:none;border-radius:4px;
         padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;
         line-height:1.6;
@@ -440,13 +455,20 @@ const claimsColumnDefs = [
         padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;
         line-height:1.6;margin-left:4px;
       `
-      const showEdit =
-        params.data?.status === 'pending' ||
-        params.data?.status === 'under_assessment'
+      const submitBtn = `
+        background:#2E7D32;color:#fff;border:none;border-radius:4px;
+        padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;
+        line-height:1.6;margin-left:4px;
+      `
+      const showEdit = isEditableClaimStatus(params.data?.status)
+      const showSubmit = isSubmittableClaimStatus(params.data?.status)
       return (
-        `<button data-action="view" style="${baseBtn}">View</button>` +
+        `<button data-action="view" style="${viewBtn}">View</button>` +
         (showEdit
           ? `<button data-action="edit" style="${editBtn}">Edit</button>`
+          : '') +
+        (showSubmit
+          ? `<button data-action="submit" style="${submitBtn}">Submit</button>`
           : '')
       )
     },
@@ -456,6 +478,8 @@ const claimsColumnDefs = [
       )?.getAttribute?.('data-action')
       if (action === 'edit') {
         editClaim(params)
+      } else if (action === 'submit') {
+        promptSubmitForAssessment(params)
       } else {
         viewClaimDetails(params)
       }
@@ -503,7 +527,10 @@ const claimsStats = computed((): ClaimsStats => {
   const currentMonth = new Date().getMonth()
   const currentYear = new Date().getFullYear()
   return {
-    pending: claims.value.filter((c) => c.status === 'pending').length,
+    drafts: claims.value.filter((c) => c.status === 'draft').length,
+    pendingAssessment: claims.value.filter(
+      (c) => c.status === 'pending_assessment'
+    ).length,
     underAssessment: claims.value.filter((c) => c.status === 'under_assessment')
       .length,
     approved: claims.value.filter((c) => {
@@ -531,17 +558,25 @@ const loadClaims = async () => {
   try {
     const response = await GroupPricingService.getClaims()
     claims.value = response.data || []
-    const pending = claims.value.filter(
-      (c: any) => c.status === 'pending'
+    const drafts = claims.value.filter(
+      (c: any) => c.status === 'draft'
+    ).length
+    const pendingAssessment = claims.value.filter(
+      (c: any) => c.status === 'pending_assessment'
     ).length
     const underAssessment = claims.value.filter(
       (c: any) => c.status === 'under_assessment'
     ).length
     statusBarStore.set([
       {
+        icon: 'mdi-file-edit-outline',
+        text: `Drafts: ${drafts}`,
+        severity: 'info'
+      },
+      {
         icon: 'mdi-clock-outline',
-        text: `Pending: ${pending}`,
-        severity: pending > 0 ? 'warn' : 'info'
+        text: `Pending assessment: ${pendingAssessment}`,
+        severity: pendingAssessment > 0 ? 'warn' : 'info'
       },
       { icon: 'mdi-magnify', text: `Under assessment: ${underAssessment}` }
     ])
@@ -582,6 +617,42 @@ const editClaim = (claim: any) => {
     name: 'group-pricing-claim-edit',
     params: { id: claimRow.id }
   })
+}
+
+const promptSubmitForAssessment = (claim: any) => {
+  const claimRow = claim.data
+  if (!claimRow?.id) return
+  confirmTitle.value = 'Submit for Assessment'
+  confirmMessage.value = `Send claim ${claimRow.claim_number || claimRow.id} to the assessment queue? It will no longer appear in Drafts.`
+  confirmCallback.value = () => submitClaimForAssessment(claimRow.id)
+  confirmDialog.value = true
+}
+
+const submitClaimForAssessment = async (claimId: number) => {
+  try {
+    await GroupPricingService.submitClaimForAssessment(claimId)
+    showSnackbar('Claim submitted for assessment', 'success')
+    await loadClaims()
+  } catch (error: any) {
+    const status = error?.response?.status
+    if (status === 422) {
+      const missing: string[] = error?.response?.data?.missing || []
+      showSnackbar(
+        missing.length
+          ? `Cannot submit: missing ${missing.join(', ')}.`
+          : 'Claim is incomplete and cannot be submitted.',
+        'error'
+      )
+    } else if (status === 409) {
+      showSnackbar(
+        'This claim cannot be submitted in its current status.',
+        'error'
+      )
+    } else {
+      console.error('Error submitting claim for assessment:', error)
+      showSnackbar('Error submitting claim. Please try again.', 'error')
+    }
+  }
 }
 
 const handleNewClaimSave = async (claimData: any) => {

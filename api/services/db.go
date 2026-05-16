@@ -358,6 +358,10 @@ func SetupTables(initTables, initDatabaseTables bool) {
 				appLog.WithField("error", err.Error()).Error("Failed to migrate group pricing tables")
 			}
 
+			if err := MigrateEmailTables(); err != nil {
+				appLog.WithField("error", err.Error()).Error("Failed to migrate email tables")
+			}
+
 			if err := MigrateGroupPricingUserTables(); err != nil {
 				appLog.WithField("error", err.Error()).Error("Failed to migrate group pricing user tables")
 			}

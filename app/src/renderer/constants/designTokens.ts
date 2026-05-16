@@ -1,6 +1,7 @@
 export const STATUS_COLORS: Record<string, { hex: string; label: string }> = {
   draft: { hex: '#9E9E9E', label: 'Draft' },
   pending: { hex: '#FF9800', label: 'Pending' },
+  pending_assessment: { hex: '#1976D2', label: 'Pending Assessment' },
   reviewed: { hex: '#009688', label: 'Reviewed' },
   approved: { hex: '#8BC34A', label: 'Approved' },
   active: { hex: '#4CAF50', label: 'Active' },

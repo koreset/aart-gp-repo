@@ -52,9 +52,10 @@
                   >This claim can no longer be edited</h3
                 >
                 <p class="text-body-2 text-medium-emphasis mb-4">
-                  Only claims with status <strong>Pending</strong> or
-                  <strong>Under Assessment</strong> can be edited. This claim is
-                  currently <strong>{{ formattedStatus }}</strong
+                  Only claims that are still in draft, pending, under
+                  assessment, or awaiting additional information can be
+                  edited. This claim is currently
+                  <strong>{{ formattedStatus }}</strong
                   >.
                 </p>
                 <v-btn color="primary" variant="outlined" @click="goToDetails">
@@ -88,6 +89,7 @@ import { useRouter } from 'vue-router'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import ClaimRegistrationForm from './components/ClaimRegistrationForm.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
+import { isEditableClaimStatus } from '@/renderer/utils/claimStatus'
 
 const props = defineProps<{
   id: string | number
@@ -103,10 +105,7 @@ const snackbar = ref(false)
 const snackbarMessage = ref('')
 const snackbarColor = ref('success')
 
-const editableStatuses = ['pending', 'under_assessment']
-const isEditable = computed(
-  () => !!claim.value && editableStatuses.includes(claim.value.status)
-)
+const isEditable = computed(() => isEditableClaimStatus(claim.value?.status))
 
 const formattedStatus = computed(() => {
   if (!claim.value?.status) return ''

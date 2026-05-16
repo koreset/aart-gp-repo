@@ -253,8 +253,9 @@
                           members</li
                         >
                         <li
-                          >All claims will be created with "pending" status
-                          initially</li
+                          >All claims will be created with "Pending Assessment"
+                          status initially (bulk uploads bypass the manual
+                          draft phase)</li
                         >
                         <li>Maximum file size: 10MB</li>
                         <li>Maximum rows: 1000 claims per upload</li>
@@ -666,7 +667,7 @@ const handleUpload = async () => {
       date_notified:
         row.date_notified || new Date().toISOString().split('T')[0],
       priority: row.priority?.toLowerCase() || 'medium',
-      status: 'pending'
+      status: 'pending_assessment'
     }))
 
     const response = await GroupPricingService.bulkUploadClaims(claimsData)
