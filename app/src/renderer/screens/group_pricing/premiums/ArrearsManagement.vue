@@ -5,39 +5,52 @@
         <h3 class="mb-0">Arrears Management</h3>
       </template>
       <template #default>
-        <!-- Summary KPIs -->
-        <v-row class="mb-4">
-          <v-col cols="12" sm="4">
-            <stat-card
-              title="Total Outstanding"
-              :value="fmtCurrency(totalOutstanding)"
-              icon="mdi-cash-multiple"
-              color="error"
-              :loading="loading"
-            />
-          </v-col>
-          <v-col cols="12" sm="4">
-            <stat-card
-              title="In Arrears"
-              :value="String(inArrearsCount)"
-              icon="mdi-clock-alert-outline"
-              color="warning"
-              :loading="loading"
-            />
-          </v-col>
-          <v-col cols="12" sm="4">
-            <stat-card
-              title="Suspended"
-              :value="String(suspendedCount)"
-              icon="mdi-cancel"
-              color="error"
-              :loading="loading"
-            />
-          </v-col>
-        </v-row>
+        <!-- ── Section: Overview ───────────────────────── -->
+        <page-section label="Overview">
+          <v-row>
+            <v-col cols="12" sm="4">
+              <kpi-card
+                label="Total Outstanding"
+                :value="fmtCurrency(totalOutstanding)"
+                hint="Sum of arrears across all schemes"
+                icon="mdi-cash-multiple"
+                :tone="totalOutstanding > 0 ? 'error' : 'muted'"
+              />
+            </v-col>
+            <v-col cols="12" sm="4">
+              <kpi-card
+                label="In Arrears"
+                :value="inArrearsCount"
+                hint="Schemes past due"
+                icon="mdi-clock-alert-outline"
+                :tone="inArrearsCount > 0 ? 'warning' : 'muted'"
+              />
+            </v-col>
+            <v-col cols="12" sm="4">
+              <kpi-card
+                label="Suspended"
+                :value="suspendedCount"
+                hint="Cover ceased pending payment"
+                icon="mdi-cancel"
+                :tone="suspendedCount > 0 ? 'error' : 'muted'"
+              />
+            </v-col>
+          </v-row>
+        </page-section>
 
-        <!-- Filter Bar -->
-        <v-row class="mb-3" align="center">
+        <!-- ── Section: Collections Lifecycle ──────────── -->
+        <page-section label="Collections Lifecycle">
+          <workflow-stepper :steps="collectionsLifecycle" />
+        </page-section>
+
+        <!-- ── Section: Arrears ────────────────────────── -->
+        <page-section
+          label="Arrears"
+          :count="filteredArrearsRecords.length"
+          last
+        >
+          <!-- Filter Bar -->
+          <v-row class="mb-3" align="center">
           <v-col cols="12" md="3">
             <v-select
               v-model="filters.status"
@@ -69,32 +82,30 @@
           </v-col>
         </v-row>
 
-        <!-- Aging Table -->
-        <v-row class="mb-4">
-          <v-col cols="12">
-            <v-card variant="outlined">
-              <v-card-title class="text-subtitle-1 pa-3"
-                >Premium Arrears Aging</v-card-title
-              >
-              <v-card-text class="pa-0">
-                <ag-grid-vue
-                  class="ag-theme-balham"
-                  :style="{ height: gridHeight, width: '100%' }"
-                  :column-defs="columnDefs"
-                  :row-data="filteredArrearsRecords"
-                  :default-col-def="{
-                    sortable: true,
-                    resizable: true,
-                    flex: 1
-                  }"
-                  :loading="loading"
-                  :get-row-class="getRowClass"
-                  @cell-clicked="onCellClicked"
-                />
-              </v-card-text>
-            </v-card>
-          </v-col>
-        </v-row>
+          <!-- Aging Table -->
+          <v-row class="mb-4">
+            <v-col cols="12">
+              <v-card variant="outlined">
+                <v-card-text class="pa-0">
+                  <ag-grid-vue
+                    class="ag-theme-balham"
+                    :style="{ height: gridHeight, width: '100%' }"
+                    :column-defs="columnDefs"
+                    :row-data="filteredArrearsRecords"
+                    :default-col-def="{
+                      sortable: true,
+                      resizable: true,
+                      flex: 1
+                    }"
+                    :loading="loading"
+                    :get-row-class="getRowClass"
+                    @cell-clicked="onCellClicked"
+                  />
+                </v-card-text>
+              </v-card>
+            </v-col>
+          </v-row>
+        </page-section>
       </template>
     </base-card>
 
@@ -439,12 +450,25 @@ import 'ag-grid-community/styles/ag-theme-balham.css'
 import { AgGridVue } from 'ag-grid-vue3'
 import PremiumManagementService from '@/renderer/api/PremiumManagementService'
 import BaseCard from '@/renderer/components/BaseCard.vue'
-import StatCard from '@/renderer/components/StatCard.vue'
+import PageSection from '@/renderer/components/page/PageSection.vue'
+import KpiCard from '@/renderer/components/page/KpiCard.vue'
+import WorkflowStepper, {
+  type WorkflowStep
+} from '@/renderer/components/page/WorkflowStepper.vue'
 import { useGridHeight } from '@/renderer/composables/useGridHeight'
 import { statusCellRenderer } from '@/renderer/utils/statusCellRenderer'
 import { fmtCurrency } from '@/renderer/utils/formatters'
 import { useStatusBarStore } from '@/renderer/store/statusBar'
 import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
+
+const collectionsLifecycle: WorkflowStep[] = [
+  { label: 'Current', sub: 'Up to date', tone: 'muted' },
+  { label: 'In Arrears', sub: 'Past due', tone: 'warning' },
+  { label: 'Reminded', sub: 'Notice sent', tone: 'info' },
+  { label: 'Payment Plan', sub: 'Plan agreed', tone: 'accent' },
+  { label: 'Suspended', sub: 'Cover ceased', tone: 'error' },
+  { label: 'Reinstated', sub: 'Back on cover', tone: 'success' }
+]
 
 const statusBarStore = useStatusBarStore()
 const { hasPermission } = usePermissionCheck()

@@ -8,50 +8,51 @@
               <span class="headline">Claims Management</span>
               <div class="d-flex gap-2">
                 <v-btn
-                  v-if="hasPermission('claims:lodge')"
                   size="small"
                   variant="outlined"
                   class="mr-2"
+                  rounded
+                  prepend-icon="mdi-upload"
+                  @click="bulkUploadDialog = true"
+                >
+                  Bulk Upload
+                </v-btn>
+                <v-btn
+                  v-if="hasPermission('claims:view_analytics')"
+                  size="small"
+                  variant="outlined"
+                  class="mr-2"
+                  rounded
+                  prepend-icon="mdi-chart-line"
+                  @click="router.push({ name: 'group-pricing-claims-analytics' })"
+                >
+                  Analytics
+                </v-btn>
+                <v-btn
+                  v-if="hasPermission('claims_pay:create_schedule')"
+                  size="small"
+                  variant="outlined"
+                  class="mr-2"
+                  rounded
+                  prepend-icon="mdi-cash-check"
+                  @click="
+                    router.push({
+                      name: 'group-pricing-claim-payment-schedules'
+                    })
+                  "
+                >
+                  Payment Schedules
+                </v-btn>
+                <v-btn
+                  v-if="hasPermission('claims:lodge')"
+                  size="small"
+                  variant="outlined"
                   rounded
                   prepend-icon="mdi-file-plus"
                   @click="newClaimDialog = true"
                 >
                   New Claim
                 </v-btn>
-                <v-menu>
-                  <template #activator="{ props: menuProps }">
-                    <v-btn
-                      size="small"
-                      variant="outlined"
-                      rounded
-                      v-bind="menuProps"
-                      append-icon="mdi-dots-vertical"
-                    >
-                      More
-                    </v-btn>
-                  </template>
-                  <v-list density="compact">
-                    <v-list-item
-                      prepend-icon="mdi-upload"
-                      title="Bulk Upload"
-                      @click="bulkUploadDialog = true"
-                    />
-                    <v-list-item
-                      v-if="hasPermission('claims:view_analytics')"
-                      prepend-icon="mdi-chart-line"
-                      title="Analytics"
-                      @click="
-                        router.push({ name: 'group-pricing-claims-analytics' })
-                      "
-                    />
-                    <v-list-item
-                      v-if="hasPermission('claims_pay:create_schedule')"
-                      prepend-icon="mdi-cash-check"
-                      title="Payment Schedules"
-                      @click="paymentSchedulesDialog = true"
-                    />
-                  </v-list>
-                </v-menu>
               </div>
             </div>
           </template>
@@ -191,25 +192,6 @@
       </base-card>
     </v-dialog>
 
-    <!-- Payment Schedules Dialog -->
-    <v-dialog v-model="paymentSchedulesDialog" persistent max-width="1200px">
-      <base-card :show-actions="false">
-        <template #header>
-          <div class="d-flex justify-space-between align-center">
-            <span class="headline">Claim Payment Schedules</span>
-            <v-btn
-              icon="mdi-close"
-              variant="text"
-              @click="paymentSchedulesDialog = false"
-            />
-          </div>
-        </template>
-        <template #default>
-          <claim-payment-schedules />
-        </template>
-      </base-card>
-    </v-dialog>
-
     <!-- Confirmation Dialog -->
     <v-dialog v-model="confirmDialog" persistent max-width="400px">
       <v-card>
@@ -247,7 +229,6 @@ import EmptyState from '@/renderer/components/EmptyState.vue'
 import DataGrid from '@/renderer/components/tables/DataGrid.vue'
 import RegisterClaimDialog from './components/RegisterClaimDialog.vue'
 import BulkClaimsUpload from './components/BulkClaimsUpload.vue'
-import ClaimPaymentSchedules from './components/ClaimPaymentSchedules.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { statusCellRenderer } from '@/renderer/utils/statusCellRenderer'
 import { currencyFormatter, dateFormatter } from '@/renderer/utils/formatters'
@@ -298,7 +279,6 @@ const router = useRouter()
 // Dialog states
 const newClaimDialog = ref(false)
 const bulkUploadDialog = ref(false)
-const paymentSchedulesDialog = ref(false)
 const confirmDialog = ref(false)
 
 // Filter states
@@ -471,9 +451,9 @@ const claimsColumnDefs = [
       )
     },
     onCellClicked: (params: any) => {
-      const action = (params.event?.target as HTMLElement | undefined)?.getAttribute?.(
-        'data-action'
-      )
+      const action = (
+        params.event?.target as HTMLElement | undefined
+      )?.getAttribute?.('data-action')
       if (action === 'edit') {
         editClaim(params)
       } else {

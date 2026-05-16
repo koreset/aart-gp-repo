@@ -5,76 +5,57 @@
         <h3 class="mb-0">Premium Reconciliation</h3>
       </template>
       <template #default>
-        <!-- Summary Dashboard -->
-        <v-row class="mb-4">
-          <v-col cols="12" sm="6" md="3">
-            <v-card variant="tonal" color="warning">
-              <v-card-text class="d-flex align-center justify-space-between">
-                <div>
-                  <div class="text-caption">Unallocated Payments</div>
-                  <div class="text-h6 font-weight-bold">{{
-                    summary.unallocated_payment_count
-                  }}</div>
-                  <div class="text-caption">{{
-                    fmtCurrency(summary.total_unallocated_payments)
-                  }}</div>
-                </div>
-                <v-icon size="36">mdi-bank-outline</v-icon>
-              </v-card-text>
-            </v-card>
-          </v-col>
-          <v-col cols="12" sm="6" md="3">
-            <v-card variant="tonal" color="error">
-              <v-card-text class="d-flex align-center justify-space-between">
-                <div>
-                  <div class="text-caption">Unpaid Invoices</div>
-                  <div class="text-h6 font-weight-bold">{{
-                    summary.unpaid_invoice_count
-                  }}</div>
-                  <div class="text-caption">{{
-                    fmtCurrency(summary.total_unpaid_invoices)
-                  }}</div>
-                </div>
-                <v-icon size="36">mdi-file-document-alert-outline</v-icon>
-              </v-card-text>
-            </v-card>
-          </v-col>
-          <v-col cols="12" sm="6" md="3">
-            <v-card variant="tonal" color="info">
-              <v-card-text class="d-flex align-center justify-space-between">
-                <div>
-                  <div class="text-caption">Suspense Balance</div>
-                  <div class="text-h6 font-weight-bold">{{
-                    summary.suspense_count
-                  }}</div>
-                  <div class="text-caption">{{
-                    fmtCurrency(summary.suspense_balance)
-                  }}</div>
-                </div>
-                <v-icon size="36">mdi-clock-alert-outline</v-icon>
-              </v-card-text>
-            </v-card>
-          </v-col>
-          <v-col cols="12" sm="6" md="3">
-            <v-card variant="tonal" color="deep-orange">
-              <v-card-text class="d-flex align-center justify-space-between">
-                <div>
-                  <div class="text-caption">Aged &gt; 90 Days</div>
-                  <div class="text-h6 font-weight-bold">{{
-                    fmtCurrency(summary.aged_over_90_days)
-                  }}</div>
-                  <div class="text-caption"
-                    >&gt;60d: {{ fmtCurrency(summary.aged_over_60_days) }}</div
-                  >
-                </div>
-                <v-icon size="36">mdi-alert-octagon-outline</v-icon>
-              </v-card-text>
-            </v-card>
-          </v-col>
-        </v-row>
+        <!-- ── Section: Overview ───────────────────────── -->
+        <page-section label="Overview">
+          <v-row>
+            <v-col cols="12" sm="6" md="3">
+              <kpi-card
+                label="Unallocated Payments"
+                :value="summary.unallocated_payment_count"
+                :hint="fmtCurrency(summary.total_unallocated_payments)"
+                icon="mdi-bank-outline"
+                tone="warning"
+              />
+            </v-col>
+            <v-col cols="12" sm="6" md="3">
+              <kpi-card
+                label="Unpaid Invoices"
+                :value="summary.unpaid_invoice_count"
+                :hint="fmtCurrency(summary.total_unpaid_invoices)"
+                icon="mdi-file-document-alert-outline"
+                tone="error"
+              />
+            </v-col>
+            <v-col cols="12" sm="6" md="3">
+              <kpi-card
+                label="Suspense Balance"
+                :value="summary.suspense_count"
+                :hint="fmtCurrency(summary.suspense_balance)"
+                icon="mdi-clock-alert-outline"
+                tone="info"
+              />
+            </v-col>
+            <v-col cols="12" sm="6" md="3">
+              <kpi-card
+                label="Aged > 90 Days"
+                :value="fmtCurrency(summary.aged_over_90_days)"
+                :hint="`>60d: ${fmtCurrency(summary.aged_over_60_days)}`"
+                icon="mdi-alert-octagon-outline"
+                tone="accent"
+              />
+            </v-col>
+          </v-row>
+        </page-section>
 
-        <!-- Tabs -->
-        <v-tabs v-model="activeTab" class="mb-4">
+        <!-- ── Section: Reconciliation Lifecycle ───────── -->
+        <page-section label="Reconciliation Lifecycle">
+          <workflow-stepper :steps="reconciliationLifecycle" />
+        </page-section>
+
+        <!-- ── Section: Workspace ──────────────────────── -->
+        <page-section label="Workspace" last>
+          <!-- Tabs -->
+          <v-tabs v-model="activeTab" class="mb-4">
           <v-tab value="workspace">Workspace</v-tab>
           <v-tab value="runs">Reconciliation Runs</v-tab>
           <v-tab value="rules">Matching Rules</v-tab>
@@ -259,6 +240,7 @@
             :loading="rulesLoading"
           />
         </div>
+        </page-section>
       </template>
     </base-card>
 
@@ -503,8 +485,21 @@ import 'ag-grid-community/styles/ag-theme-balham.css'
 import { AgGridVue } from 'ag-grid-vue3'
 import PremiumManagementService from '@/renderer/api/PremiumManagementService'
 import BaseCard from '@/renderer/components/BaseCard.vue'
+import PageSection from '@/renderer/components/page/PageSection.vue'
+import KpiCard from '@/renderer/components/page/KpiCard.vue'
+import WorkflowStepper, {
+  type WorkflowStep
+} from '@/renderer/components/page/WorkflowStepper.vue'
 import { useStatusBarStore } from '@/renderer/store/statusBar'
 import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
+
+const reconciliationLifecycle: WorkflowStep[] = [
+  { label: 'Received', sub: 'Payment ingested', tone: 'muted' },
+  { label: 'Unallocated', sub: 'Awaiting match', tone: 'warning' },
+  { label: 'Matched', sub: 'Auto or manual', tone: 'accent' },
+  { label: 'Allocated', sub: 'Linked to invoice', tone: 'info' },
+  { label: 'Reconciled', sub: 'Closed', tone: 'success' }
+]
 
 const statusBarStore = useStatusBarStore()
 const { hasPermission } = usePermissionCheck()

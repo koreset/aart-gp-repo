@@ -328,6 +328,64 @@ func AcceptGroupPricingQuote(c *gin.Context) {
 	c.JSON(http.StatusOK, nil)
 }
 
+// MarkGroupPricingQuoteNotTakenUp handles POST /quotes/:id/not-taken-up.
+// Records the closure reason and transitions an approved quote into the
+// not_taken_up terminal state. Validation errors map to 400, everything
+// else (DB issues, etc.) maps to 500.
+func MarkGroupPricingQuoteNotTakenUp(c *gin.Context) {
+	closeOutQuoteHandler(c, "not_taken_up")
+}
+
+// DeclineGroupPricingQuote handles POST /quotes/:id/decline-quote.
+// Mirrors MarkGroupPricingQuoteNotTakenUp but transitions into declined.
+func DeclineGroupPricingQuote(c *gin.Context) {
+	closeOutQuoteHandler(c, "declined")
+}
+
+// closeOutQuoteHandler is the shared controller-side logic behind the
+// two new endpoints. Kept tight because the service layer carries the
+// real validation; the controller's job is to parse, dispatch, and map
+// the error to an HTTP status.
+func closeOutQuoteHandler(c *gin.Context, outcome string) {
+	quoteId := c.Param("id")
+
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	user := c.MustGet("user").(models.AppUser)
+
+	var err error
+	switch outcome {
+	case "not_taken_up":
+		err = services.MarkGroupPricingQuoteNotTakenUp(quoteId, body.Reason, user)
+	case "declined":
+		err = services.DeclineGroupPricingQuote(quoteId, body.Reason, user)
+	default:
+		c.JSON(http.StatusBadRequest, "unknown close-out outcome")
+		return
+	}
+
+	if err != nil {
+		msg := err.Error()
+		// Validation errors from the service have predictable phrasing —
+		// surface them as 400 so the dialog can show the message inline.
+		if strings.Contains(msg, "must be approved") ||
+			strings.Contains(msg, "reason of at least") {
+			c.JSON(http.StatusBadRequest, msg)
+			return
+		}
+		c.JSON(http.StatusInternalServerError, msg)
+		return
+	}
+
+	c.JSON(http.StatusOK, nil)
+}
+
 // CreateOnRiskLetter creates (or re-issues) an On Risk letter record for a quote.
 func CreateOnRiskLetter(c *gin.Context) {
 	quoteId, err := strconv.Atoi(c.Param("id"))

@@ -186,7 +186,7 @@
       <!-- Assessment History -->
       <v-col v-if="assessmentHistory.length > 0" cols="12">
         <v-card class="mb-4">
-          <v-card-title class="bg-info text-white"
+          <v-card-title class="bg-primary text-white"
             >Assessment History</v-card-title
           >
           <v-card-text>
@@ -218,7 +218,7 @@
       <!-- Supporting Documents -->
       <v-col cols="12" md="6">
         <v-card class="mb-4">
-          <v-card-title class="bg-warning text-white"
+          <v-card-title class="bg-primary text-white"
             >Supporting Documents</v-card-title
           >
           <v-card-text>
@@ -262,7 +262,7 @@
       <!-- Missing Documents -->
       <v-col v-if="missingDocs.length !== 0" cols="12" md="6">
         <v-card class="mb-4">
-          <v-card-title class="bg-info text-white"
+          <v-card-title class="bg-primary text-white"
             >Missing Documents</v-card-title
           >
           <v-card-text>

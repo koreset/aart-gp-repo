@@ -30,8 +30,8 @@
           value="age_next_birthday"
         ></v-radio>
         <p class="text-body-2 text-medium-emphasis ml-8 mb-4">
-          Member is one year older on/after their birthday this year; before
-          it, they are at the current year-difference age. Historical behaviour.
+          Member is one year older on/after their birthday this year; before it,
+          they are at the current year-difference age. Historical behaviour.
         </p>
         <v-radio label="Age Last Birthday" value="age_last_birthday"></v-radio>
         <p class="text-body-2 text-medium-emphasis ml-8 mb-4">

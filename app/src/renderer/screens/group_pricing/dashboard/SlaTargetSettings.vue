@@ -19,11 +19,7 @@
         </span>
       </v-col>
       <v-col cols="auto">
-        <v-btn
-          color="primary"
-          prepend-icon="mdi-plus"
-          @click="openNewDialog"
-        >
+        <v-btn color="primary" prepend-icon="mdi-plus" @click="openNewDialog">
           New target
         </v-btn>
       </v-col>
@@ -67,9 +63,7 @@
               <v-icon v-if="t.active" color="success" size="small"
                 >mdi-check-circle</v-icon
               >
-              <v-icon v-else color="grey" size="small"
-                >mdi-cancel</v-icon
-              >
+              <v-icon v-else color="grey" size="small">mdi-cancel</v-icon>
             </td>
             <td class="text-medium-emphasis">{{ t.updated_by }}</td>
             <td class="text-right">
@@ -184,14 +178,12 @@
       <v-card>
         <v-card-title>Deactivate SLA target?</v-card-title>
         <v-card-text>
-          The target will be flagged inactive. Historical breach
-          calculations against it remain unchanged.
+          The target will be flagged inactive. Historical breach calculations
+          against it remain unchanged.
         </v-card-text>
         <v-card-actions>
           <v-spacer />
-          <v-btn variant="text" @click="deleteDialogOpen = false"
-            >Cancel</v-btn
-          >
+          <v-btn variant="text" @click="deleteDialogOpen = false">Cancel</v-btn>
           <v-btn color="error" :loading="deleting" @click="performDelete"
             >Deactivate</v-btn
           >

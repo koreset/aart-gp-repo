@@ -60,6 +60,31 @@ func GetPaymentSchedule(c *gin.Context) {
 	OK(c, schedule)
 }
 
+// UpdatePaymentScheduleNotes handles PATCH /group-pricing/claims/payment-schedules/:schedule_id/notes
+// Body: { "notes": "free text ≤30 chars" }
+func UpdatePaymentScheduleNotes(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("schedule_id"))
+	if err != nil {
+		BadRequestMsg(c, "invalid schedule_id")
+		return
+	}
+	var req models.UpdatePaymentScheduleNotesRequest
+	if err := c.BindJSON(&req); err != nil {
+		BadRequest(c, err)
+		return
+	}
+	schedule, err := services.UpdatePaymentScheduleNotes(id, req.Notes)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			NotFound(c, "payment schedule not found")
+			return
+		}
+		InternalError(c, err)
+		return
+	}
+	OK(c, schedule)
+}
+
 // ExportPaymentScheduleCSV handles GET /group-pricing/claims/payment-schedules/:schedule_id/export
 // Returns a CSV file download of the payment schedule.
 func ExportPaymentScheduleCSV(c *gin.Context) {

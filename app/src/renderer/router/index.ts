@@ -230,11 +230,36 @@ const router = createRouter({
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {
+      path: '/group-pricing/administration/fraud-risk',
+      name: 'group-pricing-fraud-risk',
+      component: () =>
+        import('../screens/group_pricing/administration/FraudRiskConfig.vue'),
+      meta: { required_permission: 'navigation:manage_claims' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
       path: '/group-pricing/claims-management',
       name: 'group-pricing-claims-management',
       component: () =>
         import('../screens/group_pricing/claims_management/ClaimsManagement.vue'),
       meta: { required_permission: 'navigation:manage_claims' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/claims-management/payment-schedules',
+      name: 'group-pricing-claim-payment-schedules',
+      component: () =>
+        import('../screens/group_pricing/claims_management/ClaimPaymentSchedules.vue'),
+      meta: { required_permission: 'claims_pay:create_schedule' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/claims-management/payment-schedules/:scheduleId',
+      name: 'group-pricing-claim-payment-schedule-detail',
+      component: () =>
+        import('../screens/group_pricing/claims_management/ClaimPaymentScheduleDetail.vue'),
+      props: true,
+      meta: { required_permission: 'claims_pay:create_schedule' },
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {

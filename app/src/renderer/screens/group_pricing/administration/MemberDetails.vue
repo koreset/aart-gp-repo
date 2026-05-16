@@ -57,7 +57,9 @@
                 <v-icon size="64" color="grey-lighten-1" class="mb-4"
                   >mdi-account-off</v-icon
                 >
-                <h3 class="text-h6 text-grey-darken-1 mb-2">Member not found</h3>
+                <h3 class="text-h6 text-grey-darken-1 mb-2"
+                  >Member not found</h3
+                >
                 <v-btn color="primary" variant="outlined" @click="goBack">
                   Back to Member Management
                 </v-btn>

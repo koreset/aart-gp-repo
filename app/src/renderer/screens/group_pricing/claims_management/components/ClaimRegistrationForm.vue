@@ -575,7 +575,11 @@
                             <v-icon start size="small"
                               >mdi-file-check-outline</v-icon
                             >
-                            {{ att.filename || att.document_name || `Attachment #${att.id}` }}
+                            {{
+                              att.filename ||
+                              att.document_name ||
+                              `Attachment #${att.id}`
+                            }}
                           </v-chip>
                         </v-chip-group>
                       </div>
@@ -617,9 +621,7 @@
                    to a slot for the current benefit (e.g. carry-over from a
                    different benefit type). Always visible in edit mode so they
                    can still be removed. -->
-              <v-row
-                v-if="isEditMode && otherExistingAttachments.length > 0"
-              >
+              <v-row v-if="isEditMode && otherExistingAttachments.length > 0">
                 <v-col cols="12">
                   <v-card variant="outlined" class="mb-3">
                     <v-card-title
@@ -1248,7 +1250,9 @@ const removedAttachmentIds = ref<number[]>([])
 // Form data
 const formData = ref({
   member_id_number:
-    props.claim?.member_id_number ?? props.prefilledMember?.member_id_number ?? '',
+    props.claim?.member_id_number ??
+    props.prefilledMember?.member_id_number ??
+    '',
   scheme_id: null,
   benefit_type: null as any,
   member_type: 'member',
@@ -1658,7 +1662,8 @@ const docSlotFulfilled = (code: string) => {
 
 const missingHardRequiredDocs = computed(() => {
   return requiredDocumentTypes.value.filter(
-    (doc) => hardRequiredDocCodes.includes(doc.code) && !docSlotFulfilled(doc.code)
+    (doc) =>
+      hardRequiredDocCodes.includes(doc.code) && !docSlotFulfilled(doc.code)
   )
 })
 
@@ -1980,8 +1985,7 @@ const submitClaim = async () => {
       ? props.claim?.claim_number || ''
       : `CLM-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`
     const dateRegistered = isEditMode.value
-      ? props.claim?.date_registered ||
-        new Date().toISOString().split('T')[0]
+      ? props.claim?.date_registered || new Date().toISOString().split('T')[0]
       : new Date().toISOString().split('T')[0]
     const claimStatus = isEditMode.value
       ? props.claim?.status || 'pending'

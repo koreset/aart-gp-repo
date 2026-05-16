@@ -519,6 +519,14 @@ export default {
       term
     })
   },
+  markQuoteNotTakenUp(quoteId, reason: string) {
+    return Api.post(`/group-pricing/quotes/${quoteId}/not-taken-up`, { reason })
+  },
+  declineQuote(quoteId, reason: string) {
+    return Api.post(`/group-pricing/quotes/${quoteId}/decline-quote`, {
+      reason
+    })
+  },
   approveQuote(quoteId) {
     return Api.post('/group-pricing/quotes/' + quoteId + '/approve-quote')
   },
@@ -819,9 +827,7 @@ export default {
   },
   getScbExcessPeriods(riskRateCode) {
     return Api.get(
-      '/group-pricing/rate-tables/scb-rates/' +
-        riskRateCode +
-        '/excess-periods'
+      '/group-pricing/rate-tables/scb-rates/' + riskRateCode + '/excess-periods'
     )
   },
   getHistoricalCredibilityData() {
@@ -996,9 +1002,7 @@ export default {
       typeof FormData !== 'undefined' && claimData instanceof FormData
     return Api.put(`/group-pricing/claims/${claimId}`, claimData, {
       headers: {
-        'Content-Type': isFormData
-          ? 'multipart/form-data'
-          : 'application/json',
+        'Content-Type': isFormData ? 'multipart/form-data' : 'application/json',
         Accept: isFormData ? 'multipart/form-data' : 'application/json'
       }
     })
@@ -1052,6 +1056,13 @@ export default {
 
   getPaymentSchedule(scheduleId) {
     return Api.get(`/group-pricing/claims/payment-schedules/${scheduleId}`)
+  },
+
+  updatePaymentScheduleNotes(scheduleId, notes) {
+    return Api.patch(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/notes`,
+      { notes }
+    )
   },
 
   exportPaymentScheduleCSV(scheduleId) {

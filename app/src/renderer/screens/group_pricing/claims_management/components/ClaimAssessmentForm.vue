@@ -291,28 +291,139 @@
       <!-- Risk Assessment -->
       <v-col cols="12">
         <v-card variant="outlined" class="mb-4">
-          <v-card-title class="bg-error text-white">
-            Risk Assessment
+          <v-card-title
+            class="bg-blue-grey-darken-3 text-white d-flex align-center justify-space-between"
+          >
+            <span>Risk Assessment</span>
+            <v-btn
+              size="small"
+              variant="tonal"
+              color="white"
+              prepend-icon="mdi-shield-search"
+              :loading="fraudCheckLoading"
+              :disabled="!props.claim?.id"
+              @click="runFraudCheck"
+            >
+              Run fraud check
+            </v-btn>
           </v-card-title>
           <v-card-text class="pt-4">
+            <v-row align="center">
+              <v-col cols="12" md="6">
+                <div class="text-caption text-medium-emphasis mb-1">
+                  System risk level
+                </div>
+                <div class="d-flex align-center" style="gap: 12px">
+                  <v-chip
+                    :color="riskColor(formData.fraud_risk_level)"
+                    variant="tonal"
+                    size="default"
+                    label
+                  >
+                    <v-icon start>{{
+                      riskIcon(formData.fraud_risk_level)
+                    }}</v-icon>
+                    {{ riskLabel(formData.fraud_risk_level) }}
+                  </v-chip>
+                  <span class="text-caption text-medium-emphasis">
+                    Set by the fraud check
+                  </span>
+                </div>
+              </v-col>
+              <v-col cols="12" md="6">
+                <div class="text-caption text-medium-emphasis mb-1">
+                  Special investigation
+                </div>
+                <div class="d-flex align-center" style="gap: 8px">
+                  <v-icon
+                    :color="
+                      formData.requires_investigation
+                        ? 'deep-orange-darken-2'
+                        : 'grey'
+                    "
+                  >
+                    {{
+                      formData.requires_investigation
+                        ? 'mdi-alert-decagram'
+                        : 'mdi-check-circle-outline'
+                    }}
+                  </v-icon>
+                  <span>
+                    {{
+                      formData.requires_investigation
+                        ? 'Recommended'
+                        : 'Not recommended'
+                    }}
+                  </span>
+                  <span class="text-caption text-medium-emphasis">
+                    (auto-derived from risk level)
+                  </span>
+                </div>
+              </v-col>
+            </v-row>
+
+            <v-alert
+              v-if="fraudCheckResult"
+              variant="tonal"
+              color="blue-grey-darken-2"
+              density="compact"
+              class="mt-4"
+              :icon="
+                fraudCheckResult.matched_rule
+                  ? 'mdi-flag-variant'
+                  : 'mdi-chart-bell-curve'
+              "
+            >
+              <div class="text-body-2">
+                {{ fraudCheckResult.rationale }}
+              </div>
+              <div class="text-caption text-medium-emphasis mt-1">
+                GLM score {{ fraudCheckResult.glm_score.toFixed(3) }} (band:
+                {{ riskLabel(fraudCheckResult.glm_band) }}) — final:
+                {{ riskLabel(fraudCheckResult.final_risk_level) }}.
+              </div>
+            </v-alert>
+
+            <v-alert
+              v-if="fraudCheckError"
+              type="error"
+              variant="tonal"
+              density="compact"
+              class="mt-3"
+            >
+              {{ fraudCheckError }}
+            </v-alert>
+
+            <v-divider class="my-4" />
+
+            <div class="text-subtitle-2 mb-2">Your assessment</div>
             <v-row>
               <v-col cols="12" md="6">
                 <v-select
-                  v-model="formData.fraud_risk_level"
+                  v-model="formData.assessor_risk_level"
                   :items="riskLevels"
-                  label="Fraud Risk Level *"
+                  label="Assessor Risk Level"
                   variant="outlined"
                   density="compact"
-                  :rules="[rules.required]"
-                  required
+                  clearable
+                  hint="Your judgement — used to retrain the model"
+                  persistent-hint
                 />
               </v-col>
               <v-col cols="12" md="6">
-                <v-checkbox
-                  v-model="formData.requires_investigation"
-                  label="Requires Special Investigation"
-                  color="error"
-                />
+                <v-alert
+                  v-if="
+                    formData.assessor_risk_level &&
+                    formData.assessor_risk_level !== formData.fraud_risk_level
+                  "
+                  variant="tonal"
+                  color="amber-darken-3"
+                  density="compact"
+                  icon="mdi-information-outline"
+                >
+                  Your assessment differs from the system. Note the reason in
+                  the assessment notes below.
+                </v-alert>
               </v-col>
             </v-row>
             <v-row>
@@ -567,8 +678,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
+import FraudRiskService, {
+  type FraudCheckResult,
+  type FraudRiskLevel
+} from '@/renderer/api/FraudRiskService'
 
 interface Props {
   claim: any
@@ -585,6 +700,74 @@ const emit = defineEmits<Emits>()
 const form = ref(null)
 const loading = ref(false)
 const currentUser = ref<any>(null)
+
+// Fraud-check (GLM + rules) state for the Risk Assessment panel.
+const fraudCheckLoading = ref(false)
+const fraudCheckResult = ref<FraudCheckResult | null>(null)
+const fraudCheckError = ref<string | null>(null)
+
+async function runFraudCheck() {
+  if (!props.claim?.id) return
+  fraudCheckLoading.value = true
+  fraudCheckError.value = null
+  try {
+    const { data } = await FraudRiskService.runFraudCheck(props.claim.id)
+    fraudCheckResult.value = data
+    formData.value.fraud_risk_level = data.final_risk_level
+  } catch (err: any) {
+    fraudCheckError.value =
+      err?.response?.data || err?.message || 'Fraud check failed'
+  } finally {
+    fraudCheckLoading.value = false
+  }
+}
+
+// Auto-derive the investigation recommendation from the system risk level.
+// Anything banded high or critical recommends a special investigation.
+watch(
+  () => formData.value.fraud_risk_level,
+  (level) => {
+    formData.value.requires_investigation =
+      level === 'high' || level === 'critical'
+  },
+  { immediate: true }
+)
+
+const riskLevelMeta: Record<
+  FraudRiskLevel,
+  { label: string; color: string; icon: string }
+> = {
+  low: {
+    label: 'Low Risk',
+    color: 'green-darken-2',
+    icon: 'mdi-shield-check-outline'
+  },
+  medium: {
+    label: 'Medium Risk',
+    color: 'blue-grey-darken-2',
+    icon: 'mdi-shield-half-full'
+  },
+  high: {
+    label: 'High Risk',
+    color: 'deep-orange-darken-2',
+    icon: 'mdi-shield-alert-outline'
+  },
+  critical: {
+    label: 'Critical Risk',
+    color: 'red-darken-3',
+    icon: 'mdi-shield-remove-outline'
+  }
+}
+
+function riskLabel(level: string | null | undefined) {
+  return riskLevelMeta[level as FraudRiskLevel]?.label || '—'
+}
+function riskColor(level: string | null | undefined) {
+  return riskLevelMeta[level as FraudRiskLevel]?.color || 'grey'
+}
+function riskIcon(level: string | null | undefined) {
+  return riskLevelMeta[level as FraudRiskLevel]?.icon || 'mdi-shield-outline'
+}
 
 // Form data
 const formData = ref({
@@ -620,8 +803,11 @@ const formData = ref({
     beneficiary_nomination: false
   },
 
-  // Risk assessment
+  // Risk assessment — fraud_risk_level is set by the system (Run fraud check),
+  // requires_investigation is auto-derived (see watcher below). The assessor
+  // records their own opinion in assessor_risk_level.
   fraud_risk_level: 'low',
+  assessor_risk_level: '',
   requires_investigation: false,
   risk_notes: '',
 

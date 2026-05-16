@@ -143,6 +143,23 @@ func GetPaymentSchedule(id int) (models.ClaimPaymentSchedule, error) {
 	return schedule, err
 }
 
+// UpdatePaymentScheduleNotes updates the free-text notes on a payment schedule.
+// Notes are truncated to 30 characters to match the storage column width.
+func UpdatePaymentScheduleNotes(id int, notes string) (models.ClaimPaymentSchedule, error) {
+	var schedule models.ClaimPaymentSchedule
+	if err := DB.First(&schedule, id).Error; err != nil {
+		return models.ClaimPaymentSchedule{}, err
+	}
+	if len(notes) > 30 {
+		notes = notes[:30]
+	}
+	if err := DB.Model(&schedule).Update("notes", notes).Error; err != nil {
+		return models.ClaimPaymentSchedule{}, err
+	}
+	schedule.Notes = notes
+	return schedule, nil
+}
+
 // ExportPaymentScheduleCSV streams the payment schedule as a CSV file.
 // Returns the CSV bytes and a suggested filename.
 func ExportPaymentScheduleCSV(scheduleID int, user models.AppUser) ([]byte, string, error) {
@@ -506,6 +523,23 @@ func GenerateACBFile(scheduleID int, req models.GenerateACBRequest, user models.
 	schedule, err := GetPaymentSchedule(scheduleID)
 	if err != nil {
 		return models.ACBFileRecord{}, err
+	}
+
+	// Block duplicate generation: only one initial ACB file per schedule.
+	// Retry ACB files for failed items must go through RetryFailedPayments.
+	var existingCount int64
+	if err := DB.Model(&models.ACBFileRecord{}).
+		Where("schedule_id = ? AND is_retry = ?", scheduleID, false).
+		Count(&existingCount).Error; err != nil {
+		return models.ACBFileRecord{}, err
+	}
+	if existingCount > 0 {
+		return models.ACBFileRecord{}, errors.New("an ACB file has already been generated for this schedule; use Retry Failed Payments to re-submit failed items")
+	}
+
+	// Reject if schedule has already been confirmed (paid).
+	if schedule.Status == "confirmed" {
+		return models.ACBFileRecord{}, errors.New("schedule is already confirmed (paid); ACB generation is closed")
 	}
 
 	// Validate all items have banking details

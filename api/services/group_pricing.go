@@ -446,6 +446,91 @@ func ApproveGroupPricingQuote(quoteId string, user models.AppUser) error {
 	return nil
 }
 
+// closeOutMinReasonLen is the minimum trimmed length we accept on
+// not-taken-up and decline reason notes. Short enough to allow concise
+// answers like "client signed with competitor for lower commission",
+// long enough to keep "no reason" out of the audit trail.
+const closeOutMinReasonLen = 10
+
+// MarkGroupPricingQuoteNotTakenUp transitions an approved quote into
+// the not_taken_up terminal state — the broker / client went with a
+// different insurer or didn't proceed. Records the reason for later
+// conversion analysis on the Quote Performance Dashboard.
+//
+// Precondition: quote.Status == StatusApproved. Any other status
+// returns a 400-mappable error.
+//
+// TODO: wire NotifyQuoteNotTakenUp once the comms team decides whether
+// brokers / clients should receive a closure notice. Out of scope for v1.
+func MarkGroupPricingQuoteNotTakenUp(quoteId string, reason string, user models.AppUser) error {
+	return closeOutApprovedQuote(quoteId, reason, user, models.StatusNotTakenUp)
+}
+
+// DeclineGroupPricingQuote transitions an approved quote into the
+// declined terminal state — the deal fell through on the client side
+// (couldn't fund, withdrew, project shelved, etc.). Mirrors the NTU
+// path; the distinction is reason-domain only and is captured in the
+// audit message + the declined_reason field.
+//
+// TODO: wire NotifyQuoteDeclined once the comms team decides whether
+// brokers / clients should receive a closure notice. Out of scope for v1.
+func DeclineGroupPricingQuote(quoteId string, reason string, user models.AppUser) error {
+	return closeOutApprovedQuote(quoteId, reason, user, models.StatusDeclined)
+}
+
+// closeOutApprovedQuote is the shared implementation behind the two
+// post-approval terminal transitions. Validation, audit, and the
+// timestamp / reason write are identical — only the target status and
+// the reason column differ.
+func closeOutApprovedQuote(quoteId string, reason string, user models.AppUser, target models.Status) error {
+	trimmed := strings.TrimSpace(reason)
+	if len(trimmed) < closeOutMinReasonLen {
+		return fmt.Errorf("a reason of at least %d characters is required", closeOutMinReasonLen)
+	}
+	if target != models.StatusNotTakenUp && target != models.StatusDeclined {
+		return fmt.Errorf("invalid close-out target status %q", target)
+	}
+
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var quote models.GroupPricingQuote
+		if err := tx.Where("id = ?", quoteId).First(&quote).Error; err != nil {
+			return err
+		}
+		before := quote
+
+		// Match the accept-quote precondition — close-out is only
+		// meaningful after the quote has been approved and presented.
+		if quote.Status != models.StatusApproved {
+			return fmt.Errorf("the quote must be approved before it can be closed out")
+		}
+
+		quote.Status = target
+		quote.ModifiedBy = user.UserName
+		quote.ModificationDate = time.Now()
+
+		var auditMessage string
+		switch target {
+		case models.StatusNotTakenUp:
+			quote.NotTakenUpReason = trimmed
+			auditMessage = "Not taken up by " + user.UserName + ": " + trimmed
+		case models.StatusDeclined:
+			quote.DeclinedReason = trimmed
+			auditMessage = "Declined by " + user.UserName + ": " + trimmed
+		}
+
+		applyQuoteStatusTimestamp(&quote, target)
+
+		if err := tx.Save(&quote).Error; err != nil {
+			return err
+		}
+
+		if err := RecordQuoteStatusChange(tx, quote.ID, before.Status, target, auditMessage, user.UserName); err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
 func AcceptGroupPricingQuote(quoteId string, commencementDate string, term string, user models.AppUser) error {
 	var quote models.GroupPricingQuote
 

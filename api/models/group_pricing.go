@@ -73,6 +73,7 @@ const (
 	StatusLapsed        Status = "lapsed"
 	StatusPendingReview Status = "pending_review"
 	StatusNotTakenUp    Status = "not_taken_up"
+	StatusDeclined      Status = "declined"
 	StatusQuoted        Status = "quoted"
 	StatusInEffect      Status = "in_effect"
 	StatusNotInEffect   Status = "not_in_effect"
@@ -152,6 +153,15 @@ type GroupPricingQuote struct {
 	RejectedAt     *time.Time `json:"rejected_at" gorm:"type:datetime;index"`
 	AcceptedAt     *time.Time `json:"accepted_at" gorm:"type:datetime;index"`
 	InForceAt      *time.Time `json:"in_force_at" gorm:"type:datetime;index"`
+	// Post-approval closure outcomes — terminal states. Mirror the
+	// rejected_at / rejected_reason pair so the dashboard and audit
+	// queries can treat them consistently. ModifiedBy + ModificationDate
+	// still carry the actor; the per-status timestamp is what the
+	// dashboard funnel and trend queries key off.
+	NotTakenUpAt     *time.Time `json:"not_taken_up_at" gorm:"type:datetime;index"`
+	NotTakenUpReason string     `json:"not_taken_up_reason" gorm:"size:500"`
+	DeclinedAt       *time.Time `json:"declined_at" gorm:"type:datetime;index"`
+	DeclinedReason   string     `json:"declined_reason" gorm:"size:500"`
 	RejectedReason string     `json:"rejected_reason" gorm:"type:nvarchar(500)"`
 	MemberDataCount               int                       `json:"member_data_count"`
 	ClaimsExperienceCount         int                       `json:"claims_experience_count"`
@@ -3568,6 +3578,7 @@ type GroupSchemeClaimAssessment struct {
 	MedicalNotes          string      `json:"medical_notes"`
 	DocumentsVerified     JSONMapBool `json:"documents_verified" gorm:"type:json"`
 	FraudRiskLevel        string      `json:"fraud_risk_level"`
+	AssessorRiskLevel     string      `json:"assessor_risk_level"`
 	RequiresInvestigation bool        `json:"requires_investigation"`
 	RiskNotes             string      `json:"risk_notes"`
 	AssessmentNotes       string      `json:"assessment_notes"`
@@ -3625,6 +3636,8 @@ type ClaimPaymentSchedule struct {
 	ID             int    `json:"id" gorm:"primaryKey;autoIncrement"`
 	ScheduleNumber string `json:"schedule_number" gorm:"type:varchar(191);uniqueIndex"`
 	Description    string `json:"description"`
+	// Short free-text note for quick context (≤30 chars).
+	Notes string `json:"notes" gorm:"type:varchar(30)"`
 	// Status lifecycle: draft → submitted → confirmed
 	Status           string                     `json:"status"`
 	TotalAmount      float64                    `json:"total_amount"`
@@ -3640,6 +3653,11 @@ type ClaimPaymentSchedule struct {
 	UpdatedAt        time.Time                  `json:"updated_at" gorm:"autoUpdateTime"`
 	Items            []ClaimPaymentScheduleItem `json:"items" gorm:"foreignKey:ScheduleID;references:ID"`
 	ProofOfPayments  []ClaimPaymentProof        `json:"proof_of_payments" gorm:"foreignKey:ScheduleID;references:ID"`
+}
+
+// UpdatePaymentScheduleNotesRequest is the inbound payload for updating a schedule's notes.
+type UpdatePaymentScheduleNotesRequest struct {
+	Notes string `json:"notes"`
 }
 
 // ClaimPaymentScheduleItem links a single claim to a payment schedule.

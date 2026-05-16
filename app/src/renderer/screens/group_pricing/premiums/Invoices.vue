@@ -5,27 +5,36 @@
         <h3 class="mb-0">Invoices</h3>
       </template>
       <template #default>
-        <!-- Quick Stats -->
-        <v-row class="mb-4">
-          <v-col
-            v-for="card in statCards"
-            :key="card.title"
-            cols="12"
-            sm="6"
-            md="3"
-          >
-            <stat-card
-              :title="card.title"
-              :value="card.value"
-              :icon="card.icon"
-              :color="card.iconColor"
-              :loading="loading"
-            />
-          </v-col>
-        </v-row>
+        <!-- ── Section: Overview ───────────────────────── -->
+        <page-section label="Overview">
+          <v-row>
+            <v-col
+              v-for="card in statCards"
+              :key="card.title"
+              cols="12"
+              sm="6"
+              md="3"
+            >
+              <kpi-card
+                :label="card.title"
+                :value="card.value"
+                :hint="card.hint"
+                :icon="card.icon"
+                :tone="card.tone"
+              />
+            </v-col>
+          </v-row>
+        </page-section>
 
-        <!-- Filter Bar -->
-        <v-row class="mb-3" align="center">
+        <!-- ── Section: Invoice Lifecycle ──────────────── -->
+        <page-section label="Invoice Lifecycle">
+          <workflow-stepper :steps="invoiceLifecycle" />
+        </page-section>
+
+        <!-- ── Section: Invoices ───────────────────────── -->
+        <page-section label="Invoices" :count="invoices.length" last>
+          <!-- Filter Bar -->
+          <v-row class="mb-3" align="center">
           <v-col cols="12" md="2">
             <v-select
               v-model="filters.schemeId"
@@ -98,32 +107,33 @@
           </v-col>
         </v-row>
 
-        <!-- Invoice Grid -->
-        <v-row>
-          <v-col cols="12">
-            <v-card variant="outlined">
-              <v-card-text class="pa-0">
-                <ag-grid-vue
-                  class="ag-theme-balham"
-                  :style="{ height: gridHeight, width: '100%' }"
-                  :column-defs="columnDefs"
-                  :row-data="invoices"
-                  :default-col-def="defaultColDef"
-                  :loading="loading"
-                  row-selection="single"
-                  :get-row-class="getRowClass"
-                  @row-clicked="onRowClicked"
-                />
-                <empty-state
-                  v-if="!loading && invoices.length === 0"
-                  title="No invoices found"
-                  message="Finalize a premium schedule to generate invoices."
-                  icon="mdi-receipt-text-outline"
-                />
-              </v-card-text>
-            </v-card>
-          </v-col>
-        </v-row>
+          <!-- Invoice Grid -->
+          <v-row>
+            <v-col cols="12">
+              <v-card variant="outlined">
+                <v-card-text class="pa-0">
+                  <ag-grid-vue
+                    class="ag-theme-balham"
+                    :style="{ height: gridHeight, width: '100%' }"
+                    :column-defs="columnDefs"
+                    :row-data="invoices"
+                    :default-col-def="defaultColDef"
+                    :loading="loading"
+                    row-selection="single"
+                    :get-row-class="getRowClass"
+                    @row-clicked="onRowClicked"
+                  />
+                  <empty-state
+                    v-if="!loading && invoices.length === 0"
+                    title="No invoices found"
+                    message="Finalize a premium schedule to generate invoices."
+                    icon="mdi-receipt-text-outline"
+                  />
+                </v-card-text>
+              </v-card>
+            </v-col>
+          </v-row>
+        </page-section>
       </template>
     </base-card>
   </v-container>
@@ -137,8 +147,12 @@ import 'ag-grid-community/styles/ag-theme-balham.css'
 import { AgGridVue } from 'ag-grid-vue3'
 import PremiumManagementService from '@/renderer/api/PremiumManagementService'
 import BaseCard from '@/renderer/components/BaseCard.vue'
-import StatCard from '@/renderer/components/StatCard.vue'
 import EmptyState from '@/renderer/components/EmptyState.vue'
+import PageSection from '@/renderer/components/page/PageSection.vue'
+import KpiCard from '@/renderer/components/page/KpiCard.vue'
+import WorkflowStepper, {
+  type WorkflowStep
+} from '@/renderer/components/page/WorkflowStepper.vue'
 import { useGridHeight } from '@/renderer/composables/useGridHeight'
 import { useFilterPersistence } from '@/renderer/composables/useFilterPersistence'
 import { statusCellRenderer } from '@/renderer/utils/statusCellRenderer'
@@ -189,33 +203,41 @@ const statCards = computed(() => {
     {
       title: 'Invoiced This Month',
       value: fmtCurrency(invoicedThisMonth),
+      hint: 'Net payable for current period',
       icon: 'mdi-file-document-outline',
-      color: 'text-primary',
-      iconColor: 'primary'
+      tone: 'primary' as const
     },
     {
       title: 'Collected',
       value: fmtCurrency(collected),
+      hint: 'Payments received this month',
       icon: 'mdi-check-circle-outline',
-      color: 'text-success',
-      iconColor: 'success'
+      tone: 'success' as const
     },
     {
       title: 'Outstanding',
       value: fmtCurrency(outstanding),
+      hint: 'Total balance across all invoices',
       icon: 'mdi-clock-outline',
-      color: 'text-warning',
-      iconColor: 'warning'
+      tone: 'accent' as const
     },
     {
       title: 'Overdue',
       value: fmtCurrency(overdue),
+      hint: overdue > 0 ? 'Past due — collections required' : 'No invoices past due date',
       icon: 'mdi-alert-circle-outline',
-      color: 'text-error',
-      iconColor: 'error'
+      tone: (overdue > 0 ? 'error' : 'muted') as const
     }
   ]
 })
+
+const invoiceLifecycle: WorkflowStep[] = [
+  { label: 'Draft', sub: 'Created', tone: 'muted' },
+  { label: 'Sent', sub: 'Issued to scheme', tone: 'warning' },
+  { label: 'Partial', sub: 'Part-paid', tone: 'accent' },
+  { label: 'Paid', sub: 'Settled', tone: 'success' },
+  { label: 'Overdue', sub: 'Past due date', tone: 'error' }
+]
 
 const defaultColDef = { sortable: true, filter: true, resizable: true, flex: 1 }
 const columnDefs = [

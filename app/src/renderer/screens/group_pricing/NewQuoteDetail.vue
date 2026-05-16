@@ -214,7 +214,7 @@
                     color="primary"
                     :loading="acceptQuoteLoading"
                     @click="acceptQuote"
-                    >Accept Quote</v-btn
+                    >Close Out Quote</v-btn
                   >
                 </div>
               </template>
@@ -545,38 +545,78 @@
       size="64"
     ></v-progress-circular>
   </v-container>
-  <!-- Accept Quote Dialog -->
+  <!-- Close-out Quote Dialog: pick a terminal outcome for an approved
+       quote. Accept needs commencement+term, NTU and Declined need a
+       reason note. -->
   <v-dialog v-model="acceptQuoteDialog" persistent max-width="550px">
     <base-card>
       <template #header>
-        <span class="headline">Accept Quote</span>
+        <span class="headline">Close Out Quote</span>
       </template>
       <template #default>
-        <v-row>
+        <v-row dense>
           <v-col cols="12">
-            <v-date-input
-              v-model="acceptQuoteParams.commencementDate"
-              hide-actions
-              locale="en-ZA"
-              view-mode="month"
-              prepend-icon=""
-              prepend-inner-icon="$calendar"
+            <v-btn-toggle
+              v-model="closeoutOutcome"
+              color="primary"
               variant="outlined"
+              divided
+              mandatory
               density="compact"
-              label="Commencement Date"
-              placeholder="Select a date"
-            ></v-date-input>
+              class="mb-2"
+            >
+              <v-btn value="accept" size="small">Accept</v-btn>
+              <v-btn value="not_taken_up" size="small">Not Taken Up</v-btn>
+              <v-btn value="declined" size="small">Declined</v-btn>
+            </v-btn-toggle>
           </v-col>
-          <v-col cols="12">
-            <v-text-field
-              v-model="acceptQuoteParams.term"
-              type="number"
-              variant="outlined"
-              density="compact"
-              label="Term (months)"
-              placeholder="Enter term in months"
-            ></v-text-field>
-          </v-col>
+
+          <template v-if="closeoutOutcome === 'accept'">
+            <v-col cols="12">
+              <v-date-input
+                v-model="acceptQuoteParams.commencementDate"
+                hide-actions
+                locale="en-ZA"
+                view-mode="month"
+                prepend-icon=""
+                prepend-inner-icon="$calendar"
+                variant="outlined"
+                density="compact"
+                label="Commencement Date"
+                placeholder="Select a date"
+              ></v-date-input>
+            </v-col>
+            <v-col cols="12">
+              <v-text-field
+                v-model="acceptQuoteParams.term"
+                type="number"
+                variant="outlined"
+                density="compact"
+                label="Term (months)"
+                placeholder="Enter term in months"
+              ></v-text-field>
+            </v-col>
+          </template>
+
+          <template v-else>
+            <v-col cols="12">
+              <v-textarea
+                v-model="closeoutReason"
+                variant="outlined"
+                density="compact"
+                rows="4"
+                auto-grow
+                :counter="500"
+                :label="
+                  closeoutOutcome === 'not_taken_up'
+                    ? 'Why was the quote not taken up?'
+                    : 'Why was the quote declined?'
+                "
+                hint="Minimum 10 characters."
+                persistent-hint
+              ></v-textarea>
+            </v-col>
+          </template>
         </v-row>
       </template>
       <template #actions>
@@ -585,9 +625,9 @@
           rounded
           variant="text"
           :loading="acceptQuoteLoading"
-          :disabled="acceptQuoteLoading"
-          @click="confirmAcceptQuote"
-          >Accept</v-btn
+          :disabled="acceptQuoteLoading || !closeoutCanSubmit"
+          @click="confirmCloseout"
+          >{{ closeoutActionLabel }}</v-btn
         >
         <v-btn
           rounded
@@ -776,6 +816,12 @@ const acceptQuoteParams: any = ref({
   commencementDate: '',
   term: 0
 })
+
+// Close-out dialog state: outcome picker + reason text used when the
+// user marks an approved quote as not_taken_up or declined.
+type CloseoutOutcome = 'accept' | 'not_taken_up' | 'declined'
+const closeoutOutcome = ref<CloseoutOutcome>('accept')
+const closeoutReason = ref('')
 
 // State for dialogs and snackbar
 const basisDialog = ref(false)
@@ -1055,16 +1101,48 @@ const acceptQuote = async () => {
     return
   }
 
-  // Check if quote can be accepted (status should be Approved)
+  // Check if quote can be closed out (status should be Approved)
   if (quote.value.status !== 'approved') {
-    snackbarText.value = 'Quote must be approved before it can be accepted'
+    snackbarText.value = 'Quote must be approved before it can be closed out'
     snackbar.value = true
     return
   }
 
-  // Show the accept quote dialog
+  // Reset the dialog to the default outcome each time it's opened so a
+  // prior NTU/decline session doesn't leak a half-typed reason into the
+  // next interaction.
+  closeoutOutcome.value = 'accept'
+  closeoutReason.value = ''
+  acceptQuoteParams.value = { commencementDate: '', term: 0 }
+
   acceptQuoteDialog.value = true
 }
+
+// Label on the dialog's confirm button — changes with the picked
+// outcome so the user can see exactly what hitting Enter will do.
+const closeoutActionLabel = computed(() => {
+  switch (closeoutOutcome.value) {
+    case 'not_taken_up':
+      return 'Mark Not Taken Up'
+    case 'declined':
+      return 'Decline'
+    default:
+      return 'Accept'
+  }
+})
+
+// The confirm button stays disabled until the fields for the picked
+// outcome are valid. Keeps the server-side validation as a backstop
+// rather than the primary feedback channel.
+const closeoutCanSubmit = computed(() => {
+  if (closeoutOutcome.value === 'accept') {
+    return (
+      !!acceptQuoteParams.value.commencementDate &&
+      Number(acceptQuoteParams.value.term) > 0
+    )
+  }
+  return closeoutReason.value.trim().length >= 10
+})
 
 const generatePdf = async (quoteId: string) => {
   try {
@@ -1079,42 +1157,55 @@ const generatePdf = async (quoteId: string) => {
   }
 }
 
-const confirmAcceptQuote = async () => {
+// confirmCloseout dispatches the close-out dialog to the matching API
+// call based on the picked outcome. Validation errors are surfaced via
+// the snackbar — the server returns 400 with a clear message for both
+// the precondition (not approved) and the reason-too-short cases.
+const confirmCloseout = async () => {
   acceptQuoteLoading.value = true
   try {
-    // Format the date for the API if it's a Date object
-    const formattedDate = formatDateString(
-      acceptQuoteParams.value.commencementDate,
-      true,
-      true,
-      true
-    )
-    // const formattedDate =
-    // acceptQuoteParams.value.commencementDate instanceof Date
-    //   ? acceptQuoteParams.value.commencementDate.toISOString().split('T')[0]
-    //   : acceptQuoteParams.value.commencementDate
+    let successMessage = ''
+    if (closeoutOutcome.value === 'accept') {
+      const formattedDate = formatDateString(
+        acceptQuoteParams.value.commencementDate,
+        true,
+        true,
+        true
+      )
+      await GroupPricingService.acceptQuote(
+        quote.value.id,
+        formattedDate,
+        acceptQuoteParams.value.term.toString()
+      )
+      successMessage = 'Quote has been accepted successfully.'
+    } else if (closeoutOutcome.value === 'not_taken_up') {
+      await GroupPricingService.markQuoteNotTakenUp(
+        quote.value.id,
+        closeoutReason.value.trim()
+      )
+      successMessage = 'Quote marked as not taken up.'
+    } else if (closeoutOutcome.value === 'declined') {
+      await GroupPricingService.declineQuote(
+        quote.value.id,
+        closeoutReason.value.trim()
+      )
+      successMessage = 'Quote declined.'
+    }
 
-    // Make the API call with the form parameters
-
-    await GroupPricingService.acceptQuote(
-      quote.value.id,
-      formattedDate,
-      acceptQuoteParams.value.term.toString()
-    )
-
-    snackbarText.value = 'Quote has been accepted successfully.'
+    snackbarText.value = successMessage
     snackbarTimeout.value = 4000
     snackbar.value = true
 
-    // Close the dialog
     acceptQuoteDialog.value = false
-
-    // Refresh the quote data to update the view
     await loadQuote()
   } catch (error: any) {
-    console.error('Error:', error.data || error)
-    snackbarText.value = 'Quote Acceptance Failed'
-    snackbarTimeout.value = 2000
+    console.error('Close-out error:', error?.response?.data || error)
+    const serverMessage =
+      typeof error?.response?.data === 'string'
+        ? error.response.data
+        : error?.response?.data?.error || error?.message
+    snackbarText.value = serverMessage || 'Quote close-out failed.'
+    snackbarTimeout.value = 4000
     snackbar.value = true
   } finally {
     acceptQuoteLoading.value = false

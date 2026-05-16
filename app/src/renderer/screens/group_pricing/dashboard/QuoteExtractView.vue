@@ -232,9 +232,7 @@
             <td class="text-right">{{ formatDate(row.submitted_at) }}</td>
             <td class="text-right">{{ formatDate(row.approved_at) }}</td>
             <td class="text-right">{{ formatDate(row.accepted_at) }}</td>
-            <td class="text-right"
-              >{{ formatCurrency(row.annual_premium) }}</td
-            >
+            <td class="text-right">{{ formatCurrency(row.annual_premium) }}</td>
             <td class="text-right">{{ row.member_count }}</td>
             <td class="text-right">{{
               row.cycle_hours != null ? row.cycle_hours.toFixed(1) : '—'
@@ -257,8 +255,16 @@ import { computed, onMounted } from 'vue'
 
 import { useQuoteExtract } from '@/renderer/composables/useQuoteDashboard'
 
-const { filter, rows, total, loading, error, exporting, refresh, downloadXlsx } =
-  useQuoteExtract()
+const {
+  filter,
+  rows,
+  total,
+  loading,
+  error,
+  exporting,
+  refresh,
+  downloadXlsx
+} = useQuoteExtract()
 
 const statusOptions = [
   'draft',

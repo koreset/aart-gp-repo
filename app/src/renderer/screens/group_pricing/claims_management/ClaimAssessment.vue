@@ -55,14 +55,11 @@
               <!-- Documents Panel (right) -->
               <v-col cols="12" md="5">
                 <v-card variant="outlined" class="mb-4">
-                  <v-card-title class="bg-warning text-white"
+                  <v-card-title class="bg-primary text-white"
                     >Supporting Documents</v-card-title
                   >
                   <v-card-text>
-                    <v-list
-                      v-if="supportingDocuments.length"
-                      density="compact"
-                    >
+                    <v-list v-if="supportingDocuments.length" density="compact">
                       <v-list-item
                         v-for="doc in supportingDocuments"
                         :key="doc.id ?? doc.document_name"
@@ -89,7 +86,9 @@
 
                 <v-card v-if="previewDoc" variant="outlined" class="mb-4">
                   <v-card-title class="bg-primary text-white">
-                    <div class="d-flex justify-space-between align-center w-100">
+                    <div
+                      class="d-flex justify-space-between align-center w-100"
+                    >
                       <span>{{
                         previewDoc.document_name ||
                         previewDoc.filename ||
@@ -160,7 +159,7 @@
                 </v-card>
 
                 <v-card variant="outlined">
-                  <v-card-title class="bg-info text-white"
+                  <v-card-title class="bg-primary text-white"
                     >Missing Documents</v-card-title
                   >
                   <v-card-text>

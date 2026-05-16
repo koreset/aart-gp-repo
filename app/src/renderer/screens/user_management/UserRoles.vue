@@ -326,7 +326,7 @@
                   density="comfortable"
                   class="trans-tables"
                 >
-                  <template v-slot:[`item.actions`]="{ item }">
+                  <template #[`item.actions`]="{ item }">
                     <div
                       class="d-flex justify-end align-center ga-1 flex-nowrap"
                     >

@@ -129,11 +129,11 @@
         </v-tooltip>
       </div>
       <RiskProfilePanel
+        v-model:alr-ceiling="alrCeiling"
+        v-model:alr-delta="alrDelta"
         :profile="profile"
         :rows="performance.rows"
         :deteriorating="derivedDeteriorating"
-        v-model:alr-ceiling="alrCeiling"
-        v-model:alr-delta="alrDelta"
         :is-custom-view="isCustomView"
         @reset="resetThresholds"
       />

@@ -421,6 +421,12 @@ const getStatusColor = (status) => {
       return '#F8CBAD'
     case 'accepted':
       return '#70AD47'
+    case 'rejected':
+      return '#F4B084'
+    case 'not_taken_up':
+      return '#FFD966'
+    case 'declined':
+      return '#D9D9D9'
     default:
       return 'black'
   }

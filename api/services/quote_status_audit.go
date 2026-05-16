@@ -56,6 +56,10 @@ func applyQuoteStatusTimestamp(quote *models.GroupPricingQuote, newStatus models
 		quote.AcceptedAt = &now
 	case models.StatusInForce:
 		quote.InForceAt = &now
+	case models.StatusNotTakenUp:
+		quote.NotTakenUpAt = &now
+	case models.StatusDeclined:
+		quote.DeclinedAt = &now
 	}
 	return now
 }
