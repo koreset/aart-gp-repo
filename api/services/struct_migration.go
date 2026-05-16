@@ -694,6 +694,14 @@ func getStructType(structName string) (reflect.Type, error) {
 	case "AggregatedVariableGroup":
 		return reflect.TypeOf(models.AggregatedVariableGroup{}), nil
 
+	// -- Email Tables ---
+	case "EmailOutbox":
+		return reflect.TypeOf(models.EmailOutbox{}), nil
+	case "EmailTemplate":
+		return reflect.TypeOf(models.EmailTemplate{}), nil
+	case "EmailSettings":
+		return reflect.TypeOf(models.EmailSettings{}), nil
+
 	// --- Escalation tables ---
 	case "BalanceSheetRecord":
 		return reflect.TypeOf(models.BalanceSheetRecord{}), nil
