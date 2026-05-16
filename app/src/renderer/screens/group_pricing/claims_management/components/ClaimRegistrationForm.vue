@@ -218,7 +218,7 @@
       </v-col>
 
       <!-- Claimant Information Section (for dependants) -->
-      <v-col v-if="formData.member_type !== 'member'" cols="12">
+      <v-col v-if="requiresClaimantInfo" cols="12">
         <v-card variant="outlined" class="mb-4">
           <v-card-title class="text-subtitle-1 bg-grey-lighten-4">
             Claimant Information
@@ -231,9 +231,7 @@
                   label="Claimant Name *"
                   variant="outlined"
                   density="compact"
-                  :rules="
-                    formData.member_type !== 'member' ? [rules.required] : []
-                  "
+                  :rules="requiresClaimantInfo ? [rules.required] : []"
                 />
               </v-col>
               <v-col cols="12" md="6">
@@ -243,7 +241,7 @@
                   variant="outlined"
                   density="compact"
                   :rules="
-                    formData.member_type !== 'member'
+                    requiresClaimantInfo
                       ? [rules.required, rules.idOrPassport]
                       : []
                   "
@@ -258,9 +256,7 @@
                   label="Relationship to Member *"
                   variant="outlined"
                   density="compact"
-                  :rules="
-                    formData.member_type !== 'member' ? [rules.required] : []
-                  "
+                  :rules="requiresClaimantInfo ? [rules.required] : []"
                 />
               </v-col>
               <v-col cols="12" md="6">
@@ -1478,6 +1474,19 @@ const requiredDocumentTypes = computed(() => {
   return documentTypesMapping[benefitCode] || []
 })
 
+// Member-on-self claims for GLA (Group Life) and GFF (Family Funeral)
+// imply the main member is deceased, so a claimant/beneficiary must still
+// fill in their own details.
+const CLAIMANT_REQUIRED_MEMBER_BENEFITS = ['GLA', 'GFF']
+
+const requiresClaimantInfo = computed(() => {
+  if (formData.value.member_type !== 'member') return true
+  const benefitCode =
+    formData.value.benefit_type?.value?.benefit_code ||
+    formData.value.benefit_type?.benefit_code
+  return CLAIMANT_REQUIRED_MEMBER_BENEFITS.includes(benefitCode)
+})
+
 // Validation rules
 const rules = {
   required: (value: any) => !!value || 'Field is required',
@@ -1568,7 +1577,7 @@ const isFormValid = computed(() => {
     formData.value.priority &&
     bankingDetailsComplete.value &&
     missingHardRequiredDocs.value.length === 0 &&
-    (formData.value.member_type === 'member' ||
+    (!requiresClaimantInfo.value ||
       (formData.value.claimant_name &&
         formData.value.claimant_id_number &&
         formData.value.relationship_to_member))
@@ -1964,17 +1973,18 @@ watch(
   }
 )
 
+watch(requiresClaimantInfo, (needsClaimant) => {
+  if (!needsClaimant) {
+    formData.value.claimant_name = ''
+    formData.value.claimant_id_number = ''
+    formData.value.relationship_to_member = ''
+    formData.value.claimant_contact_number = ''
+  }
+})
+
 watch(
   () => formData.value.member_type,
-  async (newType) => {
-    if (newType === 'member') {
-      // Clear claimant fields when switching to member claim
-      formData.value.claimant_name = ''
-      formData.value.claimant_id_number = ''
-      formData.value.relationship_to_member = ''
-      formData.value.claimant_contact_number = ''
-    }
-
+  async () => {
     // Reset benefit type if it's not valid for the new claim type
     const availableBenefits = benefitTypes.value
     const benefitData =
