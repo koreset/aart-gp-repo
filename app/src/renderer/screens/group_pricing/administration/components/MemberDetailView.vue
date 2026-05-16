@@ -251,74 +251,65 @@
             </v-btn>
           </v-card-title>
           <v-card-text>
-            <v-row>
-              <v-col cols="6" md="3">
-                <v-btn
-                  size="small"
-                  rounded
-                  color="info"
-                  variant="outlined"
-                  block
-                  @click="$emit('view-claims')"
-                >
-                  <v-icon left>mdi-file-document-outline</v-icon>
-                  View Claims
-                </v-btn>
-              </v-col>
-              <v-col cols="6" md="3">
-                <v-btn
-                  size="small"
-                  rounded
-                  color="success"
-                  variant="outlined"
-                  block
-                  @click="downloadMemberCertificate"
-                >
-                  <v-icon left>mdi-certificate</v-icon>
-                  Certificate
-                </v-btn>
-              </v-col>
-              <v-col cols="6" md="3">
-                <v-btn
-                  size="small"
-                  rounded
-                  color="warning"
-                  variant="outlined"
-                  block
-                  @click="viewBenefitSummary"
-                >
-                  <v-icon left>mdi-chart-line</v-icon>
-                  Benefit Summary
-                </v-btn>
-              </v-col>
-              <v-col cols="6" md="3">
-                <v-btn
-                  size="small"
-                  rounded
-                  color="primary"
-                  variant="outlined"
-                  block
-                  @click="viewMemberHistory"
-                >
-                  <v-icon left>mdi-history</v-icon>
-                  History
-                </v-btn>
-              </v-col>
-              <v-col v-if="hasPermission('claims:lodge')" cols="6" md="3">
-                <v-btn
-                  size="small"
-                  rounded
-                  color="error"
-                  variant="outlined"
-                  block
-                  :disabled="!member?.id"
-                  @click="openRegisterClaim"
-                >
-                  <v-icon left>mdi-file-plus</v-icon>
-                  Register Claim
-                </v-btn>
-              </v-col>
-            </v-row>
+            <div class="d-flex flex-wrap ga-2 quick-actions">
+              <v-btn
+                size="small"
+                rounded
+                color="info"
+                variant="outlined"
+                class="quick-action-btn"
+                @click="$emit('view-claims')"
+              >
+                <v-icon left>mdi-file-document-outline</v-icon>
+                View Claims
+              </v-btn>
+              <v-btn
+                size="small"
+                rounded
+                color="success"
+                variant="outlined"
+                class="quick-action-btn"
+                @click="downloadMemberCertificate"
+              >
+                <v-icon left>mdi-certificate</v-icon>
+                Certificate
+              </v-btn>
+              <v-btn
+                size="small"
+                rounded
+                color="warning"
+                variant="outlined"
+                class="quick-action-btn"
+                @click="viewBenefitSummary"
+              >
+                <v-icon left>mdi-chart-line</v-icon>
+                Benefit Summary
+              </v-btn>
+              <v-btn
+                size="small"
+                rounded
+                color="primary"
+                variant="outlined"
+                class="quick-action-btn"
+                @click="viewMemberHistory"
+              >
+                <v-icon left>mdi-history</v-icon>
+                History
+              </v-btn>
+              <v-btn
+                v-if="hasPermission('claims:lodge')"
+                size="small"
+                rounded
+                color="error"
+                variant="outlined"
+                class="quick-action-btn"
+                :disabled="!member?.id"
+                @click="openRegisterClaim"
+              >
+                <v-icon left>mdi-file-plus</v-icon>
+                Register Claim
+              </v-btn>
+            </div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -586,5 +577,10 @@ const handleMemberUpdated = (updatedMember: Member) => {
 .v-list-item-subtitle {
   font-size: 0.875rem;
   font-weight: 500;
+}
+
+.quick-action-btn {
+  flex: 1 1 0;
+  min-width: 140px;
 }
 </style>
