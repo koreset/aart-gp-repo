@@ -19,16 +19,29 @@
                   </template>
                 </span>
               </div>
-              <v-btn
-                v-if="canEditClaim"
-                size="small"
-                variant="outlined"
-                rounded
-                prepend-icon="mdi-pencil"
-                @click="goToEdit"
-              >
-                Edit
-              </v-btn>
+              <div class="d-flex align-center gap-2">
+                <v-btn
+                  v-if="canEditClaim"
+                  size="small"
+                  variant="outlined"
+                  rounded
+                  prepend-icon="mdi-pencil"
+                  @click="goToEdit"
+                >
+                  Edit
+                </v-btn>
+                <v-btn
+                  v-if="canSubmitForAssessment"
+                  size="small"
+                  color="primary"
+                  rounded
+                  prepend-icon="mdi-send"
+                  :loading="submittingForAssessment"
+                  @click="handleSubmitForAssessment"
+                >
+                  Submit for Assessment
+                </v-btn>
+              </div>
             </div>
           </template>
           <template #default>
@@ -64,6 +77,31 @@
       </v-col>
     </v-row>
 
+    <v-dialog v-model="confirmSubmitDialog" persistent max-width="420px">
+      <v-card>
+        <v-card-title class="text-h6">Submit for Assessment</v-card-title>
+        <v-card-text>
+          Send this claim to the assessment queue? Once submitted, the
+          assessor will start processing it.
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn
+            color="grey"
+            variant="text"
+            @click="confirmSubmitDialog = false"
+            >Cancel</v-btn
+          >
+          <v-btn
+            color="primary"
+            :loading="submittingForAssessment"
+            @click="doSubmitForAssessment"
+            >Submit</v-btn
+          >
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-snackbar v-model="snackbar" :timeout="3000" :color="snackbarColor">
       {{ snackbarMessage }}
     </v-snackbar>
@@ -76,6 +114,10 @@ import { useRouter } from 'vue-router'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import ClaimDetailView from './components/ClaimDetailView.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
+import {
+  isEditableClaimStatus,
+  isSubmittableClaimStatus
+} from '@/renderer/utils/claimStatus'
 
 const props = defineProps<{
   id: string | number
@@ -86,10 +128,12 @@ const router = useRouter()
 const loading = ref(false)
 const selectedClaim = ref<any>(null)
 
-const canEditClaim = computed(
-  () =>
-    selectedClaim.value?.status === 'pending' ||
-    selectedClaim.value?.status === 'under_assessment'
+const canEditClaim = computed(() =>
+  isEditableClaimStatus(selectedClaim.value?.status)
+)
+
+const canSubmitForAssessment = computed(() =>
+  isSubmittableClaimStatus(selectedClaim.value?.status)
 )
 
 const goToEdit = () => {
@@ -98,6 +142,45 @@ const goToEdit = () => {
     name: 'group-pricing-claim-edit',
     params: { id: selectedClaim.value.id }
   })
+}
+
+const submittingForAssessment = ref(false)
+const confirmSubmitDialog = ref(false)
+
+const handleSubmitForAssessment = () => {
+  confirmSubmitDialog.value = true
+}
+
+const doSubmitForAssessment = async () => {
+  if (!selectedClaim.value?.id) return
+  confirmSubmitDialog.value = false
+  submittingForAssessment.value = true
+  try {
+    await GroupPricingService.submitClaimForAssessment(selectedClaim.value.id)
+    showSnackbar('Claim submitted for assessment', 'success')
+    await loadClaim()
+  } catch (error: any) {
+    const status = error?.response?.status
+    if (status === 422) {
+      const missing: string[] = error?.response?.data?.missing || []
+      showSnackbar(
+        missing.length
+          ? `Cannot submit: missing ${missing.join(', ')}.`
+          : 'Claim is incomplete and cannot be submitted.',
+        'error'
+      )
+    } else if (status === 409) {
+      showSnackbar(
+        'This claim cannot be submitted in its current status.',
+        'error'
+      )
+    } else {
+      console.error('Error submitting claim for assessment:', error)
+      showSnackbar('Error submitting claim. Please try again.', 'error')
+    }
+  } finally {
+    submittingForAssessment.value = false
+  }
 }
 
 const snackbar = ref(false)

@@ -1010,6 +1010,12 @@ export default {
     )
   },
 
+  submitClaimForAssessment(claimId) {
+    return Api.post(
+      `/group-pricing/claims/${claimId}/submit-for-assessment`
+    )
+  },
+
   createClaimDeclineRecord(claimId, declineData) {
     return Api.post(`/group-pricing/claims/${claimId}/decline`, declineData, {
       headers: {

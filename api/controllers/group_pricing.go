@@ -2250,6 +2250,46 @@ func UploadGroupSchemeClaimAttachments(c *gin.Context) {
 	c.JSON(http.StatusCreated, created)
 }
 
+// SubmitClaimForAssessment transitions a claim from "draft" (or
+// "additional_info_required") to "pending", surfacing it in the assessor
+// queue. The claim must be complete (banking + hard-required attachments).
+func SubmitClaimForAssessment(c *gin.Context) {
+	claimID, err := strconv.Atoi(c.Param("claim_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, "invalid claim_id")
+		return
+	}
+
+	user := c.MustGet("user").(models.AppUser)
+	updated, svcErr := services.SubmitGroupSchemeClaimForAssessment(claimID, user)
+	if svcErr != nil {
+		if errors.Is(svcErr, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, "claim not found")
+			return
+		}
+		if errors.Is(svcErr, services.ErrClaimNotSubmittable) {
+			c.JSON(http.StatusConflict, svcErr.Error())
+			return
+		}
+		var incomplete *services.ClaimCompletenessError
+		if errors.As(svcErr, &incomplete) {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{
+				"error":   ErrClaimIncompleteMessage,
+				"missing": incomplete.Missing,
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, svcErr.Error())
+		return
+	}
+	populateAttachmentViewerURLs(updated.Attachments)
+	c.JSON(http.StatusOK, updated)
+}
+
+// ErrClaimIncompleteMessage is the human-friendly error string returned to
+// the client when a claim cannot be submitted because it is incomplete.
+const ErrClaimIncompleteMessage = "claim is missing information required for assessment"
+
 // DeleteGroupSchemeClaimAttachment removes a single attachment from a claim. The
 // claim's status must be one of the editable statuses (pending / under_assessment).
 func DeleteGroupSchemeClaimAttachment(c *gin.Context) {

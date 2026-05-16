@@ -126,6 +126,20 @@
           <v-card-text>
             <div class="d-flex mt-4 flex-column gap-2">
               <v-btn
+                v-if="hasPermission('claims:lodge') && canSubmitForAssessment"
+                rounded
+                color="primary"
+                prepend-icon="mdi-send"
+                :loading="submittingForAssessment"
+                :disabled="!claimReadyForAssessment"
+                :title="
+                  claimReadyForAssessment ? '' : missingItemsHint
+                "
+                @click="confirmSubmitForAssessment"
+              >
+                Submit for Assessment
+              </v-btn>
+              <v-btn
                 v-if="hasPermission('claims:assess')"
                 rounded
                 color="primary"
@@ -575,6 +589,31 @@
       </v-card>
     </v-dialog>
 
+    <v-dialog v-model="submitForAssessmentDialog" persistent max-width="440px">
+      <v-card>
+        <v-card-title class="text-h6">Submit for Assessment</v-card-title>
+        <v-card-text>
+          Send this claim to the assessment queue? Once submitted, the
+          assessor will start processing it.
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn
+            color="grey"
+            variant="text"
+            @click="submitForAssessmentDialog = false"
+            >Cancel</v-btn
+          >
+          <v-btn
+            color="primary"
+            :loading="submittingForAssessment"
+            @click="doSubmitForAssessment"
+            >Submit</v-btn
+          >
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- Decline Claim Dialog -->
     <v-dialog v-model="declineDialog" persistent max-width="700px">
       <v-card>
@@ -806,6 +845,7 @@ import { useRouter } from 'vue-router'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
 import { claimDocumentTypes } from '../claimDocumentTypes'
+import { isSubmittableClaimStatus } from '@/renderer/utils/claimStatus'
 
 interface Props {
   claim: any
@@ -911,9 +951,11 @@ const mockDocuments = [
 
 // Computed properties
 const canAssess = computed(() => {
-  return ['pending', 'under_assessment', 'additional_info_required'].includes(
-    props.claim?.status
-  )
+  return [
+    'pending_assessment',
+    'under_assessment',
+    'additional_info_required'
+  ].includes(props.claim?.status)
 })
 
 const declineReasons = computed(() => [
@@ -942,6 +984,76 @@ const missingDocs = computed(() => {
   return allDocTypes.filter((d) => !uploadedDocs.has(d.code))
 })
 
+// Per-benefit hard-required document codes — kept in sync with
+// hardRequiredDocsByBenefit in api/services/group_pricing.go and with
+// hardRequiredDocCodes in ClaimRegistrationForm.vue.
+const hardRequiredDocsByBenefit: Record<string, string[]> = {
+  GLA: ['claim_form', 'certified_id_deceased', 'certified_id_claimant', 'banking_details'],
+  SGLA: ['claim_form', 'certified_id_deceased', 'certified_id_claimant', 'banking_details'],
+  GFF: ['claim_form', 'certified_id_deceased', 'certified_id_claimant', 'banking_details'],
+  PTD: ['claim_form', 'certified_id_member', 'banking_details'],
+  CI: ['claim_form', 'certified_id_member', 'banking_details'],
+  TTD: ['claim_form', 'certified_id_member', 'banking_details'],
+  PHI: ['claim_form', 'certified_id_member', 'banking_details']
+}
+
+const canSubmitForAssessment = computed(() =>
+  isSubmittableClaimStatus(props.claim?.status)
+)
+
+const submissionMissingItems = computed(() => {
+  const missing: string[] = []
+  const c = props.claim || ({} as any)
+  if (!c.bank_name) missing.push('bank name')
+  if (!c.bank_account_number) missing.push('bank account number')
+  if (!c.bank_account_type) missing.push('bank account type')
+  if (!c.account_holder_name) missing.push('account holder name')
+  if (c.bank_verification_status !== 'verified') {
+    missing.push('verified banking')
+  }
+  const required = hardRequiredDocsByBenefit[c.benefit_code] || []
+  const presentTypes = new Set(
+    (c.attachments || [])
+      .map((a: any) => a.document_type)
+      .filter((t: string | undefined) => !!t)
+  )
+  for (const code of required) {
+    if (!presentTypes.has(code)) missing.push(`document: ${code}`)
+  }
+  return missing
+})
+
+const claimReadyForAssessment = computed(
+  () => submissionMissingItems.value.length === 0
+)
+
+const missingItemsHint = computed(() =>
+  submissionMissingItems.value.length
+    ? `Missing: ${submissionMissingItems.value.join(', ')}`
+    : ''
+)
+
+const submittingForAssessment = ref(false)
+const submitForAssessmentDialog = ref(false)
+
+const confirmSubmitForAssessment = () => {
+  submitForAssessmentDialog.value = true
+}
+
+const doSubmitForAssessment = async () => {
+  if (!props.claim?.id) return
+  submitForAssessmentDialog.value = false
+  submittingForAssessment.value = true
+  try {
+    await GroupPricingService.submitClaimForAssessment(props.claim.id)
+    emit('update', { ...props.claim, status: 'pending_assessment' })
+  } catch (error) {
+    console.error('Error submitting claim for assessment:', error)
+  } finally {
+    submittingForAssessment.value = false
+  }
+}
+
 const canApprove = computed(() => {
   return [
     'under_assessment',
@@ -960,7 +1072,7 @@ const canDecline = computed(() => {
 
 const canRequestInfo = computed(() => {
   return [
-    'pending',
+    'pending_assessment',
     'under_assessment',
     'additional_info_required',
     'referred_to_committee'
@@ -970,7 +1082,8 @@ const canRequestInfo = computed(() => {
 // Methods
 const getStatusColor = (status: string) => {
   const colors: Record<string, string> = {
-    pending: 'info',
+    draft: 'grey',
+    pending_assessment: 'info',
     under_assessment: 'warning',
     additional_info_required: 'orange',
     referred_to_committee: 'deep-purple',

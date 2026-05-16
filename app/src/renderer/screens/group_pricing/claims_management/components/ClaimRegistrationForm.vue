@@ -1983,9 +1983,12 @@ const submitClaim = async () => {
       ? props.claim?.date_registered ||
         new Date().toISOString().split('T')[0]
       : new Date().toISOString().split('T')[0]
+    // New claims start in "draft" and stay capturer-controlled until the
+    // capturer explicitly submits them for assessment. Edit mode preserves
+    // whatever status the claim is already in.
     const claimStatus = isEditMode.value
-      ? props.claim?.status || 'pending'
-      : 'pending'
+      ? props.claim?.status || 'draft'
+      : 'draft'
 
     // Create FormData for multipart submission
     const formDataForSubmission = new FormData()

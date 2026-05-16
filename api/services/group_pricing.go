@@ -15401,9 +15401,9 @@ func GroupSchemeSubmitClaim(claim models.GroupSchemeClaim, user models.AppUser) 
 
 	claim.CreationDate = time.Now()
 	claim.CreatedBy = user.UserName
-	if strings.TrimSpace(claim.Status) == "" {
-		claim.Status = "Pending"
-	}
+	// New claims always start in "draft". The capturer transitions them to
+	// "pending" via SubmitGroupSchemeClaimForAssessment once they're ready.
+	claim.Status = "draft"
 	if strings.TrimSpace(claim.ClaimNumber) == "" {
 		// generate a claim number if missing
 		cn, err := generateUniqueClaimNumber()
@@ -15420,7 +15420,7 @@ func GroupSchemeSubmitClaim(claim models.GroupSchemeClaim, user models.AppUser) 
 		ClaimID:       claim.ID,
 		OldStatus:     "",
 		NewStatus:     claim.Status,
-		StatusMessage: "Claim submitted",
+		StatusMessage: "Claim registered as draft",
 		ChangedBy:     user.UserName,
 		ChangedAt:     time.Now(),
 	}).Error; err != nil {
@@ -15444,8 +15444,8 @@ func GroupSchemeSubmitClaim(claim models.GroupSchemeClaim, user models.AppUser) 
 		MemberID:       member.ID,
 		MemberIDNumber: claim.MemberIDNumber,
 		Type:           "claim",
-		Title:          "Claim Submitted",
-		Description:    fmt.Sprintf("%s claim submitted", claim.BenefitAlias),
+		Title:          "Claim Registered",
+		Description:    fmt.Sprintf("%s claim registered as draft", claim.BenefitAlias),
 		Details:        claimDetails,
 		PerformedBy:    user.UserName,
 	})
@@ -15463,9 +15463,9 @@ func GroupSchemeSubmitClaimWithFiles(claim models.GroupSchemeClaim, files map[st
 	// Save the claim first (now we need the ID for attachments)
 	claim.CreationDate = time.Now()
 	claim.CreatedBy = user.UserName
-	if strings.TrimSpace(claim.Status) == "" {
-		claim.Status = "Pending"
-	}
+	// New claims always start in "draft". The capturer transitions them to
+	// "pending" via SubmitGroupSchemeClaimForAssessment once they're ready.
+	claim.Status = "draft"
 	if strings.TrimSpace(claim.ClaimNumber) == "" {
 		cn, err := generateUniqueClaimNumber()
 		if err != nil {
@@ -15481,7 +15481,7 @@ func GroupSchemeSubmitClaimWithFiles(claim models.GroupSchemeClaim, files map[st
 		ClaimID:       claim.ID,
 		OldStatus:     "",
 		NewStatus:     claim.Status,
-		StatusMessage: "Claim submitted",
+		StatusMessage: "Claim registered as draft",
 		ChangedBy:     user.UserName,
 		ChangedAt:     time.Now(),
 	}).Error; err != nil {
@@ -15503,8 +15503,8 @@ func GroupSchemeSubmitClaimWithFiles(claim models.GroupSchemeClaim, files map[st
 		MemberID:       member.ID,
 		MemberIDNumber: claim.MemberIDNumber,
 		Type:           "claim",
-		Title:          "Claim Submitted",
-		Description:    fmt.Sprintf("%s claim submitted", claim.BenefitAlias),
+		Title:          "Claim Registered",
+		Description:    fmt.Sprintf("%s claim registered as draft", claim.BenefitAlias),
 		Details:        claimDetails,
 		PerformedBy:    user.UserName,
 	})
@@ -15734,8 +15734,11 @@ func GroupSchemeSubmitClaimsBatch(claims []models.GroupSchemeClaim, user models.
 
 			c.CreationDate = now
 			c.CreatedBy = user.UserName
+			// Bulk-uploaded claims skip the manual draft phase: they come from a
+			// system-of-record and are presumed complete, so they land directly
+			// in the assessor's queue.
 			if strings.TrimSpace(c.Status) == "" {
-				c.Status = "Pending"
+				c.Status = "pending_assessment"
 			}
 			if strings.TrimSpace(c.ClaimNumber) == "" {
 				cn, err := generateUniqueClaimNumberWithTX(tx)
@@ -16553,9 +16556,172 @@ var ErrClaimNotEditable = errors.New("claim is not editable in its current statu
 
 // claimEditableStatuses lists the statuses in which a claim may be modified through
 // UpdateGroupSchemeClaim / UpdateGroupSchemeClaimWithFiles or attachment deletion.
+// The capturer can modify a claim while it is being drafted, after it has been
+// submitted (pending_assessment), while it is under assessment, and after the
+// assessor has bounced it back asking for more information.
 var claimEditableStatuses = map[string]bool{
-	"pending":          true,
-	"under_assessment": true,
+	"draft":                    true,
+	"pending_assessment":       true,
+	"under_assessment":         true,
+	"additional_info_required": true,
+}
+
+// ErrClaimNotSubmittable is returned by SubmitGroupSchemeClaimForAssessment when the
+// claim's current status is not one from which it can be submitted for assessment.
+var ErrClaimNotSubmittable = errors.New("claim is not in a state that can be submitted for assessment")
+
+// ErrClaimIncomplete is returned by SubmitGroupSchemeClaimForAssessment when the
+// claim is missing information required before it can be assessed. The detailed
+// list of missing items is exposed via ClaimCompletenessError.
+var ErrClaimIncomplete = errors.New("claim is missing information required for assessment")
+
+// ClaimCompletenessError wraps ErrClaimIncomplete with the specific list of
+// missing items so the controller can surface them to the client.
+type ClaimCompletenessError struct {
+	Missing []string
+}
+
+func (e *ClaimCompletenessError) Error() string {
+	return fmt.Sprintf("%s: %s", ErrClaimIncomplete.Error(), strings.Join(e.Missing, ", "))
+}
+
+func (e *ClaimCompletenessError) Unwrap() error { return ErrClaimIncomplete }
+
+// claimSubmittableStatuses lists the statuses from which the capturer can
+// submit a claim into the assessor's queue: a brand new draft, or a claim
+// that has been bounced back asking for more information.
+var claimSubmittableStatuses = map[string]bool{
+	"draft":                    true,
+	"additional_info_required": true,
+}
+
+// hardRequiredDocsByBenefit lists, per benefit code, the supporting-document
+// codes that must be present (as attachments) before a claim can be submitted
+// for assessment. Kept in sync with hardRequiredDocCodes ×
+// documentTypesMapping in ClaimRegistrationForm.vue — keep these in lockstep
+// when adding a new benefit or hard-required document type.
+var hardRequiredDocsByBenefit = map[string][]string{
+	"GLA":  {"claim_form", "certified_id_deceased", "certified_id_claimant", "banking_details"},
+	"SGLA": {"claim_form", "certified_id_deceased", "certified_id_claimant", "banking_details"},
+	"GFF":  {"claim_form", "certified_id_deceased", "certified_id_claimant", "banking_details"},
+	"PTD":  {"claim_form", "certified_id_member", "banking_details"},
+	"CI":   {"claim_form", "certified_id_member", "banking_details"},
+	"TTD":  {"claim_form", "certified_id_member", "banking_details"},
+	"PHI":  {"claim_form", "certified_id_member", "banking_details"},
+}
+
+// validateClaimReadyForAssessment returns the list of human-readable missing
+// items that prevent the claim from being submitted for assessment, or an
+// empty slice if the claim is complete. The banking-verification status is
+// not persisted on the claim model today, so this server-side check is
+// limited to structural fields and attachments; the frontend additionally
+// gates the Submit button on bank_verification_status === "verified".
+func validateClaimReadyForAssessment(claim models.GroupSchemeClaim, attachments []models.GroupSchemeClaimAttachment) []string {
+	var missing []string
+
+	if strings.TrimSpace(claim.BankName) == "" {
+		missing = append(missing, "bank name")
+	}
+	if strings.TrimSpace(claim.BankAccountNumber) == "" {
+		missing = append(missing, "bank account number")
+	}
+	if strings.TrimSpace(claim.BankAccountType) == "" {
+		missing = append(missing, "bank account type")
+	}
+	if strings.TrimSpace(claim.AccountHolderName) == "" {
+		missing = append(missing, "account holder name")
+	}
+
+	required, ok := hardRequiredDocsByBenefit[claim.BenefitCode]
+	if ok {
+		present := make(map[string]bool, len(attachments))
+		for _, a := range attachments {
+			if a.DocumentType != "" {
+				present[a.DocumentType] = true
+			}
+		}
+		for _, code := range required {
+			if !present[code] {
+				missing = append(missing, fmt.Sprintf("document: %s", code))
+			}
+		}
+	}
+
+	return missing
+}
+
+// SubmitGroupSchemeClaimForAssessment transitions a claim from "draft" or
+// "additional_info_required" to "pending" after verifying that all
+// hard-required information has been captured. It writes a status audit and
+// member activity entry mirroring UpdateGroupSchemeClaim's pattern.
+func SubmitGroupSchemeClaimForAssessment(claimID int, user models.AppUser) (models.GroupSchemeClaim, error) {
+	var existing models.GroupSchemeClaim
+	if err := DB.Preload("Attachments").First(&existing, claimID).Error; err != nil {
+		return existing, err
+	}
+
+	if !claimSubmittableStatuses[existing.Status] {
+		return existing, fmt.Errorf("%w: status is %q", ErrClaimNotSubmittable, existing.Status)
+	}
+
+	if missing := validateClaimReadyForAssessment(existing, existing.Attachments); len(missing) > 0 {
+		return existing, &ClaimCompletenessError{Missing: missing}
+	}
+
+	oldStatus := existing.Status
+	newStatus := "pending_assessment"
+
+	tx := DB.Begin()
+	if tx.Error != nil {
+		return existing, tx.Error
+	}
+
+	if err := tx.Model(&existing).Update("status", newStatus).Error; err != nil {
+		tx.Rollback()
+		return existing, err
+	}
+
+	if err := tx.Create(&models.GroupSchemeClaimStatusAudit{
+		ClaimID:       existing.ID,
+		OldStatus:     oldStatus,
+		NewStatus:     newStatus,
+		StatusMessage: "Submitted for assessment",
+		ChangedBy:     user.UserName,
+		ChangedAt:     time.Now(),
+	}).Error; err != nil {
+		tx.Rollback()
+		return existing, err
+	}
+
+	claimDetails, _ := json.Marshal(map[string]interface{}{
+		"claimNumber": existing.ClaimNumber,
+		"claimType":   existing.BenefitAlias,
+		"oldStatus":   oldStatus,
+		"newStatus":   newStatus,
+	})
+	var m models.GPricingMemberDataInForce
+	_ = tx.Where("member_id_number = ?", existing.MemberIDNumber).First(&m)
+
+	_ = tx.Create(&models.MemberActivity{
+		MemberID:       m.ID,
+		MemberIDNumber: existing.MemberIDNumber,
+		Type:           "claim",
+		Title:          "Claim Submitted for Assessment",
+		Description:    fmt.Sprintf("%s claim submitted for assessment", existing.BenefitAlias),
+		Details:        claimDetails,
+		PerformedBy:    user.UserName,
+	})
+
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		return existing, err
+	}
+
+	var updated models.GroupSchemeClaim
+	if err := DB.Preload("Attachments").Preload("Assessments").Preload("Communications").First(&updated, existing.ID).Error; err != nil {
+		return updated, err
+	}
+	return updated, nil
 }
 
 // UpdateGroupSchemeClaim updates a claim by ID. It preserves immutable fields like ID, CreationDate, and CreatedBy.

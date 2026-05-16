@@ -241,6 +241,7 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.POST("claims/calculate-amount", controllers.GetUpdatedClaimAmount)
 			groupPricing.GET("claims/:claim_id", controllers.GetGroupSchemeClaim)
 			groupPricing.PUT("claims/:claim_id", controllers.UpdateGroupSchemeClaim)
+			groupPricing.POST("claims/:claim_id/submit-for-assessment", controllers.SubmitClaimForAssessment)
 			// Claim attachments
 			groupPricing.GET("claims/:claim_id/attachments", controllers.ListGroupSchemeClaimAttachments)
 			groupPricing.POST("claims/:claim_id/attachments", controllers.UploadGroupSchemeClaimAttachments)
