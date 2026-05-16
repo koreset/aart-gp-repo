@@ -304,6 +304,20 @@
                   History
                 </v-btn>
               </v-col>
+              <v-col v-if="hasPermission('claims:lodge')" cols="6" md="3">
+                <v-btn
+                  size="small"
+                  rounded
+                  color="error"
+                  variant="outlined"
+                  block
+                  :disabled="!member?.id"
+                  @click="openRegisterClaim"
+                >
+                  <v-icon left>mdi-file-plus</v-icon>
+                  Register Claim
+                </v-btn>
+              </v-col>
             </v-row>
           </v-card-text>
         </v-card>
@@ -330,6 +344,15 @@
       :member-id="member?.id || null"
       :member-name="member?.member_name || ''"
     />
+
+    <!-- Register Claim Dialog -->
+    <register-claim-dialog
+      v-model="showRegisterClaim"
+      :schemes="schemes"
+      :prefilled-member="prefilledClaimMember"
+      @save="handleSaveClaim"
+      @cancel="showRegisterClaim = false"
+    />
   </v-container>
 </template>
 
@@ -338,6 +361,9 @@ import { computed, ref } from 'vue'
 import MemberBenefitSummary from './MemberBenefitSummary.vue'
 import MemberEditDialog from './MemberEditDialog.vue'
 import MemberHistoryDialog from './MemberHistoryDialog.vue'
+import RegisterClaimDialog from '../../claims_management/components/RegisterClaimDialog.vue'
+import GroupPricingService from '@/renderer/api/GroupPricingService'
+import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
 
 interface Member {
   id?: number
@@ -369,9 +395,16 @@ interface Beneficiary {
   allocation_percentage: number
 }
 
+interface Scheme {
+  id: number
+  name: string
+  [key: string]: any
+}
+
 interface Props {
   member: Member | null
   beneficiaries: Beneficiary[]
+  schemes?: Scheme[]
 }
 
 interface Emits {
@@ -379,10 +412,15 @@ interface Emits {
   (e: 'view-claims'): void
   (e: 'edit-member'): void
   (e: 'member-updated', member: Member): void
+  (e: 'claim-registered'): void
+  (e: 'notify', message: string, color?: string): void
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  schemes: () => []
+})
 const emit = defineEmits<Emits>()
+const { hasPermission } = usePermissionCheck()
 
 // State for benefit summary dialog
 const showBenefitSummary = ref(false)
@@ -392,6 +430,34 @@ const showEditDialog = ref(false)
 
 // State for history dialog
 const showHistoryDialog = ref(false)
+
+// State for register claim dialog
+const showRegisterClaim = ref(false)
+
+const prefilledClaimMember = computed(() => {
+  if (!props.member?.member_id_number) return null
+  return {
+    member_id_number: props.member.member_id_number,
+    member_name: props.member.member_name
+  }
+})
+
+const openRegisterClaim = () => {
+  if (!props.member?.id) return
+  showRegisterClaim.value = true
+}
+
+const handleSaveClaim = async (claimData: FormData) => {
+  try {
+    await GroupPricingService.submitClaim(claimData)
+    showRegisterClaim.value = false
+    emit('notify', 'Claim registered successfully', 'success')
+    emit('claim-registered')
+  } catch (error) {
+    console.error('Error registering claim:', error)
+    emit('notify', 'Error registering claim. Please try again.', 'error')
+  }
+}
 
 // Computed properties
 const totalAllocation = computed(() => {

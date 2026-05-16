@@ -68,9 +68,12 @@
               v-else
               :member="selectedMember"
               :beneficiaries="memberBeneficiaries"
+              :schemes="schemes"
               @manage-beneficiaries="openBeneficiaryManagement"
               @view-claims="viewMemberClaims"
               @member-updated="handleMemberUpdated"
+              @claim-registered="handleClaimRegistered"
+              @notify="handleNotify"
             />
           </template>
         </base-card>
@@ -402,6 +405,15 @@ const handleMemberUpdated = async (updatedMember: any) => {
   selectedMember.value = updatedMember
   await loadMember()
   showSnackbar('Member updated successfully', 'success')
+}
+
+const handleClaimRegistered = async () => {
+  // Member-level data is unchanged by claim registration; nothing to refresh
+  // here today. Hook left in place so future per-member claim views can react.
+}
+
+const handleNotify = (message: string, color: string = 'success') => {
+  showSnackbar(message, color)
 }
 
 onMounted(async () => {

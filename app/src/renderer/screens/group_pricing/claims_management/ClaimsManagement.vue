@@ -168,20 +168,12 @@
     </v-row>
 
     <!-- New Claim Dialog -->
-    <v-dialog v-model="newClaimDialog" persistent max-width="900px">
-      <base-card>
-        <template #header>
-          <span class="headline">Register New Claim</span>
-        </template>
-        <template #default>
-          <claim-registration-form
-            :schemes="schemes"
-            @save="handleNewClaimSave"
-            @cancel="newClaimDialog = false"
-          />
-        </template>
-      </base-card>
-    </v-dialog>
+    <register-claim-dialog
+      v-model="newClaimDialog"
+      :schemes="schemes"
+      @save="handleNewClaimSave"
+      @cancel="newClaimDialog = false"
+    />
 
     <!-- Claim Details Dialog -->
     <v-dialog v-model="claimDetailsDialog" persistent max-width="1200px">
@@ -281,7 +273,7 @@ import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
 import StatCard from '@/renderer/components/StatCard.vue'
 import EmptyState from '@/renderer/components/EmptyState.vue'
 import DataGrid from '@/renderer/components/tables/DataGrid.vue'
-import ClaimRegistrationForm from './components/ClaimRegistrationForm.vue'
+import RegisterClaimDialog from './components/RegisterClaimDialog.vue'
 import ClaimDetailView from './components/ClaimDetailView.vue'
 import BulkClaimsUpload from './components/BulkClaimsUpload.vue'
 import ClaimPaymentSchedules from './components/ClaimPaymentSchedules.vue'

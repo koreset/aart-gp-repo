@@ -58,6 +58,13 @@
                   variant="outlined"
                   density="compact"
                   :rules="[rules.required, rules.idOrPassport]"
+                  :readonly="!!props.prefilledMember"
+                  :persistent-hint="!!props.prefilledMember"
+                  :hint="
+                    props.prefilledMember
+                      ? 'Member is preselected from Member Details'
+                      : undefined
+                  "
                   required
                   @blur="lookupMember"
                 />
@@ -686,8 +693,15 @@ import {
   type TriState
 } from '@/renderer/types/bav'
 
+interface PrefilledMember {
+  member_id_number: string
+  member_name?: string
+  [key: string]: any
+}
+
 interface Props {
   schemes: Array<any>
+  prefilledMember?: PrefilledMember | null
 }
 
 interface Emits {
@@ -695,7 +709,9 @@ interface Emits {
   (e: 'cancel'): void
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  prefilledMember: null
+})
 const emit = defineEmits<Emits>()
 
 const form = ref(null)
@@ -1129,7 +1145,7 @@ const documentTypesMapping = {
 
 // Form data
 const formData = ref({
-  member_id_number: '',
+  member_id_number: props.prefilledMember?.member_id_number ?? '',
   scheme_id: null,
   benefit_type: null as any,
   member_type: 'member',
