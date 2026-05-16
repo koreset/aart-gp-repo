@@ -244,6 +244,7 @@ func ConfigureRouter(router *gin.Engine) {
 			// Claim attachments
 			groupPricing.GET("claims/:claim_id/attachments", controllers.ListGroupSchemeClaimAttachments)
 			groupPricing.POST("claims/:claim_id/attachments", controllers.UploadGroupSchemeClaimAttachments)
+			groupPricing.DELETE("claims/:claim_id/attachments/:attachment_id", controllers.DeleteGroupSchemeClaimAttachment)
 			groupPricing.GET("claims/attachments/:attachment_id/download", controllers.DownloadGroupSchemeClaimAttachment)
 			// Claim assessments
 			groupPricing.POST("claims/:claim_id/assessments", controllers.CreateGroupSchemeClaimAssessment)

@@ -2250,6 +2250,36 @@ func UploadGroupSchemeClaimAttachments(c *gin.Context) {
 	c.JSON(http.StatusCreated, created)
 }
 
+// DeleteGroupSchemeClaimAttachment removes a single attachment from a claim. The
+// claim's status must be one of the editable statuses (pending / under_assessment).
+func DeleteGroupSchemeClaimAttachment(c *gin.Context) {
+	claimID, err := strconv.Atoi(c.Param("claim_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, "invalid claim_id")
+		return
+	}
+	attachmentID, err := strconv.Atoi(c.Param("attachment_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, "invalid attachment_id")
+		return
+	}
+
+	user := c.MustGet("user").(models.AppUser)
+	if svcErr := services.DeleteGroupSchemeClaimAttachment(claimID, attachmentID, user); svcErr != nil {
+		if errors.Is(svcErr, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, "claim or attachment not found")
+			return
+		}
+		if errors.Is(svcErr, services.ErrClaimNotEditable) {
+			c.JSON(http.StatusConflict, svcErr.Error())
+			return
+		}
+		c.JSON(http.StatusInternalServerError, svcErr.Error())
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 // UpdateGroupSchemeClaim updates a claim by its ID
 func UpdateGroupSchemeClaim(c *gin.Context) {
 	claimIDStr := c.Param("claim_id")
@@ -2273,12 +2303,38 @@ func UpdateGroupSchemeClaim(c *gin.Context) {
 			return
 		}
 
+		// Optional: list of existing attachment IDs to delete in the same transaction.
+		var removedAttachmentIDs []int
+		if rmVals := form.Value["removed_attachment_ids"]; len(rmVals) > 0 && rmVals[0] != "" {
+			if err := json.Unmarshal([]byte(rmVals[0]), &removedAttachmentIDs); err != nil {
+				c.JSON(http.StatusBadRequest, "removed_attachment_ids must be a JSON array of integers")
+				return
+			}
+		}
+
+		// Optional: per-file metadata (document_type/name + file_index) mirroring
+		// the format used by GroupSchemeSubmitClaim. When supplied, it overrides
+		// any supporting_documents already on the payload so the frontend can use
+		// the same multipart shape it uses to create claims.
+		if dmVals := form.Value["document_metadata"]; len(dmVals) > 0 && dmVals[0] != "" {
+			var meta []models.SupportingDocument
+			if err := json.Unmarshal([]byte(dmVals[0]), &meta); err != nil {
+				c.JSON(http.StatusBadRequest, "document_metadata must be a JSON array")
+				return
+			}
+			payload.SupportingDocuments = meta
+		}
+
 		// Collect any uploaded files
 		user := c.MustGet("user").(models.AppUser)
-		updated, svcErr := services.UpdateGroupSchemeClaimWithFiles(claimID, payload, form.File, user)
+		updated, svcErr := services.UpdateGroupSchemeClaimWithFiles(claimID, payload, form.File, removedAttachmentIDs, user)
 		if svcErr != nil {
 			if errors.Is(svcErr, gorm.ErrRecordNotFound) {
 				c.JSON(http.StatusNotFound, "claim not found")
+				return
+			}
+			if errors.Is(svcErr, services.ErrClaimNotEditable) {
+				c.JSON(http.StatusConflict, svcErr.Error())
 				return
 			}
 			c.JSON(http.StatusInternalServerError, svcErr.Error())
@@ -2302,6 +2358,10 @@ func UpdateGroupSchemeClaim(c *gin.Context) {
 	if svcErr != nil {
 		if errors.Is(svcErr, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, "claim not found")
+			return
+		}
+		if errors.Is(svcErr, services.ErrClaimNotEditable) {
+			c.JSON(http.StatusConflict, svcErr.Error())
 			return
 		}
 		c.JSON(http.StatusInternalServerError, svcErr.Error())

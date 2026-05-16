@@ -58,12 +58,14 @@
                   variant="outlined"
                   density="compact"
                   :rules="[rules.required, rules.idOrPassport]"
-                  :readonly="!!props.prefilledMember"
-                  :persistent-hint="!!props.prefilledMember"
+                  :readonly="!!props.prefilledMember || isEditMode"
+                  :persistent-hint="!!props.prefilledMember || isEditMode"
                   :hint="
-                    props.prefilledMember
-                      ? 'Member is preselected from Member Details'
-                      : undefined
+                    isEditMode
+                      ? 'Member cannot be changed when editing a claim'
+                      : props.prefilledMember
+                        ? 'Member is preselected from Member Details'
+                        : undefined
                   "
                   required
                   @blur="lookupMember"
@@ -525,10 +527,7 @@
                       </v-chip>
                       <v-spacer />
                       <v-icon
-                        v-if="
-                          formData.supporting_documents[docType.code]?.length >
-                          0
-                        "
+                        v-if="docSlotFulfilled(docType.code)"
                         color="success"
                         size="small"
                       >
@@ -550,6 +549,36 @@
                           (files) => handleDocumentUpload(docType.code, files)
                         "
                       />
+
+                      <!-- Existing attachments (edit mode) -->
+                      <div
+                        v-if="
+                          (existingAttachments[docType.code]?.length ?? 0) > 0
+                        "
+                        class="mt-2"
+                      >
+                        <div class="text-caption text-medium-emphasis mb-1">
+                          Already uploaded:
+                        </div>
+                        <v-chip-group column>
+                          <v-chip
+                            v-for="att in existingAttachments[docType.code]"
+                            :key="`existing-${att.id}`"
+                            closable
+                            color="success"
+                            variant="tonal"
+                            size="small"
+                            @click:close="
+                              removeExistingAttachment(docType.code, att.id)
+                            "
+                          >
+                            <v-icon start size="small"
+                              >mdi-file-check-outline</v-icon
+                            >
+                            {{ att.filename || att.document_name || `Attachment #${att.id}` }}
+                          </v-chip>
+                        </v-chip-group>
+                      </div>
 
                       <!-- Display uploaded files for this document type -->
                       <div
@@ -579,6 +608,49 @@
                           </v-chip>
                         </v-chip-group>
                       </div>
+                    </v-card-text>
+                  </v-card>
+                </v-col>
+              </v-row>
+
+              <!-- Other existing attachments whose document_type does not map
+                   to a slot for the current benefit (e.g. carry-over from a
+                   different benefit type). Always visible in edit mode so they
+                   can still be removed. -->
+              <v-row
+                v-if="isEditMode && otherExistingAttachments.length > 0"
+              >
+                <v-col cols="12">
+                  <v-card variant="outlined" class="mb-3">
+                    <v-card-title
+                      class="text-body-1 py-3 px-3 bg-grey-lighten-3"
+                    >
+                      Other uploaded documents
+                    </v-card-title>
+                    <v-card-text class="pt-3 pb-3">
+                      <v-chip-group column>
+                        <v-chip
+                          v-for="att in otherExistingAttachments"
+                          :key="`other-${att.id}`"
+                          closable
+                          color="grey-darken-1"
+                          variant="tonal"
+                          size="small"
+                          @click:close="
+                            removeExistingAttachment(
+                              att.document_type || '__other',
+                              att.id
+                            )
+                          "
+                        >
+                          <v-icon start size="small">mdi-file-outline</v-icon>
+                          {{
+                            att.filename ||
+                            att.document_name ||
+                            `Attachment #${att.id}`
+                          }}
+                        </v-chip>
+                      </v-chip-group>
                     </v-card-text>
                   </v-card>
                 </v-col>
@@ -672,7 +744,7 @@
             :loading="loading"
             :disabled="!isFormValid"
           >
-            Register Claim
+            {{ isEditMode ? 'Save Changes' : 'Register Claim' }}
           </v-btn>
         </v-card-actions>
       </v-col>
@@ -695,9 +767,31 @@ interface PrefilledMember {
   [key: string]: any
 }
 
+interface ExistingAttachment {
+  id: number
+  claim_id?: number
+  document_type?: string
+  document_name?: string
+  filename?: string
+  size_bytes?: number
+  viewer_url?: string
+  [key: string]: any
+}
+
+interface ExistingClaim {
+  id: number
+  claim_number?: string
+  status?: string
+  date_registered?: string
+  attachments?: ExistingAttachment[]
+  [key: string]: any
+}
+
 interface Props {
   schemes: Array<any>
   prefilledMember?: PrefilledMember | null
+  claim?: ExistingClaim | null
+  mode?: 'create' | 'edit'
 }
 
 interface Emits {
@@ -706,9 +800,13 @@ interface Emits {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  prefilledMember: null
+  prefilledMember: null,
+  claim: null,
+  mode: 'create'
 })
 const emit = defineEmits<Emits>()
+
+const isEditMode = computed(() => props.mode === 'edit')
 
 const form = ref(null)
 const loading = ref(false)
@@ -1139,9 +1237,18 @@ const documentTypesMapping = {
   ]
 }
 
+// Existing attachments shown when editing an existing claim. Grouped by
+// document_type so they appear alongside any new files for the same slot.
+// The "__other" bucket holds attachments whose document_type doesn't map to
+// any known required document slot for the current benefit.
+const existingAttachments = ref<Record<string, ExistingAttachment[]>>({})
+// IDs of attachments the user has marked for deletion (committed on save).
+const removedAttachmentIds = ref<number[]>([])
+
 // Form data
 const formData = ref({
-  member_id_number: props.prefilledMember?.member_id_number ?? '',
+  member_id_number:
+    props.claim?.member_id_number ?? props.prefilledMember?.member_id_number ?? '',
   scheme_id: null,
   benefit_type: null as any,
   member_type: 'member',
@@ -1522,6 +1629,7 @@ const rules = {
   },
   eventDateMin: (value: string) => {
     if (!value) return true
+    if (!memberScheme.value?.commencement_date) return true
     const eventDate = new Date(value)
     const minDate = new Date(memberScheme.value.commencement_date)
     return eventDate >= minDate || 'Date cannot be before scheme commencement'
@@ -1538,12 +1646,19 @@ const hardRequiredDocCodes = [
   'certified_id_member'
 ]
 
+// A document slot is "fulfilled" if the user has either uploaded a new file
+// for it or kept an existing attachment from a previously registered claim
+// (edit mode). Used by the hard-required and missing-required computeds.
+const docSlotFulfilled = (code: string) => {
+  const newFiles = formData.value.supporting_documents[code]
+  if (newFiles && newFiles.length > 0) return true
+  const existing = existingAttachments.value[code]
+  return !!(existing && existing.length > 0)
+}
+
 const missingHardRequiredDocs = computed(() => {
   return requiredDocumentTypes.value.filter(
-    (doc) =>
-      hardRequiredDocCodes.includes(doc.code) &&
-      (!formData.value.supporting_documents[doc.code] ||
-        formData.value.supporting_documents[doc.code].length === 0)
+    (doc) => hardRequiredDocCodes.includes(doc.code) && !docSlotFulfilled(doc.code)
   )
 })
 
@@ -1589,29 +1704,22 @@ const memberScheme = ref()
 // Document validation computed properties
 const allRequiredDocumentsUploaded = computed(() => {
   const requiredDocs = requiredDocumentTypes.value.filter((doc) => doc.required)
-  return requiredDocs.every(
-    (doc) => formData.value.supporting_documents[doc.code]?.length > 0
-  )
+  return requiredDocs.every((doc) => docSlotFulfilled(doc.code))
 })
 
 const missingRequiredDocuments = computed(() => {
   return requiredDocumentTypes.value.filter(
-    (doc) =>
-      doc.required &&
-      (!formData.value.supporting_documents[doc.code] ||
-        formData.value.supporting_documents[doc.code].length === 0)
+    (doc) => doc.required && !docSlotFulfilled(doc.code)
   )
 })
 
 const eventDateWarning = computed(() => {
-  if (formData.value.date_of_event !== null) {
-    const eventDate = new Date(formData.value.date_of_event)
-    const coverStart = new Date(memberScheme.value.cover_start_date)
-
-    if (eventDate < coverStart) {
-      return "Scheme's cover start date has not passed"
-    }
-    return ''
+  if (formData.value.date_of_event === null) return ''
+  if (!memberScheme.value?.cover_start_date) return ''
+  const eventDate = new Date(formData.value.date_of_event)
+  const coverStart = new Date(memberScheme.value.cover_start_date)
+  if (eventDate < coverStart) {
+    return "Scheme's cover start date has not passed"
   }
   return ''
 })
@@ -1865,8 +1973,19 @@ const confirmSubmitWithMissingDocs = async () => {
 const submitClaim = async () => {
   loading.value = true
   try {
-    // Generate claim number
-    const claimNumber = `CLM-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`
+    // In edit mode preserve the original claim identity (number, status,
+    // registration date); in create mode generate a new claim number and
+    // default to pending.
+    const claimNumber = isEditMode.value
+      ? props.claim?.claim_number || ''
+      : `CLM-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`
+    const dateRegistered = isEditMode.value
+      ? props.claim?.date_registered ||
+        new Date().toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0]
+    const claimStatus = isEditMode.value
+      ? props.claim?.status || 'pending'
+      : 'pending'
 
     // Create FormData for multipart submission
     const formDataForSubmission = new FormData()
@@ -1889,8 +2008,8 @@ const submitClaim = async () => {
         formData.value.benefit_type?.value?.benefit_alias ||
         formData.value.benefit_type?.benefit_alias ||
         '',
-      status: 'pending',
-      date_registered: new Date().toISOString().split('T')[0],
+      status: claimStatus,
+      date_registered: dateRegistered,
       missing_required_documents: missingRequiredDocuments.value.map(
         (doc) => doc.name
       )
@@ -1942,6 +2061,14 @@ const submitClaim = async () => {
       'document_metadata',
       JSON.stringify(documentMetadata)
     )
+
+    // Tell the backend which existing attachments to drop (edit mode only).
+    if (isEditMode.value && removedAttachmentIds.value.length > 0) {
+      formDataForSubmission.append(
+        'removed_attachment_ids',
+        JSON.stringify(removedAttachmentIds.value)
+      )
+    }
 
     emit('save', formDataForSubmission)
   } finally {
@@ -2008,12 +2135,130 @@ watch(
   }
 )
 
+// Seed the form from an existing claim when in edit mode. Runs before the
+// onMounted lookup so the lookup uses the claim's saved values as defaults.
+const hydrateFromClaim = (claim: ExistingClaim) => {
+  // Match the structure benefitTypes returns ({ title, value: <benefit> })
+  // so the v-select's `return-object` binding keeps working.
+  const benefitTypeValue =
+    claim.benefit_code || claim.benefit_alias || claim.benefit_name
+      ? {
+          title: claim.benefit_alias || claim.benefit_name || '',
+          value: {
+            benefit_alias: claim.benefit_alias,
+            benefit_name: claim.benefit_name,
+            benefit_code: claim.benefit_code
+          }
+        }
+      : null
+
+  formData.value = {
+    ...formData.value,
+    member_id_number: claim.member_id_number || formData.value.member_id_number,
+    scheme_id: claim.scheme_id ?? null,
+    benefit_type: benefitTypeValue,
+    member_type: claim.member_type || formData.value.member_type,
+    date_of_event: claim.date_of_event || null,
+    date_notified: claim.date_notified || formData.value.date_notified,
+    claim_amount:
+      typeof claim.claim_amount === 'number'
+        ? claim.claim_amount
+        : formData.value.claim_amount,
+    priority: claim.priority || formData.value.priority,
+    cause_type: claim.cause_type || formData.value.cause_type,
+    claimant_name: claim.claimant_name || '',
+    claimant_id_number: claim.claimant_id_number || '',
+    relationship_to_member: claim.relationship_to_member || '',
+    claimant_contact_number: claim.claimant_contact_number || '',
+    bank_name: claim.bank_name || '',
+    bank_branch_code: claim.bank_branch_code || '',
+    bank_account_number: claim.bank_account_number || '',
+    bank_account_type: claim.bank_account_type || '',
+    account_holder_name: claim.account_holder_name || '',
+    // An already-saved claim has had its banking accepted at lodgement —
+    // treat it as verified so the user can save other field changes without
+    // re-verifying. Editing any banking field clears this via the existing
+    // watcher.
+    bank_verification_status: 'verified',
+    bank_verification_date: claim.bank_verification_date || '',
+    bank_verification_reference: claim.bank_verification_reference || '',
+    supporting_documents: {},
+    description: claim.description || ''
+  }
+
+  memberInfo.value = {
+    member_name: claim.member_name || '',
+    annual_salary: 0,
+    scheme_name: claim.scheme_name || '',
+    scheme_id: claim.scheme_id ?? null,
+    benefits: {},
+    scheme_category_details: {}
+  }
+
+  // Group existing attachments by document_type
+  const grouped: Record<string, ExistingAttachment[]> = {}
+  for (const att of claim.attachments || []) {
+    const key = att.document_type || '__other'
+    if (!grouped[key]) grouped[key] = []
+    grouped[key].push(att)
+  }
+  existingAttachments.value = grouped
+  removedAttachmentIds.value = []
+}
+
+const removeExistingAttachment = (docCode: string, attachmentId: number) => {
+  const bucket = existingAttachments.value[docCode]
+  if (!bucket) return
+  existingAttachments.value[docCode] = bucket.filter(
+    (a) => a.id !== attachmentId
+  )
+  if (!removedAttachmentIds.value.includes(attachmentId)) {
+    removedAttachmentIds.value.push(attachmentId)
+  }
+}
+
+// Other-bucket attachments (those whose document_type doesn't map to a known
+// slot for the current benefit) so they remain visible and removable.
+const otherExistingAttachments = computed<ExistingAttachment[]>(() => {
+  const knownCodes = new Set(requiredDocumentTypes.value.map((d) => d.code))
+  const result: ExistingAttachment[] = []
+  for (const [code, atts] of Object.entries(existingAttachments.value)) {
+    if (!knownCodes.has(code)) {
+      result.push(...atts)
+    }
+  }
+  return result
+})
+
 onMounted(async () => {
+  if (isEditMode.value && props.claim) {
+    hydrateFromClaim(props.claim)
+  }
   const res = await GroupPricingService.getBenefitMaps()
   benefitMaps.value = res.data
   // Initial member lookup if ID number is pre-filled
   if (formData.value.member_id_number) {
-    lookupMember()
+    await lookupMember()
+    // In edit mode, lookupMember overwrites benefit_type / claim_amount with
+    // the values it derives from the member's current schedule. Re-apply the
+    // claim's saved values so editing reflects the stored claim, not the
+    // member's latest defaults.
+    if (isEditMode.value && props.claim) {
+      const c = props.claim
+      if (c.benefit_code || c.benefit_alias || c.benefit_name) {
+        formData.value.benefit_type = {
+          title: c.benefit_alias || c.benefit_name || '',
+          value: {
+            benefit_alias: c.benefit_alias,
+            benefit_name: c.benefit_name,
+            benefit_code: c.benefit_code
+          }
+        } as any
+      }
+      if (typeof c.claim_amount === 'number') {
+        formData.value.claim_amount = c.claim_amount
+      }
+    }
   }
 })
 </script>

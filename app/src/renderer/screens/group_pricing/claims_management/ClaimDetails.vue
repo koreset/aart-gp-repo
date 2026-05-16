@@ -19,6 +19,16 @@
                   </template>
                 </span>
               </div>
+              <v-btn
+                v-if="canEditClaim"
+                size="small"
+                variant="outlined"
+                rounded
+                prepend-icon="mdi-pencil"
+                @click="goToEdit"
+              >
+                Edit
+              </v-btn>
             </div>
           </template>
           <template #default>
@@ -61,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import ClaimDetailView from './components/ClaimDetailView.vue'
@@ -75,6 +85,20 @@ const router = useRouter()
 
 const loading = ref(false)
 const selectedClaim = ref<any>(null)
+
+const canEditClaim = computed(
+  () =>
+    selectedClaim.value?.status === 'pending' ||
+    selectedClaim.value?.status === 'under_assessment'
+)
+
+const goToEdit = () => {
+  if (!selectedClaim.value?.id) return
+  router.push({
+    name: 'group-pricing-claim-edit',
+    params: { id: selectedClaim.value.id }
+  })
+}
 
 const snackbar = ref(false)
 const snackbarMessage = ref('')
