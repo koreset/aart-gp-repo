@@ -31,7 +31,13 @@ type CreatePaymentScheduleRequest struct {
 }
 
 // CreatePaymentSchedule builds a payment schedule from a list of approved claim IDs.
-// All qualifying claims are transitioned to "submitted_for_payment".
+// The schedule is created in "draft" status and immediately locked — line
+// items can be removed (sending the claim back to "approved" for the next
+// cut-off) but the schedule itself is immutable. All qualifying claims are
+// transitioned to "submitted_for_payment".
+// Each line item is enriched with deductions, risk flags, an approval
+// reference snapshot, and a net payable amount so finance has everything it
+// needs to verify without joining live claim data.
 // Returns an error if no claim IDs are supplied or if any claim is not in an
 // approvable state (approved / submitted_for_payment).
 func CreatePaymentSchedule(req CreatePaymentScheduleRequest, user models.AppUser) (models.ClaimPaymentSchedule, error) {
@@ -49,39 +55,76 @@ func CreatePaymentSchedule(req CreatePaymentScheduleRequest, user models.AppUser
 		return models.ClaimPaymentSchedule{}, errors.New("no valid claims found for the supplied IDs")
 	}
 
-	// Validate that every claim is in an approved state
+	// Phase 3 hard-block: refuse if any of these claims already sit on a
+	// non-archived schedule.
+	if err := CheckClaimsNotOnPriorSchedule(req.ClaimIDs); err != nil {
+		return models.ClaimPaymentSchedule{}, err
+	}
+
+	// Validate that every claim is in an approved state and build line items.
 	var items []models.ClaimPaymentScheduleItem
-	var totalAmount float64
+	var grossTotal, deductionsTotal, netTotal float64
 	for _, c := range claims {
 		lower := strings.ToLower(c.Status)
 		if lower != "approved" && lower != "submitted_for_payment" {
 			return models.ClaimPaymentSchedule{}, fmt.Errorf("claim %s has status '%s' — only approved claims can be added to a payment schedule", c.ClaimNumber, c.Status)
 		}
-		totalAmount += c.ClaimAmount
+
+		deductions := ComputeDeductions(c, DB)
+		flags := ComputeRiskFlags(c, DB)
+		net := c.ClaimAmount - deductions.Total()
+		grossTotal += c.ClaimAmount
+		deductionsTotal += deductions.Total()
+		netTotal += net
+
+		beneficiary := strings.TrimSpace(c.ClaimantName)
+		if beneficiary == "" {
+			beneficiary = c.MemberName
+		}
+		beneficiaryID := strings.TrimSpace(c.ClaimantIDNumber)
+		if beneficiaryID == "" {
+			beneficiaryID = c.MemberIDNumber
+		}
+
 		items = append(items, models.ClaimPaymentScheduleItem{
-			ClaimID:           c.ID,
-			ClaimNumber:       c.ClaimNumber,
-			MemberName:        c.MemberName,
-			MemberIDNumber:    c.MemberIDNumber,
-			BenefitName:       c.BenefitName,
-			SchemeName:        c.SchemeName,
-			SchemeID:          c.SchemeId,
-			ClaimAmount:       c.ClaimAmount,
-			BankName:          c.BankName,
-			BankBranchCode:    c.BankBranchCode,
-			BankAccountNumber: c.BankAccountNumber,
-			BankAccountType:   c.BankAccountType,
-			AccountHolderName: c.AccountHolderName,
+			ClaimID:                 c.ID,
+			ClaimNumber:             c.ClaimNumber,
+			MemberName:              c.MemberName,
+			MemberIDNumber:          c.MemberIDNumber,
+			BenefitName:             c.BenefitName,
+			SchemeName:              c.SchemeName,
+			SchemeID:                c.SchemeId,
+			ClaimAmount:             c.ClaimAmount,
+			GrossAmount:             c.ClaimAmount,
+			PremiumArrearsDeduction: deductions.PremiumArrears,
+			PolicyLoanDeduction:     deductions.PolicyLoan,
+			TaxWithheld:             deductions.TaxWithheld,
+			NetPayable:              net,
+			BeneficiaryName:         beneficiary,
+			BeneficiaryIDNumber:     beneficiaryID,
+			BankName:                c.BankName,
+			BankBranchCode:          c.BankBranchCode,
+			BankAccountNumber:       c.BankAccountNumber,
+			BankAccountType:         c.BankAccountType,
+			AccountHolderName:       c.AccountHolderName,
+			RiskFlags:               MarshalRiskFlags(flags),
+			ApprovalReference:       buildApprovalReference(c, DB),
+			LineStatus:              "pending",
 		})
 	}
 
+	now := time.Now()
 	schedule := models.ClaimPaymentSchedule{
-		ScheduleNumber: generateScheduleNumber(),
-		Description:    req.Description,
-		Status:         "submitted",
-		TotalAmount:    totalAmount,
-		ClaimsCount:    len(items),
-		CreatedBy:      user.UserName,
+		ScheduleNumber:  generateScheduleNumber(),
+		Description:     req.Description,
+		Status:          "draft",
+		TotalAmount:     grossTotal,
+		GrossTotal:      grossTotal,
+		DeductionsTotal: deductionsTotal,
+		NetTotal:        netTotal,
+		ClaimsCount:     len(items),
+		LockedAt:        &now,
+		CreatedBy:       user.UserName,
 	}
 
 	// Persist schedule + items in a transaction
@@ -115,8 +158,28 @@ func CreatePaymentSchedule(req CreatePaymentScheduleRequest, user models.AppUser
 				}
 			}
 		}
+
+		// Record the genesis state transition.
+		genesis := models.PaymentScheduleAudit{
+			ScheduleID: schedule.ID,
+			FromStatus: "",
+			ToStatus:   "draft",
+			Actor:      user.UserName,
+			Notes:      fmt.Sprintf("Schedule generated and locked (gross %.2f, deductions %.2f, net %.2f)", grossTotal, deductionsTotal, netTotal),
+		}
+		if err := tx.Create(&genesis).Error; err != nil {
+			return err
+		}
 		return nil
 	})
+	if err == nil {
+		// Within-schedule beneficiary duplicate flagging (Phase 3). Best-effort
+		// — surfaces a soft block for finance, never fails the create.
+		// Re-fetch items so the IDs assigned by Create are visible.
+		var persistedItems []models.ClaimPaymentScheduleItem
+		_ = DB.Where("schedule_id = ?", schedule.ID).Find(&persistedItems).Error
+		_, _ = FlagDuplicateBeneficiaries(schedule.ID, persistedItems)
+	}
 	if err != nil {
 		return models.ClaimPaymentSchedule{}, err
 	}
@@ -124,12 +187,22 @@ func CreatePaymentSchedule(req CreatePaymentScheduleRequest, user models.AppUser
 	return GetPaymentSchedule(schedule.ID)
 }
 
-// GetPaymentSchedules returns all payment schedules (newest first), including item counts.
-func GetPaymentSchedules() ([]models.ClaimPaymentSchedule, error) {
+// GetPaymentSchedules returns all payment schedules (newest first), including
+// item counts. Archived schedules are hidden by default so the list stays
+// focused on live work; pass includeArchived=true (e.g. from the "Show
+// archived" toggle) to surface the full history.
+func GetPaymentSchedules(includeArchived ...bool) ([]models.ClaimPaymentSchedule, error) {
+	includeArch := false
+	if len(includeArchived) > 0 {
+		includeArch = includeArchived[0]
+	}
 	var schedules []models.ClaimPaymentSchedule
 	err := DBReadWithResilience(context.Background(), func(d *gorm.DB) error {
-		return d.Preload("Items").Preload("ProofOfPayments").
-			Order("created_at DESC").Find(&schedules).Error
+		q := d.Preload("Items").Preload("ProofOfPayments").Order("created_at DESC")
+		if !includeArch {
+			q = q.Where("LOWER(status) <> ?", "archived")
+		}
+		return q.Find(&schedules).Error
 	})
 	return schedules, err
 }
@@ -304,8 +377,13 @@ func UploadPaymentProof(scheduleID int, fileHeader *multipart.FileHeader, notes 
 	if err != nil {
 		return models.ClaimPaymentProof{}, err
 	}
-	if schedule.Status == "confirmed" {
+	switch schedule.Status {
+	case "submitted_to_bank", "submitted":
+		// allowed — bank has the payment file; uploading proof closes the loop.
+	case "confirmed":
 		return models.ClaimPaymentProof{}, errors.New("this schedule is already confirmed — payment has been processed")
+	default:
+		return models.ClaimPaymentProof{}, fmt.Errorf("schedule must be submitted to the bank before proof can be uploaded (current status: %s)", schedule.Status)
 	}
 
 	// Validate CSV contents before accepting the upload
@@ -362,7 +440,17 @@ func UploadPaymentProof(scheduleID int, fileHeader *multipart.FileHeader, notes 
 		if err := tx.Create(&proof).Error; err != nil {
 			return err
 		}
+		fromStatus := schedule.Status
 		if err := tx.Model(&models.ClaimPaymentSchedule{}).Where("id = ?", scheduleID).Update("status", "confirmed").Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&models.PaymentScheduleAudit{
+			ScheduleID: scheduleID,
+			FromStatus: fromStatus,
+			ToStatus:   "confirmed",
+			Actor:      user.UserName,
+			Notes:      fmt.Sprintf("Proof uploaded: %s", fileHeader.Filename),
+		}).Error; err != nil {
 			return err
 		}
 		for _, item := range schedule.Items {
@@ -537,9 +625,16 @@ func GenerateACBFile(scheduleID int, req models.GenerateACBRequest, user models.
 		return models.ACBFileRecord{}, errors.New("an ACB file has already been generated for this schedule; use Retry Failed Payments to re-submit failed items")
 	}
 
-	// Reject if schedule has already been confirmed (paid).
-	if schedule.Status == "confirmed" {
+	// Schedule must have completed both finance authorisations before an
+	// ACB file can be generated. Legacy "submitted" rows (pre-lifecycle
+	// migration) are accepted to keep historical workflows operable.
+	switch schedule.Status {
+	case "finance_second_authorised", "submitted_to_bank", "submitted":
+		// allowed
+	case "confirmed":
 		return models.ACBFileRecord{}, errors.New("schedule is already confirmed (paid); ACB generation is closed")
+	default:
+		return models.ACBFileRecord{}, fmt.Errorf("schedule must be finance-authorised before ACB generation (current status: %s)", schedule.Status)
 	}
 
 	// Validate all items have banking details
@@ -601,14 +696,27 @@ func GenerateACBFile(scheduleID int, req models.GenerateACBRequest, user models.
 		return models.ACBFileRecord{}, err
 	}
 
-	// Update schedule ACB tracking
+	// Update schedule ACB tracking and transition to "submitted_to_bank".
+	// Legacy schedules at "submitted" status are tolerated for back-compat.
 	now := time.Now()
-	DB.Model(&models.ClaimPaymentSchedule{}).Where("id = ?", scheduleID).Updates(map[string]interface{}{
+	updates := map[string]interface{}{
 		"acb_file_generated": true,
 		"acb_generated_at":   &now,
 		"acb_generated_by":   user.UserName,
 		"bank_profile_id":    &profile.ID,
-	})
+	}
+	if schedule.Status == "finance_second_authorised" {
+		updates["status"] = "submitted_to_bank"
+		updates["submitted_to_bank_at"] = &now
+		_ = DB.Create(&models.PaymentScheduleAudit{
+			ScheduleID: scheduleID,
+			FromStatus: schedule.Status,
+			ToStatus:   "submitted_to_bank",
+			Actor:      user.UserName,
+			Notes:      fmt.Sprintf("ACB file generated: %s", fileName),
+		}).Error
+	}
+	DB.Model(&models.ClaimPaymentSchedule{}).Where("id = ?", scheduleID).Updates(updates)
 
 	return fileRecord, nil
 }
@@ -774,6 +882,8 @@ func ProcessBankResponse(acbFileID int, fileHeader *multipart.FileHeader, user m
 	}
 
 	go NotifyClaimPaymentSummary(summary, user)
+	// Phase 4: claimant SMS/email + IT3(a) certificate generation for paid lines.
+	go NotifyClaimantsForReconciliation(results, user)
 	return summary, nil
 }
 

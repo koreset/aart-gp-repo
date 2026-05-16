@@ -227,116 +227,62 @@
         </v-list-item>
       </v-list-group>
 
-      <!-- Premiums -->
-      <v-list-group v-model="expandedGroups" value="Premiums">
+      <!-- Finance -->
+      <v-list-group v-model="expandedGroups" value="Finance">
         <template #activator="{ props }">
           <v-list-item
             v-bind="props"
             :class="{
               'disabled-item': !canAccess('navigation:view_premium_dashboard')
             }"
-            prepend-icon="mdi-cash-multiple"
-            title="Premiums"
+            prepend-icon="mdi-finance"
+            title="Finance"
           ></v-list-item>
         </template>
         <v-list-item
           :class="{
             'disabled-item': !canAccess('navigation:view_premium_dashboard')
           }"
-          prepend-icon="mdi-view-dashboard-outline"
+          prepend-icon="mdi-cash-multiple"
           @click="
             navigateGroup(
               'group-pricing-premium-dashboard',
-              'Premiums',
+              'Finance',
               'navigation:view_premium_dashboard'
             )
           "
         >
-          <v-list-item-title>Dashboard</v-list-item-title>
+          <v-list-item-title>Premium Receipts</v-list-item-title>
         </v-list-item>
         <v-list-item
           :class="{
-            'disabled-item': !canAccess('navigation:manage_premium_schedules')
+            'disabled-item': !canAccess('claims_pay:create_schedule')
           }"
-          prepend-icon="mdi-calendar-month-outline"
+          prepend-icon="mdi-cash-check"
           @click="
             navigateGroup(
-              'group-pricing-premium-schedules',
-              'Premiums',
-              'navigation:manage_premium_schedules'
+              'group-pricing-claim-payment-schedules',
+              'Finance',
+              'claims_pay:create_schedule'
             )
           "
         >
-          <v-list-item-title>Premium Schedules</v-list-item-title>
-        </v-list-item>
-        <v-list-item
-          :class="{ 'disabled-item': !canAccess('navigation:manage_invoices') }"
-          prepend-icon="mdi-receipt-text-outline"
-          @click="
-            navigateGroup(
-              'group-pricing-invoices',
-              'Premiums',
-              'navigation:manage_invoices'
-            )
-          "
-        >
-          <v-list-item-title>Invoices</v-list-item-title>
-        </v-list-item>
-        <v-list-item
-          :class="{ 'disabled-item': !canAccess('navigation:manage_payments') }"
-          prepend-icon="mdi-bank-transfer"
-          @click="
-            navigateGroup(
-              'group-pricing-payments',
-              'Premiums',
-              'navigation:manage_payments'
-            )
-          "
-        >
-          <v-list-item-title>Payments</v-list-item-title>
+          <v-list-item-title>Claim Payments</v-list-item-title>
         </v-list-item>
         <v-list-item
           :class="{
-            'disabled-item': !canAccess(
-              'navigation:manage_premium_reconciliation'
-            )
+            'disabled-item': !canAccess('claims_pay:view_exceptions')
           }"
-          prepend-icon="mdi-scale-balance"
+          prepend-icon="mdi-alert-circle-outline"
           @click="
             navigateGroup(
-              'group-pricing-premium-reconciliation',
-              'Premiums',
-              'navigation:manage_premium_reconciliation'
+              'group-pricing-claim-payment-exceptions',
+              'Finance',
+              'claims_pay:view_exceptions'
             )
           "
         >
-          <v-list-item-title>Reconciliation</v-list-item-title>
-        </v-list-item>
-        <v-list-item
-          :class="{ 'disabled-item': !canAccess('navigation:manage_arrears') }"
-          prepend-icon="mdi-clock-alert-outline"
-          @click="
-            navigateGroup(
-              'group-pricing-arrears',
-              'Premiums',
-              'navigation:manage_arrears'
-            )
-          "
-        >
-          <v-list-item-title>Arrears</v-list-item-title>
-        </v-list-item>
-        <v-list-item
-          :class="{ 'disabled-item': !canAccess('navigation:view_statements') }"
-          prepend-icon="mdi-file-chart-outline"
-          @click="
-            navigateGroup(
-              'group-pricing-statements',
-              'Premiums',
-              'navigation:view_statements'
-            )
-          "
-        >
-          <v-list-item-title>Statements</v-list-item-title>
+          <v-list-item-title>Payment Exceptions</v-list-item-title>
         </v-list-item>
       </v-list-group>
 

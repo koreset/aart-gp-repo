@@ -257,9 +257,87 @@ const router = createRouter({
       path: '/group-pricing/claims-management/payment-schedules/:scheduleId',
       name: 'group-pricing-claim-payment-schedule-detail',
       component: () =>
-        import('../screens/group_pricing/claims_management/ClaimPaymentScheduleDetail.vue'),
+        import(
+          '../screens/group_pricing/claims_management/ClaimPaymentScheduleLayout.vue'
+        ),
       props: true,
       meta: { required_permission: 'claims_pay:create_schedule' },
+      beforeEnter: (to, from) => checkPermissions(to, from),
+      redirect: (to) => ({
+        name: 'group-pricing-claim-payment-schedule-claims',
+        params: { scheduleId: to.params.scheduleId }
+      }),
+      children: [
+        {
+          path: 'claims',
+          name: 'group-pricing-claim-payment-schedule-claims',
+          component: () =>
+            import(
+              '../screens/group_pricing/claims_management/ClaimPaymentScheduleClaims.vue'
+            )
+        },
+        {
+          path: 'acb',
+          name: 'group-pricing-claim-payment-schedule-acb',
+          component: () =>
+            import(
+              '../screens/group_pricing/claims_management/ClaimPaymentScheduleACB.vue'
+            )
+        },
+        {
+          path: 'queries',
+          name: 'group-pricing-claim-payment-schedule-queries',
+          component: () =>
+            import(
+              '../screens/group_pricing/claims_management/ClaimPaymentScheduleQueries.vue'
+            )
+        },
+        {
+          path: 'reconciliation',
+          name: 'group-pricing-claim-payment-schedule-reconciliation',
+          component: () =>
+            import(
+              '../screens/group_pricing/claims_management/ClaimPaymentScheduleReconciliation.vue'
+            )
+        },
+        {
+          path: 'proofs',
+          name: 'group-pricing-claim-payment-schedule-proofs',
+          component: () =>
+            import(
+              '../screens/group_pricing/claims_management/ClaimPaymentScheduleProofs.vue'
+            )
+        }
+      ]
+    },
+    {
+      path: '/group-pricing/claims-management/authority-matrix',
+      name: 'group-pricing-claim-authority-matrix',
+      component: () =>
+        import(
+          '../screens/group_pricing/claims_management/AuthorityMatrix.vue'
+        ),
+      meta: { required_permission: 'claims_pay:admin_authority' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/claims-management/payment-cutoff',
+      name: 'group-pricing-payment-cutoff-settings',
+      component: () =>
+        import(
+          '../screens/group_pricing/claims_management/PaymentCutoffSettings.vue'
+        ),
+      meta: { required_permission: 'claims_pay:admin_cutoff' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/claims-management/payment-exceptions',
+      name: 'group-pricing-claim-payment-exceptions',
+      component: () =>
+        import(
+          '../screens/group_pricing/claims_management/ClaimPaymentExceptions.vue'
+        ),
+      meta: { required_permission: 'claims_pay:view_exceptions' },
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {
@@ -473,23 +551,76 @@ const router = createRouter({
       props: true
     },
 
-    // ── Premium Management ───────────────────────────────────────────────────
+    // ── Finance: Premium Receipts (tabbed layout) ────────────────────────────
     {
-      path: '/group-pricing/premiums/dashboard',
-      name: 'group-pricing-premium-dashboard',
+      path: '/group-pricing/premiums',
       component: () =>
-        import('../screens/group_pricing/premiums/PremiumDashboard.vue'),
-      meta: { required_permission: 'navigation:view_premium_dashboard' },
-      beforeEnter: (to, from) => checkPermissions(to, from)
+        import('../screens/group_pricing/premiums/PremiumReceiptsLayout.vue'),
+      children: [
+        {
+          path: 'dashboard',
+          name: 'group-pricing-premium-dashboard',
+          component: () =>
+            import('../screens/group_pricing/premiums/PremiumDashboard.vue'),
+          meta: { required_permission: 'navigation:view_premium_dashboard' },
+          beforeEnter: (to, from) => checkPermissions(to, from)
+        },
+        {
+          path: 'schedules',
+          name: 'group-pricing-premium-schedules',
+          component: () =>
+            import('../screens/group_pricing/premiums/PremiumSchedules.vue'),
+          meta: { required_permission: 'navigation:manage_premium_schedules' },
+          beforeEnter: (to, from) => checkPermissions(to, from)
+        },
+        {
+          path: 'invoices',
+          name: 'group-pricing-invoices',
+          component: () =>
+            import('../screens/group_pricing/premiums/Invoices.vue'),
+          meta: { required_permission: 'navigation:manage_invoices' },
+          beforeEnter: (to, from) => checkPermissions(to, from)
+        },
+        {
+          path: 'payments',
+          name: 'group-pricing-payments',
+          component: () =>
+            import('../screens/group_pricing/premiums/Payments.vue'),
+          meta: { required_permission: 'navigation:manage_payments' },
+          beforeEnter: (to, from) => checkPermissions(to, from)
+        },
+        {
+          path: 'reconciliation',
+          name: 'group-pricing-premium-reconciliation',
+          component: () =>
+            import(
+              '../screens/group_pricing/premiums/PremiumReconciliation.vue'
+            ),
+          meta: {
+            required_permission: 'navigation:manage_premium_reconciliation'
+          },
+          beforeEnter: (to, from) => checkPermissions(to, from)
+        },
+        {
+          path: 'arrears',
+          name: 'group-pricing-arrears',
+          component: () =>
+            import('../screens/group_pricing/premiums/ArrearsManagement.vue'),
+          meta: { required_permission: 'navigation:manage_arrears' },
+          beforeEnter: (to, from) => checkPermissions(to, from)
+        },
+        {
+          path: 'statements',
+          name: 'group-pricing-statements',
+          component: () =>
+            import('../screens/group_pricing/premiums/Statements.vue'),
+          meta: { required_permission: 'navigation:view_statements' },
+          beforeEnter: (to, from) => checkPermissions(to, from)
+        }
+      ]
     },
-    {
-      path: '/group-pricing/premiums/schedules',
-      name: 'group-pricing-premium-schedules',
-      component: () =>
-        import('../screens/group_pricing/premiums/PremiumSchedules.vue'),
-      meta: { required_permission: 'navigation:manage_premium_schedules' },
-      beforeEnter: (to, from) => checkPermissions(to, from)
-    },
+    // Detail routes stay as top-level siblings so they render full-bleed
+    // without the Premium Receipts tab bar.
     {
       path: '/group-pricing/premiums/schedules/:scheduleId',
       name: 'group-pricing-premium-schedule-detail',
@@ -500,50 +631,12 @@ const router = createRouter({
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {
-      path: '/group-pricing/premiums/invoices',
-      name: 'group-pricing-invoices',
-      component: () => import('../screens/group_pricing/premiums/Invoices.vue'),
-      meta: { required_permission: 'navigation:manage_invoices' },
-      beforeEnter: (to, from) => checkPermissions(to, from)
-    },
-    {
       path: '/group-pricing/premiums/invoices/:invoiceId',
       name: 'group-pricing-invoice-detail',
       component: () =>
         import('../screens/group_pricing/premiums/InvoiceDetail.vue'),
       props: true,
       meta: { required_permission: 'navigation:manage_invoices' },
-      beforeEnter: (to, from) => checkPermissions(to, from)
-    },
-    {
-      path: '/group-pricing/premiums/payments',
-      name: 'group-pricing-payments',
-      component: () => import('../screens/group_pricing/premiums/Payments.vue'),
-      meta: { required_permission: 'navigation:manage_payments' },
-      beforeEnter: (to, from) => checkPermissions(to, from)
-    },
-    {
-      path: '/group-pricing/premiums/reconciliation',
-      name: 'group-pricing-premium-reconciliation',
-      component: () =>
-        import('../screens/group_pricing/premiums/PremiumReconciliation.vue'),
-      meta: { required_permission: 'navigation:manage_premium_reconciliation' },
-      beforeEnter: (to, from) => checkPermissions(to, from)
-    },
-    {
-      path: '/group-pricing/premiums/arrears',
-      name: 'group-pricing-arrears',
-      component: () =>
-        import('../screens/group_pricing/premiums/ArrearsManagement.vue'),
-      meta: { required_permission: 'navigation:manage_arrears' },
-      beforeEnter: (to, from) => checkPermissions(to, from)
-    },
-    {
-      path: '/group-pricing/premiums/statements',
-      name: 'group-pricing-statements',
-      component: () =>
-        import('../screens/group_pricing/premiums/Statements.vue'),
-      meta: { required_permission: 'navigation:view_statements' },
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
 

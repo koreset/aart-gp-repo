@@ -10,6 +10,8 @@ import (
 	"api/services/bav"
 	"api/services/bav/audit"
 	"api/services/bav/providers"
+	"api/services/sanctions"
+	"api/services/sms"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -317,6 +319,20 @@ func startApplication(initTables bool, s service.Service) {
 
 	// Start the email outbox worker (bounded concurrency)
 	services.StartEmailOutboxWorker()
+
+	// Start the payment cut-off scheduler (Phase 2). Ticks every minute and
+	// auto-generates payment schedules at the configured HH:MM times.
+	services.StartCutoffScheduler()
+
+	// Wire the sanctions screening provider (Phase 3). Defaults to the manual
+	// provider so finance can record outcomes by hand; replace at this seam
+	// when a real upstream (LexisNexis / Refinitiv / Dow Jones) is configured.
+	sanctions.Use(sanctions.NewManual())
+
+	// Wire the SMS provider (Phase 4). The log provider writes every send
+	// to the application log; swap for Clickatell / Twilio / BulkSMS by
+	// installing the corresponding adapter and calling sms.Use(adapter).
+	sms.Use(sms.NewLog())
 
 	// Initialize service logger
 	globals.Logger.Info("We are starting up...")

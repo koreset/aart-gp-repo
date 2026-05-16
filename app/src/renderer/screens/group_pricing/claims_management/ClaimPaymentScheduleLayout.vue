@@ -1,4 +1,49 @@
 <template>
+  <!-- Top tab strip (Premium-Receipts-style) -->
+  <v-tabs
+    :model-value="activeTab"
+    color="primary"
+    density="compact"
+    show-arrows
+    class="schedule-tabs"
+  >
+    <v-tab
+      value="group-pricing-claim-payment-schedule-claims"
+      :to="tabRoute('group-pricing-claim-payment-schedule-claims')"
+      prepend-icon="mdi-file-document-multiple"
+    >
+      Claims
+    </v-tab>
+    <v-tab
+      value="group-pricing-claim-payment-schedule-acb"
+      :to="tabRoute('group-pricing-claim-payment-schedule-acb')"
+      prepend-icon="mdi-bank-transfer"
+    >
+      ACB Files
+    </v-tab>
+    <v-tab
+      value="group-pricing-claim-payment-schedule-queries"
+      :to="tabRoute('group-pricing-claim-payment-schedule-queries')"
+      prepend-icon="mdi-comment-alert-outline"
+    >
+      Queries
+    </v-tab>
+    <v-tab
+      value="group-pricing-claim-payment-schedule-reconciliation"
+      :to="tabRoute('group-pricing-claim-payment-schedule-reconciliation')"
+      prepend-icon="mdi-scale-balance"
+    >
+      Reconciliation
+    </v-tab>
+    <v-tab
+      value="group-pricing-claim-payment-schedule-proofs"
+      :to="tabRoute('group-pricing-claim-payment-schedule-proofs')"
+      prepend-icon="mdi-receipt-text-check"
+    >
+      Proof of Payment
+    </v-tab>
+  </v-tabs>
+
   <v-container>
     <v-row>
       <v-col>
@@ -62,6 +107,101 @@
             />
 
             <template v-else>
+              <!-- Pipeline step indicator -->
+              <v-card variant="tonal" color="grey-lighten-5" class="pa-3 mb-4">
+                <div class="d-flex flex-wrap align-center gap-2 pipeline-strip">
+                  <template
+                    v-for="(step, idx) in PIPELINE_STATUSES"
+                    :key="step"
+                  >
+                    <v-chip
+                      :color="
+                        idx < currentStepIndex
+                          ? 'success'
+                          : idx === currentStepIndex
+                            ? statusColor(schedule.status)
+                            : 'grey-lighten-2'
+                      "
+                      :variant="idx <= currentStepIndex ? 'flat' : 'tonal'"
+                      size="small"
+                      label
+                    >
+                      <v-icon
+                        v-if="idx < currentStepIndex"
+                        start
+                        size="14"
+                        icon="mdi-check"
+                      />
+                      {{ statusLabel(step) }}
+                    </v-chip>
+                    <v-icon
+                      v-if="idx < PIPELINE_STATUSES.length - 1"
+                      size="14"
+                      color="grey"
+                      icon="mdi-chevron-right"
+                    />
+                  </template>
+                </div>
+              </v-card>
+
+              <!-- Locked banner -->
+              <v-alert
+                v-if="schedule.locked_at"
+                type="info"
+                variant="tonal"
+                density="compact"
+                class="mb-4"
+                icon="mdi-lock-outline"
+              >
+                <div class="text-body-2">
+                  <strong>Schedule locked.</strong> Line items can only be
+                  removed (which sends the claim back to the approval queue for
+                  the next cut-off). Amounts and banking details cannot be
+                  edited on this schedule.
+                </div>
+              </v-alert>
+
+              <!-- Phase 3: duplicate beneficiary warning -->
+              <v-alert
+                v-if="outstandingDuplicates > 0"
+                type="warning"
+                variant="tonal"
+                density="compact"
+                class="mb-4"
+                icon="mdi-account-multiple-outline"
+              >
+                <div class="text-body-2">
+                  <strong>Duplicate beneficiary detected.</strong>
+                  {{ outstandingDuplicates }} line(s) share a beneficiary with
+                  another line in this schedule. Review each flagged line on
+                  the Claims tab and explicitly clear if the duplicate is
+                  intentional. First finance authorisation is blocked until
+                  every flag is cleared.
+                </div>
+              </v-alert>
+
+              <!-- Phase 3: sanctions / reinsurance summary -->
+              <v-alert
+                v-if="sanctionsBlockers > 0 || reinsuranceOutstanding > 0"
+                type="warning"
+                variant="tonal"
+                density="compact"
+                class="mb-4"
+                icon="mdi-shield-alert-outline"
+              >
+                <div class="text-body-2">
+                  <span v-if="sanctionsBlockers > 0">
+                    <strong>{{ sanctionsBlockers }}</strong> line(s) outstanding
+                    on sanctions / PEP screening.
+                  </span>
+                  <span v-if="reinsuranceOutstanding > 0">
+                    <strong>{{ reinsuranceOutstanding }}</strong> reinsurance
+                    recovery(ies) not yet raised.
+                  </span>
+                  These block first finance authorisation.
+                </div>
+              </v-alert>
+
               <!-- Action buttons strip -->
               <v-card variant="tonal" color="grey-lighten-4" class="pa-3 mb-4">
                 <div class="d-flex align-center flex-wrap gap-2">
@@ -69,6 +209,67 @@
                     class="text-body-2 font-weight-medium text-medium-emphasis mr-2"
                     >Actions:</span
                   >
+                  <!-- Lifecycle gate buttons (Phase 1) -->
+                  <v-btn
+                    v-if="canSignOff"
+                    variant="flat"
+                    size="small"
+                    rounded
+                    color="primary"
+                    prepend-icon="mdi-clipboard-check-outline"
+                    :loading="signingOff"
+                    @click="signOff"
+                  >
+                    Sign Off (Head of Claims)
+                  </v-btn>
+                  <v-btn
+                    v-if="canStartReview"
+                    variant="flat"
+                    size="small"
+                    rounded
+                    color="orange"
+                    prepend-icon="mdi-magnify"
+                    :loading="startingReview"
+                    @click="startFinanceReview"
+                  >
+                    Start Finance Review
+                  </v-btn>
+                  <v-btn
+                    v-if="canAuthoriseFirst"
+                    variant="flat"
+                    size="small"
+                    rounded
+                    color="deep-orange"
+                    prepend-icon="mdi-check-decagram"
+                    :loading="authorising === 'first'"
+                    @click="authoriseFirst"
+                  >
+                    Authorise (1st)
+                  </v-btn>
+                  <v-btn
+                    v-if="canAuthoriseSecond"
+                    variant="flat"
+                    size="small"
+                    rounded
+                    color="purple"
+                    prepend-icon="mdi-shield-check"
+                    :loading="authorising === 'second'"
+                    @click="authoriseSecond"
+                  >
+                    Authorise (2nd)
+                  </v-btn>
+                  <v-btn
+                    v-if="canArchive"
+                    variant="outlined"
+                    size="small"
+                    rounded
+                    color="grey-darken-1"
+                    prepend-icon="mdi-archive-outline"
+                    :loading="archiving"
+                    @click="archive"
+                  >
+                    Archive
+                  </v-btn>
                   <v-btn
                     variant="outlined"
                     size="small"
@@ -223,268 +424,8 @@
                 <div class="text-body-2">{{ schedule.description }}</div>
               </v-card>
 
-              <!-- Tabs -->
-              <v-tabs v-model="viewTab" density="compact" class="mb-3">
-                <v-tab value="claims">
-                  <v-icon size="18" class="mr-1">mdi-file-document-multiple</v-icon>
-                  Claims
-                </v-tab>
-                <v-tab value="acb">
-                  <v-icon size="18" class="mr-1">mdi-bank-transfer</v-icon>
-                  ACB Files
-                </v-tab>
-                <v-tab value="reconciliation">
-                  <v-icon size="18" class="mr-1">mdi-scale-balance</v-icon>
-                  Reconciliation
-                </v-tab>
-                <v-tab value="proofs">
-                  <v-icon size="18" class="mr-1">mdi-receipt-text-check</v-icon>
-                  Proof of Payment
-                </v-tab>
-              </v-tabs>
-
-              <v-tabs-window v-model="viewTab">
-                <!-- Claims Tab -->
-                <v-tabs-window-item value="claims">
-                  <v-table density="compact" class="border rounded">
-                    <thead>
-                      <tr>
-                        <th>Claim #</th>
-                        <th>Member</th>
-                        <th>ID Number</th>
-                        <th>Scheme</th>
-                        <th>Benefit</th>
-                        <th>Bank</th>
-                        <th class="text-right">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="item in schedule.items" :key="item.id">
-                        <td>{{ item.claim_number }}</td>
-                        <td>{{ item.member_name }}</td>
-                        <td>{{ item.member_id_number }}</td>
-                        <td>{{ item.scheme_name }}</td>
-                        <td>{{ item.benefit_name }}</td>
-                        <td>
-                          <v-chip
-                            v-if="item.bank_account_number"
-                            size="x-small"
-                            color="teal"
-                            variant="tonal"
-                          >
-                            {{ item.bank_name || 'Set' }}
-                          </v-chip>
-                          <v-chip
-                            v-else
-                            size="x-small"
-                            color="orange"
-                            variant="tonal"
-                          >
-                            Missing
-                          </v-chip>
-                        </td>
-                        <td class="text-right">{{
-                          formatCurrency(item.claim_amount)
-                        }}</td>
-                      </tr>
-                    </tbody>
-                  </v-table>
-                </v-tabs-window-item>
-
-                <!-- ACB Files Tab -->
-                <v-tabs-window-item value="acb">
-                  <v-progress-linear
-                    v-if="loadingACBFiles"
-                    indeterminate
-                    color="teal"
-                    class="mb-2"
-                  />
-                  <empty-state
-                    v-if="!loadingACBFiles && acbFiles.length === 0"
-                    icon="mdi-file-document-outline"
-                    title="No ACB files generated yet"
-                    message="Generate an ACB file to start a BankServ payment run."
-                  />
-                  <v-list v-else density="compact" class="border rounded">
-                    <v-list-item
-                      v-for="acb in acbFiles"
-                      :key="acb.id"
-                      :subtitle="`Generated by ${acb.generated_by} on ${formatDate(acb.generated_at)} | ${acb.transaction_count} transactions | ${formatCurrency(acb.total_amount)}`"
-                      :title="acb.file_name"
-                    >
-                      <template #prepend>
-                        <v-icon
-                          :color="
-                            acb.status === 'reconciled' ? 'success' : 'teal'
-                          "
-                        >
-                          {{
-                            acb.status === 'reconciled'
-                              ? 'mdi-check-circle'
-                              : 'mdi-file-document'
-                          }}
-                        </v-icon>
-                      </template>
-                      <template #append>
-                        <div class="d-flex gap-1 align-center">
-                          <v-chip
-                            v-if="acb.is_retry"
-                            size="x-small"
-                            color="orange"
-                            variant="tonal"
-                            class="mr-1"
-                          >
-                            Retry
-                          </v-chip>
-                          <v-chip
-                            :color="
-                              acb.status === 'reconciled' ? 'success' : 'grey'
-                            "
-                            size="x-small"
-                            label
-                          >
-                            {{ acb.status }}
-                          </v-chip>
-                          <v-btn
-                            size="x-small"
-                            variant="text"
-                            color="primary"
-                            icon="mdi-download"
-                            :loading="downloadingACB === acb.id"
-                            @click="downloadACBFile(acb)"
-                          />
-                        </div>
-                      </template>
-                    </v-list-item>
-                  </v-list>
-                </v-tabs-window-item>
-
-                <!-- Reconciliation Tab -->
-                <v-tabs-window-item value="reconciliation">
-                  <v-progress-linear
-                    v-if="loadingRecon"
-                    indeterminate
-                    color="deep-purple"
-                    class="mb-2"
-                  />
-
-                  <div
-                    v-if="reconSummary"
-                    class="d-flex gap-2 mb-3 flex-wrap"
-                  >
-                    <v-chip color="default" variant="tonal">
-                      Total: {{ reconSummary.total_transactions }}
-                    </v-chip>
-                    <v-chip color="success" variant="tonal">
-                      Paid: {{ reconSummary.paid }} ({{
-                        formatCurrency(reconSummary.total_paid)
-                      }})
-                    </v-chip>
-                    <v-chip color="error" variant="tonal">
-                      Failed: {{ reconSummary.failed }} ({{
-                        formatCurrency(reconSummary.total_failed)
-                      }})
-                    </v-chip>
-                    <v-chip color="orange" variant="tonal">
-                      Unmatched: {{ reconSummary.unmatched }}
-                    </v-chip>
-                  </div>
-
-                  <empty-state
-                    v-if="!loadingRecon && reconResults.length === 0"
-                    icon="mdi-scale-balance"
-                    title="No reconciliation data yet"
-                    message="Upload a bank response file to reconcile this payment run."
-                  />
-                  <v-table v-else density="compact" class="border rounded mb-3">
-                    <thead>
-                      <tr>
-                        <th>Claim #</th>
-                        <th>Account</th>
-                        <th class="text-right">Amount</th>
-                        <th>Status</th>
-                        <th>Failure Reason</th>
-                        <th>Bank Ref</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="r in reconResults" :key="r.id">
-                        <td>{{ r.claim_number || '—' }}</td>
-                        <td>{{ r.account_number }}</td>
-                        <td class="text-right">{{
-                          formatCurrency(r.amount)
-                        }}</td>
-                        <td>
-                          <v-chip
-                            :color="reconStatusColor(r.status)"
-                            size="x-small"
-                            label
-                            variant="flat"
-                          >
-                            {{ r.status }}
-                          </v-chip>
-                        </td>
-                        <td class="text-caption">{{
-                          r.failure_reason || '—'
-                        }}</td>
-                        <td class="text-caption">{{
-                          r.bank_reference || '—'
-                        }}</td>
-                      </tr>
-                    </tbody>
-                  </v-table>
-
-                  <v-btn
-                    v-if="
-                      hasPermission('claims_pay:retry_failed') &&
-                      reconResults.some((r: any) => r.status === 'failed')
-                    "
-                    color="orange"
-                    size="small"
-                    variant="outlined"
-                    prepend-icon="mdi-refresh"
-                    :loading="retrying"
-                    @click="retryFailed"
-                  >
-                    Retry Failed Payments
-                  </v-btn>
-                </v-tabs-window-item>
-
-                <!-- Proofs Tab -->
-                <v-tabs-window-item value="proofs">
-                  <empty-state
-                    v-if="
-                      !schedule.proof_of_payments ||
-                      schedule.proof_of_payments.length === 0
-                    "
-                    icon="mdi-receipt-text-outline"
-                    title="No proof of payment uploaded yet"
-                    message="Upload proof of payment to confirm this schedule and mark all claims as Paid."
-                  />
-                  <v-list v-else density="compact" class="border rounded">
-                    <v-list-item
-                      v-for="proof in schedule.proof_of_payments"
-                      :key="proof.id"
-                      :subtitle="`Uploaded by ${proof.uploaded_by} on ${formatDate(proof.uploaded_at)}${proof.notes ? ' — ' + proof.notes : ''}`"
-                      :title="proof.file_name"
-                    >
-                      <template #prepend>
-                        <v-icon color="success">mdi-receipt-text-check</v-icon>
-                      </template>
-                      <template #append>
-                        <v-btn
-                          size="x-small"
-                          variant="text"
-                          color="primary"
-                          icon="mdi-download"
-                          :loading="downloadingProof === proof.id"
-                          @click="downloadProof(proof)"
-                        />
-                      </template>
-                    </v-list-item>
-                  </v-list>
-                </v-tabs-window-item>
-              </v-tabs-window>
+              <!-- Active tab content -->
+              <router-view />
             </template>
           </template>
         </base-card>
@@ -709,108 +650,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, provide } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import EmptyState from '@/renderer/components/EmptyState.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
-
-interface ScheduleItem {
-  id: number
-  claim_id: number
-  claim_number: string
-  member_name: string
-  member_id_number: string
-  benefit_name: string
-  scheme_name: string
-  scheme_id: number
-  claim_amount: number
-  bank_name?: string
-  bank_branch_code?: string
-  bank_account_number?: string
-  bank_account_type?: string
-  account_holder_name?: string
-}
-
-interface PaymentProof {
-  id: number
-  schedule_id: number
-  file_name: string
-  content_type: string
-  size_bytes: number
-  notes: string
-  uploaded_by: string
-  uploaded_at: string
-}
-
-interface PaymentSchedule {
-  id: number
-  schedule_number: string
-  description: string
-  status: string
-  total_amount: number
-  claims_count: number
-  exported_at?: string
-  exported_by?: string
-  acb_file_generated?: boolean
-  acb_generated_at?: string
-  acb_generated_by?: string
-  created_by: string
-  created_at: string
-  items: ScheduleItem[]
-  proof_of_payments: PaymentProof[]
-}
-
-interface BankProfile {
-  id: number
-  profile_name: string
-  bank_name: string
-  user_code: string
-  user_branch_code: string
-  user_account_number: string
-  user_account_type: string
-  bank_type_code: string
-  service_type: string
-  generation_number: number
-  is_active: boolean
-}
-
-interface ACBFile {
-  id: number
-  schedule_id: number
-  file_name: string
-  action_date: string
-  transaction_count: number
-  total_amount: number
-  status: string
-  is_retry: boolean
-  generated_by: string
-  generated_at: string
-}
-
-interface ReconResult {
-  id: number
-  claim_number: string
-  account_number: string
-  amount: number
-  status: string
-  failure_reason: string
-  bank_reference: string
-}
+import {
+  PAYMENT_SCHEDULE_CONTEXT,
+  type PaymentSchedule,
+  type PaymentProof,
+  type BankProfile,
+  type ACBFile,
+  type ReconResult,
+  type ReconSummary,
+  type ScheduleItem
+} from './payment_schedule_context'
 
 const props = defineProps<{
   scheduleId: string | number
 }>()
 
+const route = useRoute()
 const router = useRouter()
 const { hasPermission } = usePermissionCheck()
 
 // ── State ──────────────────────────────────────────────
 const loading = ref(false)
 const schedule = ref<PaymentSchedule | null>(null)
-
-const viewTab = ref('claims')
 
 const exporting = ref(false)
 const downloadingProof = ref<number | null>(null)
@@ -837,7 +704,7 @@ const processingResponse = ref(false)
 
 // Reconciliation
 const reconResults = ref<ReconResult[]>([])
-const reconSummary = ref<any>(null)
+const reconSummary = ref<ReconSummary | null>(null)
 const loadingRecon = ref(false)
 const retrying = ref(false)
 
@@ -885,6 +752,12 @@ const acbBlockedReason = computed((): string | null => {
   return null
 })
 
+const activeTab = computed(() => (route.name as string) ?? '')
+
+function tabRoute(name: string) {
+  return { name, params: { scheduleId: props.scheduleId } }
+}
+
 // ── Helpers ─────────────────────────────────────────────
 function formatCurrency(val: number) {
   return new Intl.NumberFormat('en-ZA', {
@@ -904,18 +777,30 @@ function formatDate(val?: string) {
 
 function statusLabel(status: string) {
   const map: Record<string, string> = {
+    draft: 'Draft',
+    claims_signed_off: 'Claims Signed Off',
+    finance_in_review: 'Finance Review',
+    finance_first_authorised: '1st Auth',
+    finance_second_authorised: '2nd Auth',
+    submitted_to_bank: 'Submitted to Bank',
     submitted: 'Submitted for Payment',
     confirmed: 'Paid / Confirmed',
-    draft: 'Draft'
+    archived: 'Archived'
   }
   return map[status] ?? status
 }
 
 function statusColor(status: string) {
   const map: Record<string, string> = {
+    draft: 'grey',
+    claims_signed_off: 'blue',
+    finance_in_review: 'orange',
+    finance_first_authorised: 'deep-orange',
+    finance_second_authorised: 'purple',
+    submitted_to_bank: 'warning',
     submitted: 'warning',
     confirmed: 'success',
-    draft: 'grey',
+    archived: 'grey-darken-1',
     approved: 'info',
     submitted_for_payment: 'warning',
     paid: 'success',
@@ -925,6 +810,27 @@ function statusColor(status: string) {
   }
   return map[status] ?? 'default'
 }
+
+// Ordered list of pipeline statuses for the step indicator.
+const PIPELINE_STATUSES = [
+  'draft',
+  'claims_signed_off',
+  'finance_in_review',
+  'finance_first_authorised',
+  'finance_second_authorised',
+  'submitted_to_bank',
+  'confirmed'
+]
+
+const currentStepIndex = computed(() => {
+  if (!schedule.value) return -1
+  const idx = PIPELINE_STATUSES.indexOf(schedule.value.status)
+  if (idx >= 0) return idx
+  // Legacy mapping for old "submitted" rows.
+  if (schedule.value.status === 'submitted') return 5
+  if (schedule.value.status === 'archived') return PIPELINE_STATUSES.length
+  return -1
+})
 
 function reconStatusColor(status: string) {
   const map: Record<string, string> = {
@@ -1038,16 +944,6 @@ async function loadReconData() {
     loadingRecon.value = false
   }
 }
-
-// Lazy-load tab data on first switch
-watch(viewTab, async (tab) => {
-  if (!schedule.value) return
-  if (tab === 'acb' && acbFiles.value.length === 0) {
-    await loadACBFiles()
-  } else if (tab === 'reconciliation' && reconResults.value.length === 0) {
-    await loadReconData()
-  }
-})
 
 // ── Export ──────────────────────────────────────────────
 async function exportSchedule() {
@@ -1251,10 +1147,411 @@ async function downloadProof(proof: PaymentProof) {
   }
 }
 
-onMounted(loadSchedule)
+// ── Lifecycle actions (Phase 1) ───────────────────────────
+const signingOff = ref(false)
+const startingReview = ref(false)
+const authorising = ref<'' | 'first' | 'second'>('')
+const archiving = ref(false)
+
+function errMessage(e: any, fallback: string) {
+  return (
+    e?.response?.data?.message ??
+    (typeof e?.response?.data === 'string' ? e.response.data : null) ??
+    e?.message ??
+    fallback
+  )
+}
+
+async function signOff() {
+  if (!schedule.value) return
+  signingOff.value = true
+  try {
+    await GroupPricingService.signOffPaymentSchedule(schedule.value.id)
+    notify('Head of Claims sign-off recorded.')
+    await loadSchedule()
+  } catch (e: any) {
+    notify(errMessage(e, 'Failed to sign off schedule'), 'error')
+  } finally {
+    signingOff.value = false
+  }
+}
+
+async function startFinanceReview() {
+  if (!schedule.value) return
+  startingReview.value = true
+  try {
+    await GroupPricingService.startFinanceReview(schedule.value.id)
+    notify('Finance review started.')
+    await loadSchedule()
+  } catch (e: any) {
+    notify(errMessage(e, 'Failed to start finance review'), 'error')
+  } finally {
+    startingReview.value = false
+  }
+}
+
+async function verifyLineItem(itemId: number) {
+  if (!schedule.value) return
+  try {
+    await GroupPricingService.verifyScheduleLineItem(schedule.value.id, itemId)
+    notify('Line item verified.')
+    await loadSchedule()
+  } catch (e: any) {
+    notify(errMessage(e, 'Failed to verify line item'), 'error')
+  }
+}
+
+async function queryLineItem(itemId: number, reasonCode: string, notes: string) {
+  if (!schedule.value) return
+  try {
+    await GroupPricingService.queryScheduleLineItem(schedule.value.id, itemId, {
+      reason_code: reasonCode,
+      notes
+    })
+    notify('Line queried and returned to claims.', 'warning')
+    await loadSchedule()
+    await loadQueries()
+  } catch (e: any) {
+    notify(errMessage(e, 'Failed to query line item'), 'error')
+  }
+}
+
+async function rejectLineItem(itemId: number, reasonCode: string, notes: string) {
+  if (!schedule.value) return
+  try {
+    await GroupPricingService.rejectScheduleLineItem(schedule.value.id, itemId, {
+      reason_code: reasonCode,
+      notes
+    })
+    notify('Line rejected and returned to claims.', 'warning')
+    await loadSchedule()
+    await loadQueries()
+  } catch (e: any) {
+    notify(errMessage(e, 'Failed to reject line item'), 'error')
+  }
+}
+
+async function authoriseFirst() {
+  if (!schedule.value) return
+  authorising.value = 'first'
+  try {
+    await GroupPricingService.firstAuthorisePaymentSchedule(schedule.value.id)
+    notify('First authorisation recorded.')
+    await loadSchedule()
+  } catch (e: any) {
+    notify(errMessage(e, 'Failed to authorise (1st)'), 'error')
+  } finally {
+    authorising.value = ''
+  }
+}
+
+async function authoriseSecond() {
+  if (!schedule.value) return
+  authorising.value = 'second'
+  try {
+    await GroupPricingService.secondAuthorisePaymentSchedule(schedule.value.id)
+    notify('Second authorisation recorded — schedule ready for ACB.')
+    await loadSchedule()
+  } catch (e: any) {
+    notify(errMessage(e, 'Failed to authorise (2nd)'), 'error')
+  } finally {
+    authorising.value = ''
+  }
+}
+
+async function archive() {
+  if (!schedule.value) return
+  archiving.value = true
+  try {
+    await GroupPricingService.archivePaymentSchedule(schedule.value.id)
+    notify('Schedule archived.')
+    await loadSchedule()
+  } catch (e: any) {
+    notify(errMessage(e, 'Failed to archive schedule'), 'error')
+  } finally {
+    archiving.value = false
+  }
+}
+
+// Queries tab state
+const queries = ref<any[]>([])
+const loadingQueries = ref(false)
+
+async function loadQueries() {
+  if (!schedule.value) return
+  loadingQueries.value = true
+  try {
+    const res = await GroupPricingService.getScheduleQueries(schedule.value.id)
+    queries.value = unwrap(res) ?? []
+  } catch {
+    queries.value = []
+  } finally {
+    loadingQueries.value = false
+  }
+}
+
+// ── Sanctions / reinsurance / duplicates (Phase 3) ────────
+const sanctions = ref<any[]>([])
+
+async function loadSanctions() {
+  if (!schedule.value) return
+  try {
+    const res = await GroupPricingService.listScheduleSanctions(schedule.value.id)
+    sanctions.value = unwrap(res) ?? []
+  } catch {
+    sanctions.value = []
+  }
+}
+
+async function screenLineItem(itemId: number) {
+  if (!schedule.value) return
+  try {
+    await GroupPricingService.screenScheduleLineItem(schedule.value.id, itemId)
+    notify('Sanctions screening run — record outcome to clear.', 'info')
+    await Promise.all([loadSanctions(), loadSchedule()])
+  } catch (e: any) {
+    notify(errMessage(e, 'Failed to run sanctions screening'), 'error')
+  }
+}
+
+async function recordSanctionsOutcome(
+  itemId: number,
+  status: string,
+  notes: string
+) {
+  if (!schedule.value) return
+  try {
+    await GroupPricingService.recordSanctionsOutcome(
+      schedule.value.id,
+      itemId,
+      { status, notes }
+    )
+    notify(`Sanctions outcome recorded: ${status}.`)
+    await Promise.all([loadSanctions(), loadSchedule()])
+  } catch (e: any) {
+    notify(errMessage(e, 'Failed to record sanctions outcome'), 'error')
+  }
+}
+
+async function setReinsuranceRecovery(
+  itemId: number,
+  required: boolean,
+  amount: number
+) {
+  if (!schedule.value) return
+  try {
+    await GroupPricingService.setReinsuranceRecovery(
+      schedule.value.id,
+      itemId,
+      { required, amount }
+    )
+    notify(required ? 'Reinsurance recovery flagged.' : 'Reinsurance recovery cleared.')
+    await loadSchedule()
+  } catch (e: any) {
+    notify(errMessage(e, 'Failed to update reinsurance recovery'), 'error')
+  }
+}
+
+async function confirmReinsuranceRaised(itemId: number) {
+  if (!schedule.value) return
+  try {
+    await GroupPricingService.confirmReinsuranceRecoveryRaised(
+      schedule.value.id,
+      itemId
+    )
+    notify('Reinsurance recovery raised confirmed.')
+    await loadSchedule()
+  } catch (e: any) {
+    notify(errMessage(e, 'Failed to confirm reinsurance raised'), 'error')
+  }
+}
+
+async function clearDuplicateBeneficiary(itemId: number) {
+  if (!schedule.value) return
+  try {
+    await GroupPricingService.clearDuplicateBeneficiary(
+      schedule.value.id,
+      itemId
+    )
+    notify('Duplicate beneficiary flag cleared.')
+    await loadSchedule()
+  } catch (e: any) {
+    notify(errMessage(e, 'Failed to clear duplicate flag'), 'error')
+  }
+}
+
+// ── Tax certificates (Phase 4) ──────────────────────────
+const taxCertificates = ref<any[]>([])
+
+async function loadTaxCertificates() {
+  if (!schedule.value) return
+  try {
+    const res = await GroupPricingService.listScheduleTaxCertificates(
+      schedule.value.id
+    )
+    taxCertificates.value = unwrap(res) ?? []
+  } catch {
+    taxCertificates.value = []
+  }
+}
+
+async function downloadTaxCertificate(cert: any) {
+  try {
+    const res = await GroupPricingService.downloadTaxCertificate(cert.id)
+    downloadBlob(res.data, cert.file_name, cert.content_type || 'text/html')
+  } catch (e: any) {
+    notify(errMessage(e, 'Failed to download tax certificate'), 'error')
+  }
+}
+
+// ── Action gating helpers (used in template) ──────────────
+const canSignOff = computed(() => {
+  if (!schedule.value) return false
+  return (
+    schedule.value.status === 'draft' &&
+    hasPermission('claims_pay:signoff_schedule')
+  )
+})
+
+const canStartReview = computed(() => {
+  if (!schedule.value) return false
+  return (
+    schedule.value.status === 'claims_signed_off' &&
+    hasPermission('claims_pay:finance_review')
+  )
+})
+
+const canAuthoriseFirst = computed(() => {
+  if (!schedule.value) return false
+  if (schedule.value.status !== 'finance_in_review') return false
+  if (!hasPermission('claims_pay:authorise_first')) return false
+  // Block while any line is still pending.
+  return !schedule.value.items?.some(
+    (i) => !i.line_status || i.line_status === 'pending'
+  )
+})
+
+const canAuthoriseSecond = computed(() => {
+  if (!schedule.value) return false
+  return (
+    schedule.value.status === 'finance_first_authorised' &&
+    hasPermission('claims_pay:authorise_second')
+  )
+})
+
+const canArchive = computed(() => {
+  if (!schedule.value) return false
+  return (
+    schedule.value.status === 'confirmed' &&
+    hasPermission('claims_pay:archive')
+  )
+})
+
+// ── Phase 3 banner counters ───────────────────────────────
+const outstandingDuplicates = computed(() => {
+  if (!schedule.value?.items) return 0
+  return schedule.value.items.filter(
+    (i: any) =>
+      i.duplicate_beneficiary_flag === true &&
+      i.duplicate_beneficiary_cleared !== true &&
+      (i.line_status === 'pending' || i.line_status === 'verified' || !i.line_status)
+  ).length
+})
+
+const sanctionsBlockers = computed(() => {
+  if (!schedule.value?.items) return 0
+  const itemsById = new Map<number, string[]>()
+  for (const row of sanctions.value) {
+    const list = itemsById.get(row.schedule_item_id) ?? []
+    list.push(row.status)
+    itemsById.set(row.schedule_item_id, list)
+  }
+  let count = 0
+  for (const item of schedule.value.items) {
+    if (item.line_status !== 'pending' && item.line_status !== 'verified' && item.line_status) {
+      continue
+    }
+    const statuses = itemsById.get(item.id) ?? []
+    // Block when item has no clear / manual_clear status across providers.
+    const cleared = statuses.some(
+      (s) => s === 'clear' || s === 'manual_clear'
+    )
+    const blocking = statuses.some(
+      (s) => s === 'hit' || s === 'pending' || s === 'skipped'
+    )
+    if (blocking || (!cleared && statuses.length === 0)) {
+      count++
+    }
+  }
+  return count
+})
+
+const reinsuranceOutstanding = computed(() => {
+  if (!schedule.value?.items) return 0
+  return schedule.value.items.filter(
+    (i: any) =>
+      i.reinsurance_recovery_required &&
+      !i.reinsurance_recovery_raised_at &&
+      (i.line_status === 'pending' || i.line_status === 'verified' || !i.line_status)
+  ).length
+})
+
+// Provide context to child tab components
+provide(PAYMENT_SCHEDULE_CONTEXT, {
+  schedule,
+  formatCurrency,
+  formatDate,
+  hasPermission,
+  notify,
+  acbFiles,
+  loadingACBFiles,
+  downloadingACB,
+  loadACBFiles,
+  downloadACBFile,
+  reconResults,
+  reconSummary,
+  loadingRecon,
+  retrying,
+  loadReconData,
+  retryFailed,
+  reconStatusColor,
+  downloadingProof,
+  downloadProof,
+  signOff,
+  startFinanceReview,
+  verifyLineItem,
+  queryLineItem,
+  rejectLineItem,
+  authoriseFirst,
+  authoriseSecond,
+  archive,
+  refreshSchedule: loadSchedule,
+  queries,
+  loadingQueries,
+  loadQueries,
+  sanctions,
+  loadSanctions,
+  screenLineItem,
+  recordSanctionsOutcome,
+  setReinsuranceRecovery,
+  confirmReinsuranceRaised,
+  clearDuplicateBeneficiary,
+  taxCertificates,
+  loadTaxCertificates,
+  downloadTaxCertificate
+})
+
+onMounted(async () => {
+  await loadSchedule()
+  await Promise.all([loadSanctions(), loadTaxCertificates()])
+})
 </script>
 
 <style scoped>
+.schedule-tabs {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
 .meta-card {
   min-height: 96px;
   transition: border-color 0.15s ease;

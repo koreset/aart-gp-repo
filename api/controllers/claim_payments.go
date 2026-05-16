@@ -7,6 +7,8 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -30,9 +32,11 @@ func CreatePaymentSchedule(c *gin.Context) {
 	Created(c, schedule)
 }
 
-// GetPaymentSchedules handles GET /group-pricing/claims/payment-schedules
+// GetPaymentSchedules handles GET /group-pricing/claims/payment-schedules.
+// Pass ?include_archived=1 to also surface archived schedules.
 func GetPaymentSchedules(c *gin.Context) {
-	schedules, err := services.GetPaymentSchedules()
+	includeArchived := c.Query("include_archived") == "1" || c.Query("include_archived") == "true"
+	schedules, err := services.GetPaymentSchedules(includeArchived)
 	if err != nil {
 		InternalError(c, err)
 		return
@@ -558,4 +562,540 @@ func VerifyBankAccountV2(c *gin.Context) {
 		return
 	}
 	OK(c, result)
+}
+
+// ──────────────────────────────────────────────
+// Payment Schedule Lifecycle (Phase 1)
+// ──────────────────────────────────────────────
+
+// parseScheduleID is a small helper used by every lifecycle endpoint.
+func parseScheduleID(c *gin.Context) (int, bool) {
+	id, err := strconv.Atoi(c.Param("schedule_id"))
+	if err != nil {
+		BadRequestMsg(c, "invalid schedule_id")
+		return 0, false
+	}
+	return id, true
+}
+
+func parseItemID(c *gin.Context) (int, bool) {
+	id, err := strconv.Atoi(c.Param("item_id"))
+	if err != nil {
+		BadRequestMsg(c, "invalid item_id")
+		return 0, false
+	}
+	return id, true
+}
+
+// SignOffPaymentSchedule handles POST /claims/payment-schedules/:schedule_id/signoff
+func SignOffPaymentSchedule(c *gin.Context) {
+	id, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	schedule, err := services.SignOffByHeadOfClaims(id, user)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+	OK(c, schedule)
+}
+
+// StartFinanceReview handles POST /claims/payment-schedules/:schedule_id/finance/start-review
+func StartFinanceReview(c *gin.Context) {
+	id, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	schedule, err := services.FinanceStartReview(id, user)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+	OK(c, schedule)
+}
+
+// VerifyScheduleLineItem handles POST /claims/payment-schedules/:schedule_id/items/:item_id/verify
+func VerifyScheduleLineItem(c *gin.Context) {
+	sid, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	iid, ok := parseItemID(c)
+	if !ok {
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	item, err := services.VerifyLineItem(sid, iid, user)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+	OK(c, item)
+}
+
+// QueryScheduleLineItem handles POST /claims/payment-schedules/:schedule_id/items/:item_id/query
+// Body: { "reason_code": "...", "notes": "..." }
+func QueryScheduleLineItem(c *gin.Context) {
+	sid, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	iid, ok := parseItemID(c)
+	if !ok {
+		return
+	}
+	var req services.QueryRequest
+	if err := c.BindJSON(&req); err != nil {
+		BadRequest(c, err)
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	if err := services.QueryLineItem(sid, iid, req, user); err != nil {
+		BadRequest(c, err)
+		return
+	}
+	schedule, err := services.GetPaymentSchedule(sid)
+	if err != nil {
+		InternalError(c, err)
+		return
+	}
+	OK(c, schedule)
+}
+
+// RejectScheduleLineItem handles POST /claims/payment-schedules/:schedule_id/items/:item_id/reject
+// Body: { "reason_code": "...", "notes": "..." }
+func RejectScheduleLineItem(c *gin.Context) {
+	sid, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	iid, ok := parseItemID(c)
+	if !ok {
+		return
+	}
+	var req services.QueryRequest
+	if err := c.BindJSON(&req); err != nil {
+		BadRequest(c, err)
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	if err := services.RejectLineItem(sid, iid, req, user); err != nil {
+		BadRequest(c, err)
+		return
+	}
+	schedule, err := services.GetPaymentSchedule(sid)
+	if err != nil {
+		InternalError(c, err)
+		return
+	}
+	OK(c, schedule)
+}
+
+// FirstAuthorisePaymentSchedule handles POST /claims/payment-schedules/:schedule_id/finance/authorise-first
+func FirstAuthorisePaymentSchedule(c *gin.Context) {
+	id, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	schedule, err := services.FinanceFirstAuthorise(id, user)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+	OK(c, schedule)
+}
+
+// SecondAuthorisePaymentSchedule handles POST /claims/payment-schedules/:schedule_id/finance/authorise-second
+func SecondAuthorisePaymentSchedule(c *gin.Context) {
+	id, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	schedule, err := services.FinanceSecondAuthorise(id, user)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+	OK(c, schedule)
+}
+
+// ArchivePaymentSchedule handles POST /claims/payment-schedules/:schedule_id/archive
+func ArchivePaymentSchedule(c *gin.Context) {
+	id, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	schedule, err := services.ArchiveSchedule(id, user)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+	OK(c, schedule)
+}
+
+// GetScheduleQueries handles GET /claims/payment-schedules/:schedule_id/queries
+func GetScheduleQueries(c *gin.Context) {
+	id, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	rows, err := services.GetScheduleQueries(id)
+	if err != nil {
+		InternalError(c, err)
+		return
+	}
+	OK(c, rows)
+}
+
+// GetScheduleAuditTrail handles GET /claims/payment-schedules/:schedule_id/audit
+func GetScheduleAuditTrail(c *gin.Context) {
+	id, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	rows, err := services.GetScheduleAuditTrail(id)
+	if err != nil {
+		InternalError(c, err)
+		return
+	}
+	OK(c, rows)
+}
+
+// ──────────────────────────────────────────────
+// Authority Matrix CRUD
+// ──────────────────────────────────────────────
+
+// ListAuthorityMatrix handles GET /claims/authority-matrix
+func ListAuthorityMatrix(c *gin.Context) {
+	rows, err := services.ListAuthorityMatrix()
+	if err != nil {
+		InternalError(c, err)
+		return
+	}
+	OK(c, rows)
+}
+
+// CreateAuthorityMatrixRow handles POST /claims/authority-matrix
+func CreateAuthorityMatrixRow(c *gin.Context) {
+	var row models.AuthorityMatrix
+	if err := c.BindJSON(&row); err != nil {
+		BadRequest(c, err)
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	created, err := services.CreateAuthorityMatrixRow(row, user)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+	Created(c, created)
+}
+
+// UpdateAuthorityMatrixRow handles PATCH /claims/authority-matrix/:row_id
+func UpdateAuthorityMatrixRow(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("row_id"))
+	if err != nil {
+		BadRequestMsg(c, "invalid row_id")
+		return
+	}
+	var patch models.AuthorityMatrix
+	if err := c.BindJSON(&patch); err != nil {
+		BadRequest(c, err)
+		return
+	}
+	row, err := services.UpdateAuthorityMatrixRow(id, patch)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+	OK(c, row)
+}
+
+// DeleteAuthorityMatrixRow handles DELETE /claims/authority-matrix/:row_id
+func DeleteAuthorityMatrixRow(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("row_id"))
+	if err != nil {
+		BadRequestMsg(c, "invalid row_id")
+		return
+	}
+	if err := services.DeleteAuthorityMatrixRow(id); err != nil {
+		InternalError(c, err)
+		return
+	}
+	OK(c, gin.H{"deleted": true})
+}
+
+// ──────────────────────────────────────────────
+// Payment cut-off settings & manual run (Phase 2)
+// ──────────────────────────────────────────────
+
+// resolveLicense returns the license id this request operates on. Phase 2 is
+// single-tenant so the empty-string license-id is the singleton install row.
+// Reads X-License-Id when present for future-proofing.
+func resolveLicense(c *gin.Context) string {
+	return strings.TrimSpace(c.GetHeader("X-License-Id"))
+}
+
+// GetPaymentCutoffConfig handles GET /claims/payment-cutoff/config
+func GetPaymentCutoffConfig(c *gin.Context) {
+	cfg, err := services.GetPaymentCutoffConfig(resolveLicense(c))
+	if err != nil {
+		InternalError(c, err)
+		return
+	}
+	OK(c, cfg)
+}
+
+// SavePaymentCutoffConfig handles PUT /claims/payment-cutoff/config
+func SavePaymentCutoffConfig(c *gin.Context) {
+	var patch models.PaymentCutoffConfig
+	if err := c.BindJSON(&patch); err != nil {
+		BadRequest(c, err)
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	cfg, err := services.SavePaymentCutoffConfig(resolveLicense(c), patch, user)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+	OK(c, cfg)
+}
+
+// RunPaymentCutoffNow handles POST /claims/payment-cutoff/run — a manual
+// "generate schedule for the latest cut-off" trigger. Records the run under
+// trigger_type="manual".
+func RunPaymentCutoffNow(c *gin.Context) {
+	user := c.MustGet("user").(models.AppUser)
+	run, err := services.RunCutoff(resolveLicense(c), time.Now(), "manual", user)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+	OK(c, run)
+}
+
+// ListPaymentCutoffRuns handles GET /claims/payment-cutoff/runs
+func ListPaymentCutoffRuns(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "30"))
+	rows, err := services.ListRecentCutoffRuns(resolveLicense(c), limit)
+	if err != nil {
+		InternalError(c, err)
+		return
+	}
+	OK(c, rows)
+}
+
+// GetNextPaymentCutoff handles GET /claims/payment-cutoff/next
+func GetNextPaymentCutoff(c *gin.Context) {
+	next, found := services.NextCutoff(resolveLicense(c), time.Now())
+	if !found {
+		OK(c, gin.H{"configured": false})
+		return
+	}
+	OK(c, gin.H{"configured": true, "scheduled_at": next})
+}
+
+// ──────────────────────────────────────────────
+// Sanctions / PEP screening (Phase 3)
+// ──────────────────────────────────────────────
+
+// ScreenScheduleLineItem handles POST /claims/payment-schedules/:schedule_id/items/:item_id/screen
+func ScreenScheduleLineItem(c *gin.Context) {
+	sid, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	iid, ok := parseItemID(c)
+	if !ok {
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	row, err := services.ScreenLineItem(sid, iid, user)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+	OK(c, row)
+}
+
+// RecordSanctionsOutcome handles POST /claims/payment-schedules/:schedule_id/items/:item_id/sanctions-outcome
+// Body: { "status": "clear" | "hit" | "manual_clear", "notes": "..." }
+func RecordSanctionsOutcome(c *gin.Context) {
+	sid, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	iid, ok := parseItemID(c)
+	if !ok {
+		return
+	}
+	var req services.RecordSanctionsOutcomeRequest
+	if err := c.BindJSON(&req); err != nil {
+		BadRequest(c, err)
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	row, err := services.RecordSanctionsOutcome(sid, iid, req, user)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+	OK(c, row)
+}
+
+// ListScheduleSanctionsScreenings handles GET /claims/payment-schedules/:schedule_id/sanctions
+func ListScheduleSanctionsScreenings(c *gin.Context) {
+	sid, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	rows, err := services.ListSanctionsScreeningsForSchedule(sid)
+	if err != nil {
+		InternalError(c, err)
+		return
+	}
+	OK(c, rows)
+}
+
+// ──────────────────────────────────────────────
+// Reinsurance recovery (Phase 3)
+// ──────────────────────────────────────────────
+
+// SetReinsuranceRecovery handles PUT /claims/payment-schedules/:schedule_id/items/:item_id/reinsurance
+// Body: { "required": true|false, "amount": 0 }
+func SetReinsuranceRecovery(c *gin.Context) {
+	sid, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	iid, ok := parseItemID(c)
+	if !ok {
+		return
+	}
+	var req services.SetReinsuranceRecoveryRequest
+	if err := c.BindJSON(&req); err != nil {
+		BadRequest(c, err)
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	row, err := services.SetReinsuranceRecovery(sid, iid, req, user)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+	OK(c, row)
+}
+
+// ConfirmReinsuranceRecoveryRaised handles POST /claims/payment-schedules/:schedule_id/items/:item_id/reinsurance/raised
+func ConfirmReinsuranceRecoveryRaised(c *gin.Context) {
+	sid, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	iid, ok := parseItemID(c)
+	if !ok {
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	row, err := services.ConfirmReinsuranceRecoveryRaised(sid, iid, user)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+	OK(c, row)
+}
+
+// ──────────────────────────────────────────────
+// Duplicate beneficiary clear (Phase 3)
+// ──────────────────────────────────────────────
+
+// ClearDuplicateBeneficiary handles POST /claims/payment-schedules/:schedule_id/items/:item_id/duplicate/clear
+func ClearDuplicateBeneficiary(c *gin.Context) {
+	sid, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	iid, ok := parseItemID(c)
+	if !ok {
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	if err := services.ClearDuplicateBeneficiary(sid, iid, user); err != nil {
+		BadRequest(c, err)
+		return
+	}
+	OK(c, gin.H{"cleared": true})
+}
+
+// ──────────────────────────────────────────────
+// Payment exceptions + tax certificates (Phase 4)
+// ──────────────────────────────────────────────
+
+// ListPaymentExceptions handles GET /claims/payment-exceptions
+// Query params: status (failed|unmatched|""), include_resolved=1
+func ListPaymentExceptions(c *gin.Context) {
+	req := services.ListPaymentExceptionsRequest{
+		Status:          c.Query("status"),
+		IncludeResolved: c.Query("include_resolved") == "1" || c.Query("include_resolved") == "true",
+	}
+	if limit, err := strconv.Atoi(c.Query("limit")); err == nil {
+		req.Limit = limit
+	}
+	rows, err := services.ListPaymentExceptions(req)
+	if err != nil {
+		InternalError(c, err)
+		return
+	}
+	OK(c, rows)
+}
+
+// GetPaymentExceptionsSummary handles GET /claims/payment-exceptions/summary
+func GetPaymentExceptionsSummary(c *gin.Context) {
+	summary, err := services.GetPaymentExceptionsSummary()
+	if err != nil {
+		InternalError(c, err)
+		return
+	}
+	OK(c, summary)
+}
+
+// ListScheduleTaxCertificates handles GET /claims/payment-schedules/:schedule_id/tax-certificates
+func ListScheduleTaxCertificates(c *gin.Context) {
+	sid, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	rows, err := services.ListTaxCertificatesForSchedule(sid)
+	if err != nil {
+		InternalError(c, err)
+		return
+	}
+	OK(c, rows)
+}
+
+// DownloadTaxCertificate handles GET /claims/tax-certificates/:cert_id/download
+func DownloadTaxCertificate(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("cert_id"))
+	if err != nil {
+		BadRequestMsg(c, "invalid cert_id")
+		return
+	}
+	data, contentType, filename, err := services.DownloadTaxCertificate(id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			NotFound(c, "tax certificate not found")
+			return
+		}
+		InternalError(c, err)
+		return
+	}
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Data(http.StatusOK, contentType, data)
 }

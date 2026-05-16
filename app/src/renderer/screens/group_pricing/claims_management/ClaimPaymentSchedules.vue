@@ -14,13 +14,52 @@
                 />
                 <span class="headline">Payment Schedules</span>
               </div>
-              <div class="d-flex gap-2">
+              <div class="d-flex gap-2 align-center flex-wrap">
+                <v-chip
+                  v-if="nextCutoff"
+                  color="indigo"
+                  size="small"
+                  variant="tonal"
+                  prepend-icon="mdi-clock-outline"
+                  :title="`Next auto cut-off: ${nextCutoff}`"
+                >
+                  Next cut-off {{ nextCutoff }}
+                </v-chip>
+                <v-btn
+                  v-if="hasPermission('claims_pay:run_cutoff')"
+                  rounded
+                  size="small"
+                  color="indigo"
+                  variant="outlined"
+                  prepend-icon="mdi-play-circle-outline"
+                  :loading="runningCutoff"
+                  @click="runCutoffNow"
+                >
+                  Run cut-off now
+                </v-btn>
+                <v-btn
+                  v-if="hasPermission('claims_pay:admin_cutoff')"
+                  rounded
+                  size="small"
+                  variant="text"
+                  prepend-icon="mdi-cog-outline"
+                  :to="{ name: 'group-pricing-payment-cutoff-settings' }"
+                >
+                  Cut-off settings
+                </v-btn>
+                <v-switch
+                  v-model="showArchived"
+                  color="primary"
+                  density="compact"
+                  hide-details
+                  label="Show archived"
+                  @update:model-value="loadSchedules"
+                />
                 <v-btn
                   v-if="hasPermission('claims_pay:manage_bank_profiles')"
                   rounded
                   size="small"
                   variant="outlined"
-                  class="mr-2"
                   prepend-icon="mdi-bank"
                   @click="openBankProfilesDialog"
                 >
@@ -986,7 +1025,7 @@ function goBack() {
 
 function openSchedule(schedule: PaymentSchedule) {
   router.push({
-    name: 'group-pricing-claim-payment-schedule-detail',
+    name: 'group-pricing-claim-payment-schedule-claims',
     params: { scheduleId: schedule.id }
   })
 }
@@ -1017,10 +1056,12 @@ async function onNotesChanged(
 }
 
 // ── Data loading ────────────────────────────────────────
+const showArchived = ref(false)
+
 async function loadSchedules() {
   loading.value = true
   try {
-    const res = await GroupPricingService.getPaymentSchedules()
+    const res = await GroupPricingService.getPaymentSchedules(showArchived.value)
     schedules.value = unwrap(res) ?? []
   } catch (e: any) {
     notify('Failed to load payment schedules', 'error')
@@ -1160,7 +1201,71 @@ async function deleteProfile(profile: BankProfile) {
   }
 }
 
-onMounted(loadSchedules)
+// ── Cut-off (Phase 2) ──────────────────────────────────────
+const runningCutoff = ref(false)
+const nextCutoff = ref<string>('')
+
+function unwrapBody(res: any) {
+  const body = res?.data
+  if (body && typeof body === 'object' && 'success' in body && 'data' in body) {
+    return body.data
+  }
+  return body
+}
+
+async function loadNextCutoff() {
+  try {
+    const res = await GroupPricingService.getNextPaymentCutoff()
+    const body = unwrapBody(res)
+    if (body?.configured && body?.scheduled_at) {
+      nextCutoff.value = new Date(body.scheduled_at).toLocaleString('en-ZA', {
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    } else {
+      nextCutoff.value = ''
+    }
+  } catch {
+    nextCutoff.value = ''
+  }
+}
+
+async function runCutoffNow() {
+  runningCutoff.value = true
+  try {
+    const res = await GroupPricingService.runPaymentCutoffNow()
+    const run = unwrapBody(res)
+    if (run?.status === 'no_claims') {
+      snackbar.value = true
+      snackbarMessage.value =
+        'Cut-off run completed: no approved claims at this time.'
+      snackbarColor.value = 'info'
+    } else if (run?.status === 'ok') {
+      snackbar.value = true
+      snackbarMessage.value = `Schedule created with ${run.claims_count} claims (gross ${new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(run.total_amount)}).`
+      snackbarColor.value = 'success'
+    } else {
+      snackbar.value = true
+      snackbarMessage.value = run?.error_message ?? 'Cut-off failed.'
+      snackbarColor.value = 'error'
+    }
+    await loadSchedules()
+  } catch (e: any) {
+    snackbar.value = true
+    snackbarMessage.value =
+      e?.response?.data?.message ??
+      e?.response?.data ??
+      'Failed to run cut-off'
+    snackbarColor.value = 'error'
+  } finally {
+    runningCutoff.value = false
+  }
+}
+
+onMounted(async () => {
+  await Promise.all([loadSchedules(), loadNextCutoff()])
+})
 </script>
 
 <style scoped>

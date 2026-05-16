@@ -438,6 +438,105 @@
     "parent_slug": "navigation:claims_payments",
     "display_order": 90
   },
+  {
+    "slug": "claims_pay:signoff_schedule",
+    "name": "Sign Off Payment Schedule",
+    "description": "Head of Claims sign-off on a generated payment schedule before it reaches finance.",
+    "category": "Claims",
+    "tier": "special",
+    "parent_slug": "navigation:claims_payments",
+    "display_order": 91
+  },
+  {
+    "slug": "claims_pay:finance_review",
+    "name": "Finance Schedule Review",
+    "description": "Finance can pull, verify, query, or reject line items on signed-off schedules.",
+    "category": "Claims",
+    "tier": "special",
+    "parent_slug": "navigation:claims_payments",
+    "display_order": 92
+  },
+  {
+    "slug": "claims_pay:authorise_first",
+    "name": "First Finance Authoriser",
+    "description": "First of two finance authorisers; releases the schedule for payment.",
+    "category": "Claims",
+    "tier": "special",
+    "parent_slug": "navigation:claims_payments",
+    "display_order": 93
+  },
+  {
+    "slug": "claims_pay:authorise_second",
+    "name": "Second Finance Authoriser",
+    "description": "Second finance authoriser; must be a different user from the first.",
+    "category": "Claims",
+    "tier": "special",
+    "parent_slug": "navigation:claims_payments",
+    "display_order": 94
+  },
+  {
+    "slug": "claims_pay:archive",
+    "name": "Archive Payment Schedule",
+    "description": "Move a confirmed schedule into the archive.",
+    "category": "Claims",
+    "tier": "special",
+    "parent_slug": "navigation:claims_payments",
+    "display_order": 95
+  },
+  {
+    "slug": "claims_pay:admin_authority",
+    "name": "Manage Authority Matrix",
+    "description": "Configure which roles can perform which payment-schedule actions at which monetary thresholds.",
+    "category": "Claims",
+    "tier": "special",
+    "parent_slug": "navigation:claims_payments",
+    "display_order": 96
+  },
+  {
+    "slug": "claims_pay:admin_cutoff",
+    "name": "Manage Payment Cut-off Settings",
+    "description": "Configure automatic cut-off times, timezone, and the daily payment limit for finance authorisation.",
+    "category": "Claims",
+    "tier": "special",
+    "parent_slug": "navigation:claims_payments",
+    "display_order": 97
+  },
+  {
+    "slug": "claims_pay:run_cutoff",
+    "name": "Run Payment Cut-off",
+    "description": "Manually trigger a payment cut-off, generating a schedule from all currently-approved claims.",
+    "category": "Claims",
+    "tier": "special",
+    "parent_slug": "navigation:claims_payments",
+    "display_order": 98
+  },
+  {
+    "slug": "claims_pay:screen_sanctions",
+    "name": "Sanctions / PEP Screening",
+    "description": "Run sanctions / PEP screening on a payment-schedule line and record the outcome (clear, hit, or manually cleared).",
+    "category": "Claims",
+    "tier": "special",
+    "parent_slug": "navigation:claims_payments",
+    "display_order": 99
+  },
+  {
+    "slug": "claims_pay:recovery_confirm",
+    "name": "Confirm Reinsurance Recovery Raised",
+    "description": "Confirm that a reinsurance recovery has been raised against a flagged payment-schedule line.",
+    "category": "Claims",
+    "tier": "special",
+    "parent_slug": "navigation:claims_payments",
+    "display_order": 100
+  },
+  {
+    "slug": "claims_pay:view_exceptions",
+    "name": "View Payment Exceptions",
+    "description": "Open the cross-schedule payment-exceptions queue showing failed and unmatched bank reconciliations.",
+    "category": "Claims",
+    "tier": "special",
+    "parent_slug": "navigation:claims_payments",
+    "display_order": 101
+  },
 
   {
     "slug": "navigation:manage_bordereaux",

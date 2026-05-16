@@ -3629,8 +3629,11 @@ type GroupSchemeClaimStatusAudit struct {
 }
 
 // ClaimPaymentSchedule represents a batch of approved claims collected for payment disbursement.
-// After creation the included claims are moved to "submitted_for_payment".
-// Once a proof of payment is uploaded and confirmed, claims move to "paid".
+// Lifecycle: draft → claims_signed_off → finance_in_review → finance_first_authorised
+// → finance_second_authorised → submitted_to_bank → confirmed → archived.
+// LockedAt is set the moment a schedule is generated — once non-null the schedule
+// is immutable except for removal of line items (which sends the claim back to
+// "approved" and surfaces it for the next cut-off).
 // Table name: claim_payment_schedules
 type ClaimPaymentSchedule struct {
 	ID             int    `json:"id" gorm:"primaryKey;autoIncrement"`
@@ -3638,21 +3641,39 @@ type ClaimPaymentSchedule struct {
 	Description    string `json:"description"`
 	// Short free-text note for quick context (≤30 chars).
 	Notes string `json:"notes" gorm:"type:varchar(30)"`
-	// Status lifecycle: draft → submitted → confirmed
-	Status           string                     `json:"status"`
-	TotalAmount      float64                    `json:"total_amount"`
-	ClaimsCount      int                        `json:"claims_count"`
-	ExportedAt       *time.Time                 `json:"exported_at"`
-	ExportedBy       string                     `json:"exported_by"`
-	ACBFileGenerated bool                       `json:"acb_file_generated"`
-	ACBGeneratedAt   *time.Time                 `json:"acb_generated_at"`
-	ACBGeneratedBy   string                     `json:"acb_generated_by"`
-	BankProfileID    *int                       `json:"bank_profile_id"`
-	CreatedBy        string                     `json:"created_by"`
-	CreatedAt        time.Time                  `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt        time.Time                  `json:"updated_at" gorm:"autoUpdateTime"`
-	Items            []ClaimPaymentScheduleItem `json:"items" gorm:"foreignKey:ScheduleID;references:ID"`
-	ProofOfPayments  []ClaimPaymentProof        `json:"proof_of_payments" gorm:"foreignKey:ScheduleID;references:ID"`
+	// Status lifecycle: see comment above.
+	Status      string  `json:"status"`
+	TotalAmount float64 `json:"total_amount"`
+	// Header totals captured at generation time so finance never works off live
+	// claim records that could change underneath the schedule.
+	GrossTotal      float64    `json:"gross_total"`
+	DeductionsTotal float64    `json:"deductions_total"`
+	NetTotal        float64    `json:"net_total"`
+	ClaimsCount     int        `json:"claims_count"`
+	LockedAt        *time.Time `json:"locked_at"`
+	// Sign-off & dual-auth audit (snapshot of who, when).
+	HeadOfClaimsSignedBy string     `json:"head_of_claims_signed_by"`
+	HeadOfClaimsSignedAt *time.Time `json:"head_of_claims_signed_at"`
+	FinanceReviewStartedBy string   `json:"finance_review_started_by"`
+	FinanceReviewStartedAt *time.Time `json:"finance_review_started_at"`
+	FinanceFirstAuthBy   string     `json:"finance_first_auth_by"`
+	FinanceFirstAuthAt   *time.Time `json:"finance_first_auth_at"`
+	FinanceSecondAuthBy  string     `json:"finance_second_auth_by"`
+	FinanceSecondAuthAt  *time.Time `json:"finance_second_auth_at"`
+	SubmittedToBankAt    *time.Time `json:"submitted_to_bank_at"`
+	ArchivedAt           *time.Time `json:"archived_at"`
+	ArchivedBy           string     `json:"archived_by"`
+	ExportedAt           *time.Time `json:"exported_at"`
+	ExportedBy           string     `json:"exported_by"`
+	ACBFileGenerated     bool       `json:"acb_file_generated"`
+	ACBGeneratedAt       *time.Time `json:"acb_generated_at"`
+	ACBGeneratedBy       string     `json:"acb_generated_by"`
+	BankProfileID        *int       `json:"bank_profile_id"`
+	CreatedBy            string     `json:"created_by"`
+	CreatedAt            time.Time  `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt            time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
+	Items                []ClaimPaymentScheduleItem `json:"items" gorm:"foreignKey:ScheduleID;references:ID"`
+	ProofOfPayments      []ClaimPaymentProof        `json:"proof_of_payments" gorm:"foreignKey:ScheduleID;references:ID"`
 }
 
 // UpdatePaymentScheduleNotesRequest is the inbound payload for updating a schedule's notes.
@@ -3661,24 +3682,119 @@ type UpdatePaymentScheduleNotesRequest struct {
 }
 
 // ClaimPaymentScheduleItem links a single claim to a payment schedule.
+// LineStatus is the finance review state: pending | verified | queried | rejected.
+// queried/rejected items are detached from the schedule (ScheduleID nulled when
+// historical reference is kept, or row deleted) and the underlying claim is
+// returned to "approved" so it can be picked up on the next cut-off.
 // Table name: claim_payment_schedule_items
 type ClaimPaymentScheduleItem struct {
-	ID                int       `json:"id" gorm:"primaryKey;autoIncrement"`
-	ScheduleID        int       `json:"schedule_id" gorm:"index;not null"`
-	ClaimID           int       `json:"claim_id" gorm:"index;not null"`
-	ClaimNumber       string    `json:"claim_number"`
-	MemberName        string    `json:"member_name"`
-	MemberIDNumber    string    `json:"member_id_number"`
-	BenefitName       string    `json:"benefit_name"`
-	SchemeName        string    `json:"scheme_name"`
-	SchemeID          int       `json:"scheme_id"`
-	ClaimAmount       float64   `json:"claim_amount"`
-	BankName          string    `json:"bank_name"`
-	BankBranchCode    string    `json:"bank_branch_code"`
-	BankAccountNumber string    `json:"bank_account_number"`
-	BankAccountType   string    `json:"bank_account_type"`
-	AccountHolderName string    `json:"account_holder_name"`
-	CreatedAt         time.Time `json:"created_at" gorm:"autoCreateTime"`
+	ID                int     `json:"id" gorm:"primaryKey;autoIncrement"`
+	ScheduleID        int     `json:"schedule_id" gorm:"index;not null"`
+	ClaimID           int     `json:"claim_id" gorm:"index;not null"`
+	ClaimNumber       string  `json:"claim_number"`
+	MemberName        string  `json:"member_name"`
+	MemberIDNumber    string  `json:"member_id_number"`
+	BenefitName       string  `json:"benefit_name"`
+	SchemeName        string  `json:"scheme_name"`
+	SchemeID          int     `json:"scheme_id"`
+	ClaimAmount       float64 `json:"claim_amount"`
+	// GrossAmount mirrors ClaimAmount at schedule time for clarity. Kept
+	// separate so that adding live-claim drift detection later is cheap.
+	GrossAmount             float64 `json:"gross_amount"`
+	PremiumArrearsDeduction float64 `json:"premium_arrears_deduction"`
+	PolicyLoanDeduction     float64 `json:"policy_loan_deduction"`
+	TaxWithheld             float64 `json:"tax_withheld"`
+	NetPayable              float64 `json:"net_payable"`
+	// Beneficiary snapshot (separate from member to catch substitutions).
+	BeneficiaryName     string `json:"beneficiary_name"`
+	BeneficiaryIDNumber string `json:"beneficiary_id_number"`
+	BankName            string `json:"bank_name"`
+	BankBranchCode      string `json:"bank_branch_code"`
+	BankAccountNumber   string `json:"bank_account_number"`
+	BankAccountType     string `json:"bank_account_type"`
+	AccountHolderName   string `json:"account_holder_name"`
+	// RiskFlags is a JSON blob: {banking_change_30d, contestable,
+	// recent_reinstatement, fraud_risk_level}. Stored as portable JSON text.
+	RiskFlags JSON `json:"risk_flags"`
+	// ApprovalReference snapshots who approved this claim, when, and at what
+	// authority level — denormalised from the claim audit so finance can
+	// review without joining back into claims.
+	ApprovalReference string     `json:"approval_reference"`
+	LineStatus        string     `json:"line_status" gorm:"size:32;default:'pending'"`
+	VerifiedBy        string     `json:"verified_by"`
+	VerifiedAt        *time.Time `json:"verified_at"`
+	QueryReasonCode   string     `json:"query_reason_code" gorm:"size:64"`
+	QueryNotes        string     `json:"query_notes"`
+	QueriedBy         string     `json:"queried_by"`
+	QueriedAt         *time.Time `json:"queried_at"`
+	// Reinsurance recovery (Phase 3). When required, finance must record that
+	// the recovery has been raised (e.g. claim logged with the reinsurer)
+	// before first authorisation will pass.
+	ReinsuranceRecoveryRequired bool       `json:"reinsurance_recovery_required"`
+	ReinsuranceRecoveryAmount   float64    `json:"reinsurance_recovery_amount"`
+	ReinsuranceRecoveryRaisedBy string     `json:"reinsurance_recovery_raised_by"`
+	ReinsuranceRecoveryRaisedAt *time.Time `json:"reinsurance_recovery_raised_at"`
+	// Within-schedule duplicate beneficiary flag (Phase 3). Set when another
+	// line in the same schedule shares this beneficiary ID/name; must be
+	// manually cleared before first authorisation.
+	DuplicateBeneficiaryFlag    bool       `json:"duplicate_beneficiary_flag"`
+	DuplicateBeneficiaryCleared bool       `json:"duplicate_beneficiary_cleared"`
+	CreatedAt                   time.Time  `json:"created_at" gorm:"autoCreateTime"`
+}
+
+// ClaimPaymentScheduleQuery records a finance-raised query (or rejection) on a
+// schedule line item. Kept as a separate audit row so reason-code patterns can
+// be reported on over time, independent of whether the line is still attached
+// to a schedule.
+// Outcome lifecycle: open → resolved | cancelled.
+// Table name: claim_payment_schedule_queries
+type ClaimPaymentScheduleQuery struct {
+	ID             int        `json:"id" gorm:"primaryKey;autoIncrement"`
+	ScheduleID     int        `json:"schedule_id" gorm:"index"`
+	ScheduleItemID int        `json:"schedule_item_id" gorm:"index"`
+	ClaimID        int        `json:"claim_id" gorm:"index"`
+	ClaimNumber    string     `json:"claim_number"`
+	ReasonCode     string     `json:"reason_code" gorm:"size:64;index"`
+	Notes          string     `json:"notes"`
+	Outcome        string     `json:"outcome" gorm:"size:32;default:'open'"`
+	RaisedBy       string     `json:"raised_by"`
+	RaisedAt       time.Time  `json:"raised_at" gorm:"autoCreateTime"`
+	ResolvedBy     string     `json:"resolved_by"`
+	ResolvedAt     *time.Time `json:"resolved_at"`
+}
+
+// AuthorityMatrix gates state transitions on payment schedules by role and
+// monetary threshold. A user can perform an action if any active row matches
+// the user's role and the schedule's NetTotal falls within [MinAmount, MaxAmount].
+// MaxAmount = -1 means "no upper bound".
+// Table name: authority_matrix
+type AuthorityMatrix struct {
+	ID        int       `json:"id" gorm:"primaryKey;autoIncrement"`
+	Role      string    `json:"role" gorm:"size:64;index"`
+	Action    string    `json:"action" gorm:"size:64;index"`
+	MinAmount float64   `json:"min_amount"`
+	MaxAmount float64   `json:"max_amount"`
+	IsActive  bool      `json:"is_active" gorm:"default:true"`
+	CreatedBy string    `json:"created_by"`
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
+func (AuthorityMatrix) TableName() string {
+	return "authority_matrix"
+}
+
+// PaymentScheduleAudit records every state transition on a payment schedule.
+// Drives the daily report, compliance review, and the schedule timeline UI.
+// Table name: payment_schedule_audits
+type PaymentScheduleAudit struct {
+	ID         int       `json:"id" gorm:"primaryKey;autoIncrement"`
+	ScheduleID int       `json:"schedule_id" gorm:"index"`
+	FromStatus string    `json:"from_status" gorm:"size:64"`
+	ToStatus   string    `json:"to_status" gorm:"size:64"`
+	Actor      string    `json:"actor"`
+	Notes      string    `json:"notes"`
+	ChangedAt  time.Time `json:"changed_at" gorm:"autoCreateTime"`
 }
 
 // ACBBankProfile stores company-level config for ACB file generation. One per source bank account.

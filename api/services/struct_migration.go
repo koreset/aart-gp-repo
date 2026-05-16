@@ -502,6 +502,20 @@ func getStructType(structName string) (reflect.Type, error) {
 		return reflect.TypeOf(models.ACBFileRecord{}), nil
 	case "ACBReconciliationResult":
 		return reflect.TypeOf(models.ACBReconciliationResult{}), nil
+	case "ClaimPaymentScheduleQuery":
+		return reflect.TypeOf(models.ClaimPaymentScheduleQuery{}), nil
+	case "AuthorityMatrix":
+		return reflect.TypeOf(models.AuthorityMatrix{}), nil
+	case "PaymentScheduleAudit":
+		return reflect.TypeOf(models.PaymentScheduleAudit{}), nil
+	case "PaymentCutoffConfig":
+		return reflect.TypeOf(models.PaymentCutoffConfig{}), nil
+	case "PaymentCutoffRun":
+		return reflect.TypeOf(models.PaymentCutoffRun{}), nil
+	case "SanctionsScreening":
+		return reflect.TypeOf(models.SanctionsScreening{}), nil
+	case "PaymentTaxCertificate":
+		return reflect.TypeOf(models.PaymentTaxCertificate{}), nil
 	case "Notification":
 		return reflect.TypeOf(models.Notification{}), nil
 	case "Conversation":

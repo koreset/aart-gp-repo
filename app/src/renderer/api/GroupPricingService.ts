@@ -1056,8 +1056,10 @@ export default {
     })
   },
 
-  getPaymentSchedules() {
-    return Api.get('/group-pricing/claims/payment-schedules')
+  getPaymentSchedules(includeArchived = false) {
+    return Api.get('/group-pricing/claims/payment-schedules', {
+      params: includeArchived ? { include_archived: 1 } : {}
+    })
   },
 
   getPaymentSchedule(scheduleId) {
@@ -1180,6 +1182,194 @@ export default {
       `/group-pricing/claims/acb-files/${acbFileId}/retry`,
       payload
     )
+  },
+
+  // ──────────────────────────────────────────────
+  // Payment Schedule Lifecycle (Phase 1)
+  // ──────────────────────────────────────────────
+
+  signOffPaymentSchedule(scheduleId) {
+    return Api.post(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/signoff`
+    )
+  },
+
+  startFinanceReview(scheduleId) {
+    return Api.post(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/finance/start-review`
+    )
+  },
+
+  verifyScheduleLineItem(scheduleId, itemId) {
+    return Api.post(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/items/${itemId}/verify`
+    )
+  },
+
+  queryScheduleLineItem(scheduleId, itemId, payload) {
+    return Api.post(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/items/${itemId}/query`,
+      payload
+    )
+  },
+
+  rejectScheduleLineItem(scheduleId, itemId, payload) {
+    return Api.post(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/items/${itemId}/reject`,
+      payload
+    )
+  },
+
+  firstAuthorisePaymentSchedule(scheduleId) {
+    return Api.post(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/finance/authorise-first`
+    )
+  },
+
+  secondAuthorisePaymentSchedule(scheduleId) {
+    return Api.post(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/finance/authorise-second`
+    )
+  },
+
+  archivePaymentSchedule(scheduleId) {
+    return Api.post(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/archive`
+    )
+  },
+
+  getScheduleQueries(scheduleId) {
+    return Api.get(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/queries`
+    )
+  },
+
+  getScheduleAuditTrail(scheduleId) {
+    return Api.get(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/audit`
+    )
+  },
+
+  // Authority matrix admin
+  listAuthorityMatrix() {
+    return Api.get('/group-pricing/claims/authority-matrix')
+  },
+
+  createAuthorityMatrixRow(payload) {
+    return Api.post('/group-pricing/claims/authority-matrix', payload)
+  },
+
+  updateAuthorityMatrixRow(rowId, payload) {
+    return Api.patch(
+      `/group-pricing/claims/authority-matrix/${rowId}`,
+      payload
+    )
+  },
+
+  deleteAuthorityMatrixRow(rowId) {
+    return Api.delete(`/group-pricing/claims/authority-matrix/${rowId}`)
+  },
+
+  // ──────────────────────────────────────────────
+  // Payment cut-off (Phase 2)
+  // ──────────────────────────────────────────────
+
+  getPaymentCutoffConfig() {
+    return Api.get('/group-pricing/claims/payment-cutoff/config')
+  },
+
+  savePaymentCutoffConfig(payload) {
+    return Api.put('/group-pricing/claims/payment-cutoff/config', payload)
+  },
+
+  runPaymentCutoffNow() {
+    return Api.post('/group-pricing/claims/payment-cutoff/run')
+  },
+
+  listPaymentCutoffRuns(limit = 30) {
+    return Api.get('/group-pricing/claims/payment-cutoff/runs', {
+      params: { limit }
+    })
+  },
+
+  getNextPaymentCutoff() {
+    return Api.get('/group-pricing/claims/payment-cutoff/next')
+  },
+
+  // ──────────────────────────────────────────────
+  // Sanctions / PEP, reinsurance, duplicates (Phase 3)
+  // ──────────────────────────────────────────────
+
+  listScheduleSanctions(scheduleId) {
+    return Api.get(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/sanctions`
+    )
+  },
+
+  screenScheduleLineItem(scheduleId, itemId) {
+    return Api.post(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/items/${itemId}/screen`
+    )
+  },
+
+  recordSanctionsOutcome(scheduleId, itemId, payload) {
+    return Api.post(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/items/${itemId}/sanctions-outcome`,
+      payload
+    )
+  },
+
+  setReinsuranceRecovery(scheduleId, itemId, payload) {
+    return Api.put(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/items/${itemId}/reinsurance`,
+      payload
+    )
+  },
+
+  confirmReinsuranceRecoveryRaised(scheduleId, itemId) {
+    return Api.post(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/items/${itemId}/reinsurance/raised`
+    )
+  },
+
+  clearDuplicateBeneficiary(scheduleId, itemId) {
+    return Api.post(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/items/${itemId}/duplicate/clear`
+    )
+  },
+
+  // ──────────────────────────────────────────────
+  // Payment exceptions + tax certificates (Phase 4)
+  // ──────────────────────────────────────────────
+
+  listPaymentExceptions(params: {
+    status?: string
+    includeResolved?: boolean
+    limit?: number
+  } = {}) {
+    return Api.get('/group-pricing/claims/payment-exceptions', {
+      params: {
+        status: params.status ?? '',
+        include_resolved: params.includeResolved ? 1 : 0,
+        limit: params.limit ?? 100
+      }
+    })
+  },
+
+  getPaymentExceptionsSummary() {
+    return Api.get('/group-pricing/claims/payment-exceptions/summary')
+  },
+
+  listScheduleTaxCertificates(scheduleId) {
+    return Api.get(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/tax-certificates`
+    )
+  },
+
+  downloadTaxCertificate(certId) {
+    return Api.get(`/group-pricing/claims/tax-certificates/${certId}/download`, {
+      responseType: 'blob'
+    })
   },
 
   // Bordereaux generation methods
