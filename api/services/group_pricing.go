@@ -9414,8 +9414,12 @@ func ApplyDiscountToQuote(quoteId string, discountPct float64, user models.AppUs
 	var groupParam models.GroupPricingParameters
 	DB.Where("basis = ? AND risk_rate_code = ?", quote.Basis, quote.RiskRateCode).First(&groupParam)
 
-	// Persist the discount percentage on the quote so it is available during (re)calculation
+	// Persist the discount percentage on the quote so it is available during (re)calculation.
+	// Record the applier + timestamp so the quote list can show accountability.
+	now := time.Now()
 	quote.Loadings.Discount = discountPct
+	quote.DiscountAppliedBy = user.UserName
+	quote.DiscountAppliedAt = &now
 	DB.Save(&quote)
 
 	// Store discount as a negative fraction so it reduces TotalLoading

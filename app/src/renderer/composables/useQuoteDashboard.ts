@@ -2,8 +2,11 @@ import { ref } from 'vue'
 
 import QuoteDashboardService, {
   type DashboardFilter,
+  type OpenUserFlagBody,
   type QuoteExtractFilter,
-  type QuoteSlaTarget
+  type QuoteSlaTarget,
+  type QuoteUserFlag,
+  type UserFlagsFilter
 } from '@/renderer/api/QuoteDashboardService'
 import { useFilterPersistence } from '@/renderer/composables/useFilterPersistence'
 
@@ -30,6 +33,7 @@ export interface QuotePerformanceKpis {
   total_annual_premium: number
   pipeline_annual_premium: number
   avg_quote_value: number
+  open_flags?: QuoteUserFlag[]
 }
 
 export interface FunnelStage {
@@ -198,7 +202,16 @@ export function useQuoteExtract() {
     }
   }
 
-  return { filter, rows, total, loading, error, exporting, refresh, downloadXlsx }
+  return {
+    filter,
+    rows,
+    total,
+    loading,
+    error,
+    exporting,
+    refresh,
+    downloadXlsx
+  }
 }
 
 // useSlaTargets drives the SLA target settings screen.
@@ -243,4 +256,71 @@ export function useSlaTargets() {
   }
 
   return { targets, loading, error, refresh, save, remove }
+}
+
+// useUserFlags drives the User Flags admin screen and the inline
+// open/resolve actions on the dashboard's leaderboard card. Mirrors
+// the SLA-target composable shape so the screen-level glue is
+// familiar to anyone who has touched that feature.
+export function useUserFlags() {
+  const flags = ref<QuoteUserFlag[]>([])
+  const loading = ref(false)
+  const saving = ref(false)
+  const error = ref<string | null>(null)
+  const filter = ref<UserFlagsFilter>({ status: 'open' })
+
+  async function refresh() {
+    loading.value = true
+    error.value = null
+    try {
+      const resp = await QuoteDashboardService.listUserFlags(filter.value)
+      flags.value = resp.data || []
+    } catch (e: any) {
+      error.value = e?.response?.data?.error || e?.message || String(e)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function openFlag(body: OpenUserFlagBody) {
+    saving.value = true
+    error.value = null
+    try {
+      const resp = await QuoteDashboardService.openUserFlag(body)
+      return resp.data as QuoteUserFlag
+    } catch (e: any) {
+      error.value = e?.response?.data?.error || e?.message || String(e)
+      throw e
+    } finally {
+      saving.value = false
+    }
+  }
+
+  async function resolveFlag(id: number, resolutionNote: string) {
+    saving.value = true
+    error.value = null
+    try {
+      const resp = await QuoteDashboardService.resolveUserFlag(
+        id,
+        resolutionNote
+      )
+      return resp.data as QuoteUserFlag
+    } catch (e: any) {
+      error.value = e?.response?.data?.error || e?.message || String(e)
+      throw e
+    } finally {
+      saving.value = false
+    }
+  }
+
+  return {
+    flags,
+    loading,
+    saving,
+    error,
+    filter,
+    refresh,
+    openFlag,
+    resolveFlag
+  }
 }

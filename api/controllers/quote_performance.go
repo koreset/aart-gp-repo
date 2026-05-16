@@ -64,6 +64,10 @@ func dashboardContext(c *gin.Context) context.Context {
 }
 
 // GetQuotePerformanceKpis is GET /group-pricing/dashboard/kpis.
+//
+// Each row may carry an open_flags slice. The internal manager note is
+// only included for callers holding quote:manage_user_flags — everyone
+// else sees the flag chip but not the confidential observation.
 func GetQuotePerformanceKpis(c *gin.Context) {
 	ctx := dashboardContext(c)
 	logger := log.WithContext(ctx)
@@ -74,6 +78,16 @@ func GetQuotePerformanceKpis(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	canSeeNotes := services.UserHasPermission(c, "quote:manage_user_flags")
+	if !canSeeNotes {
+		for i := range rows {
+			if len(rows[i].OpenFlags) > 0 {
+				rows[i].OpenFlags = services.StripFlagNotes(rows[i].OpenFlags)
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, rows)
 }
 

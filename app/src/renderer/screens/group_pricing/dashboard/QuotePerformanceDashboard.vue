@@ -24,8 +24,18 @@
           variant="tonal"
           prepend-icon="mdi-timer-cog-outline"
           :to="{ name: 'group-pricing-sla-targets' }"
+          class="me-2"
         >
           SLA targets
+        </v-btn>
+        <v-btn
+          v-if="canManageUserFlags"
+          color="primary"
+          variant="tonal"
+          prepend-icon="mdi-flag-outline"
+          :to="{ name: 'group-pricing-user-flags' }"
+        >
+          User flags
         </v-btn>
       </v-col>
     </v-row>
@@ -222,17 +232,22 @@
             <div class="text-subtitle-1 font-weight-bold">
               SLA breaches by transition
             </div>
-            <v-icon
-              size="small"
-              class="ms-1 text-medium-emphasis"
-              aria-label="About this table"
-              >mdi-information-outline
-              <v-tooltip activator="parent" location="top" max-width="320">
-                Each row is one status change in the quote lifecycle (e.g. draft
-                → submitted). Compliance is the share of transitions that
-                completed within the configured SLA target.
-              </v-tooltip>
-            </v-icon>
+            <v-tooltip location="top" max-width="320">
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon="mdi-information-outline"
+                  size="x-small"
+                  variant="text"
+                  density="comfortable"
+                  class="ms-1 info-icon-btn"
+                  aria-label="About this table"
+                />
+              </template>
+              Each row is one status change in the quote lifecycle (e.g. draft →
+              submitted). Compliance is the share of transitions that completed
+              within the configured SLA target.
+            </v-tooltip>
           </div>
           <v-table density="compact" hover>
             <thead>
@@ -282,17 +297,22 @@
             <div class="text-subtitle-1 font-weight-bold">
               Users with most SLA breaches
             </div>
-            <v-icon
-              size="small"
-              class="ms-1 text-medium-emphasis"
-              aria-label="About this table"
-              >mdi-information-outline
-              <v-tooltip activator="parent" location="top" max-width="320">
-                Users ranked by the number of transitions that missed their SLA
-                target (worst first). High breach counts flag where coaching or
-                capacity attention is needed.
-              </v-tooltip>
-            </v-icon>
+            <v-tooltip location="top" max-width="320">
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon="mdi-information-outline"
+                  size="x-small"
+                  variant="text"
+                  density="comfortable"
+                  class="ms-1 info-icon-btn"
+                  aria-label="About this table"
+                />
+              </template>
+              Users ranked by the number of transitions that missed their SLA
+              target (worst first). High breach counts flag where coaching or
+              capacity attention is needed.
+            </v-tooltip>
           </div>
           <v-table density="compact" hover>
             <thead>
@@ -300,11 +320,44 @@
                 <th>User</th>
                 <th class="text-right">Transitions</th>
                 <th class="text-right">Breaches</th>
+                <th v-if="canManageUserFlags" class="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="row in sla.breaches_by_user" :key="row.user_name">
-                <td>{{ row.user_name }}</td>
+                <td>
+                  <div class="d-flex align-center flex-wrap" style="gap: 4px">
+                    <span>{{ row.user_name }}</span>
+                    <v-chip
+                      v-for="flag in openFlagsFor(row.user_name)"
+                      :key="flag.id"
+                      size="x-small"
+                      :color="
+                        flag.flag_reason === 'coaching' ? 'warning' : 'info'
+                      "
+                      variant="tonal"
+                    >
+                      <v-icon start size="x-small">mdi-flag-outline</v-icon>
+                      {{
+                        flag.flag_reason === 'coaching'
+                          ? 'Coaching'
+                          : 'Capacity'
+                      }}
+                      <v-tooltip
+                        v-if="flag.note"
+                        activator="parent"
+                        location="top"
+                        max-width="320"
+                      >
+                        <div class="text-caption font-weight-medium mb-1">
+                          {{ flag.opened_by_name }} ·
+                          {{ formatFlagDate(flag.opened_at) }}
+                        </div>
+                        <div>{{ flag.note }}</div>
+                      </v-tooltip>
+                    </v-chip>
+                  </div>
+                </td>
                 <td class="text-right">{{ row.transition_count }}</td>
                 <td class="text-right">
                   <v-chip
@@ -314,9 +367,60 @@
                     >{{ row.breach_count }}</v-chip
                   >
                 </td>
+                <td v-if="canManageUserFlags" class="text-right">
+                  <v-menu v-if="openFlagsFor(row.user_name).length">
+                    <template #activator="{ props }">
+                      <v-btn
+                        v-bind="props"
+                        icon="mdi-dots-vertical"
+                        size="x-small"
+                        variant="text"
+                        density="comfortable"
+                        aria-label="Flag actions"
+                      />
+                    </template>
+                    <v-list density="compact">
+                      <v-list-item
+                        v-for="flag in openFlagsFor(row.user_name)"
+                        :key="flag.id"
+                        prepend-icon="mdi-check-circle-outline"
+                        :title="`Resolve ${
+                          flag.flag_reason === 'coaching'
+                            ? 'coaching'
+                            : 'capacity'
+                        } flag`"
+                        @click="openResolveDialog(flag)"
+                      />
+                      <v-divider v-if="canOpenAnotherReason(row.user_name)" />
+                      <v-list-item
+                        v-if="canOpenAnotherReason(row.user_name)"
+                        prepend-icon="mdi-flag-plus-outline"
+                        title="Open the other reason"
+                        @click="openFlagDialog(row.user_name)"
+                      />
+                    </v-list>
+                  </v-menu>
+                  <v-btn
+                    v-else
+                    icon="mdi-flag-plus-outline"
+                    size="x-small"
+                    variant="text"
+                    color="primary"
+                    density="comfortable"
+                    aria-label="Flag user"
+                    @click="openFlagDialog(row.user_name)"
+                  >
+                    <v-icon>mdi-flag-plus-outline</v-icon>
+                    <v-tooltip activator="parent" location="top"
+                      >Flag user for coaching or capacity</v-tooltip
+                    >
+                  </v-btn>
+                </td>
               </tr>
               <tr v-if="!sla.breaches_by_user.length">
-                <td colspan="3" class="text-center text-medium-emphasis py-4"
+                <td
+                  :colspan="canManageUserFlags ? 4 : 3"
+                  class="text-center text-medium-emphasis py-4"
                   >No transitions recorded for this filter.</td
                 >
               </tr>
@@ -405,6 +509,17 @@
         </tbody>
       </v-table>
     </v-card>
+
+    <UserFlagDialog
+      v-model="flagDialogOpen"
+      :mode="flagDialogMode"
+      :target-name="flagDialogTarget"
+      :flag-to-resolve="flagDialogResolveTarget"
+      :saving="userFlags.saving.value"
+      :error="userFlags.error.value"
+      @submit-open="handleOpenFlag"
+      @submit-resolve="handleResolveFlag"
+    />
   </v-container>
 </template>
 
@@ -413,11 +528,17 @@ import { computed, onMounted, ref } from 'vue'
 import { AgCharts } from 'ag-charts-vue3'
 import * as ExcelJS from 'exceljs'
 
+import type {
+  OpenUserFlagBody,
+  QuoteUserFlag
+} from '@/renderer/api/QuoteDashboardService'
 import {
   useQuoteDashboard,
+  useUserFlags,
   type QuotePerformanceKpis
 } from '@/renderer/composables/useQuoteDashboard'
 import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
+import UserFlagDialog from '@/renderer/screens/group_pricing/dashboard/UserFlagDialog.vue'
 
 const {
   filters,
@@ -434,6 +555,75 @@ const {
 
 const { hasPermission } = usePermissionCheck()
 const canManageSla = computed(() => hasPermission('quote:manage_sla_targets'))
+const canManageUserFlags = computed(() =>
+  hasPermission('quote:manage_user_flags')
+)
+
+const userFlags = useUserFlags()
+
+const flagDialogOpen = ref(false)
+const flagDialogMode = ref<'open' | 'resolve'>('open')
+const flagDialogTarget = ref<string>('')
+const flagDialogResolveTarget = ref<QuoteUserFlag | null>(null)
+
+// Look up open flags for a user_name from the kpi rows already loaded
+// by the dashboard — keeps the breaches-by-user table in sync with the
+// leaderboard without an extra round-trip.
+function openFlagsFor(userName: string): QuoteUserFlag[] {
+  const kpi = kpis.value.find((k) => k.user_name === userName)
+  return kpi?.open_flags ?? []
+}
+
+// "Open another reason" is only meaningful when one of the two reasons
+// is currently open — if both coaching and capacity are open we can't
+// open a third.
+function canOpenAnotherReason(userName: string): boolean {
+  const reasons = openFlagsFor(userName).map((f) => f.flag_reason)
+  return reasons.length === 1
+}
+
+function openFlagDialog(userName: string) {
+  flagDialogMode.value = 'open'
+  flagDialogTarget.value = userName
+  flagDialogResolveTarget.value = null
+  flagDialogOpen.value = true
+}
+
+function openResolveDialog(flag: QuoteUserFlag) {
+  flagDialogMode.value = 'resolve'
+  flagDialogTarget.value = flag.user_name
+  flagDialogResolveTarget.value = flag
+  flagDialogOpen.value = true
+}
+
+async function handleOpenFlag(body: OpenUserFlagBody) {
+  try {
+    await userFlags.openFlag(body)
+    flagDialogOpen.value = false
+    await refreshAll()
+  } catch {
+    // error surfaces via userFlags.error on the dialog
+  }
+}
+
+async function handleResolveFlag(id: number, note: string) {
+  try {
+    await userFlags.resolveFlag(id, note)
+    flagDialogOpen.value = false
+    await refreshAll()
+  } catch {
+    // error surfaces via userFlags.error on the dialog
+  }
+}
+
+function formatFlagDate(iso?: string | null): string {
+  if (!iso) return ''
+  try {
+    return new Date(iso).toLocaleDateString()
+  } catch {
+    return iso
+  }
+}
 
 onMounted(() => {
   refreshAll()
@@ -988,5 +1178,25 @@ async function downloadLeaderboard() {
 .quote-performance :deep(.v-btn--variant-tonal) {
   font-weight: 600;
   letter-spacing: 0;
+}
+
+/* Card-title info icons — muted by default, accented on hover so the
+ * affordance is obvious. Implemented as v-btn (the canonical Vuetify
+ * tooltip activator) but styled to look like a plain icon. */
+.info-icon-btn {
+  color: var(--qp-text-subtle);
+  opacity: 0.85;
+  cursor: help;
+  transition:
+    color 120ms ease,
+    opacity 120ms ease;
+}
+.info-icon-btn:hover,
+.info-icon-btn:focus-visible {
+  color: var(--qp-primary);
+  opacity: 1;
+}
+.info-icon-btn :deep(.v-btn__overlay) {
+  background: transparent;
 }
 </style>

@@ -129,6 +129,15 @@
     "parent_slug": "navigation:view_quotes",
     "display_order": 48
   },
+  {
+    "slug": "quote:manage_user_flags",
+    "name": "Manage Quote User Flags",
+    "description": "Can flag users for coaching or capacity attention from the Quote Performance Dashboard, see manager notes on existing flags, and resolve open flags.",
+    "category": "Quote",
+    "tier": "special",
+    "parent_slug": "navigation:view_quotes",
+    "display_order": 49
+  },
 
   {
     "slug": "navigation:view_schemes",

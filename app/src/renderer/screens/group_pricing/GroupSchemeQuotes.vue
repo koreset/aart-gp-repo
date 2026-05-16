@@ -303,6 +303,8 @@ interface Quote {
   creation_date: string
   created_by: string
   reviewer: string
+  discount_applied_by?: string
+  discount_applied_at?: string | null
 }
 
 const confirmDeleteDialog = ref()
@@ -384,7 +386,11 @@ const headers = ref([
     value: (item: any) => parseDateString(item.creation_date)
   },
   { title: 'Submitted By', value: 'created_by' },
-  { title: 'Reviewer', value: 'reviewer' }
+  { title: 'Reviewer', value: 'reviewer' },
+  {
+    title: 'Discount By',
+    value: (item: any) => item.discount_applied_by || '—'
+  }
 ])
 
 const snakeToTitleCase = (str: string) => {

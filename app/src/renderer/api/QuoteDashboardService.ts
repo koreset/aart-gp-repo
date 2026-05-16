@@ -38,12 +38,46 @@ export interface QuoteSlaTarget {
   updated_at?: string
 }
 
+// QuoteUserFlag mirrors the Go struct. Internal `note` and
+// `resolution_note` come back empty when the caller lacks
+// quote:manage_user_flags — the dashboard's chip rendering only needs
+// reason + open/resolved state, so non-managers still get the chip.
+export interface QuoteUserFlag {
+  id: number
+  user_name: string
+  user_email: string
+  flag_reason: 'coaching' | 'capacity'
+  note: string
+  opened_by: string
+  opened_by_name: string
+  opened_at: string
+  resolved_by?: string | null
+  resolved_by_name?: string | null
+  resolved_at?: string | null
+  resolution_note?: string | null
+}
+
+export interface UserFlagsFilter {
+  status?: 'open' | 'resolved' | 'all'
+  user_name?: string
+  reason?: 'coaching' | 'capacity'
+}
+
+export interface OpenUserFlagBody {
+  user_name: string
+  user_email?: string
+  flag_reason: 'coaching' | 'capacity'
+  note: string
+}
+
 // toParams converts a DashboardFilter into the URLSearchParams-style
 // shape axios expects for query strings, expanding array fields into
 // repeated keys (users=alice&users=bob) — matching gin's c.QueryArray.
 function toParams(filter: DashboardFilter) {
   const params: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(filter as Record<string, unknown>)) {
+  for (const [key, value] of Object.entries(
+    filter as Record<string, unknown>
+  )) {
     if (value === null || value === undefined) continue
     if (Array.isArray(value)) {
       if (value.length === 0) continue
@@ -138,5 +172,19 @@ export default {
 
   deleteSlaTarget(id: number) {
     return Api.delete(`/group-pricing/dashboard/sla-targets/${id}`)
+  },
+
+  listUserFlags(filter: UserFlagsFilter = {}) {
+    return Api.get('/group-pricing/dashboard/user-flags', { params: filter })
+  },
+
+  openUserFlag(body: OpenUserFlagBody) {
+    return Api.post('/group-pricing/dashboard/user-flags', body)
+  },
+
+  resolveUserFlag(id: number, resolutionNote: string) {
+    return Api.post(`/group-pricing/dashboard/user-flags/${id}/resolve`, {
+      resolution_note: resolutionNote
+    })
   }
 }

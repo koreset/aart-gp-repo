@@ -64,9 +64,7 @@ const router = createRouter({
       path: '/group-pricing/quote-performance',
       name: 'group-pricing-quote-performance',
       component: () =>
-        import(
-          '../screens/group_pricing/dashboard/QuotePerformanceDashboard.vue'
-        ),
+        import('../screens/group_pricing/dashboard/QuotePerformanceDashboard.vue'),
       meta: { required_permission: 'quote:view_performance_dashboard' },
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
@@ -84,6 +82,14 @@ const router = createRouter({
       component: () =>
         import('../screens/group_pricing/dashboard/SlaTargetSettings.vue'),
       meta: { required_permission: 'quote:manage_sla_targets' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/quote-performance/user-flags',
+      name: 'group-pricing-user-flags',
+      component: () =>
+        import('../screens/group_pricing/dashboard/UserFlagsAdmin.vue'),
+      meta: { required_permission: 'quote:manage_user_flags' },
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {

@@ -137,6 +137,12 @@ type GroupPricingQuote struct {
 	SentBy                        string                    `json:"sent_by"`
 	ModifiedBy                    string                    `json:"modified_by"`
 	ModificationDate              time.Time                 `json:"modification_date"`
+	// DiscountAppliedBy / DiscountAppliedAt record the latest applier of
+	// Loadings.Discount. Set by services.ApplyDiscountToQuote on every
+	// discount change so the quote list can show accountability without
+	// a separate audit table.
+	DiscountAppliedBy             string                    `json:"discount_applied_by" gorm:"size:255"`
+	DiscountAppliedAt             *time.Time                `json:"discount_applied_at" gorm:"type:datetime"`
 	Status                        Status                    `json:"status"`
 	// Per-status milestone timestamps powering the Quote Performance
 	// Dashboard. Set inside the relevant service functions when the
@@ -3967,6 +3973,59 @@ type QuoteSlaTarget struct {
 	UpdatedAt       time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
+// QuoteUserFlagReason is the closed enum of reasons a manager can flag a
+// user from the Quote Performance Dashboard.
+const (
+	QuoteUserFlagReasonCoaching = "coaching"
+	QuoteUserFlagReasonCapacity = "capacity"
+)
+
+// QuoteUserFlag is an append-only record raised by a manager against a
+// user shown on the dashboard's "Users with most SLA breaches" card.
+// History is the value: a user can be flagged, resolved, and flagged
+// again — each open/resolve cycle is one row. At most one open flag per
+// (user_name, flag_reason) is enforced in the service layer (MySQL has
+// no partial unique index support).
+//
+// The internal manager note is never surfaced to the flagged user;
+// notifications fire with a neutral body so the manager's observations
+// stay confidential.
+type QuoteUserFlag struct {
+	ID             int        `json:"id" gorm:"primary_key"`
+	UserName       string     `json:"user_name" gorm:"size:255;not null;index:idx_quf_user"`
+	UserEmail      string     `json:"user_email" gorm:"size:255"`
+	FlagReason     string     `json:"flag_reason" gorm:"size:50;not null"`
+	Note           string     `json:"note"`
+	OpenedBy       string     `json:"opened_by" gorm:"size:255;not null"`
+	OpenedByName   string     `json:"opened_by_name" gorm:"size:255;not null"`
+	OpenedAt       time.Time  `json:"opened_at" gorm:"autoCreateTime;index:idx_quf_opened_at"`
+	ResolvedBy     *string    `json:"resolved_by,omitempty" gorm:"size:255"`
+	ResolvedByName *string    `json:"resolved_by_name,omitempty" gorm:"size:255"`
+	ResolvedAt     *time.Time `json:"resolved_at,omitempty"`
+	ResolutionNote *string    `json:"resolution_note,omitempty"`
+}
+
+// UserFlagsFilter is the query envelope for ListUserFlags. Empty / nil
+// fields mean "no filter on this dimension".
+type UserFlagsFilter struct {
+	Status   string `form:"status"`     // "open" | "resolved" | "all" (default "open")
+	UserName string `form:"user_name"`
+	Reason   string `form:"reason"`
+}
+
+// OpenUserFlagRequest is the body for POST /dashboard/user-flags.
+type OpenUserFlagRequest struct {
+	UserName   string `json:"user_name" binding:"required"`
+	UserEmail  string `json:"user_email"`
+	FlagReason string `json:"flag_reason" binding:"required"`
+	Note       string `json:"note" binding:"required"`
+}
+
+// ResolveUserFlagRequest is the body for POST /dashboard/user-flags/:id/resolve.
+type ResolveUserFlagRequest struct {
+	ResolutionNote string `json:"resolution_note" binding:"required"`
+}
+
 // QuotePerformanceQuery is the shared filter envelope for the KPI, funnel,
 // trend and SLA-breach dashboard endpoints. Empty slices and nil pointers
 // mean "no filter on this dimension".
@@ -4005,6 +4064,7 @@ type QuotePerformanceKpis struct {
 	TotalAnnualPremium   float64 `json:"total_annual_premium"`
 	PipelineAnnualPremium float64 `json:"pipeline_annual_premium"`
 	AvgQuoteValue        float64 `json:"avg_quote_value"`
+	OpenFlags            []QuoteUserFlag `json:"open_flags,omitempty" gorm:"-"`
 }
 
 // FunnelStage represents one row in the dashboard's volume funnel: how

@@ -183,6 +183,22 @@ func GetQuotePerformanceKpis(q models.QuotePerformanceQuery) ([]models.QuotePerf
 		result = append(result, kpi)
 	}
 
+	// Hydrate open flags onto each row in a single round-trip so the
+	// "Users with most SLA breaches" card can render the flag chips and
+	// the action affordance without a follow-up request.
+	userNames := make([]string, 0, len(result))
+	for _, r := range result {
+		userNames = append(userNames, r.UserName)
+	}
+	flagsByUser, err := OpenFlagsByUserName(userNames)
+	if err == nil {
+		for i := range result {
+			if flags, ok := flagsByUser[result[i].UserName]; ok && len(flags) > 0 {
+				result[i].OpenFlags = flags
+			}
+		}
+	}
+
 	sort.Slice(result, func(i, j int) bool { return result[i].TotalQuotes > result[j].TotalQuotes })
 	return result, nil
 }

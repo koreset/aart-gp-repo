@@ -223,6 +223,12 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.GET("dashboard/sla-targets", RequirePermission("quote:view_performance_dashboard"), controllers.GetQuoteSlaTargets)
 			groupPricing.POST("dashboard/sla-targets", RequirePermission("quote:manage_sla_targets"), controllers.PostQuoteSlaTarget)
 			groupPricing.DELETE("dashboard/sla-targets/:id", RequirePermission("quote:manage_sla_targets"), controllers.DeleteQuoteSlaTarget)
+			// User coaching / capacity flags raised from the leaderboard.
+			// GET is open to all dashboard viewers so flag chips render —
+			// the controller redacts notes for non-managers.
+			groupPricing.GET("dashboard/user-flags", RequirePermission("quote:view_performance_dashboard"), controllers.GetUserFlags)
+			groupPricing.POST("dashboard/user-flags", RequirePermission("quote:manage_user_flags"), controllers.PostUserFlag)
+			groupPricing.POST("dashboard/user-flags/:id/resolve", RequirePermission("quote:manage_user_flags"), controllers.PostResolveUserFlag)
 
 			groupPricing.GET("metadata/financial-year-info", controllers.GetFinancialYearInfo)
 			groupPricing.GET("quotes/:id/win-probability", controllers.GetQuoteWinProbability)
