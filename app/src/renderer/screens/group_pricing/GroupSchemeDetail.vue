@@ -1408,11 +1408,8 @@ const handleMemberRowClick = (event: any) => {
 const editSchemeMember = () => {
   if (!selectedSchemeMember.value) return
   router.push({
-    name: 'group-pricing-member-management',
-    query: {
-      schemeId: scheme.value.id,
-      openMemberDetails: selectedSchemeMember.value.id
-    }
+    name: 'group-pricing-member-details',
+    params: { id: selectedSchemeMember.value.id }
   })
 }
 

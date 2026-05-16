@@ -175,6 +175,15 @@ const router = createRouter({
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {
+      path: '/group-pricing/administration/member-management/:id',
+      name: 'group-pricing-member-details',
+      component: () =>
+        import('../screens/group_pricing/administration/MemberDetails.vue'),
+      props: true,
+      meta: { required_permission: 'navigation:manage_members' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
       path: '/group-pricing/administration/beneficiaries',
       name: 'group-pricing-beneficiaries-overview',
       component: () =>

@@ -246,117 +246,6 @@
       </base-card>
     </v-dialog>
 
-    <!-- Member Details Dialog -->
-    <v-dialog v-model="memberDetailsDialog" persistent max-width="1200px">
-      <base-card>
-        <template #header>
-          <div class="d-flex justify-space-between align-center">
-            <span class="headline"
-              >Member Details - {{ selectedMember?.member_name }}</span
-            >
-            <div>
-              <v-btn
-                size="small"
-                rounded
-                color="white"
-                variant="outlined"
-                class="mr-2"
-                @click="editMember"
-              >
-                Edit Member
-              </v-btn>
-              <v-btn
-                rounded
-                size="small"
-                color="error"
-                variant="outlined"
-                @click="deactivateMember"
-              >
-                Deactivate
-              </v-btn>
-            </div>
-          </div>
-        </template>
-        <template #default>
-          <member-detail-view
-            :member="selectedMember"
-            :beneficiaries="memberBeneficiaries"
-            @manage-beneficiaries="openBeneficiaryManagement"
-            @view-claims="viewMemberClaims"
-            @member-updated="handleMemberUpdated"
-          />
-        </template>
-        <template #actions>
-          <v-btn color="grey" @click="memberDetailsDialog = false">Close</v-btn>
-        </template>
-      </base-card>
-    </v-dialog>
-
-    <!-- Exit Date Confirmation Dialog -->
-    <v-dialog v-model="exitDateDialog" persistent max-width="500px">
-      <base-card>
-        <template #header>
-          <span class="headline">Confirm Member Deactivation</span>
-        </template>
-        <template #default>
-          <div class="pa-4">
-            <div class="mb-4">
-              <p class="text-body-1 mb-2">
-                You are about to deactivate
-                <strong>{{ selectedMember?.member_name }}</strong> from the
-                <strong>{{ selectedMember?.scheme_name }}</strong> scheme.
-              </p>
-              <p class="text-body-2 text-medium-emphasis">
-                Please specify the effective exit date for this member.
-              </p>
-            </div>
-
-            <v-form
-              v-model="exitDateValid"
-              @submit.prevent="confirmDeactivation"
-            >
-              <v-text-field
-                v-model="exitDate"
-                label="Effective Exit Date"
-                type="date"
-                variant="outlined"
-                :rules="exitDateRules"
-                :min="
-                  selectedMember?.entry_date
-                    ? new Date(selectedMember.entry_date)
-                        .toISOString()
-                        .substr(0, 10)
-                    : undefined
-                "
-                required
-                class="mb-4"
-              />
-
-              <div class="text-caption text-medium-emphasis mb-4">
-                <v-icon size="small" class="mr-1">mdi-information</v-icon>
-                Entry Date:
-                {{
-                  selectedMember?.entry_date
-                    ? new Date(selectedMember.entry_date).toLocaleDateString()
-                    : 'Not specified'
-                }}
-              </div>
-            </v-form>
-          </div>
-        </template>
-        <template #actions>
-          <v-btn color="grey" @click="cancelDeactivation">Cancel</v-btn>
-          <v-btn
-            color="error"
-            :disabled="!exitDateValid"
-            @click="confirmDeactivation"
-          >
-            Deactivate Member
-          </v-btn>
-        </template>
-      </base-card>
-    </v-dialog>
-
     <!-- Snackbar for notifications -->
     <v-snackbar v-model="snackbar" :timeout="4000" :color="snackbarColor">
       {{ snackbarMessage }}
@@ -371,7 +260,6 @@ import BaseCard from '@/renderer/components/BaseCard.vue'
 import DataGrid from '@/renderer/components/tables/DataGrid.vue'
 import MemberEnrollmentForm from './components/MemberEnrollmentForm.vue'
 import BulkMemberEnrollment from './components/BulkMemberEnrollment.vue'
-import MemberDetailView from './components/MemberDetailView.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import formatValues from '@/renderer/utils/format_values'
 import { statusCellRenderer } from '@/renderer/utils/statusCellRenderer'
@@ -454,7 +342,6 @@ const selectedStatus = ref<string | null>(null)
 const members = ref<Member[]>([])
 const schemes = ref<Scheme[]>([])
 const selectedMember = ref<Member | null>(null)
-const memberBeneficiaries = ref<any[]>([])
 
 // Pagination and performance state
 const totalMembers = ref(0)
@@ -474,33 +361,7 @@ const serverFilters = ref({
 // Dialog states
 const addMemberDialog = ref(false)
 const bulkEnrollmentDialog = ref(false)
-const memberDetailsDialog = ref(false)
-const exitDateDialog = ref(false)
 const isEditMode = ref(false)
-
-// Exit date form state
-const exitDate = ref('')
-const exitDateValid = ref(false)
-const exitDateRules = [
-  (v: string) => !!v || 'Exit date is required',
-  (v: string) => {
-    if (!v) return true
-    const selectedDate = new Date(v)
-    const today = new Date()
-    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
-    const entryDate = selectedMember.value?.entry_date
-      ? new Date(selectedMember.value.entry_date)
-      : null
-
-    if (selectedDate < thirtyDaysAgo) {
-      return 'Exit date cannot be more than 30 days in the past'
-    }
-    if (entryDate && selectedDate <= entryDate) {
-      return 'Exit date must be after entry date'
-    }
-    return true
-  }
-]
 
 // Snackbar
 const snackbar = ref(false)
@@ -808,37 +669,11 @@ const cancelLoading = () => {
 }
 
 const handleRowClick = (event: any) => {
-  console.log('Row clicked:', event.data)
-  selectedMember.value = event.data
-  loadMemberBeneficiaries(event.data.id)
-  memberDetailsDialog.value = true
-}
-
-const loadMemberBeneficiaries = async (memberId: number) => {
-  try {
-    // This would be implemented when beneficiary API is available
-    if (memberId == null) return
-
-    const response = await GroupPricingService.getMemberBeneficiaries(memberId)
-    memberBeneficiaries.value = response.data
-  } catch (error) {
-    console.error('Error loading beneficiaries:', error)
-  }
-
-  // loading.value = true
-  //   try {
-  //     if (memberId.value) {
-  //       // Load beneficiaries for specific member
-  //       // This would be implemented when the API is available
-  //       const response = await GroupPricingService.getMemberBeneficiaries(memberId.value)
-  //       beneficiaries.value = response.data
-  //     }
-  //   } catch (error) {
-  //     console.error('Error loading beneficiaries:', error)
-  //     showSnackbar('Error loading beneficiaries', 'error')
-  //   } finally {
-  //     loading.value = false
-  //   }
+  if (!event?.data?.id) return
+  router.push({
+    name: 'group-pricing-member-details',
+    params: { id: event.data.id }
+  })
 }
 
 const handleMemberSave = async (memberData: any) => {
@@ -869,58 +704,6 @@ const closeAddMemberDialog = () => {
   addMemberDialog.value = false
   isEditMode.value = false
   selectedMember.value = null
-}
-
-const editMember = () => {
-  isEditMode.value = true
-  memberDetailsDialog.value = false
-  addMemberDialog.value = true
-}
-
-const deactivateMember = () => {
-  if (!selectedMember.value) return
-
-  // Initialize exit date to today as default
-  exitDate.value = new Date().toISOString().substr(0, 10)
-  exitDateValid.value = false
-  exitDateDialog.value = true
-}
-
-const confirmDeactivation = async () => {
-  if (!selectedMember.value || !exitDateValid.value) return
-
-  try {
-    const today = new Date().toISOString().slice(0, 10)
-    const exitInFuture = exitDate.value > today
-
-    const memberToUpdate: any = {
-      ...selectedMember.value,
-      effective_exit_date: exitDate.value,
-      status: exitInFuture ? 'ACTIVE' : 'INACTIVE'
-    }
-    await GroupPricingService.removeMemberFromScheme(
-      selectedMember.value.scheme_id,
-      memberToUpdate
-    )
-    showSnackbar(
-      exitInFuture
-        ? `Deactivation scheduled for ${exitDate.value}`
-        : 'Member deactivated successfully',
-      'success'
-    )
-    await loadMembers()
-    memberDetailsDialog.value = false
-    exitDateDialog.value = false
-  } catch (error) {
-    console.error('Error deactivating member:', error)
-    showSnackbar('Error deactivating member', 'error')
-  }
-}
-
-const cancelDeactivation = () => {
-  exitDateDialog.value = false
-  exitDate.value = ''
-  exitDateValid.value = false
 }
 
 const handleBulkUploadComplete = (result: any) => {
@@ -995,76 +778,10 @@ const exportMembers = () => {
   URL.revokeObjectURL(url)
 }
 
-const openBeneficiaryManagement = () => {
-  if (!selectedMember.value?.id) return
-  router.push({
-    name: 'group-pricing-beneficiary-management',
-    params: { memberId: selectedMember.value.id }
-  })
-}
-
-const viewMemberClaims = () => {
-  if (!selectedMember.value?.id) return
-  router.push({
-    name: 'group-pricing-claims-management',
-    query: { memberId: selectedMember.value.id }
-  })
-}
-
-const handleMemberUpdated = async (updatedMember: any) => {
-  // Update the selected member with new data
-  selectedMember.value = updatedMember
-
-  // Refresh the member list to show updated information
-  await loadMembers()
-
-  // Show success message
-  showSnackbar('Member updated successfully', 'success')
-}
-
 const showSnackbar = (message: string, color: string = 'success') => {
   snackbarMessage.value = message
   snackbarColor.value = color
   snackbar.value = true
-}
-
-// Handle auto-opening member details when returning from beneficiary management
-const handleAutoOpenMemberDetails = async () => {
-  const memberIdToOpen = route.query.openMemberDetails
-  if (memberIdToOpen) {
-    const memberId = parseInt(memberIdToOpen as string, 10)
-    // Find the member in the loaded members or load it specifically
-    let member = members.value.find((m) => m.id === memberId)
-
-    if (!member && hasSearched.value) {
-      // If member not found in current results, try to load it specifically
-      try {
-        const memberResponse = await GroupPricingService.getMemberInfo(memberId)
-        member = memberResponse.data
-        // Add scheme name if missing
-        if (member && !member.scheme_name) {
-          const scheme = schemes.value.find((s) => s.id === member?.scheme_id)
-          member.scheme_name = scheme?.name || 'Unknown Scheme'
-        }
-      } catch (error) {
-        console.error('Error loading specific member:', error)
-        showSnackbar('Member not found', 'error')
-        return
-      }
-    }
-
-    if (member && member.id) {
-      selectedMember.value = member
-      await loadMemberBeneficiaries(member.id)
-      memberDetailsDialog.value = true
-
-      // Clear the query parameter to prevent reopening on refresh
-      router.replace({
-        name: route.name,
-        query: { ...route.query, openMemberDetails: undefined }
-      })
-    }
-  }
 }
 
 // Watch member count and update status bar whenever data changes
@@ -1104,18 +821,6 @@ onMounted(async () => {
       setTimeout(() => {
         addMemberDialog.value = true
       }, 500) // Small delay to ensure data is loaded
-    }
-
-    // Check if we need to auto-open member details (returning from beneficiary management)
-    const openMemberDetails = route.query.openMemberDetails
-    if (openMemberDetails) {
-      // Load members first if not already loaded
-      if (!hasSearched.value) {
-        await reloadMembers()
-      }
-      setTimeout(() => {
-        handleAutoOpenMemberDetails()
-      }, 500)
     }
   } catch (error) {
     console.error('Error loading schemes:', error)

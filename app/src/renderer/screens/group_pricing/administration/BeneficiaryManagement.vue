@@ -496,13 +496,13 @@ const hasGuardianAppointed = () => {
 }
 
 const goBackToMemberDetails = () => {
-  // Navigate back to member management with the member ID as a query parameter
-  // This will allow the MemberManagement view to auto-open the member details dialog
+  if (!memberId.value) {
+    router.push({ name: 'group-pricing-member-management' })
+    return
+  }
   router.push({
-    name: 'group-pricing-member-management',
-    query: {
-      openMemberDetails: memberId.value?.toString()
-    }
+    name: 'group-pricing-member-details',
+    params: { id: memberId.value.toString() }
   })
 }
 
