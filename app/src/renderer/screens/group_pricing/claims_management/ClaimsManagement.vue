@@ -175,34 +175,6 @@
       @cancel="newClaimDialog = false"
     />
 
-    <!-- Claim Details Dialog -->
-    <v-dialog v-model="claimDetailsDialog" persistent max-width="1200px">
-      <base-card>
-        <template #header>
-          <span class="headline">Claim Details</span>
-        </template>
-        <template #default>
-          <claim-detail-view
-            :claim="selectedClaim"
-            @update="handleClaimUpdate"
-            @close="claimDetailsDialog = false"
-          />
-        </template>
-        <template #actions>
-          <v-btn
-            rounded
-            class="mr-3"
-            size="small"
-            color="grey"
-            variant="outlined"
-            @click="claimDetailsDialog = false"
-          >
-            Close
-          </v-btn>
-        </template>
-      </base-card>
-    </v-dialog>
-
     <!-- Bulk Claims Upload Dialog -->
     <v-dialog v-model="bulkUploadDialog" persistent max-width="900px">
       <base-card>
@@ -274,7 +246,6 @@ import StatCard from '@/renderer/components/StatCard.vue'
 import EmptyState from '@/renderer/components/EmptyState.vue'
 import DataGrid from '@/renderer/components/tables/DataGrid.vue'
 import RegisterClaimDialog from './components/RegisterClaimDialog.vue'
-import ClaimDetailView from './components/ClaimDetailView.vue'
 import BulkClaimsUpload from './components/BulkClaimsUpload.vue'
 import ClaimPaymentSchedules from './components/ClaimPaymentSchedules.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
@@ -321,13 +292,11 @@ interface Scheme {
 const loading = ref(false)
 const claims = ref<Claim[]>([])
 const schemes = ref<Scheme[]>([])
-const selectedClaim = ref<Claim | null>(null)
 
 const router = useRouter()
 
 // Dialog states
 const newClaimDialog = ref(false)
-const claimDetailsDialog = ref(false)
 const bulkUploadDialog = ref(false)
 const paymentSchedulesDialog = ref(false)
 const confirmDialog = ref(false)
@@ -594,9 +563,12 @@ const loadSchemes = async () => {
 }
 
 const viewClaimDetails = (claim: any) => {
-  selectedClaim.value = claim.data
-
-  claimDetailsDialog.value = true
+  const claimRow = claim.data
+  if (!claimRow?.id) return
+  router.push({
+    name: 'group-pricing-claim-details',
+    params: { id: claimRow.id }
+  })
 }
 
 const handleNewClaimSave = async (claimData: any) => {
@@ -619,21 +591,6 @@ const handleNewClaimSave = async (claimData: any) => {
   } catch (error) {
     console.error('Error saving claim:', error)
     showSnackbar('Error registering claim. Please try again.', 'error')
-  } finally {
-    loading.value = false
-  }
-}
-
-const handleClaimUpdate = async (updatedClaim: Claim) => {
-  loading.value = true
-  try {
-    await GroupPricingService.updateClaim(updatedClaim.id, updatedClaim)
-    showSnackbar('Claim updated successfully', 'success')
-    claimDetailsDialog.value = false
-    await loadClaims()
-  } catch (error) {
-    console.error('Error updating claim:', error)
-    showSnackbar('Error updating claim. Please try again.', 'error')
   } finally {
     loading.value = false
   }

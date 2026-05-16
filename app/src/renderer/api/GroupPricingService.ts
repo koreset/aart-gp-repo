@@ -655,6 +655,9 @@ export default {
   getClaims() {
     return Api.get('/group-pricing/claims')
   },
+  getClaim(claimId: number | string) {
+    return Api.get(`/group-pricing/claims/${claimId}`)
+  },
   getClaimsAnalytics(
     filters: {
       scheme_id?: any

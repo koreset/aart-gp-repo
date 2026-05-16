@@ -132,7 +132,7 @@
                 variant="outlined"
                 prepend-icon="mdi-pencil"
                 :disabled="!canAssess"
-                @click="assessmentDialog = true"
+                @click="goToAssessment"
               >
                 Assess Claim
               </v-btn>
@@ -273,7 +273,7 @@
                 class="cursor-pointer"
               >
                 <template #prepend>
-                  <v-icon>{{ getDocumentIcon(doc.content_type) }}</v-icon>
+                  <v-icon>mdi-file-document-outline</v-icon>
                 </template>
                 <v-list-item-title>{{ doc.name }}</v-list-item-title>
               </v-list-item>
@@ -476,22 +476,6 @@
         </v-card>
       </v-col>
     </v-row>
-
-    <!-- Assessment Dialog -->
-    <v-dialog v-model="assessmentDialog" persistent max-width="800px">
-      <v-card>
-        <v-card-title class="bg-primary text-white"
-          >Claim Assessment</v-card-title
-        >
-        <v-card-text class="pt-4">
-          <claim-assessment-form
-            :claim="claim"
-            @save="handleAssessmentSave"
-            @cancel="assessmentDialog = false"
-          />
-        </v-card-text>
-      </v-card>
-    </v-dialog>
 
     <!-- Request Additional Info Dialog -->
     <v-dialog v-model="requestInfoDialog" persistent max-width="600px">
@@ -818,9 +802,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import ClaimAssessmentForm from './ClaimAssessmentForm.vue'
+import { useRouter } from 'vue-router'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
+import { claimDocumentTypes } from '../claimDocumentTypes'
 
 interface Props {
   claim: any
@@ -829,7 +814,6 @@ interface Props {
 interface Emits {
   (e: 'update', claim: any): void
   (e: 'close'): void
-  (e: 'assessment-created', assessment: any): void
 }
 
 interface DocumentMetadata {
@@ -839,10 +823,17 @@ interface DocumentMetadata {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+const router = useRouter()
 const { hasPermission } = usePermissionCheck()
 
+const goToAssessment = () => {
+  router.push({
+    name: 'group-pricing-claim-assess',
+    params: { id: props.claim.id }
+  })
+}
+
 // Dialog states
-const assessmentDialog = ref(false)
 const requestInfoDialog = ref(false)
 const uploadDialog = ref(false)
 const communicationDialog = ref(false)
@@ -942,430 +933,8 @@ const declineReasons = computed(() => [
   { value: 'other', text: 'Other (Specify in notes)' }
 ])
 
-const documentTypesMapping = {
-  GLA: [
-    {
-      code: 'claim_form',
-      name: 'Claim Form (official insurer form)',
-      required: true
-    },
-    {
-      code: 'certified_id_deceased',
-      name: 'Certified ID - Deceased',
-      required: true
-    },
-    {
-      code: 'certified_id_claimant',
-      name: 'Certified ID - Claimant/Beneficiaries',
-      required: true
-    },
-    {
-      code: 'death_certificate',
-      name: 'Death Certificate (BI-5)',
-      required: true
-    },
-    {
-      code: 'dha_notification',
-      name: 'DHA-1663 Notification of Death',
-      required: true
-    },
-    {
-      code: 'beneficiary_form',
-      name: 'Beneficiary Nomination Form / Employer Beneficiary Statement',
-      required: true
-    },
-    {
-      code: 'employment_proof',
-      name: 'Proof of Employment / HR Letter',
-      required: true
-    },
-    {
-      code: 'salary_confirmation',
-      name: 'Salary Confirmation / CTC / Pensionable Salary',
-      required: true
-    },
-    {
-      code: 'banking_details',
-      name: 'Banking Details - beneficiary or member',
-      required: true
-    },
-    {
-      code: 'accident_report',
-      name: 'Accident Report / Police Report (if accidental cause)',
-      required: false
-    },
-    {
-      code: 'post_mortem',
-      name: 'Post-mortem / Final BI-1680/1683',
-      required: false
-    }
-  ],
-  SGLA: [
-    {
-      code: 'claim_form',
-      name: 'Claim Form (official insurer form)',
-      required: true
-    },
-    {
-      code: 'certified_id_deceased',
-      name: 'Certified ID - Deceased',
-      required: true
-    },
-    {
-      code: 'certified_id_claimant',
-      name: 'Certified ID - Claimant/Beneficiaries',
-      required: true
-    },
-    {
-      code: 'death_certificate',
-      name: 'Death Certificate (BI-5)',
-      required: true
-    },
-    {
-      code: 'dha_notification',
-      name: 'DHA-1663 Notification of Death',
-      required: true
-    },
-    {
-      code: 'beneficiary_form',
-      name: 'Beneficiary Nomination Form / Employer Beneficiary Statement',
-      required: true
-    },
-    {
-      code: 'relationship_proof',
-      name: 'Proof of Relationship (Spouse/Child)',
-      required: true
-    },
-    {
-      code: 'employment_proof',
-      name: 'Proof of Employment / HR Letter',
-      required: true
-    },
-    {
-      code: 'salary_confirmation',
-      name: 'Salary Confirmation / CTC / Pensionable Salary',
-      required: true
-    },
-    {
-      code: 'banking_details',
-      name: 'Banking Details - beneficiary or member',
-      required: true
-    },
-    {
-      code: 'accident_report',
-      name: 'Accident Report / Police Report (if accidental cause)',
-      required: false
-    },
-    {
-      code: 'post_mortem',
-      name: 'Post-mortem / Final BI-1680/1683',
-      required: false
-    }
-  ],
-  GFF: [
-    {
-      code: 'claim_form',
-      name: 'Claim Form (official insurer form)',
-      required: true
-    },
-    {
-      code: 'certified_id_deceased',
-      name: 'Certified ID - Deceased',
-      required: true
-    },
-    {
-      code: 'certified_id_claimant',
-      name: 'Certified ID - Claimant/Beneficiaries',
-      required: true
-    },
-    {
-      code: 'death_certificate',
-      name: 'Death Certificate (BI-5)',
-      required: true
-    },
-    {
-      code: 'dha_notification',
-      name: 'DHA-1663 Notification of Death',
-      required: true
-    },
-    {
-      code: 'beneficiary_form',
-      name: 'Beneficiary Nomination Form / Employer Beneficiary Statement',
-      required: true
-    },
-    {
-      code: 'relationship_proof',
-      name: 'Proof of Relationship (Spouse/Child)',
-      required: true
-    },
-    {
-      code: 'employment_proof',
-      name: 'Proof of Employment / HR Letter',
-      required: true
-    },
-    {
-      code: 'salary_confirmation',
-      name: 'Salary Confirmation / CTC / Pensionable Salary',
-      required: true
-    },
-    {
-      code: 'banking_details',
-      name: 'Banking Details - beneficiary or member',
-      required: true
-    },
-    {
-      code: 'accident_report',
-      name: 'Accident Report / Police Report (if accidental cause)',
-      required: false
-    },
-    {
-      code: 'post_mortem',
-      name: 'Post-mortem / Final BI-1680/1683',
-      required: false
-    }
-  ],
-  PTD: [
-    {
-      code: 'claim_form',
-      name: 'Claim Form (official insurer form)',
-      required: true
-    },
-    {
-      code: 'certified_id_member',
-      name: 'Certified ID - Member',
-      required: true
-    },
-    {
-      code: 'beneficiary_form',
-      name: 'Beneficiary Nomination Form / Employer Beneficiary Statement',
-      required: false
-    },
-    {
-      code: 'employment_proof',
-      name: 'Proof of Employment / HR Letter',
-      required: true
-    },
-    {
-      code: 'salary_confirmation',
-      name: 'Salary Confirmation / CTC / Pensionable Salary',
-      required: true
-    },
-    {
-      code: 'banking_details',
-      name: 'Banking Details - beneficiary or member',
-      required: true
-    },
-    {
-      code: 'accident_report',
-      name: 'Accident Report / Police Report (if accidental cause)',
-      required: false
-    },
-    {
-      code: 'medical_reports',
-      name: 'Medical Reports - treating doctor report',
-      required: true
-    },
-    {
-      code: 'attending_doctor_statement',
-      name: "Attending Doctor's Statement (Disability/CI Report)",
-      required: true
-    },
-    {
-      code: 'specialist_report',
-      name: 'Specialist Medical Report (e.g., Oncologist, Cardiologist, Neurologist)',
-      required: false
-    },
-    {
-      code: 'employer_duties_statement',
-      name: 'Employer Statement of Duties / Job Description',
-      required: true
-    },
-    {
-      code: 'functional_capacity_assessment',
-      name: 'Functional Capacity Assessment (FCE)',
-      required: false
-    },
-    {
-      code: 'occupational_therapist_report',
-      name: 'Occupational Therapist Report',
-      required: false
-    }
-  ],
-  CI: [
-    {
-      code: 'claim_form',
-      name: 'Claim Form (official insurer form)',
-      required: true
-    },
-    {
-      code: 'certified_id_member',
-      name: 'Certified ID - Member',
-      required: true
-    },
-    {
-      code: 'beneficiary_form',
-      name: 'Beneficiary Nomination Form / Employer Beneficiary Statement',
-      required: false
-    },
-    {
-      code: 'employment_proof',
-      name: 'Proof of Employment / HR Letter',
-      required: true
-    },
-    {
-      code: 'salary_confirmation',
-      name: 'Salary Confirmation / CTC / Pensionable Salary',
-      required: true
-    },
-    {
-      code: 'banking_details',
-      name: 'Banking Details - beneficiary or member',
-      required: true
-    },
-    {
-      code: 'accident_report',
-      name: 'Accident Report / Police Report (if accidental cause)',
-      required: false
-    },
-    {
-      code: 'medical_reports',
-      name: 'Medical Reports - treating doctor report',
-      required: true
-    },
-    {
-      code: 'attending_doctor_statement',
-      name: "Attending Doctor's Statement (Disability/CI Report)",
-      required: true
-    },
-    {
-      code: 'specialist_report',
-      name: 'Specialist Medical Report (e.g., Oncologist, Cardiologist, Neurologist)',
-      required: true
-    },
-    {
-      code: 'employer_duties_statement',
-      name: 'Employer Statement of Duties / Job Description',
-      required: false
-    },
-    {
-      code: 'functional_capacity_assessment',
-      name: 'Functional Capacity Assessment (FCE)',
-      required: false
-    },
-    {
-      code: 'occupational_therapist_report',
-      name: 'Occupational Therapist Report',
-      required: false
-    }
-  ],
-  PHI: [
-    {
-      code: 'claim_form',
-      name: 'Claim Form (official insurer form)',
-      required: true
-    },
-    {
-      code: 'certified_id_member',
-      name: 'Certified ID - Member',
-      required: true
-    },
-    {
-      code: 'beneficiary_form',
-      name: 'Beneficiary Nomination Form / Employer Beneficiary Statement',
-      required: false
-    },
-    {
-      code: 'employment_proof',
-      name: 'Proof of Employment / HR Letter',
-      required: true
-    },
-    {
-      code: 'salary_confirmation',
-      name: 'Salary Confirmation / CTC / Pensionable Salary',
-      required: true
-    },
-    {
-      code: 'banking_details',
-      name: 'Banking Details - beneficiary or member',
-      required: true
-    },
-    {
-      code: 'accident_report',
-      name: 'Accident Report / Police Report (if accidental cause)',
-      required: false
-    },
-    {
-      code: 'medical_reports',
-      name: 'Medical Reports - treating doctor report',
-      required: true
-    },
-    {
-      code: 'specialist_report',
-      name: 'Specialist Medical Report (e.g., Oncologist, Cardiologist, Neurologist)',
-      required: true
-    },
-    {
-      code: 'employer_duties_statement',
-      name: 'Employer Statement of Duties / Job Description',
-      required: true
-    },
-    {
-      code: 'functional_capacity_assessment',
-      name: 'Functional Capacity Assessment (FCE)',
-      required: false
-    },
-    {
-      code: 'occupational_therapist_report',
-      name: 'Occupational Therapist Report',
-      required: false
-    },
-    {
-      code: 'psychiatric_report',
-      name: 'Psychiatric Report (if mental illness claim)',
-      required: false
-    },
-    {
-      code: 'income_loss_proof',
-      name: 'Proof of Income Loss / Sick Leave Records',
-      required: true
-    }
-  ],
-  TTD: [
-    {
-      code: 'claim_form',
-      name: 'Claim Form (official insurer form)',
-      required: true
-    },
-    {
-      code: 'certified_id_member',
-      name: 'Certified ID - Member',
-      required: true
-    },
-    {
-      code: 'medical_reports',
-      name: 'Medical Reports - treating doctor report',
-      required: true
-    },
-    {
-      code: 'banking_details',
-      name: 'Banking Details - beneficiary or member',
-      required: true
-    },
-    {
-      code: 'employment_proof',
-      name: 'Proof of Employment / HR Letter',
-      required: true
-    },
-    {
-      code: 'salary_confirmation',
-      name: 'Salary Confirmation / CTC / Pensionable Salary',
-      required: true
-    }
-  ]
-}
-
 const missingDocs = computed(() => {
-  const allDocTypes = documentTypesMapping[props.claim.benefit_code] || []
+  const allDocTypes = claimDocumentTypes[props.claim.benefit_code] || []
   const uploadedDocs = new Set(
     supportingDocuments.value.map((d) => d.document_type)
   )
@@ -1647,69 +1216,6 @@ const loadCommunications = async () => {
     // Keep existing communications on error
   } finally {
     communicationsLoading.value = false
-  }
-}
-
-const handleAssessmentSave = async (assessmentData: any) => {
-  try {
-    // Create assessment payload for backend
-    const assessmentPayload = {
-      claim_id: props.claim?.id,
-      ...assessmentData,
-      assessment_timestamp:
-        assessmentData.assessment_timestamp || new Date().toISOString()
-    }
-
-    // Save assessment to backend
-    const assessmentResponse = await GroupPricingService.createClaimAssessment(
-      assessmentPayload.claim_id,
-      assessmentPayload
-    )
-    const savedAssessment = assessmentResponse.data
-
-    // Determine claim status based on assessment outcome
-    let newStatus = 'under_assessment'
-    const outcome = assessmentData.assessment_outcome
-    if (outcome === 'refer_to_committee') {
-      newStatus = 'referred_to_committee'
-    } else if (outcome === 'committee_approved') {
-      newStatus = 'approved'
-    } else if (outcome === 'committee_declined') {
-      newStatus = 'declined'
-    } else if (outcome === 'requires_additional_info') {
-      newStatus = 'additional_info_required'
-    }
-
-    // Update claim with latest assessment info
-    const updatedClaim = {
-      ...props.claim,
-      status: newStatus,
-      last_updated: new Date().toISOString()
-    }
-
-    // Save updated claim to backend
-    await GroupPricingService.updateClaim(props.claim?.id, updatedClaim)
-
-    // Update local state only after successful backend saves
-    claimAssessments.value.unshift(savedAssessment)
-
-    // Add to assessment history timeline
-    assessmentHistory.value.unshift({
-      action: 'Assessment Update',
-      description: assessmentData.assessment_notes || 'Assessment completed',
-      assessor: assessmentData.assessor_name,
-      timestamp: assessmentData.assessment_timestamp || new Date().toISOString()
-    })
-
-    // Emit both the updated claim and the new assessment
-    emit('update', updatedClaim)
-    emit('assessment-created', savedAssessment)
-
-    assessmentDialog.value = false
-  } catch (error) {
-    console.error('Failed to save assessment:', error)
-    // TODO: Show user-friendly error message
-    // You might want to show a toast/snackbar here
   }
 }
 

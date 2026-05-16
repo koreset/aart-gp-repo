@@ -232,6 +232,24 @@ const router = createRouter({
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {
+      path: '/group-pricing/claims-management/:id',
+      name: 'group-pricing-claim-details',
+      component: () =>
+        import('../screens/group_pricing/claims_management/ClaimDetails.vue'),
+      props: true,
+      meta: { required_permission: 'navigation:manage_claims' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/claims-management/:id/assess',
+      name: 'group-pricing-claim-assess',
+      component: () =>
+        import('../screens/group_pricing/claims_management/ClaimAssessment.vue'),
+      props: true,
+      meta: { required_permission: 'claims:assess' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
       path: '/group-pricing/claims-analytics',
       name: 'group-pricing-claims-analytics',
       component: () =>
