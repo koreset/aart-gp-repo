@@ -1360,6 +1360,21 @@ export default {
     return Api.get('/group-pricing/claims/payment-exceptions/summary')
   },
 
+  exportPaymentExceptionsCSV(params: {
+    status?: string
+    includeResolved?: boolean
+    limit?: number
+  } = {}) {
+    return Api.get('/group-pricing/claims/payment-exceptions/export', {
+      params: {
+        status: params.status ?? '',
+        include_resolved: params.includeResolved ? 1 : 0,
+        limit: params.limit ?? 500
+      },
+      responseType: 'blob'
+    })
+  },
+
   listScheduleTaxCertificates(scheduleId) {
     return Api.get(
       `/group-pricing/claims/payment-schedules/${scheduleId}/tax-certificates`

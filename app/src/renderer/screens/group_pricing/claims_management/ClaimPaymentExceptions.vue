@@ -4,7 +4,7 @@
       <v-col>
         <base-card :show-actions="false">
           <template #header>
-            <div class="d-flex align-center">
+            <div class="d-flex align-center ga-3 flex-wrap">
               <v-btn
                 icon="mdi-arrow-left"
                 variant="text"
@@ -14,6 +14,18 @@
               <span class="headline">Payment Exceptions</span>
               <v-spacer />
               <v-btn
+                rounded
+                size="small"
+                variant="outlined"
+                prepend-icon="mdi-download"
+                :loading="exporting"
+                :disabled="rows.length === 0"
+                @click="exportCSV"
+              >
+                Export CSV
+              </v-btn>
+              <v-btn
+                rounded
                 size="small"
                 variant="text"
                 prepend-icon="mdi-refresh"
@@ -26,25 +38,33 @@
           </template>
 
           <template #default>
-            <v-row dense class="mb-3">
+            <v-row dense class="mb-4">
               <v-col cols="12" sm="4">
-                <v-card variant="outlined" rounded="lg" class="pa-3">
-                  <div class="text-caption text-medium-emphasis">Failed</div>
-                  <div class="text-h5 font-weight-bold">{{
+                <v-card
+                  variant="outlined"
+                  rounded="lg"
+                  class="summary-card pa-3 h-100 d-flex flex-column"
+                >
+                  <div class="summary-card__label">Failed</div>
+                  <div class="summary-card__value">{{
                     summary.outstanding_failed
                   }}</div>
-                  <div class="text-caption text-medium-emphasis"
+                  <div class="summary-card__hint"
                     >Bank rejected, awaiting retry</div
                   >
                 </v-card>
               </v-col>
               <v-col cols="12" sm="4">
-                <v-card variant="outlined" rounded="lg" class="pa-3">
-                  <div class="text-caption text-medium-emphasis">Unmatched</div>
-                  <div class="text-h5 font-weight-bold">{{
+                <v-card
+                  variant="outlined"
+                  rounded="lg"
+                  class="summary-card pa-3 h-100 d-flex flex-column"
+                >
+                  <div class="summary-card__label">Unmatched</div>
+                  <div class="summary-card__value">{{
                     summary.outstanding_unmatched
                   }}</div>
-                  <div class="text-caption text-medium-emphasis"
+                  <div class="summary-card__hint"
                     >Bank ack'd but couldn't be matched</div
                   >
                 </v-card>
@@ -53,21 +73,19 @@
                 <v-card
                   variant="outlined"
                   rounded="lg"
-                  class="pa-3"
-                  color="warning"
-                  style="border-color: rgb(var(--v-theme-warning))"
+                  class="summary-card summary-card--accent pa-3 h-100 d-flex flex-column"
                 >
-                  <div class="text-caption font-weight-medium"
-                    >Outstanding value</div
+                  <div class="summary-card__label">Outstanding value</div>
+                  <div
+                    class="summary-card__value summary-card__value--warning"
+                    >{{ formatCurrency(summary.outstanding_value) }}</div
                   >
-                  <div class="text-h5 font-weight-bold">{{
-                    formatCurrency(summary.outstanding_value)
-                  }}</div>
+                  <div class="summary-card__hint">Sum still to recover</div>
                 </v-card>
               </v-col>
             </v-row>
 
-            <div class="d-flex align-center gap-2 mb-3 flex-wrap">
+            <div class="d-flex align-center flex-wrap ga-6 mb-4">
               <v-select
                 v-model="statusFilter"
                 :items="[
@@ -78,13 +96,15 @@
                 label="Status"
                 variant="outlined"
                 density="compact"
-                style="max-width: 240px"
+                style="max-width: 240px; min-width: 200px"
                 hide-details
                 @update:model-value="load"
               />
               <v-switch
                 v-model="includeResolved"
+                inset
                 color="success"
+                base-color="grey-lighten-1"
                 label="Show resolved"
                 density="compact"
                 hide-details
@@ -164,6 +184,7 @@ const headers = [
 
 const rows = ref<any[]>([])
 const loading = ref(false)
+const exporting = ref(false)
 const statusFilter = ref('failed')
 const includeResolved = ref(false)
 const summary = reactive({
@@ -230,5 +251,73 @@ async function load() {
   }
 }
 
+async function exportCSV() {
+  exporting.value = true
+  try {
+    const res = await GroupPricingService.exportPaymentExceptionsCSV({
+      status: statusFilter.value,
+      includeResolved: includeResolved.value,
+      limit: 500
+    })
+    const blob = new Blob([res.data], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')
+    a.download = `payment_exceptions_${stamp}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e: any) {
+    snackbar.value = true
+    snackbarColor.value = 'error'
+    snackbarMessage.value =
+      e?.response?.data?.message ?? 'Failed to export payment exceptions'
+  } finally {
+    exporting.value = false
+  }
+}
+
 onMounted(load)
 </script>
+
+<style scoped>
+.summary-card {
+  min-height: 110px;
+  transition: border-color 0.15s ease;
+}
+
+.summary-card:hover {
+  border-color: rgba(var(--v-theme-primary), 0.4);
+}
+
+.summary-card--accent {
+  border-color: rgba(var(--v-theme-warning), 0.55);
+}
+
+.summary-card__label {
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  margin-bottom: 4px;
+}
+
+.summary-card__value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: rgba(var(--v-theme-on-surface), 0.95);
+}
+
+.summary-card__value--warning {
+  color: rgb(var(--v-theme-warning));
+}
+
+.summary-card__hint {
+  margin-top: auto;
+  padding-top: 4px;
+  font-size: 0.72rem;
+  color: rgba(var(--v-theme-on-surface), 0.55);
+}
+</style>

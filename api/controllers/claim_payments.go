@@ -1066,6 +1066,28 @@ func GetPaymentExceptionsSummary(c *gin.Context) {
 	OK(c, summary)
 }
 
+// ExportPaymentExceptions handles GET /claims/payment-exceptions/export
+// Honours the same status / include_resolved filters as ListPaymentExceptions
+// so the CSV matches the rows currently shown on screen.
+func ExportPaymentExceptions(c *gin.Context) {
+	req := services.ListPaymentExceptionsRequest{
+		Status:          c.Query("status"),
+		IncludeResolved: c.Query("include_resolved") == "1" || c.Query("include_resolved") == "true",
+	}
+	if limit, err := strconv.Atoi(c.Query("limit")); err == nil {
+		req.Limit = limit
+	}
+
+	data, filename, err := services.ExportPaymentExceptionsCSV(req)
+	if err != nil {
+		InternalError(c, err)
+		return
+	}
+
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Data(http.StatusOK, "text/csv", data)
+}
+
 // ListScheduleTaxCertificates handles GET /claims/payment-schedules/:schedule_id/tax-certificates
 func ListScheduleTaxCertificates(c *gin.Context) {
 	sid, ok := parseScheduleID(c)

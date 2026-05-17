@@ -1,7 +1,11 @@
 package services
 
 import (
+	"bytes"
+	"encoding/csv"
+	"fmt"
 	"strings"
+	"time"
 )
 
 // ──────────────────────────────────────────────
@@ -128,6 +132,52 @@ func ListPaymentExceptions(req ListPaymentExceptionsRequest) ([]PaymentException
 		})
 	}
 	return out, nil
+}
+
+// ExportPaymentExceptionsCSV writes the same filtered exception rows that
+// ListPaymentExceptions would return as a CSV blob. Column set mirrors the
+// table shown on the Payment Exceptions screen so the download matches what
+// the user sees.
+func ExportPaymentExceptionsCSV(req ListPaymentExceptionsRequest) ([]byte, string, error) {
+	rows, err := ListPaymentExceptions(req)
+	if err != nil {
+		return nil, "", err
+	}
+
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	_ = w.Write([]string{
+		"Claim Number", "Member", "Benefit", "Schedule", "Bank Account",
+		"Amount", "Status", "Resolved", "Failure Reason", "Bank Reference",
+		"Response Code", "Failed At",
+	})
+	for _, r := range rows {
+		resolved := "no"
+		if r.Resolved {
+			resolved = "yes"
+		}
+		_ = w.Write([]string{
+			r.ClaimNumber,
+			r.MemberName,
+			r.BenefitName,
+			r.ScheduleNumber,
+			r.AccountNumber,
+			fmt.Sprintf("%.2f", r.Amount),
+			r.Status,
+			resolved,
+			r.FailureReason,
+			r.BankReference,
+			r.ResponseCode,
+			r.CreatedAt,
+		})
+	}
+	w.Flush()
+	if err := w.Error(); err != nil {
+		return nil, "", err
+	}
+
+	filename := fmt.Sprintf("payment_exceptions_%s.csv", time.Now().Format("20060102_150405"))
+	return buf.Bytes(), filename, nil
 }
 
 // PaymentExceptionsSummary is the KPI strip on the exceptions screen.

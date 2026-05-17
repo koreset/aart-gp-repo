@@ -14,7 +14,7 @@
                 />
                 <span class="headline">Payment Schedules</span>
               </div>
-              <div class="d-flex gap-2 align-center flex-wrap">
+              <div class="d-flex ga-3 align-center flex-wrap">
                 <v-chip
                   v-if="nextCutoff"
                   color="indigo"
@@ -29,7 +29,6 @@
                   v-if="hasPermission('claims_pay:run_cutoff')"
                   rounded
                   size="small"
-                  color="indigo"
                   variant="outlined"
                   prepend-icon="mdi-play-circle-outline"
                   :loading="runningCutoff"
@@ -41,20 +40,24 @@
                   v-if="hasPermission('claims_pay:admin_cutoff')"
                   rounded
                   size="small"
-                  variant="text"
+                  variant="outlined"
                   prepend-icon="mdi-cog-outline"
                   :to="{ name: 'group-pricing-payment-cutoff-settings' }"
                 >
                   Cut-off settings
                 </v-btn>
-                <v-switch
-                  v-model="showArchived"
-                  color="primary"
-                  density="compact"
-                  hide-details
-                  label="Show archived"
-                  @update:model-value="loadSchedules"
-                />
+                <div class="d-flex align-center">
+                  <v-switch
+                    v-model="showArchived"
+                    inset
+                    color="success"
+                    base-color="grey-lighten-1"
+                    density="compact"
+                    hide-details
+                    label="Show archived"
+                    @update:model-value="loadSchedules"
+                  />
+                </div>
                 <v-btn
                   v-if="hasPermission('claims_pay:manage_bank_profiles')"
                   rounded

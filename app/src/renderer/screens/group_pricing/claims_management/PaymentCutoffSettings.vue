@@ -17,7 +17,7 @@
 
           <template #default>
             <v-alert
-              type="info"
+              color="primary"
               variant="tonal"
               density="compact"
               icon="mdi-information-outline"
@@ -35,10 +35,12 @@
 
             <v-switch
               v-model="form.enabled"
+              inset
               color="success"
+              base-color="grey-lighten-1"
               label="Enable automatic cut-off generation"
               density="compact"
-              class="mb-3"
+              class="mb-4"
               hide-details
             />
 
@@ -46,21 +48,23 @@
               v-model="form.cutoff_times"
               label="Cut-off times (HH:MM, comma-separated)"
               variant="outlined"
-              density="compact"
+              density="comfortable"
+              rounded="lg"
               placeholder="11:00, 15:00"
               hint="At each time, all currently approved claims are bundled into a draft schedule."
               persistent-hint
-              class="mb-3"
+              class="mb-4"
             />
 
             <v-text-field
               v-model="form.timezone"
               label="Timezone (IANA)"
               variant="outlined"
-              density="compact"
+              density="comfortable"
+              rounded="lg"
               hint="e.g. Africa/Johannesburg. Cut-off times are interpreted in this timezone."
               persistent-hint
-              class="mb-3"
+              class="mb-4"
             />
 
             <v-text-field
@@ -68,22 +72,35 @@
               type="number"
               label="Daily payment limit (ZAR) — 0 for no limit"
               variant="outlined"
-              density="compact"
+              density="comfortable"
+              rounded="lg"
               hint="Sum of NetTotal across schedules that received first finance auth today must not exceed this."
               persistent-hint
               class="mb-4"
             />
 
-            <div class="d-flex gap-2">
+            <div class="d-flex ga-3 align-center">
               <v-btn
+                rounded
+                size="small"
                 color="primary"
+                variant="flat"
+                prepend-icon="mdi-content-save-outline"
                 :loading="saving"
                 :disabled="!canSave"
                 @click="save"
               >
                 Save settings
               </v-btn>
-              <v-btn variant="text" @click="loadConfig"> Reset </v-btn>
+              <v-btn
+                rounded
+                size="small"
+                variant="text"
+                prepend-icon="mdi-restore"
+                @click="loadConfig"
+              >
+                Reset
+              </v-btn>
             </div>
           </template>
         </base-card>
@@ -138,11 +155,17 @@
           </template>
           <template #default>
             <div v-if="next" class="text-center py-4">
+              <v-icon
+                size="32"
+                color="primary"
+                icon="mdi-clock-time-five-outline"
+                class="mb-2"
+              />
               <div class="text-overline text-medium-emphasis">Scheduled</div>
               <div class="text-h5 font-weight-bold">{{ next }}</div>
               <v-btn
                 v-if="hasPermission('claims_pay:run_cutoff')"
-                color="indigo"
+                rounded
                 class="mt-4"
                 variant="outlined"
                 size="small"

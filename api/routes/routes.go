@@ -330,6 +330,7 @@ func ConfigureRouter(router *gin.Engine) {
 			// Payment exceptions queue + tax certificates (Phase 4)
 			groupPricing.GET("claims/payment-exceptions", RequirePermission("claims_pay:view_exceptions"), controllers.ListPaymentExceptions)
 			groupPricing.GET("claims/payment-exceptions/summary", RequirePermission("claims_pay:view_exceptions"), controllers.GetPaymentExceptionsSummary)
+			groupPricing.GET("claims/payment-exceptions/export", RequirePermission("claims_pay:view_exceptions"), controllers.ExportPaymentExceptions)
 			groupPricing.GET("claims/payment-schedules/:schedule_id/tax-certificates", controllers.ListScheduleTaxCertificates)
 			groupPricing.GET("claims/tax-certificates/:cert_id/download", controllers.DownloadTaxCertificate)
 			groupPricing.GET("benefit-maps", controllers.GetBenefitMaps)

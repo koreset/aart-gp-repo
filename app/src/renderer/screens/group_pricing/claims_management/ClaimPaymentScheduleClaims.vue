@@ -1,46 +1,58 @@
 <template>
   <div v-if="schedule">
-    <!-- Schedule totals strip -->
-    <v-row dense class="mb-3">
-      <v-col cols="6" sm="3">
-        <v-card variant="outlined" rounded="lg" class="pa-3">
-          <div class="text-caption text-medium-emphasis">Claims</div>
-          <div class="text-h6 font-weight-bold">{{ schedule.claims_count }}</div>
-        </v-card>
-      </v-col>
-      <v-col cols="6" sm="3">
-        <v-card variant="outlined" rounded="lg" class="pa-3">
-          <div class="text-caption text-medium-emphasis">Gross</div>
-          <div class="text-h6 font-weight-bold">{{
-            formatCurrency(schedule.gross_total ?? schedule.total_amount)
-          }}</div>
-        </v-card>
-      </v-col>
-      <v-col cols="6" sm="3">
-        <v-card variant="outlined" rounded="lg" class="pa-3">
-          <div class="text-caption text-medium-emphasis">Deductions</div>
-          <div class="text-h6 font-weight-bold">{{
-            formatCurrency(schedule.deductions_total ?? 0)
-          }}</div>
-        </v-card>
-      </v-col>
-      <v-col cols="6" sm="3">
-        <v-card
-          variant="outlined"
-          rounded="lg"
-          class="pa-3"
-          color="primary"
-          style="border-color: rgb(var(--v-theme-primary))"
-        >
-          <div class="text-caption font-weight-medium">Net payable</div>
-          <div class="text-h6 font-weight-bold">{{
-            formatCurrency(schedule.net_total ?? schedule.total_amount)
-          }}</div>
-        </v-card>
-      </v-col>
-    </v-row>
+    <!-- ── Section: Totals ─────────────────────── -->
+    <section class="page-section">
+      <div class="section-header">
+        <span class="section-label">Totals</span>
+        <span class="section-divider" />
+      </div>
+      <v-row dense>
+        <v-col cols="12" sm="4">
+          <v-card
+            variant="outlined"
+            rounded="lg"
+            class="totals-card h-100 pa-3 d-flex flex-column"
+          >
+            <div class="totals-card__label">Gross</div>
+            <div class="totals-card__value">{{
+              formatCurrency(schedule.gross_total ?? schedule.total_amount)
+            }}</div>
+          </v-card>
+        </v-col>
+        <v-col cols="12" sm="4">
+          <v-card
+            variant="outlined"
+            rounded="lg"
+            class="totals-card h-100 pa-3 d-flex flex-column"
+          >
+            <div class="totals-card__label">Deductions</div>
+            <div class="totals-card__value">{{
+              formatCurrency(schedule.deductions_total ?? 0)
+            }}</div>
+          </v-card>
+        </v-col>
+        <v-col cols="12" sm="4">
+          <v-card
+            variant="outlined"
+            rounded="lg"
+            class="totals-card totals-card--accent h-100 pa-3 d-flex flex-column"
+          >
+            <div class="totals-card__label">Net payable</div>
+            <div class="totals-card__value totals-card__value--primary">{{
+              formatCurrency(schedule.net_total ?? schedule.total_amount)
+            }}</div>
+          </v-card>
+        </v-col>
+      </v-row>
+    </section>
 
-    <v-table density="compact" class="border rounded">
+    <!-- ── Section: Claim lines ─────────────────── -->
+    <section class="page-section">
+      <div class="section-header">
+        <span class="section-label">Claim lines</span>
+        <span class="section-divider" />
+      </div>
+      <v-table density="compact" class="border rounded">
       <thead>
         <tr>
           <th>Claim #</th>
@@ -336,7 +348,8 @@
           </td>
         </tr>
       </tbody>
-    </v-table>
+      </v-table>
+    </section>
 
     <!-- Sanctions outcome dialog (Phase 3) -->
     <v-dialog v-model="sanctionsDialog" max-width="520px">
@@ -756,3 +769,67 @@ async function onClearDuplicate(itemId: number) {
   await clearDuplicateBeneficiary(itemId)
 }
 </script>
+
+<style scoped>
+.page-section {
+  margin-bottom: 28px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.section-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: rgb(var(--v-theme-primary));
+}
+
+.section-divider {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    rgba(var(--v-theme-primary), 0.18),
+    rgba(var(--v-theme-primary), 0.02)
+  );
+}
+
+.totals-card {
+  min-height: 90px;
+  transition: border-color 0.15s ease;
+}
+
+.totals-card:hover {
+  border-color: rgba(var(--v-theme-primary), 0.4);
+}
+
+.totals-card--accent {
+  border-color: rgba(var(--v-theme-primary), 0.55);
+}
+
+.totals-card__label {
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  margin-bottom: 4px;
+}
+
+.totals-card__value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: rgba(var(--v-theme-on-surface), 0.95);
+}
+
+.totals-card__value--primary {
+  color: rgb(var(--v-theme-primary));
+}
+</style>

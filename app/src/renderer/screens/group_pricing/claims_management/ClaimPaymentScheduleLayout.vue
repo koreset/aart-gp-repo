@@ -49,39 +49,19 @@
       <v-col>
         <base-card :show-actions="false">
           <template #header>
-            <div
-              class="d-flex justify-space-between align-center flex-wrap gap-2"
-            >
-              <div class="d-flex align-center flex-wrap gap-2">
-                <v-btn
-                  icon="mdi-arrow-left"
-                  variant="text"
-                  class="mr-2"
-                  @click="goBack"
-                />
-                <span class="headline">
-                  Payment Schedule
-                  <template v-if="schedule">
-                    - {{ schedule.schedule_number }}
-                  </template>
-                </span>
-                <v-chip
-                  v-if="schedule"
-                  :color="statusColor(schedule.status)"
-                  size="small"
-                  label
-                >
-                  {{ statusLabel(schedule.status) }}
-                </v-chip>
-                <v-chip
-                  v-if="schedule?.acb_file_generated"
-                  color="teal"
-                  size="small"
-                  label
-                >
-                  ACB Generated
-                </v-chip>
-              </div>
+            <div class="d-flex align-center flex-wrap gap-2">
+              <v-btn
+                icon="mdi-arrow-left"
+                variant="text"
+                class="mr-2"
+                @click="goBack"
+              />
+              <span class="headline">
+                Payment Schedule
+                <template v-if="schedule">
+                  — {{ schedule.schedule_number }}
+                </template>
+              </span>
             </div>
           </template>
 
@@ -107,44 +87,42 @@
             />
 
             <template v-else>
-              <!-- Pipeline step indicator -->
-              <v-card variant="tonal" color="grey-lighten-5" class="pa-3 mb-4">
-                <div class="d-flex flex-wrap align-center gap-2 pipeline-strip">
-                  <template
-                    v-for="(step, idx) in PIPELINE_STATUSES"
-                    :key="step"
+              <!-- ── Section: Workflow ───────────────────── -->
+              <section class="page-section">
+                <div class="section-header">
+                  <span class="section-label">Workflow</span>
+                  <span class="section-divider" />
+                </div>
+                <div class="workflow-stepper">
+                  <div
+                    v-for="(step, idx) in pipelineSteps"
+                    :key="step.status"
+                    class="workflow-stepper__step"
+                    :class="`workflow-stepper__step--${stepTone(idx)}`"
                   >
-                    <v-chip
-                      :color="
-                        idx < currentStepIndex
-                          ? 'success'
-                          : idx === currentStepIndex
-                            ? statusColor(schedule.status)
-                            : 'grey-lighten-2'
-                      "
-                      :variant="idx <= currentStepIndex ? 'flat' : 'tonal'"
-                      size="small"
-                      label
-                    >
+                    <div class="workflow-stepper__num">
                       <v-icon
                         v-if="idx < currentStepIndex"
-                        start
-                        size="14"
+                        size="16"
                         icon="mdi-check"
                       />
-                      {{ statusLabel(step) }}
-                    </v-chip>
+                      <template v-else>{{ idx + 1 }}</template>
+                    </div>
+                    <div class="workflow-stepper__text">
+                      <div class="workflow-stepper__label">{{ step.label }}</div>
+                      <div class="workflow-stepper__sub">{{ step.sub }}</div>
+                    </div>
                     <v-icon
-                      v-if="idx < PIPELINE_STATUSES.length - 1"
-                      size="14"
-                      color="grey"
-                      icon="mdi-chevron-right"
-                    />
-                  </template>
+                      v-if="idx < pipelineSteps.length - 1"
+                      class="workflow-stepper__arrow"
+                      size="18"
+                      >mdi-chevron-right</v-icon
+                    >
+                  </div>
                 </div>
-              </v-card>
+              </section>
 
-              <!-- Locked banner -->
+              <!-- Conditional notices (locked, duplicates, sanctions) -->
               <v-alert
                 v-if="schedule.locked_at"
                 type="info"
@@ -161,7 +139,6 @@
                 </div>
               </v-alert>
 
-              <!-- Phase 3: duplicate beneficiary warning -->
               <v-alert
                 v-if="outstandingDuplicates > 0"
                 type="warning"
@@ -173,14 +150,13 @@
                 <div class="text-body-2">
                   <strong>Duplicate beneficiary detected.</strong>
                   {{ outstandingDuplicates }} line(s) share a beneficiary with
-                  another line in this schedule. Review each flagged line on
-                  the Claims tab and explicitly clear if the duplicate is
+                  another line in this schedule. Review each flagged line on the
+                  Claims tab and explicitly clear if the duplicate is
                   intentional. First finance authorisation is blocked until
                   every flag is cleared.
                 </div>
               </v-alert>
 
-              <!-- Phase 3: sanctions / reinsurance summary -->
               <v-alert
                 v-if="sanctionsBlockers > 0 || reinsuranceOutstanding > 0"
                 type="warning"
@@ -202,227 +178,215 @@
                 </div>
               </v-alert>
 
-              <!-- Action buttons strip -->
-              <v-card variant="tonal" color="grey-lighten-4" class="pa-3 mb-4">
-                <div class="d-flex align-center flex-wrap gap-2">
-                  <span
-                    class="text-body-2 font-weight-medium text-medium-emphasis mr-2"
-                    >Actions:</span
-                  >
-                  <!-- Lifecycle gate buttons (Phase 1) -->
-                  <v-btn
-                    v-if="canSignOff"
-                    variant="flat"
-                    size="small"
-                    rounded
-                    color="primary"
-                    prepend-icon="mdi-clipboard-check-outline"
-                    :loading="signingOff"
-                    @click="signOff"
-                  >
-                    Sign Off (Head of Claims)
-                  </v-btn>
-                  <v-btn
-                    v-if="canStartReview"
-                    variant="flat"
-                    size="small"
-                    rounded
-                    color="orange"
-                    prepend-icon="mdi-magnify"
-                    :loading="startingReview"
-                    @click="startFinanceReview"
-                  >
-                    Start Finance Review
-                  </v-btn>
-                  <v-btn
-                    v-if="canAuthoriseFirst"
-                    variant="flat"
-                    size="small"
-                    rounded
-                    color="deep-orange"
-                    prepend-icon="mdi-check-decagram"
-                    :loading="authorising === 'first'"
-                    @click="authoriseFirst"
-                  >
-                    Authorise (1st)
-                  </v-btn>
-                  <v-btn
-                    v-if="canAuthoriseSecond"
-                    variant="flat"
-                    size="small"
-                    rounded
-                    color="purple"
-                    prepend-icon="mdi-shield-check"
-                    :loading="authorising === 'second'"
-                    @click="authoriseSecond"
-                  >
-                    Authorise (2nd)
-                  </v-btn>
-                  <v-btn
-                    v-if="canArchive"
-                    variant="outlined"
-                    size="small"
-                    rounded
-                    color="grey-darken-1"
-                    prepend-icon="mdi-archive-outline"
-                    :loading="archiving"
-                    @click="archive"
-                  >
-                    Archive
-                  </v-btn>
-                  <v-btn
-                    variant="outlined"
-                    size="small"
-                    rounded
-                    color="info"
-                    prepend-icon="mdi-download"
-                    :loading="exporting"
-                    @click="exportSchedule"
-                  >
-                    Export CSV
-                  </v-btn>
-                  <v-tooltip
-                    v-if="hasPermission('claims_pay:generate_acb')"
-                    :disabled="!acbBlockedReason"
-                    location="bottom"
-                  >
-                    <template #activator="{ props: tipProps }">
-                      <div v-bind="tipProps">
-                        <v-btn
-                          variant="outlined"
-                          size="small"
-                          rounded
-                          color="teal"
-                          prepend-icon="mdi-file-document-outline"
-                          :disabled="!!acbBlockedReason"
-                          @click="openACBDialog"
-                        >
-                          Generate ACB
-                        </v-btn>
-                      </div>
-                    </template>
-                    {{ acbBlockedReason }}
-                  </v-tooltip>
-                  <v-btn
-                    v-if="
-                      schedule.acb_file_generated &&
-                      hasPermission('claims_pay:upload_response')
-                    "
-                    variant="outlined"
-                    size="small"
-                    rounded
-                    color="deep-purple"
-                    prepend-icon="mdi-file-upload"
-                    @click="openResponseDialog"
-                  >
-                    Upload Bank Response
-                  </v-btn>
-                  <v-btn
-                    v-if="schedule.status !== 'confirmed'"
-                    variant="flat"
-                    size="small"
-                    rounded
-                    color="success"
-                    prepend-icon="mdi-upload"
-                    @click="openProofDialog"
-                  >
-                    Upload Proof of Payment
-                  </v-btn>
-                  <v-spacer />
-                  <v-chip
-                    v-if="acbBlockedReason && hasPermission('claims_pay:generate_acb')"
-                    :color="
-                      schedule.acb_file_generated || schedule.status === 'confirmed'
-                        ? 'info'
-                        : 'warning'
-                    "
-                    size="small"
-                    variant="tonal"
-                    prepend-icon="mdi-information-outline"
-                  >
-                    {{ acbBlockedReason }}
-                  </v-chip>
+              <!-- ── Section: Actions ────────────────────── -->
+              <section class="page-section">
+                <div class="section-header">
+                  <span class="section-label">Actions</span>
+                  <span class="section-divider" />
                 </div>
-              </v-card>
-
-              <!-- Metadata grid -->
-              <v-row dense class="mb-4">
-                <v-col cols="12" sm="6" md="3">
-                  <v-card
-                    variant="outlined"
-                    rounded="lg"
-                    class="meta-card h-100 pa-3 d-flex flex-column"
-                  >
-                    <div class="meta-card__label">Claims</div>
-                    <div class="meta-card__value">{{
-                      schedule.claims_count
-                    }}</div>
-                    <div class="meta-card__hint">
-                      claim{{ schedule.claims_count === 1 ? '' : 's' }} in this
-                      schedule
-                    </div>
-                  </v-card>
-                </v-col>
-                <v-col cols="12" sm="6" md="3">
-                  <v-card
-                    variant="outlined"
-                    rounded="lg"
-                    class="meta-card h-100 pa-3 d-flex flex-column"
-                  >
-                    <div class="meta-card__label">Total Amount</div>
-                    <div class="meta-card__value">{{
-                      formatCurrency(schedule.total_amount)
-                    }}</div>
-                    <div class="meta-card__hint">payment run total</div>
-                  </v-card>
-                </v-col>
-                <v-col cols="12" sm="6" md="3">
-                  <v-card
-                    variant="outlined"
-                    rounded="lg"
-                    class="meta-card h-100 pa-3 d-flex flex-column"
-                  >
-                    <div class="meta-card__label">Created By</div>
-                    <div class="meta-card__value meta-card__value--text">{{
-                      schedule.created_by || '—'
-                    }}</div>
-                    <div class="meta-card__hint">{{
-                      formatDate(schedule.created_at)
-                    }}</div>
-                  </v-card>
-                </v-col>
-                <v-col cols="12" sm="6" md="3">
-                  <v-card
-                    variant="outlined"
-                    rounded="lg"
-                    class="meta-card h-100 pa-3 d-flex flex-column"
-                  >
-                    <div class="meta-card__label">ACB Generated By</div>
-                    <div class="meta-card__value meta-card__value--text">{{
-                      schedule.acb_generated_by || '—'
-                    }}</div>
-                    <div class="meta-card__hint">{{
-                      schedule.acb_generated_at
-                        ? formatDate(schedule.acb_generated_at)
-                        : 'Not generated'
-                    }}</div>
-                  </v-card>
-                </v-col>
-              </v-row>
-
-              <!-- Description -->
-              <v-card
-                v-if="schedule.description"
-                variant="tonal"
-                color="grey-lighten-4"
-                class="mb-4 pa-3"
-                flat
-              >
-                <div class="text-caption text-medium-emphasis"
-                  >Description</div
+                <div class="d-flex align-center flex-wrap ga-3">
+                <!-- Lifecycle gate buttons (Phase 1) -->
+                <v-btn
+                  v-if="canSignOff"
+                  variant="flat"
+                  size="small"
+                  rounded
+                  color="primary"
+                  prepend-icon="mdi-clipboard-check-outline"
+                  :loading="signingOff"
+                  @click="signOff"
                 >
-                <div class="text-body-2">{{ schedule.description }}</div>
-              </v-card>
+                  Sign Off (Head of Claims)
+                </v-btn>
+                <v-btn
+                  v-if="canStartReview"
+                  variant="flat"
+                  size="small"
+                  rounded
+                  color="primary"
+                  prepend-icon="mdi-magnify"
+                  :loading="startingReview"
+                  @click="startFinanceReview"
+                >
+                  Start Finance Review
+                </v-btn>
+                <v-btn
+                  v-if="canAuthoriseFirst"
+                  variant="flat"
+                  size="small"
+                  rounded
+                  color="primary"
+                  prepend-icon="mdi-check-decagram"
+                  :loading="authorising === 'first'"
+                  @click="authoriseFirst"
+                >
+                  Authorise (1st)
+                </v-btn>
+                <v-btn
+                  v-if="canAuthoriseSecond"
+                  variant="flat"
+                  size="small"
+                  rounded
+                  color="primary"
+                  prepend-icon="mdi-shield-check"
+                  :loading="authorising === 'second'"
+                  @click="authoriseSecond"
+                >
+                  Authorise (2nd)
+                </v-btn>
+                <v-btn
+                  variant="outlined"
+                  size="small"
+                  rounded
+                  prepend-icon="mdi-download"
+                  :loading="exporting"
+                  @click="exportSchedule"
+                >
+                  Export CSV
+                </v-btn>
+                <v-tooltip
+                  v-if="hasPermission('claims_pay:generate_acb')"
+                  :disabled="!acbBlockedReason"
+                  location="bottom"
+                >
+                  <template #activator="{ props: tipProps }">
+                    <div v-bind="tipProps">
+                      <v-btn
+                        variant="outlined"
+                        size="small"
+                        rounded
+                        prepend-icon="mdi-file-document-outline"
+                        :disabled="!!acbBlockedReason"
+                        @click="openACBDialog"
+                      >
+                        Generate ACB
+                      </v-btn>
+                    </div>
+                  </template>
+                  {{ acbBlockedReason }}
+                </v-tooltip>
+                <v-btn
+                  v-if="
+                    schedule.acb_file_generated &&
+                    hasPermission('claims_pay:upload_response')
+                  "
+                  variant="outlined"
+                  size="small"
+                  rounded
+                  prepend-icon="mdi-file-upload"
+                  @click="openResponseDialog"
+                >
+                  Upload Bank Response
+                </v-btn>
+                <v-btn
+                  v-if="canArchive"
+                  variant="outlined"
+                  size="small"
+                  rounded
+                  prepend-icon="mdi-archive-outline"
+                  :loading="archiving"
+                  @click="archive"
+                >
+                  Archive
+                </v-btn>
+                <v-spacer />
+                <v-btn
+                  v-if="schedule.status !== 'confirmed'"
+                  variant="flat"
+                  size="small"
+                  rounded
+                  color="success"
+                  prepend-icon="mdi-upload"
+                  @click="openProofDialog"
+                >
+                  Upload Proof of Payment
+                </v-btn>
+                </div>
+              </section>
+
+              <!-- ── Section: Schedule summary ───────────── -->
+              <section class="page-section">
+                <div class="section-header">
+                  <span class="section-label">Schedule summary</span>
+                  <span class="section-divider" />
+                </div>
+                <v-row dense>
+                  <v-col cols="12" sm="6" md="3">
+                    <v-card
+                      variant="outlined"
+                      rounded="lg"
+                      class="meta-card h-100 pa-3 d-flex flex-column"
+                    >
+                      <div class="meta-card__label">Claims</div>
+                      <div class="meta-card__value">{{
+                        schedule.claims_count
+                      }}</div>
+                      <div class="meta-card__hint">
+                        claim{{ schedule.claims_count === 1 ? '' : 's' }} in
+                        this schedule
+                      </div>
+                    </v-card>
+                  </v-col>
+                  <v-col cols="12" sm="6" md="3">
+                    <v-card
+                      variant="outlined"
+                      rounded="lg"
+                      class="meta-card h-100 pa-3 d-flex flex-column"
+                    >
+                      <div class="meta-card__label">Total Amount</div>
+                      <div class="meta-card__value">{{
+                        formatCurrency(schedule.total_amount)
+                      }}</div>
+                      <div class="meta-card__hint">payment run total</div>
+                    </v-card>
+                  </v-col>
+                  <v-col cols="12" sm="6" md="3">
+                    <v-card
+                      variant="outlined"
+                      rounded="lg"
+                      class="meta-card h-100 pa-3 d-flex flex-column"
+                    >
+                      <div class="meta-card__label">Created By</div>
+                      <div class="meta-card__value meta-card__value--text">{{
+                        schedule.created_by || '—'
+                      }}</div>
+                      <div class="meta-card__hint">{{
+                        formatDate(schedule.created_at)
+                      }}</div>
+                    </v-card>
+                  </v-col>
+                  <v-col cols="12" sm="6" md="3">
+                    <v-card
+                      variant="outlined"
+                      rounded="lg"
+                      class="meta-card h-100 pa-3 d-flex flex-column"
+                    >
+                      <div class="meta-card__label">ACB Generated By</div>
+                      <div class="meta-card__value meta-card__value--text">{{
+                        schedule.acb_generated_by || '—'
+                      }}</div>
+                      <div class="meta-card__hint">{{
+                        schedule.acb_generated_at
+                          ? formatDate(schedule.acb_generated_at)
+                          : 'Not generated'
+                      }}</div>
+                    </v-card>
+                  </v-col>
+                </v-row>
+
+                <v-card
+                  v-if="schedule.description"
+                  variant="tonal"
+                  color="grey-lighten-4"
+                  class="mt-3 pa-3"
+                  flat
+                >
+                  <div class="text-caption text-medium-emphasis"
+                    >Description</div
+                  >
+                  <div class="text-body-2">{{ schedule.description }}</div>
+                </v-card>
+              </section>
 
               <!-- Active tab content -->
               <router-view />
@@ -435,9 +399,7 @@
     <!-- ── ACB Generate Dialog ── -->
     <v-dialog v-model="acbDialog" persistent max-width="540px">
       <v-card rounded="lg">
-        <v-card-title class="text-h6 pa-4 pb-2"
-          >Generate ACB File</v-card-title
-        >
+        <v-card-title class="text-h6 pa-4 pb-2">Generate ACB File</v-card-title>
         <v-card-text>
           <v-alert
             type="warning"
@@ -586,8 +548,7 @@
             <div class="text-body-2">
               Uploading a proof of payment will mark
               <strong
-                >all
-                {{ schedule?.claims_count }} claim(s) ({{
+                >all {{ schedule?.claims_count }} claim(s) ({{
                   formatCurrency(schedule?.total_amount ?? 0)
                 }})</strong
               >
@@ -775,52 +736,31 @@ function formatDate(val?: string) {
   })
 }
 
-function statusLabel(status: string) {
-  const map: Record<string, string> = {
-    draft: 'Draft',
-    claims_signed_off: 'Claims Signed Off',
-    finance_in_review: 'Finance Review',
-    finance_first_authorised: '1st Auth',
-    finance_second_authorised: '2nd Auth',
-    submitted_to_bank: 'Submitted to Bank',
-    submitted: 'Submitted for Payment',
-    confirmed: 'Paid / Confirmed',
-    archived: 'Archived'
-  }
-  return map[status] ?? status
-}
-
-function statusColor(status: string) {
-  const map: Record<string, string> = {
-    draft: 'grey',
-    claims_signed_off: 'blue',
-    finance_in_review: 'orange',
-    finance_first_authorised: 'deep-orange',
-    finance_second_authorised: 'purple',
-    submitted_to_bank: 'warning',
-    submitted: 'warning',
-    confirmed: 'success',
-    archived: 'grey-darken-1',
-    approved: 'info',
-    submitted_for_payment: 'warning',
-    paid: 'success',
-    payment_failed: 'error',
-    pending: 'default',
-    declined: 'error'
-  }
-  return map[status] ?? 'default'
-}
-
-// Ordered list of pipeline statuses for the step indicator.
-const PIPELINE_STATUSES = [
-  'draft',
-  'claims_signed_off',
-  'finance_in_review',
-  'finance_first_authorised',
-  'finance_second_authorised',
-  'submitted_to_bank',
-  'confirmed'
+// Ordered pipeline steps for the workflow stepper. Each entry maps to a real
+// schedule status and supplies a label + caption shown under the step number.
+const pipelineSteps = [
+  { status: 'draft', label: 'Draft', sub: 'Created' },
+  {
+    status: 'claims_signed_off',
+    label: 'Claims Signed Off',
+    sub: 'Head of Claims'
+  },
+  { status: 'finance_in_review', label: 'Finance Review', sub: 'In review' },
+  {
+    status: 'finance_first_authorised',
+    label: '1st Authorisation',
+    sub: 'Finance'
+  },
+  {
+    status: 'finance_second_authorised',
+    label: '2nd Authorisation',
+    sub: 'Finance'
+  },
+  { status: 'submitted_to_bank', label: 'Submitted to Bank', sub: 'ACB run' },
+  { status: 'confirmed', label: 'Paid / Confirmed', sub: 'Proof uploaded' }
 ]
+
+const PIPELINE_STATUSES = pipelineSteps.map((s) => s.status)
 
 const currentStepIndex = computed(() => {
   if (!schedule.value) return -1
@@ -831,6 +771,12 @@ const currentStepIndex = computed(() => {
   if (schedule.value.status === 'archived') return PIPELINE_STATUSES.length
   return -1
 })
+
+function stepTone(idx: number) {
+  if (idx < currentStepIndex.value) return 'success'
+  if (idx === currentStepIndex.value) return 'current'
+  return 'muted'
+}
 
 function reconStatusColor(status: string) {
   const map: Record<string, string> = {
@@ -1201,7 +1147,11 @@ async function verifyLineItem(itemId: number) {
   }
 }
 
-async function queryLineItem(itemId: number, reasonCode: string, notes: string) {
+async function queryLineItem(
+  itemId: number,
+  reasonCode: string,
+  notes: string
+) {
   if (!schedule.value) return
   try {
     await GroupPricingService.queryScheduleLineItem(schedule.value.id, itemId, {
@@ -1216,13 +1166,21 @@ async function queryLineItem(itemId: number, reasonCode: string, notes: string) 
   }
 }
 
-async function rejectLineItem(itemId: number, reasonCode: string, notes: string) {
+async function rejectLineItem(
+  itemId: number,
+  reasonCode: string,
+  notes: string
+) {
   if (!schedule.value) return
   try {
-    await GroupPricingService.rejectScheduleLineItem(schedule.value.id, itemId, {
-      reason_code: reasonCode,
-      notes
-    })
+    await GroupPricingService.rejectScheduleLineItem(
+      schedule.value.id,
+      itemId,
+      {
+        reason_code: reasonCode,
+        notes
+      }
+    )
     notify('Line rejected and returned to claims.', 'warning')
     await loadSchedule()
     await loadQueries()
@@ -1296,7 +1254,9 @@ const sanctions = ref<any[]>([])
 async function loadSanctions() {
   if (!schedule.value) return
   try {
-    const res = await GroupPricingService.listScheduleSanctions(schedule.value.id)
+    const res = await GroupPricingService.listScheduleSanctions(
+      schedule.value.id
+    )
     sanctions.value = unwrap(res) ?? []
   } catch {
     sanctions.value = []
@@ -1345,7 +1305,11 @@ async function setReinsuranceRecovery(
       itemId,
       { required, amount }
     )
-    notify(required ? 'Reinsurance recovery flagged.' : 'Reinsurance recovery cleared.')
+    notify(
+      required
+        ? 'Reinsurance recovery flagged.'
+        : 'Reinsurance recovery cleared.'
+    )
     await loadSchedule()
   } catch (e: any) {
     notify(errMessage(e, 'Failed to update reinsurance recovery'), 'error')
@@ -1442,8 +1406,7 @@ const canAuthoriseSecond = computed(() => {
 const canArchive = computed(() => {
   if (!schedule.value) return false
   return (
-    schedule.value.status === 'confirmed' &&
-    hasPermission('claims_pay:archive')
+    schedule.value.status === 'confirmed' && hasPermission('claims_pay:archive')
   )
 })
 
@@ -1454,7 +1417,9 @@ const outstandingDuplicates = computed(() => {
     (i: any) =>
       i.duplicate_beneficiary_flag === true &&
       i.duplicate_beneficiary_cleared !== true &&
-      (i.line_status === 'pending' || i.line_status === 'verified' || !i.line_status)
+      (i.line_status === 'pending' ||
+        i.line_status === 'verified' ||
+        !i.line_status)
   ).length
 })
 
@@ -1468,14 +1433,16 @@ const sanctionsBlockers = computed(() => {
   }
   let count = 0
   for (const item of schedule.value.items) {
-    if (item.line_status !== 'pending' && item.line_status !== 'verified' && item.line_status) {
+    if (
+      item.line_status !== 'pending' &&
+      item.line_status !== 'verified' &&
+      item.line_status
+    ) {
       continue
     }
     const statuses = itemsById.get(item.id) ?? []
     // Block when item has no clear / manual_clear status across providers.
-    const cleared = statuses.some(
-      (s) => s === 'clear' || s === 'manual_clear'
-    )
+    const cleared = statuses.some((s) => s === 'clear' || s === 'manual_clear')
     const blocking = statuses.some(
       (s) => s === 'hit' || s === 'pending' || s === 'skipped'
     )
@@ -1492,7 +1459,9 @@ const reinsuranceOutstanding = computed(() => {
     (i: any) =>
       i.reinsurance_recovery_required &&
       !i.reinsurance_recovery_raised_at &&
-      (i.line_status === 'pending' || i.line_status === 'verified' || !i.line_status)
+      (i.line_status === 'pending' ||
+        i.line_status === 'verified' ||
+        !i.line_status)
   ).length
 })
 
@@ -1552,6 +1521,36 @@ onMounted(async () => {
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 
+/* ── Page sections ────────────────────────────────────── */
+.page-section {
+  margin-bottom: 28px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.section-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: rgb(var(--v-theme-primary));
+}
+
+.section-divider {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    rgba(var(--v-theme-primary), 0.18),
+    rgba(var(--v-theme-primary), 0.02)
+  );
+}
+
 .meta-card {
   min-height: 96px;
   transition: border-color 0.15s ease;
@@ -1590,5 +1589,80 @@ onMounted(async () => {
   padding-top: 4px;
   font-size: 0.72rem;
   color: rgba(var(--v-theme-on-surface), 0.55);
+}
+
+/* ── Workflow stepper ─────────────────────────────────── */
+.workflow-stepper {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 16px;
+  background: rgba(var(--v-theme-primary), 0.04);
+  border: 1px solid rgba(var(--v-theme-primary), 0.1);
+  border-radius: 10px;
+}
+
+.workflow-stepper__step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 0;
+  min-width: 150px;
+}
+
+.workflow-stepper__num {
+  flex: 0 0 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(var(--v-theme-on-surface), 0.35);
+}
+
+.workflow-stepper__step--muted .workflow-stepper__num {
+  background: rgba(var(--v-theme-on-surface), 0.28);
+}
+.workflow-stepper__step--current .workflow-stepper__num {
+  background: rgb(var(--v-theme-primary));
+  box-shadow: 0 0 0 4px rgba(var(--v-theme-primary), 0.18);
+}
+.workflow-stepper__step--success .workflow-stepper__num {
+  background: rgb(var(--v-theme-success));
+}
+
+.workflow-stepper__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.workflow-stepper__label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), 0.88);
+  line-height: 1.2;
+}
+
+.workflow-stepper__step--muted .workflow-stepper__label {
+  color: rgba(var(--v-theme-on-surface), 0.55);
+}
+
+.workflow-stepper__step--current .workflow-stepper__label {
+  color: rgb(var(--v-theme-primary));
+}
+
+.workflow-stepper__sub {
+  font-size: 0.7rem;
+  color: rgba(var(--v-theme-on-surface), 0.55);
+  line-height: 1.2;
+}
+
+.workflow-stepper__arrow {
+  color: rgba(var(--v-theme-primary), 0.35);
+  flex: 0 0 auto;
 }
 </style>
