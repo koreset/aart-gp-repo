@@ -132,9 +132,7 @@
                 prepend-icon="mdi-send"
                 :loading="submittingForAssessment"
                 :disabled="!claimReadyForAssessment"
-                :title="
-                  claimReadyForAssessment ? '' : missingItemsHint
-                "
+                :title="claimReadyForAssessment ? '' : missingItemsHint"
                 @click="confirmSubmitForAssessment"
               >
                 Submit for Assessment
@@ -593,8 +591,8 @@
       <v-card>
         <v-card-title class="text-h6">Submit for Assessment</v-card-title>
         <v-card-text>
-          Send this claim to the assessment queue? Once submitted, the
-          assessor will start processing it.
+          Send this claim to the assessment queue? Once submitted, the assessor
+          will start processing it.
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -988,9 +986,24 @@ const missingDocs = computed(() => {
 // hardRequiredDocsByBenefit in api/services/group_pricing.go and with
 // hardRequiredDocCodes in ClaimRegistrationForm.vue.
 const hardRequiredDocsByBenefit: Record<string, string[]> = {
-  GLA: ['claim_form', 'certified_id_deceased', 'certified_id_claimant', 'banking_details'],
-  SGLA: ['claim_form', 'certified_id_deceased', 'certified_id_claimant', 'banking_details'],
-  GFF: ['claim_form', 'certified_id_deceased', 'certified_id_claimant', 'banking_details'],
+  GLA: [
+    'claim_form',
+    'certified_id_deceased',
+    'certified_id_claimant',
+    'banking_details'
+  ],
+  SGLA: [
+    'claim_form',
+    'certified_id_deceased',
+    'certified_id_claimant',
+    'banking_details'
+  ],
+  GFF: [
+    'claim_form',
+    'certified_id_deceased',
+    'certified_id_claimant',
+    'banking_details'
+  ],
   PTD: ['claim_form', 'certified_id_member', 'banking_details'],
   CI: ['claim_form', 'certified_id_member', 'banking_details'],
   TTD: ['claim_form', 'certified_id_member', 'banking_details'],

@@ -53,8 +53,8 @@
                 >
                 <p class="text-body-2 text-medium-emphasis mb-4">
                   Only claims that are still in draft, pending, under
-                  assessment, or awaiting additional information can be
-                  edited. This claim is currently
+                  assessment, or awaiting additional information can be edited.
+                  This claim is currently
                   <strong>{{ formattedStatus }}</strong
                   >.
                 </p>

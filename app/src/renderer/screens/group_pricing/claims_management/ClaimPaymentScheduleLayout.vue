@@ -109,7 +109,9 @@
                       <template v-else>{{ idx + 1 }}</template>
                     </div>
                     <div class="workflow-stepper__text">
-                      <div class="workflow-stepper__label">{{ step.label }}</div>
+                      <div class="workflow-stepper__label">{{
+                        step.label
+                      }}</div>
                       <div class="workflow-stepper__sub">{{ step.sub }}</div>
                     </div>
                     <v-icon
@@ -185,122 +187,122 @@
                   <span class="section-divider" />
                 </div>
                 <div class="d-flex align-center flex-wrap ga-3">
-                <!-- Lifecycle gate buttons (Phase 1) -->
-                <v-btn
-                  v-if="canSignOff"
-                  variant="flat"
-                  size="small"
-                  rounded
-                  color="primary"
-                  prepend-icon="mdi-clipboard-check-outline"
-                  :loading="signingOff"
-                  @click="signOff"
-                >
-                  Sign Off (Head of Claims)
-                </v-btn>
-                <v-btn
-                  v-if="canStartReview"
-                  variant="flat"
-                  size="small"
-                  rounded
-                  color="primary"
-                  prepend-icon="mdi-magnify"
-                  :loading="startingReview"
-                  @click="startFinanceReview"
-                >
-                  Start Finance Review
-                </v-btn>
-                <v-btn
-                  v-if="canAuthoriseFirst"
-                  variant="flat"
-                  size="small"
-                  rounded
-                  color="primary"
-                  prepend-icon="mdi-check-decagram"
-                  :loading="authorising === 'first'"
-                  @click="authoriseFirst"
-                >
-                  Authorise (1st)
-                </v-btn>
-                <v-btn
-                  v-if="canAuthoriseSecond"
-                  variant="flat"
-                  size="small"
-                  rounded
-                  color="primary"
-                  prepend-icon="mdi-shield-check"
-                  :loading="authorising === 'second'"
-                  @click="authoriseSecond"
-                >
-                  Authorise (2nd)
-                </v-btn>
-                <v-btn
-                  variant="outlined"
-                  size="small"
-                  rounded
-                  prepend-icon="mdi-download"
-                  :loading="exporting"
-                  @click="exportSchedule"
-                >
-                  Export CSV
-                </v-btn>
-                <v-tooltip
-                  v-if="hasPermission('claims_pay:generate_acb')"
-                  :disabled="!acbBlockedReason"
-                  location="bottom"
-                >
-                  <template #activator="{ props: tipProps }">
-                    <div v-bind="tipProps">
-                      <v-btn
-                        variant="outlined"
-                        size="small"
-                        rounded
-                        prepend-icon="mdi-file-document-outline"
-                        :disabled="!!acbBlockedReason"
-                        @click="openACBDialog"
-                      >
-                        Generate ACB
-                      </v-btn>
-                    </div>
-                  </template>
-                  {{ acbBlockedReason }}
-                </v-tooltip>
-                <v-btn
-                  v-if="
-                    schedule.acb_file_generated &&
-                    hasPermission('claims_pay:upload_response')
-                  "
-                  variant="outlined"
-                  size="small"
-                  rounded
-                  prepend-icon="mdi-file-upload"
-                  @click="openResponseDialog"
-                >
-                  Upload Bank Response
-                </v-btn>
-                <v-btn
-                  v-if="canArchive"
-                  variant="outlined"
-                  size="small"
-                  rounded
-                  prepend-icon="mdi-archive-outline"
-                  :loading="archiving"
-                  @click="archive"
-                >
-                  Archive
-                </v-btn>
-                <v-spacer />
-                <v-btn
-                  v-if="schedule.status !== 'confirmed'"
-                  variant="flat"
-                  size="small"
-                  rounded
-                  color="success"
-                  prepend-icon="mdi-upload"
-                  @click="openProofDialog"
-                >
-                  Upload Proof of Payment
-                </v-btn>
+                  <!-- Lifecycle gate buttons (Phase 1) -->
+                  <v-btn
+                    v-if="canSignOff"
+                    variant="flat"
+                    size="small"
+                    rounded
+                    color="primary"
+                    prepend-icon="mdi-clipboard-check-outline"
+                    :loading="signingOff"
+                    @click="signOff"
+                  >
+                    Sign Off (Head of Claims)
+                  </v-btn>
+                  <v-btn
+                    v-if="canStartReview"
+                    variant="flat"
+                    size="small"
+                    rounded
+                    color="primary"
+                    prepend-icon="mdi-magnify"
+                    :loading="startingReview"
+                    @click="startFinanceReview"
+                  >
+                    Start Finance Review
+                  </v-btn>
+                  <v-btn
+                    v-if="canAuthoriseFirst"
+                    variant="flat"
+                    size="small"
+                    rounded
+                    color="primary"
+                    prepend-icon="mdi-check-decagram"
+                    :loading="authorising === 'first'"
+                    @click="authoriseFirst"
+                  >
+                    Authorise (1st)
+                  </v-btn>
+                  <v-btn
+                    v-if="canAuthoriseSecond"
+                    variant="flat"
+                    size="small"
+                    rounded
+                    color="primary"
+                    prepend-icon="mdi-shield-check"
+                    :loading="authorising === 'second'"
+                    @click="authoriseSecond"
+                  >
+                    Authorise (2nd)
+                  </v-btn>
+                  <v-btn
+                    variant="outlined"
+                    size="small"
+                    rounded
+                    prepend-icon="mdi-download"
+                    :loading="exporting"
+                    @click="exportSchedule"
+                  >
+                    Export CSV
+                  </v-btn>
+                  <v-tooltip
+                    v-if="hasPermission('claims_pay:generate_acb')"
+                    :disabled="!acbBlockedReason"
+                    location="bottom"
+                  >
+                    <template #activator="{ props: tipProps }">
+                      <div v-bind="tipProps">
+                        <v-btn
+                          variant="outlined"
+                          size="small"
+                          rounded
+                          prepend-icon="mdi-file-document-outline"
+                          :disabled="!!acbBlockedReason"
+                          @click="openACBDialog"
+                        >
+                          Generate ACB
+                        </v-btn>
+                      </div>
+                    </template>
+                    {{ acbBlockedReason }}
+                  </v-tooltip>
+                  <v-btn
+                    v-if="
+                      schedule.acb_file_generated &&
+                      hasPermission('claims_pay:upload_response')
+                    "
+                    variant="outlined"
+                    size="small"
+                    rounded
+                    prepend-icon="mdi-file-upload"
+                    @click="openResponseDialog"
+                  >
+                    Upload Bank Response
+                  </v-btn>
+                  <v-btn
+                    v-if="canArchive"
+                    variant="outlined"
+                    size="small"
+                    rounded
+                    prepend-icon="mdi-archive-outline"
+                    :loading="archiving"
+                    @click="archive"
+                  >
+                    Archive
+                  </v-btn>
+                  <v-spacer />
+                  <v-btn
+                    v-if="schedule.status !== 'confirmed'"
+                    variant="flat"
+                    size="small"
+                    rounded
+                    color="success"
+                    prepend-icon="mdi-upload"
+                    @click="openProofDialog"
+                  >
+                    Upload Proof of Payment
+                  </v-btn>
                 </div>
               </section>
 

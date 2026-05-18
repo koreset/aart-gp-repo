@@ -254,8 +254,8 @@
                         >
                         <li
                           >All claims will be created with "Pending Assessment"
-                          status initially (bulk uploads bypass the manual
-                          draft phase)</li
+                          status initially (bulk uploads bypass the manual draft
+                          phase)</li
                         >
                         <li>Maximum file size: 10MB</li>
                         <li>Maximum rows: 1000 claims per upload</li>

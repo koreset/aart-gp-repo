@@ -6,9 +6,9 @@
     </v-card-title>
     <v-card-text>
       <p class="text-caption mb-3"
-        >This attestation confirms the member is actively performing the
-        duties of their occupation on the cover date. Required before cover
-        commences for any tier-1+ member.</p
+        >This attestation confirms the member is actively performing the duties
+        of their occupation on the cover date. Required before cover commences
+        for any tier-1+ member.</p
       >
 
       <v-row dense>
@@ -66,17 +66,12 @@
           v-for="a in attestations"
           :key="a.id"
           :title="a.attested_by_name"
-          :subtitle="
-            `${a.attested_by_role || 'self'} · ${formatDate(a.attested_at)}`
-          "
+          :subtitle="`${a.attested_by_role || 'self'} · ${formatDate(a.attested_at)}`"
         >
           <template #append>
             <v-tooltip location="top">
               <template #activator="{ props: tipProps }">
-                <v-icon
-                  v-bind="tipProps"
-                  size="small"
-                  color="success"
+                <v-icon v-bind="tipProps" size="small" color="success"
                   >mdi-shield-check-outline</v-icon
                 >
               </template>

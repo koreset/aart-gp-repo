@@ -148,9 +148,7 @@
                 <v-card v-if="selectedSet" variant="outlined" rounded="lg">
                   <v-card-title class="d-flex align-center flex-wrap gap-2"
                     ><span class="font-weight-bold"
-                      >{{ selectedSet.name }} v{{
-                        selectedSet.version
-                      }}</span
+                      >{{ selectedSet.name }} v{{ selectedSet.version }}</span
                     >
                     <v-chip
                       v-if="selectedSet.active"
@@ -192,10 +190,7 @@
                         </tr>
                       </thead>
                       <tbody>
-                        <tr
-                          v-for="r in selectedSet.rules || []"
-                          :key="r.id"
-                        >
+                        <tr v-for="r in selectedSet.rules || []" :key="r.id">
                           <td>{{ r.category }}</td>
                           <td>{{ r.field }}</td>
                           <td>{{ r.op }}</td>
@@ -210,7 +205,9 @@
                               >{{ r.outcome }}</v-chip
                             >
                           </td>
-                          <td class="text-right">{{ r.loading_percent || '—' }}</td>
+                          <td class="text-right">{{
+                            r.loading_percent || '—'
+                          }}</td>
                           <td>{{ r.exclusion_code || '—' }}</td>
                           <td class="text-right">{{ r.priority }}</td>
                           <td>
@@ -250,9 +247,7 @@
                   rounded="lg"
                   class="mt-4"
                 >
-                  <v-card-title class="font-weight-bold"
-                    >Dry-run</v-card-title
-                  >
+                  <v-card-title class="font-weight-bold">Dry-run</v-card-title>
                   <v-card-text>
                     <p class="text-caption text-grey mb-2"
                       >Enter sample disclosure values and see how the engine
@@ -344,7 +339,9 @@
                             <td>{{ o.rule_id }}</td>
                             <td>{{ o.field }}</td>
                             <td>{{ o.outcome }}</td>
-                            <td class="text-right">{{ o.loading_percent || '—' }}</td>
+                            <td class="text-right">{{
+                              o.loading_percent || '—'
+                            }}</td>
                             <td>{{ o.exclusion_code || '—' }}</td>
                           </tr>
                           <tr v-if="!(dryRunResult.outcomes || []).length">
@@ -401,7 +398,9 @@
     <!-- New / Edit rule -->
     <v-dialog v-model="newRuleDialog" max-width="640">
       <v-card>
-        <v-card-title>{{ editingRuleId ? 'Edit rule' : 'Add rule' }}</v-card-title>
+        <v-card-title>{{
+          editingRuleId ? 'Edit rule' : 'Add rule'
+        }}</v-card-title>
         <v-card-text>
           <v-row dense>
             <v-col cols="12">
@@ -423,14 +422,12 @@
                 class="mt-1 mb-1"
               >
                 <div class="text-caption">
-                  <strong>What this category is for: </strong>{{
-                    selectedCategoryInfo.description
-                  }}
+                  <strong>What this category is for: </strong
+                  >{{ selectedCategoryInfo.description }}
                 </div>
                 <div class="text-caption mt-1">
-                  <strong>Standard rate assumption: </strong>{{
-                    selectedCategoryInfo.standardAssumption
-                  }}
+                  <strong>Standard rate assumption: </strong
+                  >{{ selectedCategoryInfo.standardAssumption }}
                 </div>
               </v-alert>
             </v-col>
@@ -456,14 +453,12 @@
                 icon="mdi-information-outline"
               >
                 <div class="text-caption">
-                  <strong>Standard reference: </strong>{{
-                    selectedFieldInfo.standardReference
-                  }}
+                  <strong>Standard reference: </strong
+                  >{{ selectedFieldInfo.standardReference }}
                 </div>
                 <div class="text-caption mt-1">
-                  <strong>Considered risky: </strong>{{
-                    selectedFieldInfo.riskyThreshold
-                  }}
+                  <strong>Considered risky: </strong
+                  >{{ selectedFieldInfo.riskyThreshold }}
                 </div>
               </v-alert>
             </v-col>
@@ -494,10 +489,7 @@
                 variant="outlined"
               />
             </v-col>
-            <v-col
-              v-if="newRule.op === 'between'"
-              cols="6"
-            >
+            <v-col v-if="newRule.op === 'between'" cols="6">
               <v-text-field
                 v-model="newRule.value_b"
                 label="Value B (upper bound)"
@@ -733,8 +725,7 @@ const fieldCatalog: Record<string, FieldInfo[]> = {
       title: 'bmi — Body Mass Index',
       value: 'bmi',
       standardReference: 'Standard rates assume BMI 18.5–30.',
-      riskyThreshold:
-        'BMI 30–35: typically +25%. 35–40: +50%. > 40: decline.'
+      riskyThreshold: 'BMI 30–35: typically +25%. 35–40: +50%. > 40: decline.'
     },
     {
       title: 'height_cm — Height in centimetres',
@@ -813,7 +804,8 @@ const fieldCatalog: Record<string, FieldInfo[]> = {
       title: 'condition_asthma — Disclosed asthma',
       value: 'condition_asthma',
       standardReference: 'Standard rates assume no asthma.',
-      riskyThreshold: 'Mild controlled: often accept. Severe / hospitalised: refer.'
+      riskyThreshold:
+        'Mild controlled: often accept. Severe / hospitalised: refer.'
     },
     {
       title: 'condition_cancer_history — Disclosed cancer history',
@@ -823,7 +815,8 @@ const fieldCatalog: Record<string, FieldInfo[]> = {
         'Disclosed: refer; outcome depends on type, stage, time since treatment.'
     },
     {
-      title: 'condition_cardiovascular_disease — Disclosed cardiovascular disease',
+      title:
+        'condition_cardiovascular_disease — Disclosed cardiovascular disease',
       value: 'condition_cardiovascular_disease',
       standardReference: 'Standard rates assume no cardiovascular history.',
       riskyThreshold: 'Disclosed: refer or decline.'
@@ -835,9 +828,11 @@ const fieldCatalog: Record<string, FieldInfo[]> = {
       riskyThreshold: 'Disclosed: refer; severity-dependent outcome.'
     },
     {
-      title: 'condition_mental_health_treatment — Disclosed mental health treatment',
+      title:
+        'condition_mental_health_treatment — Disclosed mental health treatment',
       value: 'condition_mental_health_treatment',
-      standardReference: 'Standard rates assume no current mental health treatment.',
+      standardReference:
+        'Standard rates assume no current mental health treatment.',
       riskyThreshold:
         'Disclosed: refer; outcome depends on diagnosis and current treatment.'
     }
@@ -927,8 +922,7 @@ const outcomeOptions = ['accept', 'refer', 'decline']
 
 // Currently-selected category info (for help text in the dialog).
 const selectedCategoryInfo = computed<CategoryInfo | null>(
-  () =>
-    categoryOptions.find((c) => c.value === newRule.value.category) || null
+  () => categoryOptions.find((c) => c.value === newRule.value.category) || null
 )
 
 // Fields available for the currently-selected category. Falls back to
@@ -941,8 +935,7 @@ const fieldsForCategory = computed<FieldInfo[]>(
 // Help block for the chosen field — appears below the field combobox.
 const selectedFieldInfo = computed<FieldInfo | null>(
   () =>
-    fieldsForCategory.value.find((f) => f.value === newRule.value.field) ||
-    null
+    fieldsForCategory.value.find((f) => f.value === newRule.value.field) || null
 )
 
 // Help line for the chosen operator — appears below the operator select.
@@ -982,7 +975,8 @@ const loadRuleSets = async () => {
     ruleSets.value = res.data || []
     if (
       ruleSets.value.length &&
-      (!selectedSet.value || !ruleSets.value.find((r) => r.id === selectedSet.value!.id))
+      (!selectedSet.value ||
+        !ruleSets.value.find((r) => r.id === selectedSet.value!.id))
     ) {
       selectRuleSet(ruleSets.value[0].id)
     }
@@ -1152,9 +1146,7 @@ const deleteRule = async (rule: any) => {
   const loading = rule.loading_percent ? ` (+${rule.loading_percent}%)` : ''
   const summary = `${category} · ${field} ${op} → ${outcome}${loading}`
   if (
-    !window.confirm(
-      `Delete this rule?\n\n${summary}\n\nThis cannot be undone.`,
-    )
+    !window.confirm(`Delete this rule?\n\n${summary}\n\nThis cannot be undone.`)
   ) {
     return
   }

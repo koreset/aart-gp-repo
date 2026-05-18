@@ -156,9 +156,7 @@
                 </p>
               </v-col>
               <v-col cols="4">
-                <p
-                  >Within FCL <span class="text-grey">(auto-accept)</span></p
-                >
+                <p>Within FCL <span class="text-grey">(auto-accept)</span></p>
               </v-col>
               <v-col cols="4">
                 <p
@@ -210,8 +208,9 @@
                   }}
                   <span class="text-caption text-grey ml-2"
                     >(original
-                    {{ roundUpToTwoDecimals(resultSummary.total_annual_premium) }},
-                    re-rated
+                    {{
+                      roundUpToTwoDecimals(resultSummary.total_annual_premium)
+                    }}, re-rated
                     {{ formatReRatedAt(resultSummary.uw_re_rated_at) }})</span
                   >
                 </v-alert>

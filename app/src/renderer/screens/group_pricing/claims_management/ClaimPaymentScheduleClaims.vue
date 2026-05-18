@@ -53,301 +53,297 @@
         <span class="section-divider" />
       </div>
       <v-table density="compact" class="border rounded">
-      <thead>
-        <tr>
-          <th>Claim #</th>
-          <th>Beneficiary</th>
-          <th>Member</th>
-          <th>Scheme / Benefit</th>
-          <th>Bank</th>
-          <th class="text-right">Gross</th>
-          <th class="text-right">Deductions</th>
-          <th class="text-right">Net</th>
-          <th>Flags</th>
-          <th>Sanctions</th>
-          <th>Reinsurance</th>
-          <th>Status</th>
-          <th v-if="isFinanceReview">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="item in schedule.items" :key="item.id">
-          <td>
-            <div class="font-weight-medium">{{ item.claim_number }}</div>
-            <div
-              v-if="item.approval_reference"
-              class="text-caption text-medium-emphasis"
-              >Approved by {{ item.approval_reference }}</div
-            >
-          </td>
-          <td>
-            <div>{{ item.beneficiary_name || item.member_name }}</div>
-            <div class="text-caption text-medium-emphasis">
-              {{ item.beneficiary_id_number || item.member_id_number }}
-              <v-tooltip
-                v-if="beneficiaryMismatch(item)"
-                text="Beneficiary differs from member — verify before paying"
+        <thead>
+          <tr>
+            <th>Claim #</th>
+            <th>Beneficiary</th>
+            <th>Member</th>
+            <th>Scheme / Benefit</th>
+            <th>Bank</th>
+            <th class="text-right">Gross</th>
+            <th class="text-right">Deductions</th>
+            <th class="text-right">Net</th>
+            <th>Flags</th>
+            <th>Sanctions</th>
+            <th>Reinsurance</th>
+            <th>Status</th>
+            <th v-if="isFinanceReview">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in schedule.items" :key="item.id">
+            <td>
+              <div class="font-weight-medium">{{ item.claim_number }}</div>
+              <div
+                v-if="item.approval_reference"
+                class="text-caption text-medium-emphasis"
+                >Approved by {{ item.approval_reference }}</div
               >
-                <template #activator="{ props: tipProps }">
-                  <v-icon
-                    v-bind="tipProps"
-                    size="14"
-                    color="warning"
-                    icon="mdi-alert-circle"
-                  />
-                </template>
-              </v-tooltip>
-            </div>
-          </td>
-          <td>
-            <div>{{ item.member_name }}</div>
-            <div class="text-caption text-medium-emphasis">{{
-              item.member_id_number
-            }}</div>
-          </td>
-          <td>
-            <div>{{ item.scheme_name }}</div>
-            <div class="text-caption text-medium-emphasis">{{
-              item.benefit_name
-            }}</div>
-          </td>
-          <td>
-            <v-chip
-              v-if="item.bank_account_number"
-              size="x-small"
-              color="teal"
-              variant="tonal"
-            >
-              {{ item.bank_name || 'Set' }}
-            </v-chip>
-            <v-chip v-else size="x-small" color="orange" variant="tonal">
-              Missing
-            </v-chip>
-          </td>
-          <td class="text-right">{{
-            formatCurrency(item.gross_amount ?? item.claim_amount)
-          }}</td>
-          <td class="text-right">
-            <v-tooltip
-              v-if="totalDeductions(item) > 0"
-              location="top"
-            >
-              <template #activator="{ props: tipProps }">
-                <span v-bind="tipProps">{{
-                  formatCurrency(totalDeductions(item))
-                }}</span>
-              </template>
-              <div class="text-caption">
-                <div
-                  >Premium arrears:
-                  {{ formatCurrency(item.premium_arrears_deduction ?? 0) }}</div
+            </td>
+            <td>
+              <div>{{ item.beneficiary_name || item.member_name }}</div>
+              <div class="text-caption text-medium-emphasis">
+                {{ item.beneficiary_id_number || item.member_id_number }}
+                <v-tooltip
+                  v-if="beneficiaryMismatch(item)"
+                  text="Beneficiary differs from member — verify before paying"
                 >
-                <div
-                  >Policy loan:
-                  {{ formatCurrency(item.policy_loan_deduction ?? 0) }}</div
-                >
-                <div
-                  >Tax withheld:
-                  {{ formatCurrency(item.tax_withheld ?? 0) }}</div
-                >
+                  <template #activator="{ props: tipProps }">
+                    <v-icon
+                      v-bind="tipProps"
+                      size="14"
+                      color="warning"
+                      icon="mdi-alert-circle"
+                    />
+                  </template>
+                </v-tooltip>
               </div>
-            </v-tooltip>
-            <span v-else>—</span>
-          </td>
-          <td class="text-right font-weight-medium">{{
-            formatCurrency(item.net_payable ?? item.claim_amount)
-          }}</td>
-          <td>
-            <div class="d-flex flex-wrap gap-1">
+            </td>
+            <td>
+              <div>{{ item.member_name }}</div>
+              <div class="text-caption text-medium-emphasis">{{
+                item.member_id_number
+              }}</div>
+            </td>
+            <td>
+              <div>{{ item.scheme_name }}</div>
+              <div class="text-caption text-medium-emphasis">{{
+                item.benefit_name
+              }}</div>
+            </td>
+            <td>
               <v-chip
-                v-if="riskFlag(item, 'banking_change_30d')"
+                v-if="item.bank_account_number"
                 size="x-small"
-                color="warning"
-                variant="flat"
-                title="Banking details changed in last 30 days"
-                >Bank 30d</v-chip
+                color="teal"
+                variant="tonal"
               >
-              <v-chip
-                v-if="riskFlag(item, 'contestable')"
-                size="x-small"
-                color="orange"
-                variant="flat"
-                title="Within the contestability window"
-                >Contestable</v-chip
-              >
-              <v-chip
-                v-if="riskFlag(item, 'recent_reinstatement')"
-                size="x-small"
-                color="amber"
-                variant="flat"
-                title="Policy reinstated recently"
-                >Reinstated</v-chip
-              >
-              <v-chip
-                v-if="fraudLevel(item)"
-                size="x-small"
-                :color="fraudColor(fraudLevel(item))"
-                variant="flat"
-              >
-                {{ fraudLevel(item) }}
+                {{ item.bank_name || 'Set' }}
               </v-chip>
-              <v-chip
-                v-if="
-                  item.duplicate_beneficiary_flag &&
-                  !item.duplicate_beneficiary_cleared
-                "
-                size="x-small"
-                color="warning"
-                variant="flat"
-                title="Same beneficiary appears on another line in this schedule"
-              >
-                Duplicate
+              <v-chip v-else size="x-small" color="orange" variant="tonal">
+                Missing
               </v-chip>
-            </div>
-          </td>
-          <td>
-            <div class="d-flex align-center gap-1">
-              <v-chip
-                :color="sanctionsChipColor(item.id)"
-                size="x-small"
-                variant="flat"
-                :title="sanctionsHitSummary(item.id)"
-              >
-                {{ sanctionsLabel(item.id) }}
-              </v-chip>
-              <v-btn
-                v-if="canScreenSanctions"
-                size="x-small"
-                variant="text"
-                icon="mdi-magnify-scan"
-                title="Run / re-run sanctions screening"
-                @click="onScreen(item.id)"
-              />
-              <v-btn
-                v-if="canScreenSanctions"
-                size="x-small"
-                variant="text"
-                icon="mdi-pencil-outline"
-                title="Record sanctions outcome"
-                @click="openSanctionsDialog(item)"
-              />
-            </div>
-          </td>
-          <td>
-            <div v-if="item.reinsurance_recovery_required">
-              <v-chip
-                :color="
-                  item.reinsurance_recovery_raised_at
-                    ? 'success'
-                    : 'warning'
-                "
-                size="x-small"
-                variant="flat"
-              >
-                {{
-                  item.reinsurance_recovery_raised_at
-                    ? `Raised ${formatCurrency(item.reinsurance_recovery_amount ?? 0)}`
-                    : `Required ${formatCurrency(item.reinsurance_recovery_amount ?? 0)}`
-                }}
-              </v-chip>
-              <div class="d-flex gap-1 mt-1">
-                <v-btn
+            </td>
+            <td class="text-right">{{
+              formatCurrency(item.gross_amount ?? item.claim_amount)
+            }}</td>
+            <td class="text-right">
+              <v-tooltip v-if="totalDeductions(item) > 0" location="top">
+                <template #activator="{ props: tipProps }">
+                  <span v-bind="tipProps">{{
+                    formatCurrency(totalDeductions(item))
+                  }}</span>
+                </template>
+                <div class="text-caption">
+                  <div
+                    >Premium arrears:
+                    {{
+                      formatCurrency(item.premium_arrears_deduction ?? 0)
+                    }}</div
+                  >
+                  <div
+                    >Policy loan:
+                    {{ formatCurrency(item.policy_loan_deduction ?? 0) }}</div
+                  >
+                  <div
+                    >Tax withheld:
+                    {{ formatCurrency(item.tax_withheld ?? 0) }}</div
+                  >
+                </div>
+              </v-tooltip>
+              <span v-else>—</span>
+            </td>
+            <td class="text-right font-weight-medium">{{
+              formatCurrency(item.net_payable ?? item.claim_amount)
+            }}</td>
+            <td>
+              <div class="d-flex flex-wrap gap-1">
+                <v-chip
+                  v-if="riskFlag(item, 'banking_change_30d')"
+                  size="x-small"
+                  color="warning"
+                  variant="flat"
+                  title="Banking details changed in last 30 days"
+                  >Bank 30d</v-chip
+                >
+                <v-chip
+                  v-if="riskFlag(item, 'contestable')"
+                  size="x-small"
+                  color="orange"
+                  variant="flat"
+                  title="Within the contestability window"
+                  >Contestable</v-chip
+                >
+                <v-chip
+                  v-if="riskFlag(item, 'recent_reinstatement')"
+                  size="x-small"
+                  color="amber"
+                  variant="flat"
+                  title="Policy reinstated recently"
+                  >Reinstated</v-chip
+                >
+                <v-chip
+                  v-if="fraudLevel(item)"
+                  size="x-small"
+                  :color="fraudColor(fraudLevel(item))"
+                  variant="flat"
+                >
+                  {{ fraudLevel(item) }}
+                </v-chip>
+                <v-chip
                   v-if="
-                    !item.reinsurance_recovery_raised_at &&
-                    canConfirmRecovery
+                    item.duplicate_beneficiary_flag &&
+                    !item.duplicate_beneficiary_cleared
                   "
                   size="x-small"
-                  variant="outlined"
-                  color="success"
-                  @click="onConfirmRaised(item.id)"
+                  color="warning"
+                  variant="flat"
+                  title="Same beneficiary appears on another line in this schedule"
                 >
-                  Mark raised
-                </v-btn>
+                  Duplicate
+                </v-chip>
+              </div>
+            </td>
+            <td>
+              <div class="d-flex align-center gap-1">
+                <v-chip
+                  :color="sanctionsChipColor(item.id)"
+                  size="x-small"
+                  variant="flat"
+                  :title="sanctionsHitSummary(item.id)"
+                >
+                  {{ sanctionsLabel(item.id) }}
+                </v-chip>
                 <v-btn
-                  v-if="canEditReinsurance"
+                  v-if="canScreenSanctions"
+                  size="x-small"
+                  variant="text"
+                  icon="mdi-magnify-scan"
+                  title="Run / re-run sanctions screening"
+                  @click="onScreen(item.id)"
+                />
+                <v-btn
+                  v-if="canScreenSanctions"
                   size="x-small"
                   variant="text"
                   icon="mdi-pencil-outline"
-                  @click="openReinsuranceDialog(item)"
+                  title="Record sanctions outcome"
+                  @click="openSanctionsDialog(item)"
                 />
               </div>
-            </div>
-            <v-btn
-              v-else-if="canEditReinsurance"
-              size="x-small"
-              variant="text"
-              prepend-icon="mdi-plus"
-              @click="openReinsuranceDialog(item)"
-            >
-              Flag
-            </v-btn>
-            <span v-else class="text-medium-emphasis">—</span>
-          </td>
-          <td>
-            <div class="d-flex align-center gap-1">
-              <v-chip
-                :color="lineStatusColor(item.line_status)"
-                size="x-small"
-                variant="flat"
-              >
-                {{ item.line_status || 'pending' }}
-              </v-chip>
-              <template v-if="taxCertForItem(item.id)">
-                <v-btn
+            </td>
+            <td>
+              <div v-if="item.reinsurance_recovery_required">
+                <v-chip
+                  :color="
+                    item.reinsurance_recovery_raised_at ? 'success' : 'warning'
+                  "
                   size="x-small"
-                  variant="text"
-                  icon="mdi-certificate-outline"
-                  :title="`IT3(a) ${taxCertForItem(item.id)!.certificate_ref}`"
-                  @click="downloadTaxCertificate(taxCertForItem(item.id)!)"
+                  variant="flat"
+                >
+                  {{
+                    item.reinsurance_recovery_raised_at
+                      ? `Raised ${formatCurrency(item.reinsurance_recovery_amount ?? 0)}`
+                      : `Required ${formatCurrency(item.reinsurance_recovery_amount ?? 0)}`
+                  }}
+                </v-chip>
+                <div class="d-flex gap-1 mt-1">
+                  <v-btn
+                    v-if="
+                      !item.reinsurance_recovery_raised_at && canConfirmRecovery
+                    "
+                    size="x-small"
+                    variant="outlined"
+                    color="success"
+                    @click="onConfirmRaised(item.id)"
+                  >
+                    Mark raised
+                  </v-btn>
+                  <v-btn
+                    v-if="canEditReinsurance"
+                    size="x-small"
+                    variant="text"
+                    icon="mdi-pencil-outline"
+                    @click="openReinsuranceDialog(item)"
+                  />
+                </div>
+              </div>
+              <v-btn
+                v-else-if="canEditReinsurance"
+                size="x-small"
+                variant="text"
+                prepend-icon="mdi-plus"
+                @click="openReinsuranceDialog(item)"
+              >
+                Flag
+              </v-btn>
+              <span v-else class="text-medium-emphasis">—</span>
+            </td>
+            <td>
+              <div class="d-flex align-center gap-1">
+                <v-chip
+                  :color="lineStatusColor(item.line_status)"
+                  size="x-small"
+                  variant="flat"
+                >
+                  {{ item.line_status || 'pending' }}
+                </v-chip>
+                <template v-if="taxCertForItem(item.id)">
+                  <v-btn
+                    size="x-small"
+                    variant="text"
+                    icon="mdi-certificate-outline"
+                    :title="`IT3(a) ${taxCertForItem(item.id)!.certificate_ref}`"
+                    @click="downloadTaxCertificate(taxCertForItem(item.id)!)"
+                  />
+                </template>
+              </div>
+            </td>
+            <td v-if="isFinanceReview">
+              <div class="d-flex gap-1">
+                <v-btn
+                  v-if="canVerify(item)"
+                  size="x-small"
+                  variant="flat"
+                  color="success"
+                  icon="mdi-check"
+                  title="Verify"
+                  @click="verifyLineItem(item.id)"
                 />
-              </template>
-            </div>
-          </td>
-          <td v-if="isFinanceReview">
-            <div class="d-flex gap-1">
-              <v-btn
-                v-if="canVerify(item)"
-                size="x-small"
-                variant="flat"
-                color="success"
-                icon="mdi-check"
-                title="Verify"
-                @click="verifyLineItem(item.id)"
-              />
-              <v-btn
-                v-if="canQuery(item)"
-                size="x-small"
-                variant="outlined"
-                color="warning"
-                icon="mdi-comment-alert-outline"
-                title="Query"
-                @click="openQueryDialog(item, 'query')"
-              />
-              <v-btn
-                v-if="canQuery(item)"
-                size="x-small"
-                variant="outlined"
-                color="error"
-                icon="mdi-close"
-                title="Reject"
-                @click="openQueryDialog(item, 'reject')"
-              />
-              <v-btn
-                v-if="
-                  item.duplicate_beneficiary_flag &&
-                  !item.duplicate_beneficiary_cleared
-                "
-                size="x-small"
-                variant="outlined"
-                color="indigo"
-                icon="mdi-account-check-outline"
-                title="Clear duplicate beneficiary flag"
-                @click="onClearDuplicate(item.id)"
-              />
-            </div>
-          </td>
-        </tr>
-      </tbody>
+                <v-btn
+                  v-if="canQuery(item)"
+                  size="x-small"
+                  variant="outlined"
+                  color="warning"
+                  icon="mdi-comment-alert-outline"
+                  title="Query"
+                  @click="openQueryDialog(item, 'query')"
+                />
+                <v-btn
+                  v-if="canQuery(item)"
+                  size="x-small"
+                  variant="outlined"
+                  color="error"
+                  icon="mdi-close"
+                  title="Reject"
+                  @click="openQueryDialog(item, 'reject')"
+                />
+                <v-btn
+                  v-if="
+                    item.duplicate_beneficiary_flag &&
+                    !item.duplicate_beneficiary_cleared
+                  "
+                  size="x-small"
+                  variant="outlined"
+                  color="indigo"
+                  icon="mdi-account-check-outline"
+                  title="Clear duplicate beneficiary flag"
+                  @click="onClearDuplicate(item.id)"
+                />
+              </div>
+            </td>
+          </tr>
+        </tbody>
       </v-table>
     </section>
 
@@ -629,7 +625,11 @@ function canVerify(item: ScheduleItem) {
 
 function canQuery(item: ScheduleItem) {
   if (!isFinanceReview.value) return false
-  return !item.line_status || item.line_status === 'pending' || item.line_status === 'verified'
+  return (
+    !item.line_status ||
+    item.line_status === 'pending' ||
+    item.line_status === 'verified'
+  )
 }
 
 // Query / Reject dialog
@@ -653,9 +653,17 @@ async function submitQuery() {
   submittingQuery.value = true
   try {
     if (dialogMode.value === 'reject') {
-      await rejectLineItem(dialogItemId.value, reasonCode.value, reasonNotes.value)
+      await rejectLineItem(
+        dialogItemId.value,
+        reasonCode.value,
+        reasonNotes.value
+      )
     } else {
-      await queryLineItem(dialogItemId.value, reasonCode.value, reasonNotes.value)
+      await queryLineItem(
+        dialogItemId.value,
+        reasonCode.value,
+        reasonNotes.value
+      )
     }
     queryDialog.value = false
   } finally {
@@ -709,7 +717,8 @@ const savingSanctions = ref(false)
 function openSanctionsDialog(item: ScheduleItem) {
   dialogItem.value = item
   const existing = latestSanctionsForItem(item.id)
-  sanctionsStatus.value = existing?.status === 'pending' ? '' : existing?.status ?? ''
+  sanctionsStatus.value =
+    existing?.status === 'pending' ? '' : (existing?.status ?? '')
   sanctionsNotes.value = existing?.notes ?? ''
   sanctionsDialog.value = true
 }

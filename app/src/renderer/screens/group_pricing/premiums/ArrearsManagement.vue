@@ -51,36 +51,36 @@
         >
           <!-- Filter Bar -->
           <v-row class="mb-3" align="center">
-          <v-col cols="12" md="3">
-            <v-select
-              v-model="filters.status"
-              label="Status"
-              :items="statusOptions"
-              variant="outlined"
-              density="compact"
-              clearable
-            />
-          </v-col>
-          <v-col cols="12" md="3">
-            <v-select
-              v-model="agingBucket"
-              label="Aging Bucket"
-              :items="agingBuckets"
-              variant="outlined"
-              density="compact"
-            />
-          </v-col>
-          <v-col cols="12" md="3" class="d-flex align-center">
-            <v-btn
-              variant="outlined"
-              color="primary"
-              prepend-icon="mdi-refresh"
-              @click="loadArrears"
-            >
-              Refresh
-            </v-btn>
-          </v-col>
-        </v-row>
+            <v-col cols="12" md="3">
+              <v-select
+                v-model="filters.status"
+                label="Status"
+                :items="statusOptions"
+                variant="outlined"
+                density="compact"
+                clearable
+              />
+            </v-col>
+            <v-col cols="12" md="3">
+              <v-select
+                v-model="agingBucket"
+                label="Aging Bucket"
+                :items="agingBuckets"
+                variant="outlined"
+                density="compact"
+              />
+            </v-col>
+            <v-col cols="12" md="3" class="d-flex align-center">
+              <v-btn
+                variant="outlined"
+                color="primary"
+                prepend-icon="mdi-refresh"
+                @click="loadArrears"
+              >
+                Refresh
+              </v-btn>
+            </v-col>
+          </v-row>
 
           <!-- Aging Table -->
           <v-row class="mb-4">

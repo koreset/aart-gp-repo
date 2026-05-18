@@ -17,7 +17,9 @@
             <div class="text-overline text-grey-darken-1 mb-1">
               <v-icon size="small" class="mr-1">mdi-pound</v-icon>
               Case {{ caseFile.id }} ·
-              <v-icon size="small" class="mx-1">mdi-file-document-outline</v-icon>
+              <v-icon size="small" class="mx-1"
+                >mdi-file-document-outline</v-icon
+              >
               Quote {{ caseFile.quote_id }} ·
               {{ caseFile.category }}
             </div>
@@ -114,9 +116,7 @@
             <v-row>
               <v-col cols="12" md="6">
                 <v-card variant="outlined" rounded="lg" class="h-100">
-                  <v-card-title
-                    class="d-flex align-center font-weight-bold"
-                  >
+                  <v-card-title class="d-flex align-center font-weight-bold">
                     <v-icon class="mr-2" color="primary"
                       >mdi-account-circle-outline</v-icon
                     >
@@ -146,9 +146,7 @@
               </v-col>
               <v-col cols="12" md="6">
                 <v-card variant="outlined" rounded="lg" class="h-100">
-                  <v-card-title
-                    class="d-flex align-center font-weight-bold"
-                  >
+                  <v-card-title class="d-flex align-center font-weight-bold">
                     <v-icon class="mr-2" color="primary"
                       >mdi-shield-half-full</v-icon
                     >
@@ -218,9 +216,7 @@
             <v-row>
               <v-col cols="12" md="6">
                 <v-card variant="outlined" rounded="lg" class="h-100">
-                  <v-card-title
-                    class="d-flex align-center font-weight-bold"
-                  >
+                  <v-card-title class="d-flex align-center font-weight-bold">
                     <v-icon class="mr-2" color="primary"
                       >mdi-briefcase-clock-outline</v-icon
                     >
@@ -372,12 +368,8 @@
 
               <v-col cols="12" md="6">
                 <v-card variant="outlined" rounded="lg" class="h-100">
-                  <v-card-title
-                    class="d-flex align-center font-weight-bold"
-                  >
-                    <v-icon class="mr-2" color="primary"
-                      >mdi-gavel</v-icon
-                    >
+                  <v-card-title class="d-flex align-center font-weight-bold">
+                    <v-icon class="mr-2" color="primary">mdi-gavel</v-icon>
                     Record decision
                   </v-card-title>
                   <v-card-text>
@@ -451,9 +443,7 @@
             <v-row>
               <v-col cols="12" md="6">
                 <v-card variant="outlined" rounded="lg" class="h-100">
-                  <v-card-title
-                    class="d-flex align-center font-weight-bold"
-                  >
+                  <v-card-title class="d-flex align-center font-weight-bold">
                     <v-icon class="mr-2" color="primary"
                       >mdi-clipboard-text-clock-outline</v-icon
                     >
@@ -462,7 +452,7 @@
                   <v-card-text>
                     <v-list density="compact">
                       <v-list-item
-                        v-for="d in (caseFile.decisions || [])"
+                        v-for="d in caseFile.decisions || []"
                         :key="d.id"
                         :title="`${d.benefit_type.toUpperCase()} — ${d.outcome}`"
                         :subtitle="
@@ -485,7 +475,9 @@
                       </v-list-item>
                     </v-list>
                     <p
-                      v-if="!caseFile.decisions || caseFile.decisions.length === 0"
+                      v-if="
+                        !caseFile.decisions || caseFile.decisions.length === 0
+                      "
                       class="text-grey"
                       >No decisions recorded yet.</p
                     >
@@ -495,12 +487,8 @@
 
               <v-col cols="12" md="6">
                 <v-card variant="outlined" rounded="lg" class="h-100">
-                  <v-card-title
-                    class="d-flex align-center font-weight-bold"
-                  >
-                    <v-icon class="mr-2" color="primary"
-                      >mdi-paperclip</v-icon
-                    >
+                  <v-card-title class="d-flex align-center font-weight-bold">
+                    <v-icon class="mr-2" color="primary">mdi-paperclip</v-icon>
                     Attachments
                   </v-card-title>
                   <v-card-text>
@@ -614,16 +602,12 @@
                       <v-list-item
                         v-for="r in vendorRequests"
                         :key="r.id"
-                        :title="
-                          `${vendorKindLabel(r.kind)} — ${r.subject || '—'}`
-                        "
-                        :subtitle="
-                          `${r.provider} · ${formatDate(r.requested_at)} · ${
-                            r.cost_cents
-                              ? 'R' + (r.cost_cents / 100).toFixed(2)
-                              : 'cost N/A'
-                          }`
-                        "
+                        :title="`${vendorKindLabel(r.kind)} — ${r.subject || '—'}`"
+                        :subtitle="`${r.provider} · ${formatDate(r.requested_at)} · ${
+                          r.cost_cents
+                            ? 'R' + (r.cost_cents / 100).toFixed(2)
+                            : 'cost N/A'
+                        }`"
                       >
                         <template #append>
                           <v-chip
@@ -647,9 +631,7 @@
                         </template>
                       </v-list-item>
                     </v-list>
-                    <p
-                      v-else
-                      class="text-grey text-caption"
+                    <p v-else class="text-grey text-caption"
                       >No external requests yet.</p
                     >
                   </v-card-text>
@@ -683,7 +665,10 @@
                   <v-btn variant="text" @click="vendorDialogOpen = false"
                     >Cancel</v-btn
                   >
-                  <v-btn color="primary" :loading="!!vendorBusy" @click="submitVendor"
+                  <v-btn
+                    color="primary"
+                    :loading="!!vendorBusy"
+                    @click="submitVendor"
                     >Send</v-btn
                   >
                 </v-card-actions>
@@ -714,12 +699,8 @@
             <v-row>
               <v-col cols="12">
                 <v-card variant="outlined" rounded="lg">
-                  <v-card-title
-                    class="d-flex align-center font-weight-bold"
-                  >
-                    <v-icon class="mr-2" color="primary"
-                      >mdi-history</v-icon
-                    >
+                  <v-card-title class="d-flex align-center font-weight-bold">
+                    <v-icon class="mr-2" color="primary">mdi-history</v-icon>
                     Audit timeline
                   </v-card-title>
                   <v-card-text>
@@ -1184,9 +1165,7 @@ const workflowSteps = computed(() => {
       key: 'pending_evidence',
       label: 'Pending evidence',
       icon: 'mdi-clipboard-clock-outline',
-      ...(isPending
-        ? { state: 'active', color: 'warning' }
-        : pillFor('done'))
+      ...(isPending ? { state: 'active', color: 'warning' } : pillFor('done'))
     },
     {
       key: 'in_review',

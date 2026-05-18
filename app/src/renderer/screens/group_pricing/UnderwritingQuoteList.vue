@@ -294,9 +294,8 @@ const loadSummaries = async () => {
     if (statusFilter.value) params.status = statusFilter.value
     if (tierFilter.value) params.tier = tierFilter.value
     if (assigneeFilter.value) params.assignee = assigneeFilter.value
-    const res = await GroupPricingService.listUnderwritingCaseQuoteSummaries(
-      params
-    )
+    const res =
+      await GroupPricingService.listUnderwritingCaseQuoteSummaries(params)
     summaries.value = res.data || []
   } catch (err) {
     console.error('Failed to load underwriting quote summaries', err)

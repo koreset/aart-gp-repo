@@ -53,8 +53,7 @@
             </v-col>
             <v-col cols="12">
               <p class="text-caption text-grey"
-                >Computed BMI:
-                <strong>{{ computedBMI || '—' }}</strong></p
+                >Computed BMI: <strong>{{ computedBMI || '—' }}</strong></p
               >
             </v-col>
           </v-row>

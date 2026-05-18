@@ -507,9 +507,7 @@
                         </template>
                       </v-list-item>
                     </v-list>
-                    <p
-                      v-else
-                      class="text-grey text-caption"
+                    <p v-else class="text-grey text-caption"
                       >No snapshots yet — the scheduler writes one when the
                       scheme transitions to in-force.</p
                     >
@@ -1811,8 +1809,7 @@ const downloadSnapshot = (snapshotId: number) => {
   // The download endpoint streams the payload directly. The renderer hits
   // the same base URL the API client uses; window.open is the simplest
   // way to trigger a file save in Electron.
-  const base =
-    (window as any).mainApi?.sendSync?.('msgGetBaseUrl') || ''
+  const base = (window as any).mainApi?.sendSync?.('msgGetBaseUrl') || ''
   const url = `${base}${GroupPricingService.downloadPolicyHandoffSnapshotURL(snapshotId)}`
   window.open(url, '_blank')
 }

@@ -4,7 +4,9 @@
       <v-col>
         <base-card :show-actions="false">
           <template #header>
-            <div class="d-flex justify-space-between align-center flex-wrap gap-2">
+            <div
+              class="d-flex justify-space-between align-center flex-wrap gap-2"
+            >
               <div class="d-flex align-center">
                 <v-btn
                   icon="mdi-arrow-left"
@@ -136,7 +138,9 @@
                     <div class="kpi-card__stripe" />
                     <div class="kpi-card__body">
                       <div class="kpi-card__head">
-                        <span class="kpi-card__label">Confirmed This Month</span>
+                        <span class="kpi-card__label"
+                          >Confirmed This Month</span
+                        >
                         <v-icon class="kpi-card__icon" size="20"
                           >mdi-check-decagram-outline</v-icon
                         >
@@ -954,7 +958,11 @@ const scheduleColumnDefs: ColDef<PaymentSchedule>[] = [
     cellStyle: { fontStyle: 'italic', color: '#475569' },
     valueFormatter: (p: any) => p.value || 'Click to add notes…',
     onCellValueChanged: (params: any) => {
-      onNotesChanged(params.data?.id, params.newValue || '', params.oldValue || '')
+      onNotesChanged(
+        params.data?.id,
+        params.newValue || '',
+        params.oldValue || ''
+      )
     }
   }
 ]
@@ -1064,7 +1072,9 @@ const showArchived = ref(false)
 async function loadSchedules() {
   loading.value = true
   try {
-    const res = await GroupPricingService.getPaymentSchedules(showArchived.value)
+    const res = await GroupPricingService.getPaymentSchedules(
+      showArchived.value
+    )
     schedules.value = unwrap(res) ?? []
   } catch (e: any) {
     notify('Failed to load payment schedules', 'error')
@@ -1121,9 +1131,7 @@ async function createSchedule() {
       description: newScheduleDescription.value
     })
     createDialog.value = false
-    notify(
-      'Payment schedule created. Claims moved to "Submitted for Payment".'
-    )
+    notify('Payment schedule created. Claims moved to "Submitted for Payment".')
     await loadSchedules()
   } catch (e: any) {
     notify(e?.response?.data ?? 'Failed to create schedule', 'error')
@@ -1257,9 +1265,7 @@ async function runCutoffNow() {
   } catch (e: any) {
     snackbar.value = true
     snackbarMessage.value =
-      e?.response?.data?.message ??
-      e?.response?.data ??
-      'Failed to run cut-off'
+      e?.response?.data?.message ?? e?.response?.data ?? 'Failed to run cut-off'
     snackbarColor.value = 'error'
   } finally {
     runningCutoff.value = false
@@ -1556,8 +1562,7 @@ onMounted(async () => {
 }
 
 .ps-card__num {
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.85rem;
   font-weight: 600;
   color: rgb(var(--v-theme-primary));

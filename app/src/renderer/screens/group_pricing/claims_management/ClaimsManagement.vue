@@ -24,7 +24,9 @@
                   class="mr-2"
                   rounded
                   prepend-icon="mdi-chart-line"
-                  @click="router.push({ name: 'group-pricing-claims-analytics' })"
+                  @click="
+                    router.push({ name: 'group-pricing-claims-analytics' })
+                  "
                 >
                   Analytics
                 </v-btn>
@@ -558,9 +560,7 @@ const loadClaims = async () => {
   try {
     const response = await GroupPricingService.getClaims()
     claims.value = response.data || []
-    const drafts = claims.value.filter(
-      (c: any) => c.status === 'draft'
-    ).length
+    const drafts = claims.value.filter((c: any) => c.status === 'draft').length
     const pendingAssessment = claims.value.filter(
       (c: any) => c.status === 'pending_assessment'
     ).length

@@ -81,8 +81,8 @@
       <v-card>
         <v-card-title class="text-h6">Submit for Assessment</v-card-title>
         <v-card-text>
-          Send this claim to the assessment queue? Once submitted, the
-          assessor will start processing it.
+          Send this claim to the assessment queue? Once submitted, the assessor
+          will start processing it.
         </v-card-text>
         <v-card-actions>
           <v-spacer />

@@ -56,190 +56,194 @@
         <page-section label="Workspace" last>
           <!-- Tabs -->
           <v-tabs v-model="activeTab" class="mb-4">
-          <v-tab value="workspace">Workspace</v-tab>
-          <v-tab value="runs">Reconciliation Runs</v-tab>
-          <v-tab value="rules">Matching Rules</v-tab>
-        </v-tabs>
+            <v-tab value="workspace">Workspace</v-tab>
+            <v-tab value="runs">Reconciliation Runs</v-tab>
+            <v-tab value="rules">Matching Rules</v-tab>
+          </v-tabs>
 
-        <!-- Tab: Workspace -->
-        <div v-if="activeTab === 'workspace'">
-          <!-- Action Buttons -->
-          <v-row class="mb-3">
-            <v-col class="d-flex ga-2 flex-wrap">
-              <v-btn
-                v-if="hasPermission('premiums:reconcile')"
-                color="primary"
-                prepend-icon="mdi-eye-outline"
-                :loading="previewing"
-                @click="handlePreview"
-              >
-                Preview Auto-Match
-              </v-btn>
-              <v-btn
-                v-if="hasPermission('premiums:reconcile')"
-                color="primary"
-                prepend-icon="mdi-auto-fix"
-                :loading="autoMatching"
-                @click="handleAutoMatch"
-              >
-                Run Auto-Match
-              </v-btn>
-              <v-btn
-                variant="outlined"
-                color="primary"
-                prepend-icon="mdi-link-variant"
-                :disabled="
-                  selectedPaymentItems.length === 0 ||
-                  selectedInvoiceItems.length === 0
-                "
-                @click="allocateDialog = true"
-              >
-                Allocate Selected
-              </v-btn>
-              <v-btn
-                variant="outlined"
-                prepend-icon="mdi-pencil-off-outline"
-                :disabled="!selectedItem"
-                @click="openWriteOff"
-              >
-                Write-Off
-              </v-btn>
-              <v-btn
-                variant="outlined"
-                prepend-icon="mdi-cash-refund"
-                :disabled="!selectedPaymentItem"
-                @click="openRefund"
-              >
-                Refund
-              </v-btn>
-            </v-col>
-          </v-row>
+          <!-- Tab: Workspace -->
+          <div v-if="activeTab === 'workspace'">
+            <!-- Action Buttons -->
+            <v-row class="mb-3">
+              <v-col class="d-flex ga-2 flex-wrap">
+                <v-btn
+                  v-if="hasPermission('premiums:reconcile')"
+                  color="primary"
+                  prepend-icon="mdi-eye-outline"
+                  :loading="previewing"
+                  @click="handlePreview"
+                >
+                  Preview Auto-Match
+                </v-btn>
+                <v-btn
+                  v-if="hasPermission('premiums:reconcile')"
+                  color="primary"
+                  prepend-icon="mdi-auto-fix"
+                  :loading="autoMatching"
+                  @click="handleAutoMatch"
+                >
+                  Run Auto-Match
+                </v-btn>
+                <v-btn
+                  variant="outlined"
+                  color="primary"
+                  prepend-icon="mdi-link-variant"
+                  :disabled="
+                    selectedPaymentItems.length === 0 ||
+                    selectedInvoiceItems.length === 0
+                  "
+                  @click="allocateDialog = true"
+                >
+                  Allocate Selected
+                </v-btn>
+                <v-btn
+                  variant="outlined"
+                  prepend-icon="mdi-pencil-off-outline"
+                  :disabled="!selectedItem"
+                  @click="openWriteOff"
+                >
+                  Write-Off
+                </v-btn>
+                <v-btn
+                  variant="outlined"
+                  prepend-icon="mdi-cash-refund"
+                  :disabled="!selectedPaymentItem"
+                  @click="openRefund"
+                >
+                  Refund
+                </v-btn>
+              </v-col>
+            </v-row>
 
-          <!-- Preview Results -->
-          <v-alert
-            v-if="previewResult"
-            type="info"
-            variant="tonal"
-            closable
-            class="mb-4"
-            @click:close="previewResult = null"
-          >
-            <strong>Preview:</strong>
-            {{ previewResult.total_matched }} allocations totalling
-            {{ fmtCurrency(previewResult.total_allocated) }},
-            {{ previewResult.total_remaining }} payments remaining.
-          </v-alert>
+            <!-- Preview Results -->
+            <v-alert
+              v-if="previewResult"
+              type="info"
+              variant="tonal"
+              closable
+              class="mb-4"
+              @click:close="previewResult = null"
+            >
+              <strong>Preview:</strong>
+              {{ previewResult.total_matched }} allocations totalling
+              {{ fmtCurrency(previewResult.total_allocated) }},
+              {{ previewResult.total_remaining }} payments remaining.
+            </v-alert>
 
-          <!-- Two-Panel Layout -->
-          <v-row>
-            <v-col cols="12" md="6">
-              <v-card variant="outlined">
-                <v-card-title class="text-subtitle-1 pa-3 d-flex align-center">
-                  <span>Unallocated Payments</span>
-                  <v-spacer />
-                  <v-chip size="small" color="warning">{{
-                    paymentItems.length
-                  }}</v-chip>
-                </v-card-title>
-                <v-card-text class="pa-0">
-                  <ag-grid-vue
-                    :key="`payments-${gridReloadKey}`"
-                    class="ag-theme-balham"
-                    style="height: 400px; width: 100%"
-                    :column-defs="paymentItemCols"
-                    :row-data="paymentItems"
-                    :default-col-def="{
-                      sortable: true,
-                      resizable: true,
-                      flex: 1
-                    }"
-                    :loading="loading"
-                    row-selection="multiple"
-                    @selection-changed="onPaymentItemsSelected"
-                  />
-                </v-card-text>
-              </v-card>
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-card variant="outlined">
-                <v-card-title class="text-subtitle-1 pa-3 d-flex align-center">
-                  <span>Unpaid / Partial Invoices</span>
-                  <v-spacer />
-                  <v-chip size="small" color="error">{{
-                    invoiceItems.length
-                  }}</v-chip>
-                </v-card-title>
-                <v-card-text class="pa-0">
-                  <ag-grid-vue
-                    :key="`invoices-${gridReloadKey}`"
-                    class="ag-theme-balham"
-                    style="height: 400px; width: 100%"
-                    :column-defs="invoiceItemCols"
-                    :row-data="invoiceItems"
-                    :default-col-def="{
-                      sortable: true,
-                      resizable: true,
-                      flex: 1
-                    }"
-                    :loading="loading"
-                    row-selection="multiple"
-                    @selection-changed="onInvoiceItemsSelected"
-                  />
-                </v-card-text>
-              </v-card>
-            </v-col>
-          </v-row>
-        </div>
+            <!-- Two-Panel Layout -->
+            <v-row>
+              <v-col cols="12" md="6">
+                <v-card variant="outlined">
+                  <v-card-title
+                    class="text-subtitle-1 pa-3 d-flex align-center"
+                  >
+                    <span>Unallocated Payments</span>
+                    <v-spacer />
+                    <v-chip size="small" color="warning">{{
+                      paymentItems.length
+                    }}</v-chip>
+                  </v-card-title>
+                  <v-card-text class="pa-0">
+                    <ag-grid-vue
+                      :key="`payments-${gridReloadKey}`"
+                      class="ag-theme-balham"
+                      style="height: 400px; width: 100%"
+                      :column-defs="paymentItemCols"
+                      :row-data="paymentItems"
+                      :default-col-def="{
+                        sortable: true,
+                        resizable: true,
+                        flex: 1
+                      }"
+                      :loading="loading"
+                      row-selection="multiple"
+                      @selection-changed="onPaymentItemsSelected"
+                    />
+                  </v-card-text>
+                </v-card>
+              </v-col>
+              <v-col cols="12" md="6">
+                <v-card variant="outlined">
+                  <v-card-title
+                    class="text-subtitle-1 pa-3 d-flex align-center"
+                  >
+                    <span>Unpaid / Partial Invoices</span>
+                    <v-spacer />
+                    <v-chip size="small" color="error">{{
+                      invoiceItems.length
+                    }}</v-chip>
+                  </v-card-title>
+                  <v-card-text class="pa-0">
+                    <ag-grid-vue
+                      :key="`invoices-${gridReloadKey}`"
+                      class="ag-theme-balham"
+                      style="height: 400px; width: 100%"
+                      :column-defs="invoiceItemCols"
+                      :row-data="invoiceItems"
+                      :default-col-def="{
+                        sortable: true,
+                        resizable: true,
+                        flex: 1
+                      }"
+                      :loading="loading"
+                      row-selection="multiple"
+                      @selection-changed="onInvoiceItemsSelected"
+                    />
+                  </v-card-text>
+                </v-card>
+              </v-col>
+            </v-row>
+          </div>
 
-        <!-- Tab: Reconciliation Runs -->
-        <div v-if="activeTab === 'runs'">
-          <ag-grid-vue
-            class="ag-theme-balham"
-            style="height: 500px; width: 100%"
-            :column-defs="runCols"
-            :row-data="runs"
-            :default-col-def="{ sortable: true, resizable: true, flex: 1 }"
-            :loading="runsLoading"
-            row-selection="single"
-            @selection-changed="onRunSelected"
-          />
-          <v-row v-if="selectedRun" class="mt-3">
-            <v-col>
-              <v-btn
-                variant="outlined"
-                color="error"
-                prepend-icon="mdi-undo"
-                :loading="rollingBack"
-                :disabled="selectedRun.status === 'rolled_back'"
-                @click="handleRollback"
-              >
-                Rollback Run #{{ selectedRun.id }}
-              </v-btn>
-            </v-col>
-          </v-row>
-        </div>
+          <!-- Tab: Reconciliation Runs -->
+          <div v-if="activeTab === 'runs'">
+            <ag-grid-vue
+              class="ag-theme-balham"
+              style="height: 500px; width: 100%"
+              :column-defs="runCols"
+              :row-data="runs"
+              :default-col-def="{ sortable: true, resizable: true, flex: 1 }"
+              :loading="runsLoading"
+              row-selection="single"
+              @selection-changed="onRunSelected"
+            />
+            <v-row v-if="selectedRun" class="mt-3">
+              <v-col>
+                <v-btn
+                  variant="outlined"
+                  color="error"
+                  prepend-icon="mdi-undo"
+                  :loading="rollingBack"
+                  :disabled="selectedRun.status === 'rolled_back'"
+                  @click="handleRollback"
+                >
+                  Rollback Run #{{ selectedRun.id }}
+                </v-btn>
+              </v-col>
+            </v-row>
+          </div>
 
-        <!-- Tab: Matching Rules -->
-        <div v-if="activeTab === 'rules'">
-          <v-row class="mb-3">
-            <v-col class="d-flex ga-2">
-              <v-btn
-                color="primary"
-                prepend-icon="mdi-plus"
-                @click="openRuleDialog()"
-                >Add Rule</v-btn
-              >
-            </v-col>
-          </v-row>
-          <ag-grid-vue
-            class="ag-theme-balham"
-            style="height: 400px; width: 100%"
-            :column-defs="ruleCols"
-            :row-data="matchingRules"
-            :default-col-def="{ sortable: true, resizable: true, flex: 1 }"
-            :loading="rulesLoading"
-          />
-        </div>
+          <!-- Tab: Matching Rules -->
+          <div v-if="activeTab === 'rules'">
+            <v-row class="mb-3">
+              <v-col class="d-flex ga-2">
+                <v-btn
+                  color="primary"
+                  prepend-icon="mdi-plus"
+                  @click="openRuleDialog()"
+                  >Add Rule</v-btn
+                >
+              </v-col>
+            </v-row>
+            <ag-grid-vue
+              class="ag-theme-balham"
+              style="height: 400px; width: 100%"
+              :column-defs="ruleCols"
+              :row-data="matchingRules"
+              :default-col-def="{ sortable: true, resizable: true, flex: 1 }"
+              :loading="rulesLoading"
+            />
+          </div>
         </page-section>
       </template>
     </base-card>

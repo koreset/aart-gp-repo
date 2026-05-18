@@ -41,9 +41,9 @@
                     >member_id_number, member_name, date_of_birth,
                     gla_sum_assured, ptd_sum_assured, ci_sum_assured,
                     prior_loadings, prior_exclusions, in_force</code
-                  >. `prior_loadings` is pipe-separated `benefit:percent`
-                  (e.g. `gla:25|ptd:10`). `prior_exclusions` is
-                  pipe-separated codes (e.g. `smoker|diabetes`).</p
+                  >. `prior_loadings` is pipe-separated `benefit:percent` (e.g.
+                  `gla:25|ptd:10`). `prior_exclusions` is pipe-separated codes
+                  (e.g. `smoker|diabetes`).</p
                 >
                 <v-row dense>
                   <v-col cols="12" md="6">
@@ -116,12 +116,7 @@
               </v-card-text>
             </v-card>
 
-            <v-card
-              v-if="summary"
-              variant="outlined"
-              rounded="lg"
-              class="mb-4"
-            >
+            <v-card v-if="summary" variant="outlined" rounded="lg" class="mb-4">
               <v-card-title class="d-flex align-center font-weight-bold">
                 <span>Match preview</span>
                 <v-spacer />
@@ -134,7 +129,10 @@
                   >Re-match</v-btn
                 >
                 <v-btn
-                  v-if="(summary.continuation_no_evidence || summary.continuation_with_loading) > 0"
+                  v-if="
+                    (summary.continuation_no_evidence ||
+                      summary.continuation_with_loading) > 0
+                  "
                   size="small"
                   color="primary"
                   variant="tonal"
@@ -215,9 +213,15 @@
                       <td>{{ m.member_id_number || '—' }}</td>
                       <td>{{ m.member_name }}</td>
                       <td>{{ formatDate(m.date_of_birth) }}</td>
-                      <td class="text-right">{{ formatMoney(m.gla_sum_assured) }}</td>
-                      <td class="text-right">{{ formatMoney(m.ptd_sum_assured) }}</td>
-                      <td class="text-right">{{ formatMoney(m.ci_sum_assured) }}</td>
+                      <td class="text-right">{{
+                        formatMoney(m.gla_sum_assured)
+                      }}</td>
+                      <td class="text-right">{{
+                        formatMoney(m.ptd_sum_assured)
+                      }}</td>
+                      <td class="text-right">{{
+                        formatMoney(m.ci_sum_assured)
+                      }}</td>
                       <td class="text-caption">{{ m.prior_loadings }}</td>
                       <td class="text-caption">{{ m.prior_exclusions }}</td>
                       <td>
@@ -393,8 +397,7 @@ const upload = async () => {
     await load() // reload to pick up members
     flash('Schedule uploaded and matched')
   } catch (err: any) {
-    error.value =
-      err?.response?.data || err?.message || 'Upload failed'
+    error.value = err?.response?.data || err?.message || 'Upload failed'
   } finally {
     busy.value = false
   }

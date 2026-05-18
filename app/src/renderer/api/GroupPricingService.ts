@@ -484,7 +484,8 @@ export default {
     } = {}
   ) {
     const { offset = 0, limit = null, fields } = params
-    const url = '/group-pricing/get-quote/' + quoteId + '/table-type/' + tableType
+    const url =
+      '/group-pricing/get-quote/' + quoteId + '/table-type/' + tableType
     const qs = new URLSearchParams()
     if (limit !== null) {
       qs.append('offset', String(offset))
@@ -1025,9 +1026,7 @@ export default {
   },
 
   submitClaimForAssessment(claimId) {
-    return Api.post(
-      `/group-pricing/claims/${claimId}/submit-for-assessment`
-    )
+    return Api.post(`/group-pricing/claims/${claimId}/submit-for-assessment`)
   },
 
   createClaimDeclineRecord(claimId, declineData) {
@@ -1270,10 +1269,7 @@ export default {
   },
 
   updateAuthorityMatrixRow(rowId, payload) {
-    return Api.patch(
-      `/group-pricing/claims/authority-matrix/${rowId}`,
-      payload
-    )
+    return Api.patch(`/group-pricing/claims/authority-matrix/${rowId}`, payload)
   },
 
   deleteAuthorityMatrixRow(rowId) {
@@ -1352,11 +1348,13 @@ export default {
   // Payment exceptions + tax certificates (Phase 4)
   // ──────────────────────────────────────────────
 
-  listPaymentExceptions(params: {
-    status?: string
-    includeResolved?: boolean
-    limit?: number
-  } = {}) {
+  listPaymentExceptions(
+    params: {
+      status?: string
+      includeResolved?: boolean
+      limit?: number
+    } = {}
+  ) {
     return Api.get('/group-pricing/claims/payment-exceptions', {
       params: {
         status: params.status ?? '',
@@ -1370,11 +1368,13 @@ export default {
     return Api.get('/group-pricing/claims/payment-exceptions/summary')
   },
 
-  exportPaymentExceptionsCSV(params: {
-    status?: string
-    includeResolved?: boolean
-    limit?: number
-  } = {}) {
+  exportPaymentExceptionsCSV(
+    params: {
+      status?: string
+      includeResolved?: boolean
+      limit?: number
+    } = {}
+  ) {
     return Api.get('/group-pricing/claims/payment-exceptions/export', {
       params: {
         status: params.status ?? '',
@@ -1392,9 +1392,12 @@ export default {
   },
 
   downloadTaxCertificate(certId) {
-    return Api.get(`/group-pricing/claims/tax-certificates/${certId}/download`, {
-      responseType: 'blob'
-    })
+    return Api.get(
+      `/group-pricing/claims/tax-certificates/${certId}/download`,
+      {
+        responseType: 'blob'
+      }
+    )
   },
 
   // Bordereaux generation methods
@@ -2380,9 +2383,7 @@ export default {
     )
   },
   deleteUWRuleSet(ruleSetId: number | string) {
-    return Api.delete(
-      `/group-pricing/underwriting/rule-sets/${ruleSetId}`
-    )
+    return Api.delete(`/group-pricing/underwriting/rule-sets/${ruleSetId}`)
   },
   seedStarterUWRuleSet() {
     return Api.post('/group-pricing/underwriting/rule-sets/seed-starter')
@@ -2402,18 +2403,16 @@ export default {
     caseId: number | string,
     overrides: Record<string, any> = {}
   ) {
-    return Api.get(
-      `/group-pricing/underwriting/cases/${caseId}/dry-run`,
-      { params: overrides }
-    )
+    return Api.get(`/group-pricing/underwriting/cases/${caseId}/dry-run`, {
+      params: overrides
+    })
   },
 
   // Phase 4: re-rate
   rerateQuoteFromUWDecisions(quoteId: number | string, reason = '') {
-    return Api.post(
-      `/group-pricing/underwriting/quotes/${quoteId}/rerate`,
-      { reason }
-    )
+    return Api.post(`/group-pricing/underwriting/quotes/${quoteId}/rerate`, {
+      reason
+    })
   },
   listQuoteReRateEvents(quoteId: number | string) {
     return Api.get(
@@ -2448,9 +2447,7 @@ export default {
     return Api.get(`/group-pricing/underwriting/cases/${caseId}/disclosure`)
   },
   listMemberDisclosures(caseId: number | string) {
-    return Api.get(
-      `/group-pricing/underwriting/cases/${caseId}/disclosures`
-    )
+    return Api.get(`/group-pricing/underwriting/cases/${caseId}/disclosures`)
   },
   submitConsent(payload: {
     case_id?: number
@@ -2463,8 +2460,12 @@ export default {
     granted_by_name: string
     granted_by_email?: string
   }) {
-    return Api.post('/group-pricing/underwriting/cases/' +
-      (payload.case_id ?? 0) + '/consent', payload)
+    return Api.post(
+      '/group-pricing/underwriting/cases/' +
+        (payload.case_id ?? 0) +
+        '/consent',
+      payload
+    )
   },
   listCaseConsents(caseId: number | string) {
     return Api.get(`/group-pricing/underwriting/cases/${caseId}/consents`)

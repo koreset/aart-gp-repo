@@ -4,9 +4,7 @@
     <div class="kpi-card__body">
       <div class="kpi-card__head">
         <span class="kpi-card__label">{{ label }}</span>
-        <v-icon v-if="icon" class="kpi-card__icon" size="20">{{
-          icon
-        }}</v-icon>
+        <v-icon v-if="icon" class="kpi-card__icon" size="20">{{ icon }}</v-icon>
       </div>
       <div class="kpi-card__value">{{ value }}</div>
       <div v-if="hint" class="kpi-card__hint">{{ hint }}</div>

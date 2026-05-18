@@ -35,77 +35,77 @@
         <page-section label="Invoices" :count="invoices.length" last>
           <!-- Filter Bar -->
           <v-row class="mb-3" align="center">
-          <v-col cols="12" md="2">
-            <v-select
-              v-model="filters.schemeId"
-              label="Scheme"
-              :items="inForceSchemes"
-              item-title="name"
-              item-value="id"
-              variant="outlined"
-              density="compact"
-              clearable
-              prepend-inner-icon="mdi-office-building-outline"
-              :loading="schemesLoading"
-            />
-          </v-col>
-          <v-col cols="12" md="2">
-            <v-select
-              v-model="filters.status"
-              label="Status"
-              :items="statusOptions"
-              variant="outlined"
-              density="compact"
-              clearable
-            />
-          </v-col>
-          <v-col cols="12" md="2">
-            <v-text-field
-              v-model="filters.from"
-              label="From"
-              type="date"
-              variant="outlined"
-              density="compact"
-            />
-          </v-col>
-          <v-col cols="12" md="2">
-            <v-text-field
-              v-model="filters.to"
-              label="To"
-              type="date"
-              variant="outlined"
-              density="compact"
-            />
-          </v-col>
-          <v-col cols="12" md="4" class="d-flex ga-2 align-center">
-            <v-btn
-              color="primary"
-              variant="outlined"
-              prepend-icon="mdi-magnify"
-              @click="loadInvoices"
-            >
-              Search
-            </v-btn>
-            <v-btn
-              variant="outlined"
-              prepend-icon="mdi-refresh"
-              @click="loadInvoices"
-              >Refresh</v-btn
-            >
-            <v-btn
-              variant="outlined"
-              prepend-icon="mdi-filter-remove"
-              @click="
-                () => {
-                  resetFilters()
-                  loadInvoices()
-                }
-              "
-            >
-              Clear Filters
-            </v-btn>
-          </v-col>
-        </v-row>
+            <v-col cols="12" md="2">
+              <v-select
+                v-model="filters.schemeId"
+                label="Scheme"
+                :items="inForceSchemes"
+                item-title="name"
+                item-value="id"
+                variant="outlined"
+                density="compact"
+                clearable
+                prepend-inner-icon="mdi-office-building-outline"
+                :loading="schemesLoading"
+              />
+            </v-col>
+            <v-col cols="12" md="2">
+              <v-select
+                v-model="filters.status"
+                label="Status"
+                :items="statusOptions"
+                variant="outlined"
+                density="compact"
+                clearable
+              />
+            </v-col>
+            <v-col cols="12" md="2">
+              <v-text-field
+                v-model="filters.from"
+                label="From"
+                type="date"
+                variant="outlined"
+                density="compact"
+              />
+            </v-col>
+            <v-col cols="12" md="2">
+              <v-text-field
+                v-model="filters.to"
+                label="To"
+                type="date"
+                variant="outlined"
+                density="compact"
+              />
+            </v-col>
+            <v-col cols="12" md="4" class="d-flex ga-2 align-center">
+              <v-btn
+                color="primary"
+                variant="outlined"
+                prepend-icon="mdi-magnify"
+                @click="loadInvoices"
+              >
+                Search
+              </v-btn>
+              <v-btn
+                variant="outlined"
+                prepend-icon="mdi-refresh"
+                @click="loadInvoices"
+                >Refresh</v-btn
+              >
+              <v-btn
+                variant="outlined"
+                prepend-icon="mdi-filter-remove"
+                @click="
+                  () => {
+                    resetFilters()
+                    loadInvoices()
+                  }
+                "
+              >
+                Clear Filters
+              </v-btn>
+            </v-col>
+          </v-row>
 
           <!-- Invoice Grid -->
           <v-row>
@@ -224,9 +224,12 @@ const statCards = computed(() => {
     {
       title: 'Overdue',
       value: fmtCurrency(overdue),
-      hint: overdue > 0 ? 'Past due — collections required' : 'No invoices past due date',
+      hint:
+        overdue > 0
+          ? 'Past due — collections required'
+          : 'No invoices past due date',
       icon: 'mdi-alert-circle-outline',
-      tone: (overdue > 0 ? 'error' : 'muted') as const
+      tone: overdue > 0 ? ('error' as const) : ('muted' as const)
     }
   ]
 })

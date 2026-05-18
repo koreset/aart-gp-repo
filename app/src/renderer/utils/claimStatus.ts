@@ -19,9 +19,7 @@ export type EditableClaimStatus = (typeof EDITABLE_CLAIM_STATUSES)[number]
 export type SubmittableClaimStatus = (typeof SUBMITTABLE_CLAIM_STATUSES)[number]
 
 export const isEditableClaimStatus = (status?: string | null): boolean =>
-  !!status &&
-  (EDITABLE_CLAIM_STATUSES as readonly string[]).includes(status)
+  !!status && (EDITABLE_CLAIM_STATUSES as readonly string[]).includes(status)
 
 export const isSubmittableClaimStatus = (status?: string | null): boolean =>
-  !!status &&
-  (SUBMITTABLE_CLAIM_STATUSES as readonly string[]).includes(status)
+  !!status && (SUBMITTABLE_CLAIM_STATUSES as readonly string[]).includes(status)

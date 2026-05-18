@@ -286,8 +286,7 @@ const router = createRouter({
     {
       path: '/group-pricing/quotes/:quoteId/takeover',
       name: 'group-pricing-takeover-upload',
-      component: () =>
-        import('../screens/group_pricing/TakeoverUpload.vue'),
+      component: () => import('../screens/group_pricing/TakeoverUpload.vue'),
       props: true,
       meta: { required_permission: 'underwriting:decide' },
       beforeEnter: (to, from) => checkPermissions(to, from)
@@ -304,9 +303,7 @@ const router = createRouter({
       path: '/group-pricing/claims-management/payment-schedules/:scheduleId',
       name: 'group-pricing-claim-payment-schedule-detail',
       component: () =>
-        import(
-          '../screens/group_pricing/claims_management/ClaimPaymentScheduleLayout.vue'
-        ),
+        import('../screens/group_pricing/claims_management/ClaimPaymentScheduleLayout.vue'),
       props: true,
       meta: { required_permission: 'claims_pay:create_schedule' },
       beforeEnter: (to, from) => checkPermissions(to, from),
@@ -319,41 +316,31 @@ const router = createRouter({
           path: 'claims',
           name: 'group-pricing-claim-payment-schedule-claims',
           component: () =>
-            import(
-              '../screens/group_pricing/claims_management/ClaimPaymentScheduleClaims.vue'
-            )
+            import('../screens/group_pricing/claims_management/ClaimPaymentScheduleClaims.vue')
         },
         {
           path: 'acb',
           name: 'group-pricing-claim-payment-schedule-acb',
           component: () =>
-            import(
-              '../screens/group_pricing/claims_management/ClaimPaymentScheduleACB.vue'
-            )
+            import('../screens/group_pricing/claims_management/ClaimPaymentScheduleACB.vue')
         },
         {
           path: 'queries',
           name: 'group-pricing-claim-payment-schedule-queries',
           component: () =>
-            import(
-              '../screens/group_pricing/claims_management/ClaimPaymentScheduleQueries.vue'
-            )
+            import('../screens/group_pricing/claims_management/ClaimPaymentScheduleQueries.vue')
         },
         {
           path: 'reconciliation',
           name: 'group-pricing-claim-payment-schedule-reconciliation',
           component: () =>
-            import(
-              '../screens/group_pricing/claims_management/ClaimPaymentScheduleReconciliation.vue'
-            )
+            import('../screens/group_pricing/claims_management/ClaimPaymentScheduleReconciliation.vue')
         },
         {
           path: 'proofs',
           name: 'group-pricing-claim-payment-schedule-proofs',
           component: () =>
-            import(
-              '../screens/group_pricing/claims_management/ClaimPaymentScheduleProofs.vue'
-            )
+            import('../screens/group_pricing/claims_management/ClaimPaymentScheduleProofs.vue')
         }
       ]
     },
@@ -361,9 +348,7 @@ const router = createRouter({
       path: '/group-pricing/claims-management/authority-matrix',
       name: 'group-pricing-claim-authority-matrix',
       component: () =>
-        import(
-          '../screens/group_pricing/claims_management/AuthorityMatrix.vue'
-        ),
+        import('../screens/group_pricing/claims_management/AuthorityMatrix.vue'),
       meta: { required_permission: 'claims_pay:admin_authority' },
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
@@ -371,9 +356,7 @@ const router = createRouter({
       path: '/group-pricing/claims-management/payment-cutoff',
       name: 'group-pricing-payment-cutoff-settings',
       component: () =>
-        import(
-          '../screens/group_pricing/claims_management/PaymentCutoffSettings.vue'
-        ),
+        import('../screens/group_pricing/claims_management/PaymentCutoffSettings.vue'),
       meta: { required_permission: 'claims_pay:admin_cutoff' },
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
@@ -381,9 +364,7 @@ const router = createRouter({
       path: '/group-pricing/claims-management/payment-exceptions',
       name: 'group-pricing-claim-payment-exceptions',
       component: () =>
-        import(
-          '../screens/group_pricing/claims_management/ClaimPaymentExceptions.vue'
-        ),
+        import('../screens/group_pricing/claims_management/ClaimPaymentExceptions.vue'),
       meta: { required_permission: 'claims_pay:view_exceptions' },
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
@@ -640,9 +621,7 @@ const router = createRouter({
           path: 'reconciliation',
           name: 'group-pricing-premium-reconciliation',
           component: () =>
-            import(
-              '../screens/group_pricing/premiums/PremiumReconciliation.vue'
-            ),
+            import('../screens/group_pricing/premiums/PremiumReconciliation.vue'),
           meta: {
             required_permission: 'navigation:manage_premium_reconciliation'
           },

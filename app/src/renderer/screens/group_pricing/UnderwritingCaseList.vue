@@ -194,7 +194,9 @@ const queryQuoteId = computed(() => {
 })
 const quoteIdLocked = computed(
   () =>
-    (props.quoteId !== undefined && props.quoteId !== null && props.quoteId !== '') ||
+    (props.quoteId !== undefined &&
+      props.quoteId !== null &&
+      props.quoteId !== '') ||
     queryQuoteId.value !== null
 )
 
@@ -217,7 +219,11 @@ watch(
 watch(
   () => queryQuoteId.value,
   (next) => {
-    if (props.quoteId === undefined || props.quoteId === null || props.quoteId === '') {
+    if (
+      props.quoteId === undefined ||
+      props.quoteId === null ||
+      props.quoteId === ''
+    ) {
       quoteIdFilter.value = next
       loadCases()
     }

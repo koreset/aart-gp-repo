@@ -28,10 +28,9 @@
             >
               <div class="text-body-2">
                 Each row authorises a role to perform a payment-schedule action
-                when the schedule's net payable amount falls between the
-                min and max bounds. Leave the matrix empty to allow all
-                holders of the relevant permission slug to act (bootstrap
-                mode).
+                when the schedule's net payable amount falls between the min and
+                max bounds. Leave the matrix empty to allow all holders of the
+                relevant permission slug to act (bootstrap mode).
               </div>
             </v-alert>
 
@@ -185,15 +184,26 @@ const ACTION_LABELS: Record<string, string> = {
   archive_schedule: 'Archive schedule'
 }
 
-const ACTION_OPTIONS = Object.entries(ACTION_LABELS).map(
-  ([value, title]) => ({ value, title })
-)
+const ACTION_OPTIONS = Object.entries(ACTION_LABELS).map(([value, title]) => ({
+  value,
+  title
+}))
 
 const headers = [
   { title: 'Role', key: 'role', sortable: true },
   { title: 'Action', key: 'action', sortable: true },
-  { title: 'Min amount', key: 'min_amount', sortable: true, align: 'end' as const },
-  { title: 'Max amount', key: 'max_amount', sortable: true, align: 'end' as const },
+  {
+    title: 'Min amount',
+    key: 'min_amount',
+    sortable: true,
+    align: 'end' as const
+  },
+  {
+    title: 'Max amount',
+    key: 'max_amount',
+    sortable: true,
+    align: 'end' as const
+  },
   { title: 'Active', key: 'is_active', sortable: false },
   { title: '', key: 'actions', sortable: false }
 ]
@@ -277,10 +287,7 @@ async function save() {
   saving.value = true
   try {
     if (editing.value) {
-      await GroupPricingService.updateAuthorityMatrixRow(
-        editing.value.id,
-        form
-      )
+      await GroupPricingService.updateAuthorityMatrixRow(editing.value.id, form)
       notify('Authority row updated.')
     } else {
       await GroupPricingService.createAuthorityMatrixRow(form)

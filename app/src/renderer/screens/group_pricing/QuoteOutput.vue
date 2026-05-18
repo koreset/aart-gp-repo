@@ -158,9 +158,7 @@
                     >
                       <strong>Takeover schedule on file</strong> —
                       {{ priorSchedule.insurer_name || 'Prior insurer' }}:
-                      <strong>{{
-                        priorSchedule.in_force_count
-                      }}</strong>
+                      <strong>{{ priorSchedule.in_force_count }}</strong>
                       members continued,
                       <strong>{{
                         Math.max(

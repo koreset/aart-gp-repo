@@ -119,9 +119,7 @@
             class="d-inline-flex ml-3 align-middle"
             hide-details
             :label="
-              showAllColumns
-                ? 'Showing all columns'
-                : 'Showing summary columns'
+              showAllColumns ? 'Showing all columns' : 'Showing summary columns'
             "
             :disabled="loadingData"
             @update:model-value="reloadCurrentTable"
