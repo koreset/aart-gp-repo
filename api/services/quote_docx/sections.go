@@ -179,7 +179,7 @@ func BuildPremiumSummarySection(quote models.GroupPricingQuote, summaries []mode
 		buf.WriteString(sectionHeadingXML("Premium Summary"))
 
 		premiumRows := BuildPremiumSummaryRows(summaries)
-		labels := []string{"Category", "No of Lives", "Total Annual Salary", "Annual Premium", "% Salary"}
+		labels := []string{"Category", "No of Lives", "Total Annual Salary", "Monthly Premium", "%Salary"}
 
 		cw := LandscapeContentWidth
 		colWidths := []int{
@@ -202,7 +202,7 @@ func BuildPremiumSummarySection(quote models.GroupPricingQuote, summaries []mode
 			}
 
 			alignments := []string{"LEFT", "CENTER", "RIGHT", "RIGHT", "CENTER"}
-			values := []string{row.Category, row.MemberCount, row.TotalSalary, row.AnnualPremium, row.PercentSalary}
+			values := []string{row.Category, row.MemberCount, row.TotalSalary, row.MonthlyPremium, row.PercentSalary}
 			tableRows = append(tableRows, dataRowXML(values, colWidths, alignments, isTotal, fillColor))
 		}
 

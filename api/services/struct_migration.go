@@ -417,6 +417,40 @@ func getStructType(structName string) (reflect.Type, error) {
 		return reflect.TypeOf(models.GeneralLoading{}), nil
 	case "RegionLoading":
 		return reflect.TypeOf(models.RegionLoading{}), nil
+	case "UnderwritingTierConfig":
+		return reflect.TypeOf(models.UnderwritingTierConfig{}), nil
+	case "UnderwritingCase":
+		return reflect.TypeOf(models.UnderwritingCase{}), nil
+	case "UnderwritingDecision":
+		return reflect.TypeOf(models.UnderwritingDecision{}), nil
+	case "UnderwritingCaseEvent":
+		return reflect.TypeOf(models.UnderwritingCaseEvent{}), nil
+	case "UnderwritingCaseAttachment":
+		return reflect.TypeOf(models.UnderwritingCaseAttachment{}), nil
+	case "UWRuleSet":
+		return reflect.TypeOf(models.UWRuleSet{}), nil
+	case "UWRule":
+		return reflect.TypeOf(models.UWRule{}), nil
+	case "UWConditionCode":
+		return reflect.TypeOf(models.UWConditionCode{}), nil
+	case "QuoteReRateEvent":
+		return reflect.TypeOf(models.QuoteReRateEvent{}), nil
+	case "MemberDisclosure":
+		return reflect.TypeOf(models.MemberDisclosure{}), nil
+	case "ActivelyAtWorkAttestation":
+		return reflect.TypeOf(models.ActivelyAtWorkAttestation{}), nil
+	case "ConsentRecord":
+		return reflect.TypeOf(models.ConsentRecord{}), nil
+	case "VendorRequest":
+		return reflect.TypeOf(models.VendorRequest{}), nil
+	case "VendorWebhook":
+		return reflect.TypeOf(models.VendorWebhook{}), nil
+	case "PriorInsurerSchedule":
+		return reflect.TypeOf(models.PriorInsurerSchedule{}), nil
+	case "PriorInsurerMember":
+		return reflect.TypeOf(models.PriorInsurerMember{}), nil
+	case "PolicyHandoffSnapshot":
+		return reflect.TypeOf(models.PolicyHandoffSnapshot{}), nil
 	case "PremiumLoadings":
 		return reflect.TypeOf(models.PremiumLoading{}), nil
 

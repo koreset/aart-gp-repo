@@ -90,6 +90,94 @@
                         <strong>Status:</strong> {{ quote.status || 'N/A' }}
                       </v-col>
                     </v-row>
+                    <v-row v-if="hasUnderwritingTiers">
+                      <v-col cols="12">
+                        <strong>Members Requiring Underwriting:</strong>
+                        <v-chip
+                          class="ml-2"
+                          color="success"
+                          variant="tonal"
+                          size="small"
+                          >Within FCL:
+                          {{ underwritingTierTotals.within }}</v-chip
+                        >
+                        <v-chip
+                          class="ml-2"
+                          color="warning"
+                          variant="tonal"
+                          size="small"
+                          >Short-form:
+                          {{ underwritingTierTotals.shortForm }}</v-chip
+                        >
+                        <v-chip
+                          class="ml-2"
+                          color="error"
+                          variant="tonal"
+                          size="small"
+                          >Full UW:
+                          {{ underwritingTierTotals.fullReview }}</v-chip
+                        >
+                      </v-col>
+                    </v-row>
+                    <v-alert
+                      v-if="latestReRate"
+                      :type="
+                        latestReRate.delta > 0
+                          ? 'warning'
+                          : latestReRate.delta < 0
+                            ? 'info'
+                            : 'success'
+                      "
+                      variant="tonal"
+                      density="compact"
+                      class="mt-3"
+                      :icon="
+                        latestReRate.delta >= 0
+                          ? 'mdi-arrow-up-bold'
+                          : 'mdi-arrow-down-bold'
+                      "
+                    >
+                      <strong>Quote re-rated</strong> —
+                      {{ formatCurrency(latestReRate.previous_premium) }} →
+                      <strong>{{
+                        formatCurrency(latestReRate.new_premium)
+                      }}</strong>
+                      ({{ latestReRate.delta >= 0 ? '+' : ''
+                      }}{{ formatCurrency(latestReRate.delta) }}).
+                      <span class="text-caption text-grey">{{
+                        latestReRate.reason
+                      }}</span>
+                    </v-alert>
+                    <v-alert
+                      v-if="priorSchedule"
+                      type="info"
+                      variant="tonal"
+                      density="compact"
+                      class="mt-3"
+                      icon="mdi-handshake-outline"
+                    >
+                      <strong>Takeover schedule on file</strong> —
+                      {{ priorSchedule.insurer_name || 'Prior insurer' }}:
+                      <strong>{{
+                        priorSchedule.in_force_count
+                      }}</strong>
+                      members continued,
+                      <strong>{{
+                        Math.max(
+                          priorSchedule.member_count -
+                            priorSchedule.in_force_count,
+                          0
+                        )
+                      }}</strong>
+                      need new evidence.
+                      <v-btn
+                        size="x-small"
+                        variant="text"
+                        class="ml-2"
+                        @click="openTakeover"
+                        >Open schedule →</v-btn
+                      >
+                    </v-alert>
                   </v-card-text>
                 </v-card>
               </v-col>
@@ -435,7 +523,8 @@
 
 <script setup lang="ts">
 import BaseCard from '@/renderer/components/BaseCard.vue'
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useWebSocket } from '@/renderer/composables/useWebSocket'
 import jsPDF from 'jspdf'
 import { applyPlugin } from 'jspdf-autotable'
 // import logo from '@/renderer/assets/aart-logo-01.png'
@@ -483,6 +572,86 @@ const resultSummaries: any = ref([])
 const insurer: any = ref(null)
 const categoryEducatorBenefits: any = ref([])
 const riskProfileVariationTolerancePct = ref<number>(7)
+
+const underwritingTierTotals = computed(() => {
+  const totals = { within: 0, shortForm: 0, fullReview: 0 }
+  for (const summary of resultSummaries.value || []) {
+    totals.within += summary.within_free_cover_limit_count || 0
+    totals.shortForm += summary.short_form_underwriting_count || 0
+    totals.fullReview += summary.full_underwriting_count || 0
+  }
+  return totals
+})
+
+const hasUnderwritingTiers = computed(
+  () =>
+    underwritingTierTotals.value.within +
+      underwritingTierTotals.value.shortForm +
+      underwritingTierTotals.value.fullReview >
+    0
+)
+
+interface ReRatePayload {
+  quote_id: number
+  previous_premium: number
+  new_premium: number
+  delta: number
+  reason: string
+  case_id?: number
+  rating_version: number
+  triggered_by: string
+  triggered_at: string
+}
+const latestReRate = ref<ReRatePayload | null>(null)
+const { on: wsOn, off: wsOff } = useWebSocket()
+
+interface PriorSchedule {
+  id: number
+  insurer_name: string
+  certificate_number: string
+  member_count: number
+  in_force_count: number
+}
+const priorSchedule = ref<PriorSchedule | null>(null)
+
+const loadPriorSchedule = async () => {
+  if (!quote.value?.id) return
+  try {
+    const res = await GroupPricingService.getPriorInsurerScheduleForQuote(
+      quote.value.id
+    )
+    priorSchedule.value = res.data
+  } catch (err: any) {
+    // 404 is the normal "no schedule" path.
+    priorSchedule.value = null
+  }
+}
+
+const openTakeover = () => {
+  if (!quote.value?.id) return
+  router.push({
+    name: 'group-pricing-takeover-upload',
+    params: { quoteId: String(quote.value.id) }
+  })
+}
+
+const handleReRated = (payload: ReRatePayload) => {
+  if (!quote.value || payload.quote_id !== quote.value.id) return
+  latestReRate.value = payload
+  // Refresh result summaries so OutputSummary picks up new totals.
+  refreshResultSummaries()
+}
+
+const refreshResultSummaries = async () => {
+  if (!quote.value?.id) return
+  try {
+    const res = await GroupPricingService.getResultSummary(quote.value.id)
+    if (res?.data) resultSummaries.value = res.data
+  } catch (err) {
+    // non-fatal — the banner still shows the headline numbers.
+    console.warn('Refresh after re-rate failed', err)
+  }
+}
 
 // const router = useRouter()
 
@@ -976,6 +1145,7 @@ onMounted(async () => {
   GroupPricingService.getQuote(props.quoteId).then((res) => {
     quote.value = res.data
     console.log('Quote data:', quote.value)
+    loadPriorSchedule()
   })
   GroupPricingService.getResultSummary(props.quoteId).then((res) => {
     resultSummaries.value = res.data || []
@@ -1002,6 +1172,13 @@ onMounted(async () => {
       // Fall back to the default seeded into the ref so quote generation
       // still works if the settings endpoint is unreachable.
     })
+  // Subscribe to re-rate pushes for this quote so the broker sees revised
+  // premiums live when an underwriter applies a decision.
+  wsOn('quote_re_rated', handleReRated)
+})
+
+onUnmounted(() => {
+  wsOff('quote_re_rated', handleReRated)
 })
 
 const exportBenefitDataToExcel = () => {
@@ -1782,7 +1959,9 @@ const buildSystemPdf = async (): Promise<any> => {
       doc.text(`${item.category} Category`, leftMargin, currentY)
     }
 
-    const premiumBreakdownData = [
+    // Cells can be plain strings or autoTable cell objects (used to grey-out
+    // the rate column for income-replacement benefits), so widen the type.
+    const premiumBreakdownData: any[][] = [
       [
         'Benefit',
         'Total Sum Assured',
@@ -1799,19 +1978,26 @@ const buildSystemPdf = async (): Promise<any> => {
     // pre-commission rate into an otherwise post-commission row.
     const itemMonthlySalary = item.total_annual_salary / 12
 
+    // Income-replacement benefits (PHI, TTD) are priced as a percentage of
+    // salary rather than per 1000 of cover, so the rate column is left blank
+    // and greyed for those rows.
     const breakdownRow = (
       title: string,
       sumAssured: number,
-      annualPremiumField: string
+      annualPremiumField: string,
+      rateApplicable = true
     ) => {
       const monthlyPremium = finalFieldValue(item, annualPremiumField) / 12
       const pctSalary =
         itemMonthlySalary > 0 ? (monthlyPremium / itemMonthlySalary) * 100 : 0
+      const rateCell = rateApplicable
+        ? ratePer1000(monthlyPremium, sumAssured)
+        : { content: '', styles: { fillColor: [224, 224, 224] } }
       return [
         title,
         formatCurrency(sumAssured),
         formatCurrency(monthlyPremium),
-        ratePer1000(monthlyPremium, sumAssured),
+        rateCell,
         `${roundUpToTwoDecimalsAccounting(pctSalary)}%`
       ]
     }
@@ -1848,7 +2034,8 @@ const buildSystemPdf = async (): Promise<any> => {
       breakdownRow(
         phiBenefitTitle.value,
         item.total_phi_capped_income,
-        'final_phi_annual_office_premium'
+        'final_phi_annual_office_premium',
+        false
       )
     )
     premiumBreakdownData.push(
@@ -1862,7 +2049,8 @@ const buildSystemPdf = async (): Promise<any> => {
       breakdownRow(
         ttdBenefitTitle.value,
         item.total_ttd_capped_income,
-        'final_ttd_annual_office_premium'
+        'final_ttd_annual_office_premium',
+        false
       )
     )
 

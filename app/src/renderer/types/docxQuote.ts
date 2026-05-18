@@ -76,8 +76,7 @@ export interface PremiumSummaryRow {
   category: string
   memberCount: string
   totalSalary: string
-  totalSumAssured: string
-  annualPremium: string
+  monthlyPremium: string
   percentSalary: string
 }
 
@@ -85,16 +84,20 @@ export interface PremiumSummaryRow {
 export interface GroupFuneralRow {
   category: string
   memberCount: string
-  monthlyPremium: string
-  annualPremium: string
-  totalAnnualPremium: string
+  monthlyPremiumPerMember: string
+  totalMonthlyPremium: string
 }
 
 /** Row data for per-category premium breakdown */
 export interface PremiumBreakdownRow {
   benefit: string
   totalSumAssured: string
+  /** Annual office premium — retained for the Benefit Schedule output. */
   annualPremium: string
+  /** Post-commission monthly premium (Final* annual ÷ 12). */
+  monthlyPremium: string
+  /** Monthly rate per 1000 of sum assured; `'n.a'` when sum assured is zero. */
+  monthlyRate: string
   percentSalary: string
 }
 

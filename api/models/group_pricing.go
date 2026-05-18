@@ -182,6 +182,25 @@ type GroupPricingQuote struct {
 	RiskRateCode                  string                    `json:"risk_rate_code" gorm:"column:risk_rate_code"`
 	SchemeQuoteStatus             Status                    `json:"scheme_quote_status" gorm:"column:scheme_quote_status"`
 	EditMode                      bool                      `json:"edit_mode" gorm:"-"`
+	// RatingVersion increments on every UW re-rate so concurrent edits can
+	// detect staleness (optimistic-lock). 0 = never re-rated.
+	RatingVersion                 int                       `json:"rating_version"`
+}
+
+// QuoteReRateEvent is an append-only record of every UW re-rate applied to
+// a quote. Compliance reproduces a quote's history by replaying these in
+// order alongside the snapshotted rule-set version and decision rows.
+type QuoteReRateEvent struct {
+	ID              int       `json:"id" gorm:"primary_key"`
+	QuoteID         int       `json:"quote_id" gorm:"index"`
+	TriggeredBy     string    `json:"triggered_by" gorm:"size:128"`
+	TriggeredAt     time.Time `json:"triggered_at" gorm:"autoCreateTime"`
+	PreviousPremium float64   `json:"previous_premium"`
+	NewPremium      float64   `json:"new_premium"`
+	PremiumDelta    float64   `json:"premium_delta"`
+	Reason          string    `json:"reason" gorm:"type:text"`
+	CaseID          int       `json:"case_id,omitempty"`
+	RatingVersion   int       `json:"rating_version"`
 }
 
 type GroupRiskQuoteStats struct {
@@ -1013,6 +1032,10 @@ type GroupPricingExperienceRateOverride struct {
 }
 
 type MemberRatingResult struct {
+	// ID is auto-incrementing. Added Phase 4 so UW re-rate can update rows
+	// in place (the pre-Phase-4 lifecycle delete-then-CreateInBatches still
+	// works — auto-increment fills the column on insert).
+	ID                              int       `json:"id" gorm:"primaryKey;autoIncrement"`
 	FinancialYear                   int       `json:"financial_year" csv:"financial_year"`
 	SchemeId                        int       `json:"-" csv:"scheme_id"`
 	QuoteId                         int       `json:"-" csv:"quote_id" gorm:"index"`
@@ -1334,6 +1357,36 @@ type MemberRatingResult struct {
 
 	ExceedsNormalRetirementAgeIndicator    int     `json:"exceeds_normal_retirement_age_indicator" csv:"exceeds_normal_retirement_age_indicator"`
 	ExceedsFreeCoverLimitIndicator         int     `json:"exceeds_free_cover_limit_indicator" csv:"exceeds_free_cover_limit_indicator"`
+	// UnderwritingTier classifies the member by SA-to-FCL ratio so the broker
+	// sees underwriting requirements at quote time. 0 = within FCL (auto-accept),
+	// 1 = modestly above FCL (short-form / tele-UW), 2 = significantly above
+	// (full underwriting). The ratio is computed against requested (uncapped)
+	// SA across all benefits; the member's tier is the max across benefits.
+	UnderwritingTier                       int     `json:"underwriting_tier" csv:"underwriting_tier"`
+	FCLExcessRatio                         float64 `json:"fcl_excess_ratio" csv:"fcl_excess_ratio"`
+	// Underwriting decision adjustments (Phase 4). Applied on top of the
+	// already-loaded rate and capped SA when ApplyDecisionsAndReRate runs.
+	// Loading is a percentage (e.g. 25 = +25%). CoverCap is an absolute
+	// monetary cap; 0 means "no underwriting cap" (rating result keeps its
+	// original FCL/restriction-driven cap). Declined=true zeros the benefit's
+	// premium and SA contribution to the UW-adjusted totals.
+	UWGlaLoading                           float64 `json:"uw_gla_loading" csv:"uw_gla_loading"`
+	UWGlaCoverCap                          float64 `json:"uw_gla_cover_cap" csv:"uw_gla_cover_cap"`
+	UWGlaDeclined                          bool    `json:"uw_gla_declined" csv:"uw_gla_declined"`
+	UWPtdLoading                           float64 `json:"uw_ptd_loading" csv:"uw_ptd_loading"`
+	UWPtdCoverCap                          float64 `json:"uw_ptd_cover_cap" csv:"uw_ptd_cover_cap"`
+	UWPtdDeclined                          bool    `json:"uw_ptd_declined" csv:"uw_ptd_declined"`
+	UWCiLoading                            float64 `json:"uw_ci_loading" csv:"uw_ci_loading"`
+	UWCiCoverCap                           float64 `json:"uw_ci_cover_cap" csv:"uw_ci_cover_cap"`
+	UWCiDeclined                           bool    `json:"uw_ci_declined" csv:"uw_ci_declined"`
+	UWSglaLoading                          float64 `json:"uw_sgla_loading" csv:"uw_sgla_loading"`
+	UWSglaCoverCap                         float64 `json:"uw_sgla_cover_cap" csv:"uw_sgla_cover_cap"`
+	UWSglaDeclined                         bool    `json:"uw_sgla_declined" csv:"uw_sgla_declined"`
+	// UWAdjustedAnnualOfficePremium is the per-member office premium after
+	// UW adjustments. 0 means no adjustments have been applied; the original
+	// premium (sum of FinalGlaOfficePremium + FinalPtdOfficePremium + ...) is
+	// the operative figure in that case.
+	UWAdjustedAnnualOfficePremium          float64 `json:"uw_adjusted_annual_office_premium" csv:"uw_adjusted_annual_office_premium"`
 	FuneralExperienceAdjustedAnnualPremium float64 `json:"funeral_experience_adjusted_annual_premium" csv:"funeral_experience_adjusted_annual_premium"`
 
 	// Reinsurance industry loadings (resolved per member from ReinsuranceIndustryLoading table)
@@ -1819,6 +1872,21 @@ type MemberRatingResultSummary struct {
 
 	ExceedsNormalRetirementAgeIndicator int `json:"exceeds_normal_retirement_age_indicator" csv:"exceeds_normal_retirement_age_indicator"`
 	ExceedsFreeCoverLimitIndicator      int `json:"exceeds_free_cover_limit_indicator" csv:"exceeds_free_cover_limit_indicator"`
+	// Underwriting tier counts — aggregated from MemberRatingResult.UnderwritingTier
+	// for the category. Indicative-data mode leaves these zero (no member rows).
+	WithinFreeCoverLimitCount  int `json:"within_free_cover_limit_count" csv:"within_free_cover_limit_count"`
+	ShortFormUnderwritingCount int `json:"short_form_underwriting_count" csv:"short_form_underwriting_count"`
+	FullUnderwritingCount      int `json:"full_underwriting_count" csv:"full_underwriting_count"`
+	// UW-adjusted totals (Phase 4). Populated when ApplyDecisionsAndReRate
+	// has run for the quote. 0 / nil indicates no UW decisions have been
+	// applied yet — broker UI falls back to the original totals.
+	UWAdjustedTotalAnnualPremium        float64    `json:"uw_adjusted_total_annual_premium" csv:"uw_adjusted_total_annual_premium"`
+	UWAdjustedTotalGlaCappedSumAssured  float64    `json:"uw_adjusted_total_gla_capped_sum_assured" csv:"uw_adjusted_total_gla_capped_sum_assured"`
+	UWAdjustedTotalPtdCappedSumAssured  float64    `json:"uw_adjusted_total_ptd_capped_sum_assured" csv:"uw_adjusted_total_ptd_capped_sum_assured"`
+	UWAdjustedTotalCiCappedSumAssured   float64    `json:"uw_adjusted_total_ci_capped_sum_assured" csv:"uw_adjusted_total_ci_capped_sum_assured"`
+	UWAdjustedTotalSglaCappedSumAssured float64    `json:"uw_adjusted_total_sgla_capped_sum_assured" csv:"uw_adjusted_total_sgla_capped_sum_assured"`
+	UWReRatedAt                         *time.Time `json:"uw_re_rated_at,omitempty"`
+	UWReRatedBy                         string     `json:"uw_re_rated_by,omitempty" gorm:"size:128"`
 	//TotalGlaExperienceAdjustedAnnualPremium     float64 `json:"total_gla_experience_adjusted_annual_premium" csv:"total_gla_experience_adjusted_annual_premium"`
 	//TotalPtdExperienceAdjustedAnnualPremium     float64 `json:"total_ptd_experience_adjusted_annual_premium" csv:"total_ptd_experience_adjusted_annual_premium"`
 	//TotalTtdExperienceAdjustedAnnualPremium     float64 `json:"total_ttd_experience_adjusted_annual_premium" csv:"total_ttd_experience_adjusted_annual_premium"`
@@ -2976,6 +3044,374 @@ type RegionLoading struct {
 	FunAidsRegionLoadingRate float64   `json:"fun_aids_region_loading_rate" csv:"fun_aids_region_loading_rate"`
 	CreationDate             time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
 	CreatedBy                string    `json:"created_by" csv:"created_by"`
+}
+
+// UnderwritingTierConfig defines the SA-to-FCL multiple bands that classify a
+// member into an underwriting tier. Rows are ordered by Tier ascending and
+// matched on LowerMultiple <= ratio < UpperMultiple. An UpperMultiple of 0
+// means "no upper bound" (catch-all). When no active rows exist for an
+// InsurerID, services.DefaultTierConfig() is used.
+type UnderwritingTierConfig struct {
+	ID            int       `json:"id" gorm:"primary_key"`
+	InsurerID     int       `json:"insurer_id" csv:"insurer_id" gorm:"index"`
+	Tier          int       `json:"tier" csv:"tier"`
+	LowerMultiple float64   `json:"lower_multiple" csv:"lower_multiple"`
+	UpperMultiple float64   `json:"upper_multiple" csv:"upper_multiple"`
+	Active        bool      `json:"active" csv:"active" gorm:"default:true"`
+	CreationDate  time.Time `json:"creation_date" csv:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy     string    `json:"created_by" csv:"created_by"`
+}
+
+// UWCaseStatus is the lifecycle of an underwriting case. Kept separate from
+// the quote-wide Status enum because case states are local to the underwriter
+// workflow and should not collide with quote statuses.
+type UWCaseStatus string
+
+const (
+	UWCaseStatusPendingEvidence UWCaseStatus = "pending_evidence"
+	UWCaseStatusInReview        UWCaseStatus = "in_review"
+	UWCaseStatusDecided         UWCaseStatus = "decided"
+	UWCaseStatusPostponed       UWCaseStatus = "postponed"
+	UWCaseStatusDeclined        UWCaseStatus = "declined"
+)
+
+// UWDecisionOutcome — accept / postpone / decline on a single benefit.
+type UWDecisionOutcome string
+
+const (
+	UWOutcomeAccept   UWDecisionOutcome = "accept"
+	UWOutcomePostpone UWDecisionOutcome = "postpone"
+	UWOutcomeDecline  UWDecisionOutcome = "decline"
+)
+
+// UWAttachmentKind — what the uploaded file is for. The renderer mirrors
+// these values; keep both sides in lock-step when adding new kinds.
+const (
+	UWAttachmentKindMedicalReport   = "medical_report"
+	UWAttachmentKindActivelyAtWork  = "actively_at_work"
+	UWAttachmentKindConsent         = "consent"
+	UWAttachmentKindDisclosure      = "disclosure"
+)
+
+// UnderwritingCase is the per-member case file created automatically for
+// every member whose UnderwritingTier >= 1 (short-form or full-UW). One case
+// per (QuoteID, MemberIdNumber+MemberName+Category) — re-rates of the same
+// quote update tier/ratio on the existing case rather than creating a new one
+// (so underwriter decisions survive a re-calc).
+type UnderwritingCase struct {
+	ID      int `json:"id" gorm:"primary_key"`
+	QuoteID int `json:"quote_id" gorm:"index"`
+	// Member snapshot — captured at case-create time so the case keeps a
+	// useful identity even if the member rating row is rewritten on re-calc.
+	// MemberIdNumber may be empty for indicative-mode quotes; MemberName +
+	// Category are always populated.
+	MemberIdNumber string `json:"member_id_number" gorm:"index"`
+	MemberName     string `json:"member_name"`
+	Category       string `json:"category"`
+	// Snapshot of tier + ratio at the latest calc. Updated by CreateCasesForQuote
+	// on every re-calc; underwriter decisions are NOT cleared.
+	Tier                    int     `json:"tier"`
+	FCLExcessRatio          float64 `json:"fcl_excess_ratio"`
+	GlaSumAssured           float64 `json:"gla_sum_assured"`
+	PtdSumAssured           float64 `json:"ptd_sum_assured"`
+	CiSumAssured            float64 `json:"ci_sum_assured"`
+	SpouseGlaSumAssured     float64 `json:"spouse_gla_sum_assured"`
+	FreeCoverLimit          float64 `json:"free_cover_limit"`
+	// Workflow.
+	Status                   UWCaseStatus `json:"status" gorm:"size:32;index"`
+	AssignedUnderwriterEmail string       `json:"assigned_underwriter_email" gorm:"size:128;index"`
+	DecidedAt                *time.Time   `json:"decided_at,omitempty"`
+	DecidedBy                string       `json:"decided_by" gorm:"size:128"`
+	// Rule-set snapshot at case-create time. 0 means no active rule set was
+	// in effect when the case was opened; re-running the engine on this case
+	// later uses the snapshotted version, NOT the latest active set, so
+	// historical cases reproduce.
+	RuleSetID      int `json:"rule_set_id"`
+	RuleSetVersion int `json:"rule_set_version"`
+	// Engine outcome snapshot, refreshed every time a disclosure is
+	// submitted. Underwriters see this as guidance — they still commit a
+	// human UnderwritingDecision separately. Empty / zero means "no engine
+	// evaluation yet".
+	EngineOutcome      string     `json:"engine_outcome" gorm:"size:16"`
+	EngineLoading      float64    `json:"engine_loading"`
+	EngineExclusions   string     `json:"engine_exclusions" gorm:"type:text"` // JSON array of exclusion codes
+	EngineEvaluatedAt  *time.Time `json:"engine_evaluated_at,omitempty"`
+	CreationDate             time.Time    `json:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy                string       `json:"created_by" gorm:"size:128"`
+	UpdatedAt                time.Time    `json:"updated_at" gorm:"autoUpdateTime"`
+
+	Decisions   []UnderwritingDecision         `json:"decisions,omitempty" gorm:"foreignKey:CaseID"`
+	Events      []UnderwritingCaseEvent        `json:"events,omitempty" gorm:"foreignKey:CaseID"`
+	Attachments []UnderwritingCaseAttachment   `json:"attachments,omitempty" gorm:"foreignKey:CaseID"`
+}
+
+// UnderwritingDecision is one outcome per benefit on a case. A case has many
+// decisions; the latest decision per benefit is the operative one.
+type UnderwritingDecision struct {
+	ID                int               `json:"id" gorm:"primary_key"`
+	CaseID            int               `json:"case_id" gorm:"index"`
+	BenefitType       string            `json:"benefit_type" gorm:"size:16"`
+	Outcome           UWDecisionOutcome `json:"outcome" gorm:"size:16"`
+	LoadingPercent    float64           `json:"loading_percent"`
+	LoadingFlatAmount float64           `json:"loading_flat_amount"`
+	ExclusionCode     string            `json:"exclusion_code" gorm:"size:64"`
+	ExclusionText     string            `json:"exclusion_text" gorm:"type:text"`
+	CoverCap          float64           `json:"cover_cap"`
+	Notes             string            `json:"notes" gorm:"type:text"`
+	CreationDate      time.Time         `json:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy         string            `json:"created_by" gorm:"size:128"`
+}
+
+// UnderwritingCaseEvent is an append-only audit log for the case. Every state
+// transition, decision, attachment and notification produces a row.
+type UnderwritingCaseEvent struct {
+	ID           int       `json:"id" gorm:"primary_key"`
+	CaseID       int       `json:"case_id" gorm:"index"`
+	EventType    string    `json:"event_type" gorm:"size:64"`
+	Actor        string    `json:"actor" gorm:"size:128"`
+	Payload      string    `json:"payload" gorm:"type:text"`
+	CreationDate time.Time `json:"creation_date" gorm:"autoCreateTime"`
+}
+
+// PriorInsurerSchedule is a broker-uploaded schedule from the outgoing
+// insurer when AART takes over a scheme. One row per upload; the file
+// itself is stored on disk and linked via DocumentPath.
+type PriorInsurerSchedule struct {
+	ID                int        `json:"id" gorm:"primary_key"`
+	QuoteID           int        `json:"quote_id" gorm:"index"`
+	InsurerName       string     `json:"insurer_name" gorm:"size:255"`
+	CertificateNumber string     `json:"certificate_number" gorm:"size:128"`
+	EffectiveDate     *time.Time `json:"effective_date,omitempty"`
+	ExpiryDate        *time.Time `json:"expiry_date,omitempty"`
+	DocumentPath      string     `json:"document_path" gorm:"size:512"`
+	UploadedAt        time.Time  `json:"uploaded_at" gorm:"autoCreateTime"`
+	UploadedBy        string     `json:"uploaded_by" gorm:"size:128"`
+	MemberCount       int        `json:"member_count"`
+	InForceCount      int        `json:"in_force_count"`
+	Notes             string     `json:"notes" gorm:"type:text"`
+
+	Members []PriorInsurerMember `json:"members,omitempty" gorm:"foreignKey:ScheduleID"`
+}
+
+// PriorInsurerMember is one row from a PriorInsurerSchedule. PriorLoadings
+// and PriorExclusions are JSON blobs because schedules are wildly
+// inconsistent across insurers; we keep the raw structure for audit and
+// surface a canonical interpretation via the matcher.
+type PriorInsurerMember struct {
+	ID             int     `json:"id" gorm:"primary_key"`
+	ScheduleID     int     `json:"schedule_id" gorm:"index"`
+	MemberIdNumber string  `json:"member_id_number" gorm:"size:64;index"`
+	MemberName     string  `json:"member_name" gorm:"size:255"`
+	DateOfBirth    *time.Time `json:"date_of_birth,omitempty"`
+	GlaSumAssured  float64 `json:"gla_sum_assured"`
+	PtdSumAssured  float64 `json:"ptd_sum_assured"`
+	CiSumAssured   float64 `json:"ci_sum_assured"`
+	PriorLoadings  string  `json:"prior_loadings" gorm:"type:text"`  // JSON: {"gla": 25, "ptd": 50}
+	PriorExclusions string `json:"prior_exclusions" gorm:"type:text"` // JSON: ["smoker", "diabetes"]
+	InForce        bool    `json:"in_force"`
+	// Match outcome — populated by MatchPriorMembersToCensus.
+	MatchedMemberName string `json:"matched_member_name" gorm:"size:255"`
+	MatchedCategory   string `json:"matched_category" gorm:"size:128"`
+	MatchedCaseID     int    `json:"matched_case_id"`
+	TakeoverOutcome   string `json:"takeover_outcome" gorm:"size:48"` // continuation_no_evidence | continuation_with_loading | new_evidence_required | unmatched
+}
+
+// PolicyHandoffSnapshot is the append-only canonical record of every
+// in-force handoff. The Payload field is a JSON document containing the
+// full accepted quote — scheme, categories, members, decisions,
+// attachments index — so compliance can reproduce what was handed off
+// from this single row.
+type PolicyHandoffSnapshot struct {
+	ID            int       `json:"id" gorm:"primary_key"`
+	QuoteID       int       `json:"quote_id" gorm:"index"`
+	SchemeID      int       `json:"scheme_id" gorm:"index"`
+	HandedOffAt   time.Time `json:"handed_off_at" gorm:"autoCreateTime"`
+	HandedOffBy   string    `json:"handed_off_by" gorm:"size:128"`
+	Reason        string    `json:"reason" gorm:"type:text"`
+	MemberCount   int       `json:"member_count"`
+	TakeoverCount int       `json:"takeover_count"`
+	Payload       string    `json:"payload" gorm:"type:longtext"`
+}
+
+// VendorRequest is the audit row for every outbound vendor call: pathology
+// pulls, GP-record requests, e-signature envelopes and SMS sends all share
+// this shape. ExternalRequestID is the vendor's identifier; webhooks
+// reference it to find the originating row.
+type VendorRequest struct {
+	ID                  int        `json:"id" gorm:"primary_key"`
+	Kind                string     `json:"kind" gorm:"size:16;index"` // pathology | gp_records | esign | sms
+	Provider            string     `json:"provider" gorm:"size:64"`
+	CaseID              int        `json:"case_id,omitempty" gorm:"index"`
+	QuoteID             int        `json:"quote_id,omitempty" gorm:"index"`
+	Subject             string     `json:"subject" gorm:"size:255"` // recipient email / phone / member id
+	Body                string     `json:"body" gorm:"type:text"`
+	MetadataJSON        string     `json:"metadata_json" gorm:"type:text"` // free-form per-kind extras
+	RequestPayloadHash  string     `json:"request_payload_hash" gorm:"size:64;index"`
+	ExternalRequestID   string     `json:"external_request_id" gorm:"size:128;index"`
+	Status              string     `json:"status" gorm:"size:32;index"` // queued | in_flight | awaiting_response | complete | failed | cancelled
+	ResponseJSON        string     `json:"response_json" gorm:"type:text"`
+	CostCents           int        `json:"cost_cents"`
+	RequestedAt         time.Time  `json:"requested_at" gorm:"autoCreateTime"`
+	RequestedBy         string     `json:"requested_by" gorm:"size:128"`
+	CompletedAt         *time.Time `json:"completed_at,omitempty"`
+	ErrorMessage        string     `json:"error_message" gorm:"type:text"`
+}
+
+// VendorWebhook is the inbound payload audit. Stored before any processing
+// so we can replay if the dispatch into the case file fails. IdempotencyKey
+// is the (provider + external request id + body sha256) — re-deliveries
+// from a vendor are recognised by the same key.
+type VendorWebhook struct {
+	ID                int       `json:"id" gorm:"primary_key"`
+	Provider          string    `json:"provider" gorm:"size:64;index"`
+	Kind              string    `json:"kind" gorm:"size:16;index"`
+	ExternalRequestID string    `json:"external_request_id" gorm:"size:128;index"`
+	IdempotencyKey    string    `json:"idempotency_key" gorm:"size:128;uniqueIndex"`
+	SignatureHeader   string    `json:"signature_header" gorm:"size:255"`
+	BodySHA256        string    `json:"body_sha256" gorm:"size:64"`
+	RawBody           string    `json:"raw_body" gorm:"type:text"`
+	Processed         bool      `json:"processed" gorm:"default:false;index"`
+	ProcessedAt       *time.Time `json:"processed_at,omitempty"`
+	ProcessError      string    `json:"process_error" gorm:"type:text"`
+	ReceivedAt        time.Time `json:"received_at" gorm:"autoCreateTime"`
+}
+
+// MemberDisclosure captures self-reported lifestyle, build and medical
+// information for a member's underwriting case. POPIA: this is special
+// personal information — encrypt at rest where the deployment policy
+// requires it, and only accept a disclosure when a matching ConsentRecord
+// of type `medical_info` exists on the case.
+//
+// The disclosed_conditions JSON column is a flat array of stable
+// UWConditionCode.code values; the renderer binds against the catalogue so
+// the codes are validated client-side before submission.
+type MemberDisclosure struct {
+	ID                    int       `json:"id" gorm:"primary_key"`
+	CaseID                int       `json:"case_id" gorm:"index"`
+	Height                float64   `json:"height"`                          // centimetres
+	Weight                float64   `json:"weight"`                          // kilograms
+	BMI                   float64   `json:"bmi"`                             // computed; stored so dry-run can use it directly
+	Smoker                bool      `json:"smoker"`
+	CigarettesPerDay      int       `json:"cigarettes_per_day"`
+	AlcoholUnitsPerWeek   float64   `json:"alcohol_units_per_week"`
+	HasHazardousHobbies   bool      `json:"has_hazardous_hobbies"`
+	HazardousHobbies      string    `json:"hazardous_hobbies" gorm:"type:text"`
+	OccupationRiskAnswers string    `json:"occupation_risk_answers" gorm:"type:text"` // JSON: {"question": "answer"}
+	DisclosedConditions   string    `json:"disclosed_conditions" gorm:"type:text"`    // JSON: ["code1", "code2"]
+	AdditionalNotes       string    `json:"additional_notes" gorm:"type:text"`
+	FormVariant           string    `json:"form_variant" gorm:"size:16"` // short | long
+	SubmittedAt           time.Time `json:"submitted_at" gorm:"autoCreateTime"`
+	SubmittedVia          string    `json:"submitted_via" gorm:"size:32"` // broker | member_self | underwriter
+	SubmittedBy           string    `json:"submitted_by" gorm:"size:128"`
+}
+
+// ActivelyAtWorkAttestation is the digital equivalent of the paper
+// declaration that a member is actively at work on the cover date. The
+// signature hash is a SHA-256 of (typed name + timestamp + IP); a real
+// e-sign provider (Phase 6) will replace this with a cryptographically
+// stronger signed payload.
+type ActivelyAtWorkAttestation struct {
+	ID              int       `json:"id" gorm:"primary_key"`
+	CaseID          int       `json:"case_id,omitempty" gorm:"index"`
+	QuoteID         int       `json:"quote_id" gorm:"index"`
+	MemberIdNumber  string    `json:"member_id_number" gorm:"size:64"`
+	MemberName      string    `json:"member_name" gorm:"size:128"`
+	AttestedAt      time.Time `json:"attested_at" gorm:"autoCreateTime"`
+	AttestedByName  string    `json:"attested_by_name" gorm:"size:255"`
+	AttestedByRole  string    `json:"attested_by_role" gorm:"size:128"` // self | employer_hr | broker
+	AttestedByEmail string    `json:"attested_by_email" gorm:"size:128"`
+	IPAddress       string    `json:"ip_address" gorm:"size:64"`
+	UserAgent       string    `json:"user_agent" gorm:"size:255"`
+	SignatureHash   string    `json:"signature_hash" gorm:"size:128"`
+}
+
+// ConsentRecord is a POPIA-required record of explicit consent to process a
+// particular kind of personal information. Vendor-agnostic by design: the
+// e-sign abstraction layer in Phase 6 will produce a ConsentRecord per
+// provider with the same shape.
+type ConsentRecord struct {
+	ID             int       `json:"id" gorm:"primary_key"`
+	CaseID         int       `json:"case_id,omitempty" gorm:"index"`
+	QuoteID        int       `json:"quote_id,omitempty" gorm:"index"`
+	ConsentType    string    `json:"consent_type" gorm:"size:32"` // medical_info | pathology | gp_records | actively_at_work
+	GrantedAt      time.Time `json:"granted_at" gorm:"autoCreateTime"`
+	GrantedByName  string    `json:"granted_by_name" gorm:"size:255"`
+	GrantedByEmail string    `json:"granted_by_email" gorm:"size:128"`
+	IPAddress      string    `json:"ip_address" gorm:"size:64"`
+	SignatureHash  string    `json:"signature_hash" gorm:"size:128"`
+}
+
+// UWRuleSet is a versioned bundle of UWRule rows. Only the `Active` set
+// drives new-case decisioning, but inactive sets are kept so historical
+// cases can replay against the version they were created under (recorded on
+// UnderwritingCase.RuleSetVersion).
+type UWRuleSet struct {
+	ID            int        `json:"id" gorm:"primary_key"`
+	Name          string     `json:"name" gorm:"size:128;index"`
+	Version       int        `json:"version" gorm:"index"`
+	EffectiveFrom *time.Time `json:"effective_from,omitempty"`
+	EffectiveTo   *time.Time `json:"effective_to,omitempty"`
+	Active        bool       `json:"active" gorm:"default:false;index"`
+	CreationDate  time.Time  `json:"creation_date" gorm:"autoCreateTime"`
+	CreatedBy     string     `json:"created_by" gorm:"size:128"`
+
+	Rules []UWRule `json:"rules,omitempty" gorm:"foreignKey:RuleSetID"`
+}
+
+// UWRule is a single decision row in a UWRuleSet.
+//
+// ConditionJSON is a JSON document with this shape:
+//
+//	{"field":"bmi","op":"between","value_a":30,"value_b":35}
+//	{"field":"smoker","op":"eq","value_a":true}
+//	{"field":"occupation_class","op":"in","values":[3,4]}
+//
+// Supported ops: eq, ne, gt, gte, lt, lte, between, in. Each rule is a
+// single field condition; rules accumulate (every matching rule's outcome
+// contributes to the case decision). The closed operator set is deliberate;
+// no logical AND/OR — express that by adding more rows.
+type UWRule struct {
+	ID             int       `json:"id" gorm:"primary_key"`
+	RuleSetID      int       `json:"rule_set_id" gorm:"index"`
+	Category       string    `json:"category" gorm:"size:32;index"`
+	Field          string    `json:"field" gorm:"size:64"`
+	Op             string    `json:"op" gorm:"size:16"`
+	ConditionJSON  string    `json:"condition_json" gorm:"type:text"`
+	Outcome        string    `json:"outcome" gorm:"size:16"`
+	LoadingPercent float64   `json:"loading_percent"`
+	ExclusionCode  string    `json:"exclusion_code" gorm:"size:64"`
+	Priority       int       `json:"priority"`
+	Notes          string    `json:"notes" gorm:"type:text"`
+	CreationDate   time.Time `json:"creation_date" gorm:"autoCreateTime"`
+}
+
+// UWConditionCode is the stable catalogue of disclosable conditions and
+// occupational/lifestyle codes. Rule rows reference these codes via
+// `field`/`value_a` so disclosure forms (Phase 5) bind against a known set
+// rather than free text.
+type UWConditionCode struct {
+	ID           int       `json:"id" gorm:"primary_key"`
+	Category     string    `json:"category" gorm:"size:32;index"`
+	Code         string    `json:"code" gorm:"size:64;uniqueIndex"`
+	Label        string    `json:"label" gorm:"size:255"`
+	Description  string    `json:"description" gorm:"type:text"`
+	Active       bool      `json:"active" gorm:"default:true"`
+	CreationDate time.Time `json:"creation_date" gorm:"autoCreateTime"`
+}
+
+// UnderwritingCaseAttachment is a file uploaded against a case (medical
+// reports, signed actively-at-work attestations, consent records, etc.).
+type UnderwritingCaseAttachment struct {
+	ID           int       `json:"id" gorm:"primary_key"`
+	CaseID       int       `json:"case_id" gorm:"index"`
+	Kind         string    `json:"kind" gorm:"size:32"`
+	FileName     string    `json:"filename" gorm:"size:255"`
+	ContentType  string    `json:"content_type" gorm:"size:128"`
+	SizeBytes    int64     `json:"size_bytes"`
+	StoragePath  string    `json:"storage_path" gorm:"size:512"`
+	UploadedAt   time.Time `json:"uploaded_at" gorm:"autoCreateTime"`
+	UploadedBy   string    `json:"uploaded_by" gorm:"size:128"`
+	ViewerURL    string    `json:"viewer_url" gorm:"-"`
 }
 
 type TieredIncomeReplacement struct {

@@ -72,14 +72,17 @@ func FormatQuoteDate(t time.Time) string {
 	return t.Format("02 Jan 2006")
 }
 
-// CalculateQuoteTotals calculates aggregated totals across all result summaries
+// CalculateQuoteTotals calculates aggregated totals across all result summaries.
+// TotalAnnualPremium is the post-commission, post-discount, funeral-inclusive
+// scheme premium — mirroring the PDF cover-page calculation so the system
+// template Word and PDF outputs stay aligned.
 func CalculateQuoteTotals(summaries []models.MemberRatingResultSummary) QuoteTotals {
 	totals := QuoteTotals{}
 	for _, item := range summaries {
 		totals.TotalLives += int(item.MemberCount)
 		totals.TotalSumAssured += item.TotalSumAssured
 		totals.TotalAnnualSalary += item.TotalAnnualSalary
-		totals.TotalAnnualPremium += item.ExpTotalAnnualPremiumExclFuneral
+		totals.TotalAnnualPremium += item.FinalTotalAnnualPremiumExclFuneral + item.FinalFunAnnualOfficePremium
 	}
 	return totals
 }
@@ -114,12 +117,14 @@ func BuildInitialInfoRows(quote models.GroupPricingQuote, totals QuoteTotals) []
 		{Label: "Inception Date:", Value: FormatQuoteDate(quote.CommencementDate)},
 		{Label: "Number of Lives Covered:", Value: fmt.Sprintf("%d", totals.TotalLives)},
 		{Label: "Total Annual Salary:", Value: RoundUpToTwoDecimalsAccounting(totals.TotalAnnualSalary)},
-		{Label: "Total Annual Premium:", Value: RoundUpToTwoDecimalsAccounting(totals.TotalAnnualPremium)},
+		{Label: "Total Monthly Premium:", Value: RoundUpToTwoDecimalsAccounting(totals.TotalAnnualPremium / 12)},
 	}
 }
 
 // BuildPremiumSummaryRows builds rows for the Premium Summary table
-// Returns data rows + a totals row
+// (excluding funeral). Premium values are post-commission/post-discount Final*
+// fields, divided by 12 to display monthly — matching the PDF system-template
+// output in QuoteOutput.vue. Returns data rows + a totals row.
 func BuildPremiumSummaryRows(summaries []models.MemberRatingResultSummary) []PremiumSummaryRow {
 	rows := []PremiumSummaryRow{}
 
@@ -128,41 +133,48 @@ func BuildPremiumSummaryRows(summaries []models.MemberRatingResultSummary) []Pre
 			continue
 		}
 
+		annualPremium := item.FinalTotalAnnualPremiumExclFuneral
+		monthlyPremium := annualPremium / 12
+		monthlySalary := item.TotalAnnualSalary / 12
+
 		percentSalary := 0.0
-		if item.TotalAnnualSalary > 0 {
-			percentSalary = item.ExpTotalAnnualPremiumExclFuneral / item.TotalAnnualSalary
+		if monthlySalary > 0 {
+			percentSalary = monthlyPremium / monthlySalary
 		}
 		rows = append(rows, PremiumSummaryRow{
-			Category:      item.Category,
-			MemberCount:   fmt.Sprintf("%.0f", item.MemberCount),
-			TotalSalary:   RoundUpToTwoDecimalsAccounting(item.TotalAnnualSalary),
-			AnnualPremium: RoundUpToTwoDecimalsAccounting(item.ExpTotalAnnualPremiumExclFuneral),
-			PercentSalary: fmt.Sprintf("%s%%", RoundUpToTwoDecimalsAccounting(percentSalary*100)),
+			Category:       item.Category,
+			MemberCount:    fmt.Sprintf("%.0f", item.MemberCount),
+			TotalSalary:    RoundUpToTwoDecimalsAccounting(item.TotalAnnualSalary),
+			MonthlyPremium: RoundUpToTwoDecimalsAccounting(monthlyPremium),
+			PercentSalary:  fmt.Sprintf("%s%%", RoundUpToTwoDecimalsAccounting(percentSalary*100)),
 		})
 	}
 
 	// Calculate totals row
 	totalLives := 0.0
 	totalSalary := 0.0
-	totalPremium := 0.0
+	totalAnnualPremium := 0.0
 
 	for _, item := range summaries {
 		totalLives += item.MemberCount
 		totalSalary += item.TotalAnnualSalary
-		totalPremium += item.ExpTotalAnnualPremiumExclFuneral
+		totalAnnualPremium += item.FinalTotalAnnualPremiumExclFuneral
 	}
 
+	totalMonthlyPremium := totalAnnualPremium / 12
+	totalMonthlySalary := totalSalary / 12
+
 	percentSalaryStr := "0.00%"
-	if totalSalary > 0 {
-		percentSalaryStr = fmt.Sprintf("%s%%", RoundUpToTwoDecimalsAccounting((totalPremium/totalSalary)*100))
+	if totalMonthlySalary > 0 {
+		percentSalaryStr = fmt.Sprintf("%s%%", RoundUpToTwoDecimalsAccounting((totalMonthlyPremium/totalMonthlySalary)*100))
 	}
 
 	rows = append(rows, PremiumSummaryRow{
-		Category:      "Total",
-		MemberCount:   fmt.Sprintf("%.0f", totalLives),
-		TotalSalary:   RoundUpToTwoDecimalsAccounting(totalSalary),
-		AnnualPremium: RoundUpToTwoDecimalsAccounting(totalPremium),
-		PercentSalary: percentSalaryStr,
+		Category:       "Total",
+		MemberCount:    fmt.Sprintf("%.0f", totalLives),
+		TotalSalary:    RoundUpToTwoDecimalsAccounting(totalSalary),
+		MonthlyPremium: RoundUpToTwoDecimalsAccounting(totalMonthlyPremium),
+		PercentSalary:  percentSalaryStr,
 	})
 
 	return rows

@@ -803,6 +803,13 @@ func ExecuteMigration(files map[string]*multipart.FileHeader, user models.AppUse
 				return fmt.Errorf("failed to update quote status for scheme '%s': %v", schemeName, err)
 			}
 
+			// Phase 7: canonical policy-admin handoff snapshot for bulk
+			// migration intake (broker uploads a complete scheme bundle
+			// straight to in-force). Idempotent; non-fatal on error.
+			if _, err := RecordPolicyHandoffSnapshot(tx, quote.ID, scheme.ID, "system", "Bulk migration intake"); err != nil {
+				fmt.Printf("[migration] handoff snapshot failed for scheme '%s': %v\n", schemeName, err)
+			}
+
 			// --- 8. Insert beneficiaries (Template 4, optional) ---
 			if len(benRows) > 0 {
 				// Build member ID number -> in-force member ID mapping

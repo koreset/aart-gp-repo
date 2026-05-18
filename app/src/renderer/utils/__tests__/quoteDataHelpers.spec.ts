@@ -73,6 +73,11 @@ function makeSummary(overrides: Record<string, any> = {}) {
     exp_total_fun_monthly_premium_per_member: 45.5,
     exp_total_fun_annual_premium_per_member: 546,
     exp_total_fun_annual_risk_premium: 43680,
+    // Final* (post-commission) figures used by the Word and PDF cover
+    // pages. Kept distinct from the Exp* numbers so tests can detect any
+    // accidental fallback to the pre-commission fields.
+    final_total_annual_premium_excl_funeral: 250000,
+    final_fun_annual_office_premium: 50000,
     ...overrides
   }
 }
@@ -318,19 +323,22 @@ describe('calculateQuoteTotals', () => {
         member_count: 100,
         total_sum_assured: 5000000,
         total_annual_salary: 2000000,
-        total_annual_premium: 100000
+        final_total_annual_premium_excl_funeral: 80000,
+        final_fun_annual_office_premium: 20000
       }),
       makeSummary({
         member_count: 200,
         total_sum_assured: 10000000,
         total_annual_salary: 4000000,
-        total_annual_premium: 200000
+        final_total_annual_premium_excl_funeral: 160000,
+        final_fun_annual_office_premium: 40000
       })
     ]
     const totals = calculateQuoteTotals(summaries)
     expect(totals.totalLives).toBe(300)
     expect(totals.totalSumAssured).toBe(15000000)
     expect(totals.totalAnnualSalary).toBe(6000000)
+    // 80000 + 20000 + 160000 + 40000 = 300000 (excl-funeral + funeral office)
     expect(totals.totalAnnualPremium).toBe(300000)
   })
 
@@ -346,6 +354,8 @@ describe('calculateQuoteTotals', () => {
     const totals = calculateQuoteTotals([makeSummary()])
     expect(totals.totalLives).toBe(100)
     expect(totals.totalSumAssured).toBe(50000000)
+    // 250000 + 50000 from the fixture's Final* fields.
+    expect(totals.totalAnnualPremium).toBe(300000)
   })
 })
 
@@ -384,10 +394,11 @@ describe('categoryHasNonFuneralBenefits', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildInitialInfoRows', () => {
-  it('returns 9 key-value rows', () => {
+  it('returns 8 key-value rows (no Total Sum Assured)', () => {
     const totals = calculateQuoteTotals([makeSummary()])
     const rows = buildInitialInfoRows(mockQuote, totals)
-    expect(rows).toHaveLength(9)
+    expect(rows).toHaveLength(8)
+    expect(rows.map((r) => r.label)).not.toContain('Total Sum Assured:')
   })
 
   it('includes quote name and scheme name', () => {
@@ -401,11 +412,13 @@ describe('buildInitialInfoRows', () => {
     expect(quoteRow?.value).toBe('QTE-2026-00142')
   })
 
-  it('formats total sum assured as accounting number', () => {
+  it('renders the Final* scheme premium as a monthly figure', () => {
+    // Fixture: final_total_annual_premium_excl_funeral 250000 +
+    // final_fun_annual_office_premium 50000 = 300000 annual → 25000 monthly.
     const totals = calculateQuoteTotals([makeSummary()])
     const rows = buildInitialInfoRows(mockQuote, totals)
-    const sumAssuredRow = rows.find((r) => r.label === 'Total Sum Assured:')
-    expect(sumAssuredRow?.value).toBe('50 000 000.00')
+    const monthlyRow = rows.find((r) => r.label === 'Total Monthly Premium:')
+    expect(monthlyRow?.value).toBe('25 000.00')
   })
 })
 
@@ -450,9 +463,10 @@ describe('buildGroupFuneralRows', () => {
     // exp_total_fun_annual_risk_premium = 43680, scheme loading = 0.10,
     // member_count = 100 ⇒ annual office = 43680 / 0.9 = 48533.333…,
     // per member annual = 485.333…, monthly = 40.444… → rounded up to 40.45.
+    // Category total monthly = annual office / 12 = 4044.444… → 4044.45.
     const rows = buildGroupFuneralRows([makeSummary()])
-    expect(rows[0].monthlyPremium).toBe('40.45')
-    expect(rows[0].annualPremium).toBe('485.34')
+    expect(rows[0].monthlyPremiumPerMember).toBe('40.45')
+    expect(rows[0].totalMonthlyPremium).toBe('4 044.45')
   })
 
   it('ignores the persisted exp_total_fun_*_premium_per_member fields', () => {
@@ -465,8 +479,8 @@ describe('buildGroupFuneralRows', () => {
         exp_total_fun_monthly_premium_per_member: 0
       })
     ])
-    expect(rows[0].annualPremium).toBe('485.34')
-    expect(rows[0].monthlyPremium).toBe('40.45')
+    expect(rows[0].monthlyPremiumPerMember).toBe('40.45')
+    expect(rows[0].totalMonthlyPremium).toBe('4 044.45')
   })
 })
 

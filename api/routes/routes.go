@@ -21,6 +21,11 @@ func ConfigureRouter(router *gin.Engine) {
 	// handled inside the controller via the query-param token.
 	router.GET("/ws", controllers.HandleWebSocketUpgrade)
 
+	// Vendor webhook gateway — vendors POST results back here; auth is
+	// HMAC signature verification per-provider, not the API's user-token
+	// middleware. Path: /vendor-webhooks/:kind/:provider.
+	router.POST("/vendor-webhooks/:kind/:provider", controllers.IngestVendorWebhook)
+
 	apiv1 := router.Group("", GetActiveUser())
 
 	{
@@ -269,6 +274,64 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.POST("claims/:claim_id/decline", controllers.CreateGroupSchemeClaimDecline)
 			groupPricing.GET("claims/:claim_id/declines", controllers.GetGroupSchemeClaimDeclines)
 			groupPricing.GET("claims/scheme/:scheme_id/quote/:quote_id/member/:member_id/rating", controllers.GetSchemeMemberRating)
+
+			// Underwriting case file (Phase 2). Permissions:
+			// - underwriting:view  → list / get / download attachments
+			// - underwriting:decide → assign / transition / record decisions / upload
+			// - underwriting:admin  → backfill cases for an older quote
+			groupPricing.GET("underwriting/cases", RequirePermission("underwriting:view"), controllers.ListUnderwritingCases)
+			groupPricing.GET("underwriting/quotes-summary", RequirePermission("underwriting:view"), controllers.ListUnderwritingCaseQuoteSummaries)
+			groupPricing.GET("underwriting/cases/:case_id", RequirePermission("underwriting:view"), controllers.GetUnderwritingCase)
+			groupPricing.POST("underwriting/cases/:case_id/assign", RequirePermission("underwriting:decide"), controllers.AssignUnderwritingCase)
+			groupPricing.POST("underwriting/cases/:case_id/transition", RequirePermission("underwriting:decide"), controllers.TransitionUnderwritingCase)
+			groupPricing.POST("underwriting/cases/:case_id/decisions", RequirePermission("underwriting:decide"), controllers.CreateUnderwritingDecision)
+			groupPricing.POST("underwriting/cases/:case_id/attachments", RequirePermission("underwriting:decide"), controllers.UploadUnderwritingCaseAttachments)
+			groupPricing.GET("underwriting/attachments/:attachment_id/download", RequirePermission("underwriting:view"), controllers.DownloadUnderwritingCaseAttachment)
+			groupPricing.POST("underwriting/quotes/:quote_id/recreate-cases", RequirePermission("underwriting:admin"), controllers.RecreateUnderwritingCasesForQuote)
+			// Phase 4: manual re-rate + history.
+			groupPricing.POST("underwriting/quotes/:quote_id/rerate", RequirePermission("underwriting:decide"), controllers.RerateQuoteFromUWDecisions)
+			groupPricing.GET("underwriting/quotes/:quote_id/rerate-events", RequirePermission("underwriting:view"), controllers.ListQuoteReRateEvents)
+
+			// Phase 5: disclosure, attestation, consent.
+			groupPricing.POST("underwriting/cases/:case_id/disclosure", RequirePermission("underwriting:decide"), controllers.SubmitMemberDisclosure)
+			groupPricing.GET("underwriting/cases/:case_id/disclosure", RequirePermission("underwriting:view"), controllers.GetMemberDisclosure)
+			groupPricing.GET("underwriting/cases/:case_id/disclosures", RequirePermission("underwriting:view"), controllers.ListMemberDisclosures)
+			groupPricing.POST("underwriting/cases/:case_id/consent", RequirePermission("underwriting:decide"), controllers.SubmitConsent)
+			groupPricing.GET("underwriting/cases/:case_id/consents", RequirePermission("underwriting:view"), controllers.ListCaseConsents)
+			groupPricing.POST("underwriting/actively-at-work", RequirePermission("underwriting:decide"), controllers.SubmitActivelyAtWork)
+			groupPricing.GET("underwriting/actively-at-work", RequirePermission("underwriting:view"), controllers.ListActivelyAtWorkAttestations)
+
+			// Phase 6: vendor adapters (pathology / GP records / e-sign / SMS).
+			groupPricing.POST("underwriting/vendor/request/:kind", RequirePermission("underwriting:decide"), controllers.SubmitVendorRequest)
+			groupPricing.GET("underwriting/cases/:case_id/vendor-requests", RequirePermission("underwriting:view"), controllers.ListVendorRequestsForCase)
+			groupPricing.POST("underwriting/vendor/requests/:request_id/fire-mock", RequirePermission("underwriting:admin"), controllers.FireMockVendorWebhook)
+
+			// Phase 7: takeover (prior-insurer schedule) + policy handoff.
+			groupPricing.POST("underwriting/takeover/schedules", RequirePermission("underwriting:decide"), controllers.UploadPriorInsurerSchedule)
+			groupPricing.GET("underwriting/takeover/quotes/:quote_id/schedule", RequirePermission("underwriting:view"), controllers.GetPriorInsurerScheduleForQuote)
+			groupPricing.POST("underwriting/takeover/schedules/:schedule_id/rematch", RequirePermission("underwriting:decide"), controllers.RematchPriorInsurerSchedule)
+			groupPricing.POST("underwriting/takeover/schedules/:schedule_id/apply", RequirePermission("underwriting:decide"), controllers.ApplyTakeoverTermsToCases)
+			// Policy handoff snapshots.
+			groupPricing.GET("underwriting/handoff/schemes/:scheme_id/snapshots", RequirePermission("underwriting:view"), controllers.ListPolicyHandoffSnapshotsForScheme)
+			groupPricing.GET("underwriting/handoff/snapshots/:snapshot_id", RequirePermission("underwriting:view"), controllers.GetPolicyHandoffSnapshot)
+			groupPricing.GET("underwriting/handoff/snapshots/:snapshot_id/download", RequirePermission("underwriting:view"), controllers.DownloadPolicyHandoffSnapshot)
+			groupPricing.POST("underwriting/handoff/quotes/:quote_id/rebuild", RequirePermission("underwriting:admin"), controllers.RebuildPolicyHandoffSnapshot)
+
+			// Underwriting rules engine (Phase 3).
+			groupPricing.GET("underwriting/rule-sets", RequirePermission("underwriting:view"), controllers.ListUWRuleSets)
+			groupPricing.POST("underwriting/rule-sets", RequirePermission("underwriting:admin"), controllers.CreateUWRuleSet)
+			groupPricing.GET("underwriting/rule-sets/:rule_set_id", RequirePermission("underwriting:view"), controllers.GetUWRuleSet)
+			groupPricing.POST("underwriting/rule-sets/:rule_set_id/activate", RequirePermission("underwriting:admin"), controllers.ActivateUWRuleSet)
+			groupPricing.POST("underwriting/rule-sets/:rule_set_id/rules", RequirePermission("underwriting:admin"), controllers.CreateUWRule)
+			groupPricing.PUT("underwriting/rules/:rule_id", RequirePermission("underwriting:admin"), controllers.UpdateUWRule)
+			groupPricing.DELETE("underwriting/rules/:rule_id", RequirePermission("underwriting:admin"), controllers.DeleteUWRule)
+			groupPricing.POST("underwriting/rule-sets/import", RequirePermission("underwriting:admin"), controllers.ImportUWRulesCSV)
+			groupPricing.POST("underwriting/rules/dry-run", RequirePermission("underwriting:view"), controllers.DryRunUWRules)
+			groupPricing.GET("underwriting/cases/:case_id/dry-run", RequirePermission("underwriting:view"), controllers.DryRunUWRulesForCase)
+			groupPricing.GET("underwriting/rule-sets/:rule_set_id/export", RequirePermission("underwriting:view"), controllers.ExportUWRuleSetCSV)
+			groupPricing.POST("underwriting/rule-sets/:rule_set_id/duplicate", RequirePermission("underwriting:admin"), controllers.DuplicateUWRuleSet)
+			groupPricing.DELETE("underwriting/rule-sets/:rule_set_id", RequirePermission("underwriting:admin"), controllers.DeleteUWRuleSet)
+			groupPricing.POST("underwriting/rule-sets/seed-starter", RequirePermission("underwriting:admin"), controllers.SeedStarterRuleSet)
 			// Claim payment schedules
 			groupPricing.POST("claims/payment-schedules", controllers.CreatePaymentSchedule)
 			groupPricing.GET("claims/payment-schedules", controllers.GetPaymentSchedules)

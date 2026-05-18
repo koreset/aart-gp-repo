@@ -23,7 +23,22 @@ const (
 	WSCalculationProgress    WSMessageType = "calculation_progress"
 	WSBordereauxProgress     WSMessageType = "bordereaux_progress"
 	WSRIValidationProgress   WSMessageType = "ri_validation_progress"
+	WSQuoteReRated           WSMessageType = "quote_re_rated"
 )
+
+// QuoteReRatedPayload is pushed when ApplyDecisionsAndReRate finishes.
+// Renderer subscribes to WSQuoteReRated and updates QuoteOutput.vue live.
+type QuoteReRatedPayload struct {
+	QuoteID         int     `json:"quote_id"`
+	PreviousPremium float64 `json:"previous_premium"`
+	NewPremium      float64 `json:"new_premium"`
+	Delta           float64 `json:"delta"`
+	Reason          string  `json:"reason"`
+	CaseID          int     `json:"case_id,omitempty"`
+	RatingVersion   int     `json:"rating_version"`
+	TriggeredBy     string  `json:"triggered_by"`
+	TriggeredAt     string  `json:"triggered_at"`
+}
 
 // CalculationProgress reports quote calculation progress to the frontend.
 type CalculationProgress struct {

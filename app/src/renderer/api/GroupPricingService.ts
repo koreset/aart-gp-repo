@@ -477,14 +477,24 @@ export default {
   getQuoteTable(
     quoteId: any,
     tableType: any,
-    params: { offset?: number; limit?: number | null } = {}
+    params: {
+      offset?: number
+      limit?: number | null
+      fields?: 'summary' | 'full'
+    } = {}
   ) {
-    const { offset = 0, limit = null } = params
-    let url = '/group-pricing/get-quote/' + quoteId + '/table-type/' + tableType
+    const { offset = 0, limit = null, fields } = params
+    const url = '/group-pricing/get-quote/' + quoteId + '/table-type/' + tableType
+    const qs = new URLSearchParams()
     if (limit !== null) {
-      url += `?offset=${offset}&limit=${limit}`
+      qs.append('offset', String(offset))
+      qs.append('limit', String(limit))
     }
-    return Api.get(url)
+    if (fields) {
+      qs.append('fields', fields)
+    }
+    const q = qs.toString()
+    return Api.get(q ? `${url}?${q}` : url)
   },
   exportQuoteTableCsv(quoteId, tableType) {
     return Api.get(
@@ -2241,5 +2251,323 @@ export default {
   },
   retryEmailOutbox(id) {
     return Api.post(`/group-pricing/email/outbox/${id}/retry`)
+  },
+
+  // Underwriting cases (Phase 2)
+  listUnderwritingCases(
+    params: {
+      quote_id?: number | string
+      status?: string
+      tier?: number | string
+      assignee?: string
+    } = {}
+  ) {
+    return Api.get('/group-pricing/underwriting/cases', { params })
+  },
+  listUnderwritingCaseQuoteSummaries(
+    params: {
+      quote_id?: number | string
+      status?: string
+      tier?: number | string
+      assignee?: string
+    } = {}
+  ) {
+    return Api.get('/group-pricing/underwriting/quotes-summary', { params })
+  },
+  getUnderwritingCase(caseId: number | string) {
+    return Api.get(`/group-pricing/underwriting/cases/${caseId}`)
+  },
+  assignUnderwritingCase(caseId: number | string, assigneeEmail: string) {
+    return Api.post(`/group-pricing/underwriting/cases/${caseId}/assign`, {
+      assignee_email: assigneeEmail
+    })
+  },
+  transitionUnderwritingCase(
+    caseId: number | string,
+    status: string,
+    note = ''
+  ) {
+    return Api.post(`/group-pricing/underwriting/cases/${caseId}/transition`, {
+      status,
+      note
+    })
+  },
+  createUnderwritingDecision(
+    caseId: number | string,
+    decision: {
+      benefit_type: string
+      outcome: string
+      loading_percent?: number
+      loading_flat_amount?: number
+      exclusion_code?: string
+      exclusion_text?: string
+      cover_cap?: number
+      notes?: string
+    }
+  ) {
+    return Api.post(
+      `/group-pricing/underwriting/cases/${caseId}/decisions`,
+      decision
+    )
+  },
+  uploadUnderwritingCaseAttachments(
+    caseId: number | string,
+    formData: FormData
+  ) {
+    return Api.post(
+      `/group-pricing/underwriting/cases/${caseId}/attachments`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      }
+    )
+  },
+  recreateUnderwritingCases(quoteId: number | string) {
+    return Api.post(
+      `/group-pricing/underwriting/quotes/${quoteId}/recreate-cases`
+    )
+  },
+
+  // Underwriting rules engine (Phase 3)
+  listUWRuleSets() {
+    return Api.get('/group-pricing/underwriting/rule-sets')
+  },
+  getUWRuleSet(ruleSetId: number | string) {
+    return Api.get(`/group-pricing/underwriting/rule-sets/${ruleSetId}`)
+  },
+  createUWRuleSet(payload: { name: string; version: number }) {
+    return Api.post('/group-pricing/underwriting/rule-sets', payload)
+  },
+  activateUWRuleSet(ruleSetId: number | string) {
+    return Api.post(
+      `/group-pricing/underwriting/rule-sets/${ruleSetId}/activate`
+    )
+  },
+  createUWRule(
+    ruleSetId: number | string,
+    payload: {
+      category: string
+      field: string
+      op: string
+      condition_json: string
+      outcome: string
+      loading_percent?: number
+      exclusion_code?: string
+      priority?: number
+      notes?: string
+    }
+  ) {
+    return Api.post(
+      `/group-pricing/underwriting/rule-sets/${ruleSetId}/rules`,
+      payload
+    )
+  },
+  updateUWRule(ruleId: number | string, payload: any) {
+    return Api.put(`/group-pricing/underwriting/rules/${ruleId}`, payload)
+  },
+  deleteUWRule(ruleId: number | string) {
+    return Api.delete(`/group-pricing/underwriting/rules/${ruleId}`)
+  },
+  exportUWRuleSetCSV(ruleSetId: number | string) {
+    return Api.get(
+      `/group-pricing/underwriting/rule-sets/${ruleSetId}/export`,
+      { responseType: 'blob' }
+    )
+  },
+  duplicateUWRuleSet(ruleSetId: number | string) {
+    return Api.post(
+      `/group-pricing/underwriting/rule-sets/${ruleSetId}/duplicate`
+    )
+  },
+  deleteUWRuleSet(ruleSetId: number | string) {
+    return Api.delete(
+      `/group-pricing/underwriting/rule-sets/${ruleSetId}`
+    )
+  },
+  seedStarterUWRuleSet() {
+    return Api.post('/group-pricing/underwriting/rule-sets/seed-starter')
+  },
+  importUWRulesCSV(formData: FormData) {
+    return Api.post('/group-pricing/underwriting/rule-sets/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+  dryRunUWRules(payload: {
+    context: Record<string, any>
+    rule_set_id?: number
+  }) {
+    return Api.post('/group-pricing/underwriting/rules/dry-run', payload)
+  },
+  dryRunUWRulesForCase(
+    caseId: number | string,
+    overrides: Record<string, any> = {}
+  ) {
+    return Api.get(
+      `/group-pricing/underwriting/cases/${caseId}/dry-run`,
+      { params: overrides }
+    )
+  },
+
+  // Phase 4: re-rate
+  rerateQuoteFromUWDecisions(quoteId: number | string, reason = '') {
+    return Api.post(
+      `/group-pricing/underwriting/quotes/${quoteId}/rerate`,
+      { reason }
+    )
+  },
+  listQuoteReRateEvents(quoteId: number | string) {
+    return Api.get(
+      `/group-pricing/underwriting/quotes/${quoteId}/rerate-events`
+    )
+  },
+
+  // Phase 5: disclosure, attestation, consent
+  submitMemberDisclosure(
+    caseId: number | string,
+    payload: {
+      height: number
+      weight: number
+      smoker: boolean
+      cigarettes_per_day?: number
+      alcohol_units_per_week?: number
+      has_hazardous_hobbies?: boolean
+      hazardous_hobbies?: string
+      occupation_risk_answers?: Record<string, any>
+      disclosed_conditions?: string[]
+      additional_notes?: string
+      form_variant?: 'short' | 'long'
+      submitted_via?: 'broker' | 'member_self' | 'underwriter'
+    }
+  ) {
+    return Api.post(
+      `/group-pricing/underwriting/cases/${caseId}/disclosure`,
+      payload
+    )
+  },
+  getMemberDisclosure(caseId: number | string) {
+    return Api.get(`/group-pricing/underwriting/cases/${caseId}/disclosure`)
+  },
+  listMemberDisclosures(caseId: number | string) {
+    return Api.get(
+      `/group-pricing/underwriting/cases/${caseId}/disclosures`
+    )
+  },
+  submitConsent(payload: {
+    case_id?: number
+    quote_id?: number
+    consent_type:
+      | 'medical_info'
+      | 'pathology'
+      | 'gp_records'
+      | 'actively_at_work'
+    granted_by_name: string
+    granted_by_email?: string
+  }) {
+    return Api.post('/group-pricing/underwriting/cases/' +
+      (payload.case_id ?? 0) + '/consent', payload)
+  },
+  listCaseConsents(caseId: number | string) {
+    return Api.get(`/group-pricing/underwriting/cases/${caseId}/consents`)
+  },
+  submitActivelyAtWork(payload: {
+    quote_id?: number
+    case_id?: number
+    member_id_number?: string
+    member_name?: string
+    attested_by_name: string
+    attested_by_role: string
+  }) {
+    return Api.post('/group-pricing/underwriting/actively-at-work', payload)
+  },
+  listActivelyAtWork(params: {
+    case_id?: number | string
+    quote_id?: number | string
+  }) {
+    return Api.get('/group-pricing/underwriting/actively-at-work', { params })
+  },
+
+  // Phase 6: vendor adapters
+  submitVendorRequest(
+    kind: 'pathology' | 'gp_records' | 'esign' | 'sms',
+    payload: {
+      case_id: number
+      quote_id?: number
+      subject: string
+      body?: string
+      metadata?: Record<string, any>
+    }
+  ) {
+    return Api.post(
+      `/group-pricing/underwriting/vendor/request/${kind}`,
+      payload
+    )
+  },
+  listVendorRequestsForCase(caseId: number | string) {
+    return Api.get(
+      `/group-pricing/underwriting/cases/${caseId}/vendor-requests`
+    )
+  },
+  fireMockVendorWebhook(
+    requestId: number | string,
+    payload: {
+      status?: 'complete' | 'failed'
+      filename?: string
+      body_text?: string
+      attach_kind?: string
+    } = {}
+  ) {
+    return Api.post(
+      `/group-pricing/underwriting/vendor/requests/${requestId}/fire-mock`,
+      payload
+    )
+  },
+
+  // Phase 7: takeover + policy handoff
+  uploadPriorInsurerSchedule(formData: FormData) {
+    return Api.post(
+      '/group-pricing/underwriting/takeover/schedules',
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    )
+  },
+  getPriorInsurerScheduleForQuote(quoteId: number | string) {
+    return Api.get(
+      `/group-pricing/underwriting/takeover/quotes/${quoteId}/schedule`
+    )
+  },
+  rematchPriorInsurerSchedule(scheduleId: number | string) {
+    return Api.post(
+      `/group-pricing/underwriting/takeover/schedules/${scheduleId}/rematch`
+    )
+  },
+  applyTakeoverTermsToCases(scheduleId: number | string) {
+    return Api.post(
+      `/group-pricing/underwriting/takeover/schedules/${scheduleId}/apply`
+    )
+  },
+  listPolicyHandoffSnapshots(schemeId: number | string) {
+    return Api.get(
+      `/group-pricing/underwriting/handoff/schemes/${schemeId}/snapshots`
+    )
+  },
+  getPolicyHandoffSnapshot(snapshotId: number | string) {
+    return Api.get(
+      `/group-pricing/underwriting/handoff/snapshots/${snapshotId}`
+    )
+  },
+  downloadPolicyHandoffSnapshotURL(snapshotId: number | string): string {
+    // Resolved relative to the configured API base in the renderer.
+    return `/group-pricing/underwriting/handoff/snapshots/${snapshotId}/download`
+  },
+  rebuildPolicyHandoffSnapshot(
+    quoteId: number | string,
+    schemeId?: number | string
+  ) {
+    const params = schemeId !== undefined ? { scheme_id: schemeId } : {}
+    return Api.post(
+      `/group-pricing/underwriting/handoff/quotes/${quoteId}/rebuild`,
+      null,
+      { params }
+    )
   }
 }

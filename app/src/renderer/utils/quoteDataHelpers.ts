@@ -381,7 +381,11 @@ export function finalOfficeProportionFromRiskProportion(
 
 /**
  * Calculate totals across all result summaries.
- * Extracted from QuoteOutput.vue lines 952-967.
+ * `totalAnnualPremium` is the post-commission, funeral-inclusive scheme
+ * premium — composed from the per-benefit Final* fields the same way the
+ * PDF cover-page builder does it (see QuoteOutput.vue buildSystemPdf), so
+ * the Word and PDF cover pages stay in sync regardless of whether the
+ * rolled-up `final_total_annual_premium` field has been refreshed.
  */
 export function calculateQuoteTotals(resultSummaries: any[]): QuoteTotals {
   return {
@@ -398,7 +402,10 @@ export function calculateQuoteTotals(resultSummaries: any[]): QuoteTotals {
       0
     ),
     totalAnnualPremium: resultSummaries.reduce(
-      (sum, item) => sum + item.total_annual_premium,
+      (sum, item) =>
+        sum +
+        finalFieldValue(item, 'final_total_annual_premium_excl_funeral') +
+        finalFieldValue(item, 'final_fun_annual_office_premium'),
       0
     )
   }
@@ -461,16 +468,12 @@ export function buildInitialInfoRows(
     },
     { label: 'Number of Lives Covered:', value: `${totals.totalLives}` },
     {
-      label: 'Total Sum Assured:',
-      value: roundUpToTwoDecimalsAccounting(totals.totalSumAssured)
-    },
-    {
       label: 'Total Annual Salary:',
       value: roundUpToTwoDecimalsAccounting(totals.totalAnnualSalary)
     },
     {
-      label: 'Total Annual Premium:',
-      value: roundUpToTwoDecimalsAccounting(totals.totalAnnualPremium)
+      label: 'Total Monthly Premium:',
+      value: roundUpToTwoDecimalsAccounting(totals.totalAnnualPremium / 12)
     }
   ]
 }
@@ -481,7 +484,8 @@ export function buildInitialInfoRows(
 
 /**
  * Build rows for the Premium Summary table (excluding the header row).
- * Extracted from QuoteOutput.vue lines 1085-1140.
+ * Premium values are post-commission Final* fields divided by 12 (monthly)
+ * to match the PDF system-template output in QuoteOutput.vue.
  * Returns data rows + a totals row.
  */
 export function buildPremiumSummaryRows(
@@ -492,20 +496,20 @@ export function buildPremiumSummaryRows(
   resultSummaries.forEach((item) => {
     if (!categoryHasNonFuneralBenefits(item)) return
 
+    const annualPremium = finalFieldValue(
+      item,
+      'final_total_annual_premium_excl_funeral'
+    )
+    const monthlyPremium = annualPremium / 12
+    const monthlySalary = item.total_annual_salary / 12
+
     rows.push({
       category: item.category,
       memberCount: item.member_count.toString(),
       totalSalary: roundUpToTwoDecimalsAccounting(item.total_annual_salary),
-      totalSumAssured: roundUpToTwoDecimalsAccounting(item.total_sum_assured),
-      annualPremium: roundUpToTwoDecimalsAccounting(
-        item.exp_total_annual_premium_excl_funeral
-      ),
+      monthlyPremium: roundUpToTwoDecimalsAccounting(monthlyPremium),
       percentSalary: `${roundUpToTwoDecimalsAccounting(
-        item.total_annual_salary > 0
-          ? (item.exp_total_annual_premium_excl_funeral /
-              item.total_annual_salary) *
-              100
-          : 0
+        monthlySalary > 0 ? (monthlyPremium / monthlySalary) * 100 : 0
       )}%`
     })
   })
@@ -519,22 +523,24 @@ export function buildPremiumSummaryRows(
     (sum, item) => sum + item.total_annual_salary,
     0
   )
-  const totalSumAssured = resultSummaries.reduce(
-    (sum, item) => sum + item.total_sum_assured,
+  const totalAnnualPremium = resultSummaries.reduce(
+    (sum, item) =>
+      sum + finalFieldValue(item, 'final_total_annual_premium_excl_funeral'),
     0
   )
-  const totalPremium = resultSummaries.reduce(
-    (sum, item) => sum + item.exp_total_annual_premium_excl_funeral,
-    0
-  )
+  const totalMonthlyPremium = totalAnnualPremium / 12
+  const totalMonthlySalary = totalSalary / 12
 
   rows.push({
     category: 'Total',
     memberCount: totalLives.toString(),
     totalSalary: roundUpToTwoDecimalsAccounting(totalSalary),
-    totalSumAssured: roundUpToTwoDecimalsAccounting(totalSumAssured),
-    annualPremium: roundUpToTwoDecimalsAccounting(totalPremium),
-    percentSalary: `${roundUpToTwoDecimalsAccounting((totalPremium / totalSalary) * 100)}%`
+    monthlyPremium: roundUpToTwoDecimalsAccounting(totalMonthlyPremium),
+    percentSalary: `${roundUpToTwoDecimalsAccounting(
+      totalMonthlySalary > 0
+        ? (totalMonthlyPremium / totalMonthlySalary) * 100
+        : 0
+    )}%`
   })
 
   return rows
@@ -542,7 +548,8 @@ export function buildPremiumSummaryRows(
 
 /**
  * Build rows for the Group Funeral summary table.
- * Extracted from QuoteOutput.vue lines 1204-1247.
+ * Two columns: per-member monthly premium and category total monthly premium —
+ * matching the PDF system-template output in QuoteOutput.vue.
  */
 export function buildGroupFuneralRows(
   resultSummaries: any[]
@@ -553,14 +560,11 @@ export function buildGroupFuneralRows(
     rows.push({
       category: item.category,
       memberCount: item.member_count.toString(),
-      monthlyPremium: roundUpToTwoDecimalsAccounting(
+      monthlyPremiumPerMember: roundUpToTwoDecimalsAccounting(
         funMonthlyPremiumPerMember(item)
       ),
-      annualPremium: roundUpToTwoDecimalsAccounting(
-        funAnnualPremiumPerMember(item)
-      ),
-      totalAnnualPremium: roundUpToTwoDecimalsAccounting(
-        computeOfficePremium(item.exp_total_fun_annual_risk_premium, item)
+      totalMonthlyPremium: roundUpToTwoDecimalsAccounting(
+        computeOfficePremium(item.exp_total_fun_annual_risk_premium, item) / 12
       )
     })
   })
@@ -571,23 +575,18 @@ export function buildGroupFuneralRows(
     memberCount: resultSummaries
       .reduce((sum, item) => sum + item.member_count, 0)
       .toString(),
-    monthlyPremium: roundUpToTwoDecimalsAccounting(
+    monthlyPremiumPerMember: roundUpToTwoDecimalsAccounting(
       resultSummaries.reduce(
         (sum, item) => sum + funMonthlyPremiumPerMember(item),
         0
       )
     ),
-    annualPremium: roundUpToTwoDecimalsAccounting(
-      resultSummaries.reduce(
-        (sum, item) => sum + funAnnualPremiumPerMember(item),
-        0
-      )
-    ),
-    totalAnnualPremium: roundUpToTwoDecimalsAccounting(
+    totalMonthlyPremium: roundUpToTwoDecimalsAccounting(
       resultSummaries.reduce(
         (sum, item) =>
           sum +
-          computeOfficePremium(item.exp_total_fun_annual_risk_premium, item),
+          computeOfficePremium(item.exp_total_fun_annual_risk_premium, item) /
+            12,
         0
       )
     )
@@ -602,83 +601,104 @@ export function buildGroupFuneralRows(
 
 /**
  * Build the per-category benefit premium breakdown rows.
- * Extracted from QuoteOutput.vue lines 1315-1354.
+ *
+ * `monthlyPremium`, `monthlyRate`, and `percentSalary` mirror the PDF
+ * system-template breakdown in QuoteOutput.vue: post-commission Final* annual
+ * office premium ÷ 12, with the rate and salary percentage derived from those
+ * monthly figures. `monthlyRate` returns the literal string `'n.a'` when sum
+ * assured is zero, matching the PDF cell.
+ *
+ * `annualPremium` is preserved (and still derived from the pre-commission Exp*
+ * risk premium) because it is consumed by useBenefitScheduleGeneration.ts.
  */
 export function buildPremiumBreakdownRows(
   item: any,
   benefitTitles: BenefitTitles
 ): PremiumBreakdownRow[] {
-  return [
-    {
-      benefit: benefitTitles.glaBenefitTitle,
-      totalSumAssured: roundUpToTwoDecimalsAccounting(
-        item.total_gla_capped_sum_assured
-      ),
-      annualPremium: roundUpToTwoDecimalsAccounting(
-        computeOfficePremium(item.exp_total_gla_annual_risk_premium, item)
-      ),
-      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_gla_annual_risk_premium_salary, item) * 100)}%`
-    },
-    {
-      benefit: benefitTitles.sglaBenefitTitle,
-      totalSumAssured: roundUpToTwoDecimalsAccounting(
-        item.total_sgla_capped_sum_assured
-      ),
-      annualPremium: roundUpToTwoDecimalsAccounting(
-        computeOfficePremium(item.exp_total_sgla_annual_risk_premium, item)
-      ),
-      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_sgla_annual_risk_premium_salary, item) * 100)}%`
-    },
-    {
-      benefit: benefitTitles.ptdBenefitTitle,
-      totalSumAssured: roundUpToTwoDecimalsAccounting(
-        item.total_ptd_capped_sum_assured
-      ),
-      annualPremium: roundUpToTwoDecimalsAccounting(
-        computeOfficePremium(item.exp_total_ptd_annual_risk_premium, item)
-      ),
-      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_ptd_annual_risk_premium_salary, item) * 100)}%`
-    },
-    {
-      benefit: benefitTitles.ciBenefitTitle,
-      totalSumAssured: roundUpToTwoDecimalsAccounting(
-        item.total_ci_capped_sum_assured
-      ),
-      annualPremium: roundUpToTwoDecimalsAccounting(
-        computeOfficePremium(item.exp_total_ci_annual_risk_premium, item)
-      ),
-      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_ci_annual_risk_premium_salary, item) * 100)}%`
-    },
-    {
-      benefit: benefitTitles.phiBenefitTitle,
-      totalSumAssured: roundUpToTwoDecimalsAccounting(
-        item.total_phi_capped_income
-      ),
-      annualPremium: roundUpToTwoDecimalsAccounting(
-        computeOfficePremium(item.exp_total_phi_annual_risk_premium, item)
-      ),
-      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_phi_annual_risk_premium_salary, item) * 100)}%`
-    },
-    {
-      benefit: benefitTitles.scbBenefitTitle || 'SCB',
-      totalSumAssured: roundUpToTwoDecimalsAccounting(
-        item.total_phi_capped_income
-      ),
-      annualPremium: roundUpToTwoDecimalsAccounting(
-        computeOfficePremium(item.exp_adj_total_scb_annual_risk_premium, item)
-      ),
-      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_adj_proportion_scb_risk_premium_salary, item) * 100)}%`
-    },
-    {
-      benefit: benefitTitles.ttdBenefitTitle,
-      totalSumAssured: roundUpToTwoDecimalsAccounting(
-        item.total_ttd_capped_income
-      ),
-      annualPremium: roundUpToTwoDecimalsAccounting(
-        computeOfficePremium(item.exp_total_ttd_annual_risk_premium, item)
-      ),
-      percentSalary: `${roundUpToTwoDecimalsAccounting(officeProportionFromRiskProportion(item.exp_proportion_ttd_annual_risk_premium_salary, item) * 100)}%`
+  const monthlySalary = asFiniteNumber(item?.total_annual_salary) / 12
+
+  // Income-replacement benefits (PHI, TTD) price off a percentage of salary,
+  // not a sum assured — so a rate-per-1000 figure is not meaningful for them.
+  // The PDF/Word breakdown leaves that cell blank (greyed) for those rows;
+  // the renderer applies the fill when monthlyRate is the empty string.
+  const buildRow = (
+    benefit: string,
+    sumAssured: number | undefined,
+    finalAnnualField: string,
+    expAnnualRiskField: string,
+    rateApplicable = true
+  ): PremiumBreakdownRow => {
+    const sa = asFiniteNumber(sumAssured)
+    const monthlyPremiumNum = finalFieldValue(item, finalAnnualField) / 12
+    let monthlyRateStr: string
+    if (!rateApplicable) {
+      monthlyRateStr = ''
+    } else if (sa <= 0) {
+      monthlyRateStr = 'n.a'
+    } else {
+      monthlyRateStr = roundUpToTwoDecimalsAccounting(
+        (monthlyPremiumNum / sa) * 1000
+      )
     }
+    const pctSalary =
+      monthlySalary > 0 ? (monthlyPremiumNum / monthlySalary) * 100 : 0
+    return {
+      benefit,
+      totalSumAssured: roundUpToTwoDecimalsAccounting(sa),
+      annualPremium: roundUpToTwoDecimalsAccounting(
+        computeOfficePremium(asFiniteNumber(item?.[expAnnualRiskField]), item)
+      ),
+      monthlyPremium: roundUpToTwoDecimalsAccounting(monthlyPremiumNum),
+      monthlyRate: monthlyRateStr,
+      percentSalary: `${roundUpToTwoDecimalsAccounting(pctSalary)}%`
+    }
+  }
+
+  return [
+    buildRow(
+      benefitTitles.glaBenefitTitle,
+      item.total_gla_capped_sum_assured,
+      'final_gla_annual_office_premium',
+      'exp_total_gla_annual_risk_premium'
+    ),
+    buildRow(
+      benefitTitles.sglaBenefitTitle,
+      item.total_sgla_capped_sum_assured,
+      'final_sgla_annual_office_premium',
+      'exp_total_sgla_annual_risk_premium'
+    ),
+    buildRow(
+      benefitTitles.ptdBenefitTitle,
+      item.total_ptd_capped_sum_assured,
+      'final_ptd_annual_office_premium',
+      'exp_total_ptd_annual_risk_premium'
+    ),
+    buildRow(
+      benefitTitles.ciBenefitTitle,
+      item.total_ci_capped_sum_assured,
+      'final_ci_annual_office_premium',
+      'exp_total_ci_annual_risk_premium'
+    ),
+    buildRow(
+      benefitTitles.phiBenefitTitle,
+      item.total_phi_capped_income,
+      'final_phi_annual_office_premium',
+      'exp_total_phi_annual_risk_premium',
+      false
+    ),
+    buildRow(
+      benefitTitles.scbBenefitTitle || 'SCB',
+      item.total_phi_capped_income,
+      'final_scb_office_premium',
+      'exp_adj_total_scb_annual_risk_premium'
+    ),
+    buildRow(
+      benefitTitles.ttdBenefitTitle,
+      item.total_ttd_capped_income,
+      'final_ttd_annual_office_premium',
+      'exp_total_ttd_annual_risk_premium',
+      false
+    )
   ]
 }
 

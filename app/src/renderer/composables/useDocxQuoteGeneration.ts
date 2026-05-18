@@ -269,7 +269,13 @@ function headerRow(
   })
 }
 
-/** Create a data row with optional bold and shading. */
+/** Create a data row with optional bold and shading.
+ *
+ * `blankCellFill` lets a caller mark empty-string cells as intentionally
+ * blank (e.g. the Premium Breakdown rate-per-1000 column for income-
+ * replacement benefits). When set, any cell whose value is `''` is rendered
+ * with that fill instead of the row-level `fillColor`.
+ */
 function dataRow(
   values: string[],
   colWidths: number[],
@@ -277,36 +283,36 @@ function dataRow(
     alignments?: (typeof AlignmentType)[keyof typeof AlignmentType][]
     bold?: boolean
     fillColor?: string
+    blankCellFill?: string
   }
 ): TableRow {
   return new TableRow({
-    children: values.map(
-      (val, i) =>
-        new TableCell({
-          width: { size: colWidths[i], type: WidthType.DXA },
-          shading: options?.fillColor
-            ? { fill: options.fillColor, type: ShadingType.CLEAR }
-            : undefined,
-          borders: thinBorders,
-          margins: cellMargins,
-          children: [
-            new Paragraph({
-              alignment:
-                options?.alignments?.[i] ??
-                (i === 0 ? AlignmentType.LEFT : AlignmentType.RIGHT),
-              children: [
-                new TextRun({
-                  text: val,
-                  font: FONT,
-                  size: SIZE.caption,
-                  bold: options?.bold ?? i === 0,
-                  color: COLORS.dark
-                })
-              ]
-            })
-          ]
-        })
-    )
+    children: values.map((val, i) => {
+      const isBlank = options?.blankCellFill !== undefined && val === ''
+      const fill = isBlank ? options?.blankCellFill : options?.fillColor
+      return new TableCell({
+        width: { size: colWidths[i], type: WidthType.DXA },
+        shading: fill ? { fill, type: ShadingType.CLEAR } : undefined,
+        borders: thinBorders,
+        margins: cellMargins,
+        children: [
+          new Paragraph({
+            alignment:
+              options?.alignments?.[i] ??
+              (i === 0 ? AlignmentType.LEFT : AlignmentType.RIGHT),
+            children: [
+              new TextRun({
+                text: val,
+                font: FONT,
+                size: SIZE.caption,
+                bold: options?.bold ?? i === 0,
+                color: COLORS.dark
+              })
+            ]
+          })
+        ]
+      })
+    })
   })
 }
 
@@ -610,27 +616,24 @@ function buildPremiumSummarySection(quote: any, resultSummaries: any[]) {
       'Category',
       'No of Lives',
       'Total Annual Salary',
-      'Total Sum Assured',
-      'Annual Premium',
-      '% Salary'
+      'Monthly Premium',
+      '%Salary'
     ]
     // Distribute columns across landscape width
     const cw = LANDSCAPE_CONTENT_WIDTH
     const colWidths = [
+      Math.round(cw * 0.25),
+      Math.round(cw * 0.15),
+      Math.round(cw * 0.25),
       Math.round(cw * 0.2),
-      Math.round(cw * 0.12),
-      Math.round(cw * 0.2),
-      Math.round(cw * 0.2),
-      Math.round(cw * 0.18),
-      Math.round(cw * 0.1)
+      0
     ]
     // Adjust last column to absorb rounding
-    colWidths[5] = cw - colWidths.slice(0, 5).reduce((a, b) => a + b, 0)
+    colWidths[4] = cw - colWidths.slice(0, 4).reduce((a, b) => a + b, 0)
 
     const alignments = [
       AlignmentType.LEFT,
       AlignmentType.CENTER,
-      AlignmentType.RIGHT,
       AlignmentType.RIGHT,
       AlignmentType.RIGHT,
       AlignmentType.CENTER
@@ -645,8 +648,7 @@ function buildPremiumSummarySection(quote: any, resultSummaries: any[]) {
             row.category,
             row.memberCount,
             row.totalSalary,
-            row.totalSumAssured,
-            row.annualPremium,
+            row.monthlyPremium,
             row.percentSalary
           ],
           colWidths,
@@ -682,24 +684,21 @@ function buildPremiumSummarySection(quote: any, resultSummaries: any[]) {
   const fCols = [
     'Category',
     'No of Lives',
-    'Monthly Premium',
-    'Annual Premium',
-    'Total Annual Premium'
+    'Monthly Premium per Member',
+    'Total Monthly Premium'
   ]
   const funeralCw = LANDSCAPE_CONTENT_WIDTH
   const fColWidths = [
-    Math.round(funeralCw * 0.22),
-    Math.round(funeralCw * 0.14),
-    Math.round(funeralCw * 0.2),
-    Math.round(funeralCw * 0.2),
-    Math.round(funeralCw * 0.24)
+    Math.round(funeralCw * 0.25),
+    Math.round(funeralCw * 0.15),
+    Math.round(funeralCw * 0.3),
+    0
   ]
-  fColWidths[4] = funeralCw - fColWidths.slice(0, 4).reduce((a, b) => a + b, 0)
+  fColWidths[3] = funeralCw - fColWidths.slice(0, 3).reduce((a, b) => a + b, 0)
 
   const fAlignments = [
     AlignmentType.LEFT,
     AlignmentType.CENTER,
-    AlignmentType.RIGHT,
     AlignmentType.RIGHT,
     AlignmentType.RIGHT
   ]
@@ -712,9 +711,8 @@ function buildPremiumSummarySection(quote: any, resultSummaries: any[]) {
         [
           row.category,
           row.memberCount,
-          row.monthlyPremium,
-          row.annualPremium,
-          row.totalAnnualPremium
+          row.monthlyPremiumPerMember,
+          row.totalMonthlyPremium
         ],
         fColWidths,
         {
@@ -777,19 +775,22 @@ function buildPremiumBreakdownSection(
       const bCols = [
         'Benefit',
         'Total Sum Assured',
-        'Annual Premium',
+        'Monthly Premium',
+        'Monthly Rate /1000',
         '% Salary'
       ]
       const bColWidths = [
-        Math.round(cw * 0.3),
-        Math.round(cw * 0.25),
-        Math.round(cw * 0.25),
-        Math.round(cw * 0.2)
+        Math.round(cw * 0.24),
+        Math.round(cw * 0.22),
+        Math.round(cw * 0.22),
+        Math.round(cw * 0.18),
+        0
       ]
-      bColWidths[3] = cw - bColWidths.slice(0, 3).reduce((a, b) => a + b, 0)
+      bColWidths[4] = cw - bColWidths.slice(0, 4).reduce((a, b) => a + b, 0)
 
       const bAlignments = [
         AlignmentType.LEFT,
+        AlignmentType.RIGHT,
         AlignmentType.RIGHT,
         AlignmentType.RIGHT,
         AlignmentType.CENTER
@@ -802,13 +803,15 @@ function buildPremiumBreakdownSection(
             [
               row.benefit,
               row.totalSumAssured,
-              row.annualPremium,
+              row.monthlyPremium,
+              row.monthlyRate,
               row.percentSalary
             ],
             bColWidths,
             {
               alignments: bAlignments,
-              fillColor: i % 2 === 1 ? 'FDFDFE' : undefined
+              fillColor: i % 2 === 1 ? 'FDFDFE' : undefined,
+              blankCellFill: 'E0E0E0'
             }
           )
         )

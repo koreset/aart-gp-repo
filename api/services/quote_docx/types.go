@@ -22,11 +22,11 @@ type LabelValueRow struct {
 
 // PremiumSummaryRow is a row for the Premium Summary table
 type PremiumSummaryRow struct {
-	Category      string
-	MemberCount   string
-	TotalSalary   string
-	AnnualPremium string
-	PercentSalary string
+	Category       string
+	MemberCount    string
+	TotalSalary    string
+	MonthlyPremium string
+	PercentSalary  string
 }
 
 // GroupFuneralRow is a row for the Group Funeral table

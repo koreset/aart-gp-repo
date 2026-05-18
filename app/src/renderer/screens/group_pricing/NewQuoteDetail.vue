@@ -643,7 +643,7 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
@@ -801,7 +801,27 @@ const router = useRouter()
 const quote: any = ref(null)
 const loading = ref(false)
 const acceptQuoteLoading = ref(false)
-const tab = ref('summary')
+// Honour `?tab=...` so deep links (e.g. from the Underwriting quote-list
+// queue) land directly on the right tab. Unknown / missing values fall
+// back to the default "summary" tab.
+const route = useRoute()
+const validTabs = new Set([
+  'summary',
+  'benefits',
+  'data',
+  'results',
+  'outputsummary',
+  'benefitssummary',
+  'reinsurancepremiumsummary',
+  'additionalglacover'
+])
+const initialTab = (() => {
+  const requested = route?.query?.tab
+  const value = Array.isArray(requested) ? requested[0] : requested
+  if (typeof value === 'string' && validTabs.has(value)) return value
+  return 'summary'
+})()
+const tab = ref(initialTab)
 const confirmAction = ref()
 const broker = ref(null)
 const parameterBases = ref([]) // Array to hold basis options

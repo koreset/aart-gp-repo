@@ -131,6 +131,92 @@
                 }}</p></v-col
               >
             </v-row>
+            <v-row>
+              <v-col cols="12">
+                <p class="mb-2"
+                  ><b>Underwriting Requirements</b>
+                  <v-tooltip location="top" max-width="320">
+                    <template #activator="{ props: tooltipProps }">
+                      <v-icon
+                        v-bind="tooltipProps"
+                        size="small"
+                        class="ml-1"
+                        color="grey"
+                        >mdi-information-outline</v-icon
+                      >
+                    </template>
+                    <span
+                      >Classification of members by sum-assured-to-FCL ratio:
+                      within FCL is auto-accepted; modestly above FCL (≤1.5×)
+                      needs a short-form / tele-underwriting decision;
+                      significantly above (&gt;1.5×) routes to a human
+                      underwriter.</span
+                    >
+                  </v-tooltip>
+                </p>
+              </v-col>
+              <v-col cols="4">
+                <p
+                  >Within FCL <span class="text-grey">(auto-accept)</span></p
+                >
+              </v-col>
+              <v-col cols="4">
+                <p
+                  >Short-form / tele-UW
+                  <span class="text-grey">(modestly above FCL)</span></p
+                >
+              </v-col>
+              <v-col cols="4">
+                <p
+                  >Full underwriting
+                  <span class="text-grey">(significantly above FCL)</span></p
+                >
+              </v-col>
+              <v-col cols="4">
+                <p class="text-center content-bg">
+                  <v-chip color="success" variant="tonal" size="small">{{
+                    resultSummary.within_free_cover_limit_count ?? 0
+                  }}</v-chip>
+                </p>
+              </v-col>
+              <v-col cols="4">
+                <p class="text-center content-bg">
+                  <v-chip color="warning" variant="tonal" size="small">{{
+                    resultSummary.short_form_underwriting_count ?? 0
+                  }}</v-chip>
+                </p>
+              </v-col>
+              <v-col cols="4">
+                <p class="text-center content-bg">
+                  <v-chip color="error" variant="tonal" size="small">{{
+                    resultSummary.full_underwriting_count ?? 0
+                  }}</v-chip>
+                </p>
+              </v-col>
+            </v-row>
+            <v-row v-if="resultSummary.uw_re_rated_at">
+              <v-col cols="12">
+                <v-alert
+                  type="info"
+                  variant="tonal"
+                  density="compact"
+                  icon="mdi-clipboard-check-outline"
+                >
+                  <strong>UW-Adjusted Premium:</strong>
+                  {{
+                    roundUpToTwoDecimals(
+                      resultSummary.uw_adjusted_total_annual_premium
+                    )
+                  }}
+                  <span class="text-caption text-grey ml-2"
+                    >(original
+                    {{ roundUpToTwoDecimals(resultSummary.total_annual_premium) }},
+                    re-rated
+                    {{ formatReRatedAt(resultSummary.uw_re_rated_at) }})</span
+                  >
+                </v-alert>
+              </v-col>
+            </v-row>
             <v-divider class="my-5"></v-divider>
             <v-row>
               <v-col cols="3">
@@ -4135,6 +4221,15 @@ const roundUpToTwoDecimals = (num) => {
 
 const dashIfEmpty = (value: any) => {
   return value || '-'
+}
+
+const formatReRatedAt = (s: string | undefined): string => {
+  if (!s) return ''
+  try {
+    return new Date(s).toLocaleString()
+  } catch {
+    return s
+  }
 }
 
 const handleCategoryChange = (event: any) => {

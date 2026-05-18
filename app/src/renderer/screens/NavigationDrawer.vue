@@ -153,6 +153,44 @@
         <v-list-item-title>Bordereaux Management</v-list-item-title>
       </v-list-item>
 
+      <!-- Underwriting -->
+      <v-list-group v-model="expandedGroups" value="Underwriting">
+        <template #activator="{ props }">
+          <v-list-item
+            v-bind="props"
+            :class="{ 'disabled-item': !canAccess('underwriting:view') }"
+            prepend-icon="mdi-clipboard-account-outline"
+            title="Underwriting"
+          ></v-list-item>
+        </template>
+        <v-list-item
+          :class="{ 'disabled-item': !canAccess('underwriting:view') }"
+          prepend-icon="mdi-clipboard-list-outline"
+          @click="
+            navigateGroup(
+              'group-pricing-underwriting-cases',
+              'Underwriting',
+              'underwriting:view'
+            )
+          "
+        >
+          <v-list-item-title>Case Queue</v-list-item-title>
+        </v-list-item>
+        <v-list-item
+          :class="{ 'disabled-item': !canAccess('underwriting:admin') }"
+          prepend-icon="mdi-book-cog-outline"
+          @click="
+            navigateGroup(
+              'group-pricing-underwriting-rules',
+              'Underwriting',
+              'underwriting:admin'
+            )
+          "
+        >
+          <v-list-item-title>Rules</v-list-item-title>
+        </v-list-item>
+      </v-list-group>
+
       <v-divider class="my-2"></v-divider>
 
       <!-- PHI -->

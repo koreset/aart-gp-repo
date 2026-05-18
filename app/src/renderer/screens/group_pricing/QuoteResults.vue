@@ -111,6 +111,21 @@
             @click="manualCredibilityDialog = true"
             >Manual Credibility</v-btn
           >
+          <v-switch
+            v-if="supportsColumnToggle"
+            v-model="showAllColumns"
+            density="compact"
+            color="primary"
+            class="d-inline-flex ml-3 align-middle"
+            hide-details
+            :label="
+              showAllColumns
+                ? 'Showing all columns'
+                : 'Showing summary columns'
+            "
+            :disabled="loadingData"
+            @update:model-value="reloadCurrentTable"
+          />
           <group-pricing-data-grid
             ref="dataGridRef"
             :key="`results-grid-${gridRemountKey}`"
@@ -347,6 +362,27 @@ const useInfiniteModel = ref(false)
 const dataSource: any = ref(null)
 const currentTableType = ref('')
 const dataGridRef: any = ref(null)
+
+// "Show all columns" toggle state. Default is summary mode (only the
+// renderer-visible columns + a few extras); flipping to full pulls every
+// column the Go struct declares. Only the three tables that have a
+// summary projection on the backend benefit from this toggle.
+const showAllColumns = ref(false)
+const currentItem: any = ref(null)
+const tablesWithColumnToggle = new Set([
+  'member_rating_results',
+  'member_data',
+  'member_premium_schedules'
+])
+const supportsColumnToggle = computed(
+  () =>
+    !!currentItem.value &&
+    tablesWithColumnToggle.has(currentItem.value.value) &&
+    !!selectedTable.value
+)
+const currentFieldSet = computed<'summary' | 'full'>(() =>
+  showAllColumns.value ? 'full' : 'summary'
+)
 // Bumped when the underlying data for the currently-viewed table changes
 // (e.g. the user re-runs calculations) so the grid remounts and drops its
 // cached blocks. AG Grid's server-side / infinite row model caches rows by
@@ -452,6 +488,19 @@ const clearData = () => {
   useInfiniteModel.value = false
   dataSource.value = null
   currentTableType.value = ''
+  // Reset the column-toggle so the next "View" starts in summary mode.
+  showAllColumns.value = false
+  currentItem.value = null
+}
+
+// reloadCurrentTable re-fetches the currently-open table with the latest
+// fieldSet (driven by the "Show all columns" switch). For the infinite
+// model AG Grid re-requests blocks via the dataSource closure (which
+// reads currentFieldSet at call time), so we just bump the grid key to
+// force the column definitions to refresh from a fresh sample.
+const reloadCurrentTable = async () => {
+  if (!currentItem.value) return
+  await viewTable(currentItem.value)
 }
 
 const handleExportAllCsv = async () => {
@@ -664,13 +713,16 @@ const viewTable = async (item: any) => {
   // special case for output summary
   loadingData.value = true
   loadingItem.value = item.value
+  currentItem.value = item
 
   try {
     currentTableType.value = item.value
     console.log('Item to view:', item)
 
-    // Check if we should use infinite model (for large datasets)
-    const shouldUseInfiniteModel = item.count > 20000
+    // Use AG Grid's infinite-row model for anything above the backend's
+    // default-page size. The backend caps page size at 500 and returns
+    // `has_more` so the grid can keep paging.
+    const shouldUseInfiniteModel = item.count > 500
     useInfiniteModel.value = shouldUseInfiniteModel
 
     if (shouldUseInfiniteModel) {
@@ -683,7 +735,8 @@ const viewTable = async (item: any) => {
         item.value,
         {
           offset: 0,
-          limit: 1
+          limit: 1,
+          fields: currentFieldSet.value
         }
       )
 
@@ -707,23 +760,29 @@ const viewTable = async (item: any) => {
             const res = await GroupPricingService.getQuoteTable(
               props.quote.id,
               currentTableType.value,
-              { offset: startRow, limit }
+              { offset: startRow, limit, fields: currentFieldSet.value }
             )
             rowCount.value = endRow
-            if (res.data.data !== null && res.data.data.length > 0) {
-              const orderedData = res.data.data.map((item) =>
-                _.fromPairs(res.data.json_tags.map((key) => [key, item[key]]))
+            const rows: any[] =
+              res.data && Array.isArray(res.data.data) ? res.data.data : []
+            const orderedData = rows.map((item) =>
+              _.fromPairs(
+                (res.data?.json_tags || []).map((key) => [key, item[key]])
               )
-
-              // Calculate last row - if we got less data than requested, we've reached the end
-              const lastRow =
-                res.data.data.length < limit
-                  ? startRow + res.data.data.length
-                  : -1
-              params.success({ rowData: orderedData, lastRow })
-            } else {
-              params.success([], 0)
+            )
+            // AG Grid SSRM (LazyCache) expects { rowData, rowCount? }.
+            // rowCount is the total when known — present it whenever the
+            // backend signals `has_more: false` OR the page came back
+            // short. Otherwise omit it so AG Grid keeps requesting pages.
+            const isLastPage =
+              res.data?.has_more === false || rows.length < limit
+            const response: { rowData: any[]; rowCount?: number } = {
+              rowData: orderedData
             }
+            if (isLastPage) {
+              response.rowCount = startRow + orderedData.length
+            }
+            params.success(response)
           } catch (error) {
             console.error('Error fetching data:', error)
             params.fail()
@@ -736,10 +795,13 @@ const viewTable = async (item: any) => {
       resultTableData.value = [] // Clear client-side data when using infinite model
       loadingData.value = false
     } else {
-      // Use original client-side approach for smaller datasets
+      // Use original client-side approach for smaller datasets — still
+      // pass `fields` so the payload stays trim unless the user has
+      // toggled "Show all columns".
       const res = await GroupPricingService.getQuoteTable(
         props.quote.id,
-        item.value
+        item.value,
+        { fields: currentFieldSet.value }
       )
       if (res.data.data !== null && res.data.data.length > 0) {
         const orderedData = res.data.data.map((item) =>

@@ -476,6 +476,47 @@
                 </v-card>
               </v-col>
             </v-row>
+
+            <v-row>
+              <v-col cols="12">
+                <v-card variant="outlined" rounded="lg">
+                  <v-card-title class="d-flex align-center font-weight-bold">
+                    <v-icon class="mr-2">mdi-clipboard-check-outline</v-icon>
+                    Policy handoff snapshots
+                    <v-spacer />
+                    <span class="text-caption text-grey">
+                      Append-only canonical audit of every in-force transition.
+                    </span>
+                  </v-card-title>
+                  <v-card-text>
+                    <v-list v-if="handoffSnapshots.length" density="compact">
+                      <v-list-item
+                        v-for="s in handoffSnapshots"
+                        :key="s.id"
+                        :title="`Snapshot #${s.id} — ${s.reason || 'In-force handoff'}`"
+                        :subtitle="`${formatHandoffDate(s.handed_off_at)} · ${s.member_count} members · ${s.takeover_count} takeover`"
+                      >
+                        <template #append>
+                          <v-btn
+                            size="x-small"
+                            variant="text"
+                            prepend-icon="mdi-download"
+                            @click="downloadSnapshot(s.id)"
+                            >Download JSON</v-btn
+                          >
+                        </template>
+                      </v-list-item>
+                    </v-list>
+                    <p
+                      v-else
+                      class="text-grey text-caption"
+                      >No snapshots yet — the scheduler writes one when the
+                      scheme transitions to in-force.</p
+                    >
+                  </v-card-text>
+                </v-card>
+              </v-col>
+            </v-row>
           </template>
         </base-card>
       </v-col>
@@ -1738,11 +1779,50 @@ const navigateToQuoteDetails = (event: any, { item }: { item: any }) => {
   })
 }
 
+interface HandoffSnapshot {
+  id: number
+  quote_id: number
+  scheme_id: number
+  handed_off_at: string
+  handed_off_by: string
+  reason: string
+  member_count: number
+  takeover_count: number
+}
+const handoffSnapshots = ref<HandoffSnapshot[]>([])
+
+const loadHandoffSnapshots = async () => {
+  if (!scheme.value?.id) return
+  try {
+    const res = await GroupPricingService.listPolicyHandoffSnapshots(
+      scheme.value.id
+    )
+    handoffSnapshots.value = res.data || []
+  } catch (err) {
+    console.warn('Failed to load handoff snapshots', err)
+    handoffSnapshots.value = []
+  }
+}
+
+const formatHandoffDate = (s: string) =>
+  s ? new Date(s).toLocaleString() : '—'
+
+const downloadSnapshot = (snapshotId: number) => {
+  // The download endpoint streams the payload directly. The renderer hits
+  // the same base URL the API client uses; window.open is the simplest
+  // way to trigger a file save in Electron.
+  const base =
+    (window as any).mainApi?.sendSync?.('msgGetBaseUrl') || ''
+  const url = `${base}${GroupPricingService.downloadPolicyHandoffSnapshotURL(snapshotId)}`
+  window.open(url, '_blank')
+}
+
 onMounted(() => {
   GroupPricingService.getScheme(route.params.id).then((response) => {
     scheme.value = response.data
     schemes.value.push(scheme.value)
     console.log('Loaded scheme:', scheme.value)
+    loadHandoffSnapshots()
   })
 })
 

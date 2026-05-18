@@ -108,6 +108,15 @@ func UpdateGroupSchemeStatuses() {
 					return err
 				}
 
+				// Phase 7: write the canonical policy-admin handoff
+				// snapshot inside the same transaction as the status
+				// flip. Idempotent — replays no-op if a snapshot already
+				// exists for (quote, scheme). Failure does not abort the
+				// transition (snapshot can be backfilled).
+				if _, err := RecordPolicyHandoffSnapshot(tx, quote.ID, after.ID, "system", "Scheduler renewal transition"); err != nil {
+					fmt.Printf("[scheduler] handoff snapshot failed for scheme %d: %v\n", s.ID, err)
+				}
+
 				if quote.QuoteType == "New Business" {
 					var members []models.GPricingMemberDataInForce
 					if err := tx.Where("scheme_id = ?", s.ID).Find(&members).Error; err != nil {
@@ -242,6 +251,13 @@ func UpdateGroupSchemeStatuses() {
 			}
 			if err := tx.Create(&statusAudit).Error; err != nil {
 				return err
+			}
+
+			// Phase 7: canonical policy-admin handoff snapshot for the
+			// Accepted→InForce transition. Idempotent. Failure does not
+			// abort the transition (snapshot can be backfilled).
+			if _, err := RecordPolicyHandoffSnapshot(tx, quote.ID, after.ID, "system", "Scheduler Accepted→InForce transition"); err != nil {
+				fmt.Printf("[scheduler] handoff snapshot failed for scheme %d: %v\n", s.ID, err)
 			}
 
 			//// Generic audit

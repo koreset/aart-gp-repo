@@ -1293,6 +1293,13 @@ func CalculateGroupPricingQuote(quoteId string, basis string, credibility float6
 		logger.WithField("error", err.Error()).Error("Failed to apply scheme-wide commission")
 	}
 
+	// Spawn / refresh underwriting cases for every tier-1+ member now that
+	// member ratings are persisted. Idempotent — existing cases are refreshed
+	// with the latest tier snapshot; underwriter decisions are preserved.
+	if _, err := CreateCasesForQuote(intQuoteID(quoteId), user.UserEmail); err != nil {
+		logger.WithField("error", err.Error()).Error("Failed to create underwriting cases")
+	}
+
 	// Stamp the calculation completion time on the quote so the UI can show
 	// users when the results were last produced. Done before emitting the
 	// completion event so a client that queries the quote on receipt sees the
@@ -2099,6 +2106,14 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		}
 		mdrs.ExceedsFreeCoverLimitIndicator += mr.ExceedsFreeCoverLimitIndicator
 		mdrs.ExceedsNormalRetirementAgeIndicator += mr.ExceedsNormalRetirementAgeIndicator
+		switch mr.UnderwritingTier {
+		case UnderwritingTierShortForm:
+			mdrs.ShortFormUnderwritingCount++
+		case UnderwritingTierFullReview:
+			mdrs.FullUnderwritingCount++
+		default:
+			mdrs.WithinFreeCoverLimitCount++
+		}
 		mdrs.TotalGlaRiskRate += mr.LoadedGlaRate
 		mdrs.ExpTotalGlaRiskRate += mr.ExpAdjLoadedGlaRate
 		mdrs.TotalGlaAnnualRiskPremium += mr.GlaRiskPremium
@@ -3726,6 +3741,12 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	if memberDataPointResult.GlaSumAssured > groupQuote.FreeCoverLimit {
 		memberDataPointResult.ExceedsFreeCoverLimitIndicator = 1
 	}
+	memberDataPointResult.UnderwritingTier, memberDataPointResult.FCLExcessRatio = ClassifyTier(map[string]float64{
+		"gla":    memberDataPointResult.GlaSumAssured,
+		"ptd":    memberDataPointResult.PtdSumAssured,
+		"ci":     memberDataPointResult.CiSumAssured,
+		"sgla":   memberDataPointResult.SpouseGlaSumAssured,
+	}, groupQuote.FreeCoverLimit, nil)
 
 	//memberDataPointResult.GlaExperienceAdjustedAnnualPremium = memberDataPointResult.GlaRiskPremium
 	//memberDataPointResult.PtdExperienceAdjustedAnnualPremium = memberDataPointResult.PtdRiskPremium
@@ -4821,6 +4842,12 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	if memberDataPointResult.GlaSumAssured > groupQuote.FreeCoverLimit {
 		memberDataPointResult.ExceedsFreeCoverLimitIndicator = 1
 	}
+	memberDataPointResult.UnderwritingTier, memberDataPointResult.FCLExcessRatio = ClassifyTier(map[string]float64{
+		"gla":  memberDataPointResult.GlaSumAssured,
+		"ptd":  memberDataPointResult.PtdSumAssured,
+		"ci":   memberDataPointResult.CiSumAssured,
+		"sgla": memberDataPointResult.SpouseGlaSumAssured,
+	}, groupQuote.FreeCoverLimit, nil)
 
 	//memberDataPointResult.GlaExperienceAdjustedAnnualPremium = memberDataPointResult.GlaRiskPremium
 	//memberDataPointResult.PtdExperienceAdjustedAnnualPremium = memberDataPointResult.PtdRiskPremium
@@ -6108,7 +6135,10 @@ func SaveQuoteTables(v *multipart.FileHeader, tableType string, quoteId int, use
 					}
 				}
 				if !valid {
-					// Skip adding this member data row as it doesn't match allowed categories
+					validationErrors = append(validationErrors, fmt.Sprintf(
+						"row %d scheme_category '%s' is not in the quote's selected categories [%s]",
+						i, csvSchemeName, strings.Join(quote.SelectedSchemeCategories, ", "),
+					))
 					continue
 				}
 			}
@@ -13341,7 +13371,18 @@ func GetGroupPricingIndustries() ([]string, error) {
 	return industries, nil
 }
 
-func GetGroupPricingQuoteTableData(quoteId int, tableType string, offset int, limit int) (map[string]interface{}, error) {
+// GetGroupPricingQuoteTableData returns the per-quote table data for the
+// QuoteResults dialog. fieldSet selects between "summary" (only the
+// renderer-visible columns — much smaller payload) and "full" (legacy
+// behaviour: every column on the struct).
+//
+// Pagination contract:
+//   - limit == 0 → defaults to DefaultQuoteTableLimit (500). Stops the
+//     renderer accidentally pulling 5 000 × 373-column rows.
+//   - Caller may pass an explicit larger limit to opt out of the cap.
+//   - The response envelope carries `has_more` so the renderer can stop
+//     guessing from the count.
+func GetGroupPricingQuoteTableData(quoteId int, tableType string, offset int, limit int, fieldSet string) (map[string]interface{}, error) {
 	var results []map[string]interface{}
 	resultData := make(map[string]interface{})
 	var jsonTags []string
@@ -13353,6 +13394,34 @@ func GetGroupPricingQuoteTableData(quoteId int, tableType string, offset int, li
 	if limit < 0 {
 		limit = 0
 	}
+	if limit == 0 {
+		limit = DefaultQuoteTableLimit
+	}
+	// Fetch one extra row so we can detect "more available" without a
+	// separate count query.
+	fetchLimit := limit + 1
+
+	useSummary := fieldSet != QuoteTableFieldSetFull
+	summaryCols := summaryColumnsFor(tableType)
+	if len(summaryCols) == 0 {
+		useSummary = false // no projection defined; fall back to full row
+	}
+
+	// resolveProjection intersects the requested projection with the
+	// live schema so a SELECT never references a column the deployment
+	// hasn't migrated yet. Returns the safe column list AND the slice we
+	// use as jsonTags so the renderer only shows what it actually got.
+	resolveProjection := func(tableName string) (cols []string, tags []string) {
+		cols = filterToLiveColumns(tableName, summaryCols)
+		// If filtering ate every column (table introspection happened to
+		// be empty too), fall back to full row.
+		if len(cols) == 0 {
+			useSummary = false
+			return nil, nil
+		}
+		tags = cols
+		return cols, tags
+	}
 
 	switch tableType {
 	case "member_data":
@@ -13360,37 +13429,56 @@ func GetGroupPricingQuoteTableData(quoteId int, tableType string, offset int, li
 		if err := DB.Where("id = ?", quoteId).First(&quote).Error; err == nil && quote.QuoteType == "Renewal" {
 			var memberData []models.GPricingMemberDataInForce
 			db := DB.Where("scheme_id = ?", quote.SchemeID)
-			if limit > 0 {
-				db = db.Offset(offset).Limit(limit)
+			var safeCols []string
+			if useSummary {
+				safeCols, jsonTags = resolveProjection("g_pricing_member_data_in_forces")
+				if useSummary {
+					db = db.Select(safeCols)
+				}
 			}
-			db.Find(&memberData)
-			b, _ := json.Marshal(&memberData)
-			err := json.Unmarshal(b, &results)
-			if err != nil {
-				return nil, err
+			db = db.Offset(offset).Limit(fetchLimit)
+			if err := db.Find(&memberData).Error; err != nil {
+				return nil, fmt.Errorf("load member_data (renewal): %w", err)
 			}
-			jsonTags = getJSONTags(models.GPricingMemberDataInForce{})
+			if useSummary {
+				results = projectSliceToMaps(memberData, safeCols)
+			} else {
+				b, _ := json.Marshal(&memberData)
+				if err := json.Unmarshal(b, &results); err != nil {
+					return nil, err
+				}
+				jsonTags = getJSONTags(models.GPricingMemberDataInForce{})
+			}
 		} else {
 			var memberData []models.GPricingMemberData
 			db := DB.Where("quote_id = ?", quoteId)
-			if limit > 0 {
-				db = db.Offset(offset).Limit(limit)
+			var safeCols []string
+			if useSummary {
+				safeCols, jsonTags = resolveProjection("g_pricing_member_data")
+				if useSummary {
+					db = db.Select(safeCols)
+				}
 			}
-			db.Find(&memberData)
-			b, _ := json.Marshal(&memberData)
-			err := json.Unmarshal(b, &results)
-			if err != nil {
-				return nil, err
+			db = db.Offset(offset).Limit(fetchLimit)
+			if err := db.Find(&memberData).Error; err != nil {
+				return nil, fmt.Errorf("load member_data: %w", err)
 			}
-			jsonTags = getJSONTags(models.GPricingMemberData{})
+			if useSummary {
+				results = projectSliceToMaps(memberData, safeCols)
+			} else {
+				b, _ := json.Marshal(&memberData)
+				if err := json.Unmarshal(b, &results); err != nil {
+					return nil, err
+				}
+				jsonTags = getJSONTags(models.GPricingMemberData{})
+			}
 		}
 	case "claims_experience":
 		var claimsExperience []models.GroupPricingClaimsExperience
-		db := DB.Where("quote_id = ?", quoteId)
-		if limit > 0 {
-			db = db.Offset(offset).Limit(limit)
+		db := DB.Where("quote_id = ?", quoteId).Offset(offset).Limit(fetchLimit)
+		if err := db.Find(&claimsExperience).Error; err != nil {
+			return nil, fmt.Errorf("load claims_experience: %w", err)
 		}
-		db.Find(&claimsExperience)
 		b, _ := json.Marshal(&claimsExperience)
 		err := json.Unmarshal(b, &results)
 		if err != nil {
@@ -13400,36 +13488,55 @@ func GetGroupPricingQuoteTableData(quoteId int, tableType string, offset int, li
 	case "member_rating_results":
 		var memberRatingResults []models.MemberRatingResult
 		db := DB.Where("quote_id = ?", quoteId)
-		if limit > 0 {
-			db = db.Offset(offset).Limit(limit)
+		var safeCols []string
+		if useSummary {
+			safeCols, jsonTags = resolveProjection("member_rating_results")
+			if useSummary {
+				db = db.Select(safeCols)
+			}
 		}
-		db.Find(&memberRatingResults)
-		b, _ := json.Marshal(&memberRatingResults)
-		err := json.Unmarshal(b, &results)
-		if err != nil {
-			return nil, err
+		db = db.Offset(offset).Limit(fetchLimit)
+		if err := db.Find(&memberRatingResults).Error; err != nil {
+			return nil, fmt.Errorf("load member_rating_results: %w", err)
 		}
-		jsonTags = getJSONTags(models.MemberRatingResult{})
+		if useSummary {
+			results = projectSliceToMaps(memberRatingResults, safeCols)
+		} else {
+			b, _ := json.Marshal(&memberRatingResults)
+			if err := json.Unmarshal(b, &results); err != nil {
+				return nil, err
+			}
+			jsonTags = getJSONTags(models.MemberRatingResult{})
+		}
 	case "member_premium_schedules":
 		var memberPremiumSchedules []models.MemberPremiumSchedule
 		db := DB.Where("quote_id = ?", quoteId)
-		if limit > 0 {
-			db = db.Offset(offset).Limit(limit)
+		var safeCols []string
+		if useSummary {
+			safeCols, jsonTags = resolveProjection("member_premium_schedules")
+			if useSummary {
+				db = db.Select(safeCols)
+			}
 		}
-		db.Find(&memberPremiumSchedules)
-		b, _ := json.Marshal(&memberPremiumSchedules)
-		err := json.Unmarshal(b, &results)
-		if err != nil {
-			return nil, err
+		db = db.Offset(offset).Limit(fetchLimit)
+		if err := db.Find(&memberPremiumSchedules).Error; err != nil {
+			return nil, fmt.Errorf("load member_premium_schedules: %w", err)
 		}
-		jsonTags = getJSONTags(models.MemberPremiumSchedule{})
+		if useSummary {
+			results = projectSliceToMaps(memberPremiumSchedules, safeCols)
+		} else {
+			b, _ := json.Marshal(&memberPremiumSchedules)
+			if err := json.Unmarshal(b, &results); err != nil {
+				return nil, err
+			}
+			jsonTags = getJSONTags(models.MemberPremiumSchedule{})
+		}
 	case "group_pricing_parameters":
 		var groupPricingParameters []models.GroupPricingParameters
-		db := DB
-		if limit > 0 {
-			db = db.Offset(offset).Limit(limit)
+		db := DB.Offset(offset).Limit(fetchLimit)
+		if err := db.Find(&groupPricingParameters).Error; err != nil {
+			return nil, fmt.Errorf("load group_pricing_parameters: %w", err)
 		}
-		db.Find(&groupPricingParameters)
 		b, _ := json.Marshal(&groupPricingParameters)
 		err := json.Unmarshal(b, &results)
 		if err != nil {
@@ -13440,7 +13547,7 @@ func GetGroupPricingQuoteTableData(quoteId int, tableType string, offset int, li
 		// Bordereaux rows are projected on-the-fly from MemberRatingResult so
 		// the latest loadings and reinsurance structure flow through without
 		// requiring a recalculation.
-		bordereaux, err := BuildBordereauxRowsForQuote(quoteId, offset, limit)
+		bordereaux, err := BuildBordereauxRowsForQuote(quoteId, offset, fetchLimit)
 		if err != nil {
 			return nil, err
 		}
@@ -13455,8 +13562,19 @@ func GetGroupPricingQuoteTableData(quoteId int, tableType string, offset int, li
 		jsonTags = QuoteBordereauxJSONTags()
 	}
 
+	// has_more: we fetched limit+1; if the extra row came back, trim it
+	// from the response and flag the caller that more pages exist.
+	hasMore := false
+	if len(results) > limit {
+		results = results[:limit]
+		hasMore = true
+	}
+
 	resultData["data"] = results
 	resultData["json_tags"] = jsonTags
+	resultData["has_more"] = hasMore
+	resultData["limit"] = limit
+	resultData["offset"] = offset
 
 	return resultData, nil
 }
@@ -19144,6 +19262,15 @@ func GetQuoteTableDataExcel(quoteId int, tableType string) ([]byte, error) {
 		columns = getStructDBColumns(models.MemberPremiumSchedule{})
 	default:
 		return nil, fmt.Errorf("invalid table type: %s", tableType)
+	}
+
+	// Drop any column the Go struct declares but the live DB schema
+	// hasn't migrated yet (e.g. recently-added underwriting columns on a
+	// pre-migration deployment). Without this filter the SELECT would
+	// fail with "Unknown column 'xxx' in 'field list'".
+	columns = filterToLiveColumns(tableName, columns)
+	if len(columns) == 0 {
+		return nil, fmt.Errorf("no exportable columns for table %s — schema introspection returned empty", tableName)
 	}
 
 	// Project columns in struct field order so the Excel output matches the

@@ -246,6 +246,53 @@ const router = createRouter({
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {
+      // Quote-grouped queue — the top-level Underwriting entry point.
+      // Drills into a quote's Underwriting tab via ?tab=underwriting.
+      path: '/group-pricing/underwriting',
+      name: 'group-pricing-underwriting-cases',
+      component: () =>
+        import('../screens/group_pricing/UnderwritingQuoteList.vue'),
+      meta: { required_permission: 'underwriting:view' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      // Flat per-member case list. Kept as a deep-link target for
+      // analysts and accessible from the "Flat case list" button at
+      // the top of the quote queue.
+      path: '/group-pricing/underwriting/flat',
+      name: 'group-pricing-underwriting-cases-flat',
+      component: () =>
+        import('../screens/group_pricing/UnderwritingCaseList.vue'),
+      meta: { required_permission: 'underwriting:view' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/underwriting/:caseId',
+      name: 'group-pricing-underwriting-case-detail',
+      component: () =>
+        import('../screens/group_pricing/UnderwritingCaseDetail.vue'),
+      props: true,
+      meta: { required_permission: 'underwriting:view' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/underwriting-rules',
+      name: 'group-pricing-underwriting-rules',
+      component: () =>
+        import('../screens/group_pricing/UnderwritingRulesAdmin.vue'),
+      meta: { required_permission: 'underwriting:admin' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/quotes/:quoteId/takeover',
+      name: 'group-pricing-takeover-upload',
+      component: () =>
+        import('../screens/group_pricing/TakeoverUpload.vue'),
+      props: true,
+      meta: { required_permission: 'underwriting:decide' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
       path: '/group-pricing/claims-management/payment-schedules',
       name: 'group-pricing-claim-payment-schedules',
       component: () =>

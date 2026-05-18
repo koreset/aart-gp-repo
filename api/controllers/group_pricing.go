@@ -1592,8 +1592,14 @@ func GetGroupPricingQuoteTableData(c *gin.Context) {
 			limit = v
 		}
 	}
+	// `fields=summary` (default) returns the renderer-visible columns
+	// only; `fields=full` returns every column on the struct (legacy).
+	fieldSet := c.Query("fields")
+	if fieldSet == "" {
+		fieldSet = services.QuoteTableFieldSetSummary
+	}
 
-	resultData, err := services.GetGroupPricingQuoteTableData(quoteId, tableType, offset, limit)
+	resultData, err := services.GetGroupPricingQuoteTableData(quoteId, tableType, offset, limit, fieldSet)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
