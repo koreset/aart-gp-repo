@@ -609,6 +609,12 @@ export default {
       member
     )
   },
+  addMembersBulk(schemeId, members, skipDuplicates = true) {
+    return Api.post(
+      '/group-pricing/schemes/' + schemeId + '/members/bulk',
+      { members, skip_duplicates: skipDuplicates }
+    )
+  },
   getMembersInForce(schemeId) {
     return Api.get('/group-pricing/schemes/' + schemeId + '/members')
   },

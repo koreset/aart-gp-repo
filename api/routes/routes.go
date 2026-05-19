@@ -153,6 +153,7 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.GET("schemes/:id", controllers.GetGroupScheme)
 			groupPricing.GET("schemes/:id/quotes", controllers.GetQuotesForScheme)
 			groupPricing.POST("schemes/:id/members", controllers.AddMemberToScheme)
+			groupPricing.POST("schemes/:id/members/bulk", controllers.AddMembersToSchemeBulk)
 			groupPricing.GET("schemes/:id/members", controllers.GetSchemeMembers)
 			// Paginated members with optional filters: page, pageSize, search, schemeId, status
 			groupPricing.GET("members/paginated", controllers.GetMembersPaginated)

@@ -340,6 +340,30 @@
         </v-btn>
       </template>
     </v-snackbar>
+
+    <v-dialog v-model="blockingErrorsDialog" max-width="900" scrollable>
+      <v-card>
+        <v-card-title class="text-h6">
+          Member upload blocked
+        </v-card-title>
+        <v-card-text>
+          <MemberUploadErrorReport
+            :blocking-errors="blockingErrors"
+            :context-label="`quote-${props.quote?.id ?? ''}`"
+            filename-prefix="quote-member-upload-errors"
+          />
+        </v-card-text>
+        <v-card-actions class="justify-end">
+          <v-btn
+            color="primary"
+            variant="text"
+            @click="blockingErrorsDialog = false"
+          >
+            Close
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </base-card>
   <confirm-dialog ref="confirmationDialog" />
 </template>
@@ -356,6 +380,15 @@ import FileUploadDialog from '@/renderer/components/FileUploadDialog.vue'
 import LoadingIndicator from '@/renderer/components/LoadingIndicator.vue'
 import GroupPricingDataGrid from '@/renderer/components/tables/GroupPricingDataGrid.vue'
 import ExperienceRateOverrides from '@/renderer/components/grouppricing/ExperienceRateOverrides.vue'
+import MemberUploadErrorReport from '@/renderer/screens/group_pricing/shared/MemberUploadErrorReport.vue'
+
+interface BlockingError {
+  row: number
+  field?: string
+  message: string
+  member_id_number?: string
+  member_name?: string
+}
 
 // Import necessary components like BaseCard, DataGrid, FileUploadDialog
 
@@ -386,6 +419,8 @@ const columnDefs: any = ref([])
 const selectedTable: any = ref(null)
 const loadingData = ref(false)
 const isDialogOpen = ref(false)
+const blockingErrorsDialog = ref(false)
+const blockingErrors = ref<BlockingError[]>([])
 const resultTableData = ref([])
 const displaySummary = ref(false)
 const snackbar = ref(false)
@@ -839,10 +874,22 @@ const handleUpload = async (payload: any) => {
     })
     .catch((error) => {
       // console.log('Error:', error)
-      const errMsg = error.response?.data?.error
-      snackbarText.value =
-        errMsg && errMsg.trim() !== '' ? errMsg : 'Failed to upload table'
-      snackbar.value = true
+      const data = error.response?.data
+      const blocking = data?.blocking_errors
+      if (Array.isArray(blocking) && blocking.length > 0) {
+        // Structured presence-check failure from the backend: surface the
+        // per-row report so the user can fix the source CSV and re-upload.
+        // The backend already preserved the previous good data — the upload
+        // never reached the DELETE step.
+        blockingErrors.value = blocking
+        blockingErrorsDialog.value = true
+        isDialogOpen.value = false
+      } else {
+        const errMsg = data?.error
+        snackbarText.value =
+          errMsg && errMsg.trim() !== '' ? errMsg : 'Failed to upload table'
+        snackbar.value = true
+      }
       uploadingData.value = false
     })
 }

@@ -70,7 +70,7 @@ func GenerateGroupPricingQuote(c *gin.Context) {
 	// the groupQuote.CommencementDate is  GMT time, so we need to convert it to local time
 	sastLocation, err := time.LoadLocation("Africa/Johannesburg")
 	if err != nil {
-		panic(err)
+		sastLocation = time.Local
 	}
 
 	// 2. Use the .In() method to convert the time
@@ -694,6 +694,16 @@ func UploadQuoteTables(c *gin.Context) {
 	err, count := services.SaveQuoteTables(file, tableType, quoteId, user)
 
 	if err != nil {
+		// Structured blocking-field error: surface the per-row list so the frontend
+		// can render an error report and let the user download it as CSV.
+		var blocking *services.MemberUploadBlockingErrors
+		if errors.As(err, &blocking) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":           err.Error(),
+				"blocking_errors": blocking.Errors,
+			})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   err.Error(),
 			"details": strings.Split(err.Error(), "; "),
@@ -1284,6 +1294,18 @@ func AddMemberToScheme(c *gin.Context) {
 	memberData, err = services.AddMemberToScheme(memberData, user)
 
 	if err != nil {
+		// Member-presence and ID-format failures are user-correctable: surface them
+		// as 400s so the frontend can render them as field-level errors instead of
+		// "internal server error".
+		msg := err.Error()
+		if strings.Contains(msg, "is required") ||
+			strings.Contains(msg, "must be greater than zero") ||
+			strings.Contains(msg, "invalid RSA ID") ||
+			strings.Contains(msg, "already exists for this scheme") ||
+			strings.Contains(msg, "Entry data cannot be before") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -1298,6 +1320,82 @@ func normalizeSlashDates(data []byte) []byte {
 	// Regex to match full date tokens like 2025/12/21 not part of larger strings
 	re := regexp.MustCompile(`\b(\d{4})/(\d{2})/(\d{2})\b`)
 	return re.ReplaceAll(data, []byte("$1-$2-$3"))
+}
+
+// AddMembersToSchemeBulk replaces the per-row HTTP loop that BulkMemberEnrollment.vue
+// used to drive. The whole batch is validated and inserted in one request inside
+// a single transaction, so cloud-network upload time drops from N round-trips to 1.
+//
+// Body: { "members": [GPricingMemberDataInForce, ...], "skip_duplicates": bool }
+//
+// Responses:
+//   - 201 with { "inserted": N } on success.
+//   - 400 with { "error": "...", "blocking_errors": [{row, field, message, ...}] }
+//     when any row is missing gender / date_of_birth / annual_salary.
+//   - 400 with { "error": "..." } for other validation failures (invalid RSA ID,
+//     entry date before commencement, duplicate when skip_duplicates is false).
+//   - 500 for unexpected errors.
+func AddMembersToSchemeBulk(c *gin.Context) {
+	schemeId, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scheme id"})
+		return
+	}
+
+	raw, err := c.GetRawData()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// Accept both YYYY-MM-DD and YYYY/MM/DD, matching the single-row endpoint.
+	raw = normalizeSlashDates(raw)
+
+	var payload struct {
+		Members        []models.GPricingMemberDataInForce `json:"members"`
+		SkipDuplicates bool                               `json:"skip_duplicates"`
+	}
+	if uErr := json.Unmarshal(raw, &payload); uErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": uErr.Error()})
+		return
+	}
+	if len(payload.Members) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "members array is required and cannot be empty"})
+		return
+	}
+
+	// Force every member to the scheme from the URL — the body's scheme_id is
+	// ignored to prevent a client targeting the wrong scheme by accident.
+	for i := range payload.Members {
+		payload.Members[i].SchemeId = schemeId
+	}
+
+	user := c.MustGet("user").(models.AppUser)
+
+	inserted, svcErr := services.AddMembersToSchemeBulk(schemeId, payload.Members, payload.SkipDuplicates, user)
+	if svcErr != nil {
+		var blocking *services.MemberUploadBlockingErrors
+		if errors.As(svcErr, &blocking) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":           svcErr.Error(),
+				"blocking_errors": blocking.Errors,
+			})
+			return
+		}
+		msg := svcErr.Error()
+		if strings.Contains(msg, "is required") ||
+			strings.Contains(msg, "must be greater than zero") ||
+			strings.Contains(msg, "invalid RSA ID") ||
+			strings.Contains(msg, "already exists for this scheme") ||
+			strings.Contains(msg, "entry date cannot be before") ||
+			strings.Contains(msg, "no members provided") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": msg})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"inserted": inserted})
 }
 
 func GetSchemeMembers(c *gin.Context) {
@@ -3761,6 +3859,10 @@ func ApplyDiscountToQuote(c *gin.Context) {
 // today holds the global discount calculation method. The row is created with
 // defaults on first read so the endpoint always returns a usable payload.
 func GetGroupPricingSettings(c *gin.Context) {
+	if services.DB == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"message": "database not available"})
+		return
+	}
 	var s models.GroupPricingSetting
 	if err := services.DB.First(&s, 1).Error; err != nil {
 		s = models.GroupPricingSetting{
@@ -3782,6 +3884,10 @@ func GetGroupPricingSettings(c *gin.Context) {
 // The discount method only takes effect on the next ApplyDiscountToQuote /
 // recompute call — existing quotes are not retroactively recomputed.
 func UpdateGroupPricingSettings(c *gin.Context) {
+	if services.DB == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"message": "database not available"})
+		return
+	}
 	// Pointer-typed fields so we can distinguish "field omitted" from
 	// "explicitly set to zero" — relevant for FCLOverrideTolerance, where 0
 	// is a meaningful (strict) value.

@@ -2155,8 +2155,14 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 		mdrs.TotalSglaAnnualRiskPremium += mr.SpouseGlaRiskPremium
 		mdrs.ExpTotalSglaAnnualRiskPremium += mr.ExpAdjSpouseGlaRiskPremium
 
-		mdrs.TotalFunAnnualRiskPremium += mr.TotalFuneralRiskPremium
-		mdrs.ExpTotalFunAnnualRiskPremium += mr.ExpAdjTotalFuneralRiskPremium
+		// Defensive: with the per-member funeral guard upstream, mr.*Funeral*
+		// is already 0 when the benefit is off, so the aggregation is harmless.
+		// Skipping the += explicitly here keeps the summary correct even if a
+		// future change reintroduces stale per-member funeral values.
+		if category == nil || category.FamilyFuneralBenefit {
+			mdrs.TotalFunAnnualRiskPremium += mr.TotalFuneralRiskPremium
+			mdrs.ExpTotalFunAnnualRiskPremium += mr.ExpAdjTotalFuneralRiskPremium
+		}
 
 		// Reinsurance premium sums per benefit. Funeral is the roll-up of
 		// the five relationship-level reinsurance premiums.
@@ -3703,29 +3709,34 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 
 	discountFraction := -(groupQuote.Loadings.Discount / 100.0)
 
-	memberDataPointResult.AverageNumberSpouse = groupFuneralParameter.ProportionMarried
+	// Family funeral risk-premium block. Skipped when the category does not
+	// elect FamilyFuneralBenefit so lingering sum-assured fields on the
+	// category cannot pollute per-member funeral premiums for movement runs.
+	if schemeCategory.FamilyFuneralBenefit {
+		memberDataPointResult.AverageNumberSpouse = groupFuneralParameter.ProportionMarried
 
-	memberDataPointResult.ChildFuneralBaseRate = applyCoverAgeLimit(GetChildFuneralRate(&originalMemberDataPointResult, groupParameter, memberDataPointResult.AverageChildAgeNextBirthday), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
-	memberDataPointResult.ChildFuneralSumAssured = schemeCategory.FamilyFuneralChildrenFuneralSumAssured
-	memberDataPointResult.ParentFuneralBaseRate = applyCoverAgeLimit(GetDependantMortalityRate(&originalMemberDataPointResult, groupParameter, memberDataPointResult.AverageDependantAgeNextBirthday, mpIncomeLevel), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
-	memberDataPointResult.ParentFuneralSumAssured = schemeCategory.FamilyFuneralAdultDependantSumAssured
+		memberDataPointResult.ChildFuneralBaseRate = applyCoverAgeLimit(GetChildFuneralRate(&originalMemberDataPointResult, groupParameter, memberDataPointResult.AverageChildAgeNextBirthday), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
+		memberDataPointResult.ChildFuneralSumAssured = schemeCategory.FamilyFuneralChildrenFuneralSumAssured
+		memberDataPointResult.ParentFuneralBaseRate = applyCoverAgeLimit(GetDependantMortalityRate(&originalMemberDataPointResult, groupParameter, memberDataPointResult.AverageDependantAgeNextBirthday, mpIncomeLevel), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
+		memberDataPointResult.ParentFuneralSumAssured = schemeCategory.FamilyFuneralAdultDependantSumAssured
 
-	mainMemberFuneralSA := applyMaxCoverCap(applyCoverAgeLimit(schemeCategory.FamilyFuneralMainMemberFuneralSumAssured, memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge), reinsCoverCaps[benefitTypeKey(schemeCategory.FamilyFuneralAlias, models.BenefitTypeFun)])
-	if schemeCategory.GlaBenefit {
-		memberDataPointResult.MainMemberFuneralRiskPremium = memberDataPointResult.LoadedGlaRate * mainMemberFuneralSA
-		memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.LoadedSpouseGlaRate * schemeCategory.FamilyFuneralSpouseFuneralSumAssured * memberDataPointResult.AverageNumberSpouse
-	} else {
-		memberDataPointResult.MainMemberFuneralRiskPremium = memberDataPointResult.MainMemberFuneralBaseRate * mainMemberFuneralSA
-		memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.SpouseFuneralBaseRate * schemeCategory.FamilyFuneralSpouseFuneralSumAssured * memberDataPointResult.AverageNumberSpouse
+		mainMemberFuneralSA := applyMaxCoverCap(applyCoverAgeLimit(schemeCategory.FamilyFuneralMainMemberFuneralSumAssured, memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge), reinsCoverCaps[benefitTypeKey(schemeCategory.FamilyFuneralAlias, models.BenefitTypeFun)])
+		if schemeCategory.GlaBenefit {
+			memberDataPointResult.MainMemberFuneralRiskPremium = memberDataPointResult.LoadedGlaRate * mainMemberFuneralSA
+			memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.LoadedSpouseGlaRate * schemeCategory.FamilyFuneralSpouseFuneralSumAssured * memberDataPointResult.AverageNumberSpouse
+		} else {
+			memberDataPointResult.MainMemberFuneralRiskPremium = memberDataPointResult.MainMemberFuneralBaseRate * mainMemberFuneralSA
+			memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.SpouseFuneralBaseRate * schemeCategory.FamilyFuneralSpouseFuneralSumAssured * memberDataPointResult.AverageNumberSpouse
+		}
+		memberDataPointResult.ChildFuneralRiskPremium = memberDataPointResult.ChildFuneralBaseRate * schemeCategory.FamilyFuneralChildrenFuneralSumAssured * math.Min(memberDataPointResult.AverageNumberChildren, float64(schemeCategory.FamilyFuneralMaxNumberChildren))
+		memberDataPointResult.ParentFuneralRiskPremium = memberDataPointResult.ParentFuneralBaseRate * schemeCategory.FamilyFuneralAdultDependantSumAssured * memberDataPointResult.AverageNumberDependants
+
+		memberDataPointResult.TotalFuneralRiskPremium = (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
+		memberDataPointResult.ExpAdjTotalFuneralRiskPremium = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
+		memberDataPointResult.TotalFuneralOfficePremium = memberDataPointResult.TotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
+		memberDataPointResult.ExpAdjTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
+		memberDataPointResult.FinalTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - (memberDataPointResult.TotalPremiumLoading + discountFraction))
 	}
-	memberDataPointResult.ChildFuneralRiskPremium = memberDataPointResult.ChildFuneralBaseRate * schemeCategory.FamilyFuneralChildrenFuneralSumAssured * math.Min(memberDataPointResult.AverageNumberChildren, float64(schemeCategory.FamilyFuneralMaxNumberChildren))
-	memberDataPointResult.ParentFuneralRiskPremium = memberDataPointResult.ParentFuneralBaseRate * schemeCategory.FamilyFuneralAdultDependantSumAssured * memberDataPointResult.AverageNumberDependants
-
-	memberDataPointResult.TotalFuneralRiskPremium = (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
-	memberDataPointResult.ExpAdjTotalFuneralRiskPremium = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading)
-	memberDataPointResult.TotalFuneralOfficePremium = memberDataPointResult.TotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
-	memberDataPointResult.ExpAdjTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
-	memberDataPointResult.FinalTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - (memberDataPointResult.TotalPremiumLoading + discountFraction))
 
 	// Compute all non-educator conversion / continuity slice premiums now
 	// that Loaded*Rates and TotalFuneralRiskCost are final. Educator slice
@@ -4698,45 +4709,51 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 
 	discountFraction := -(groupQuote.Loadings.Discount / 100.0)
 
-	memberDataPointResult.AverageNumberSpouse = groupFuneralParameter.ProportionMarried
+	// Family funeral risk-premium block. Skipped when the category does not
+	// elect FamilyFuneralBenefit so that lingering sum-assured fields on the
+	// category (which the UI does not zero on toggle-off) cannot leak into
+	// per-member funeral premiums and pollute the scheme commission base.
+	if groupQuote.SchemeCategories[i].FamilyFuneralBenefit {
+		memberDataPointResult.AverageNumberSpouse = groupFuneralParameter.ProportionMarried
 
-	memberDataPointResult.ChildFuneralBaseRate = applyCoverAgeLimit(GetChildFuneralRate(&memberDataPointResult, groupParameter, memberDataPointResult.AverageChildAgeNextBirthday), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
-	memberDataPointResult.ChildFuneralBaseRate *= (1 + memberRegionLoading.FunRegionLoadingRate)
-	memberDataPointResult.ChildFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralChildrenFuneralSumAssured * indicativeRatesCount
-	memberDataPointResult.ParentFuneralBaseRate = applyCoverAgeLimit(GetDependantMortalityRate(&memberDataPointResult, groupParameter, memberDataPointResult.AverageDependantAgeNextBirthday, mpIncomeLevel), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
-	memberDataPointResult.ParentFuneralBaseRate *= (1 + memberRegionLoading.FunRegionLoadingRate)
-	memberDataPointResult.ParentFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralParentFuneralSumAssured * indicativeRatesCount
-	memberDataPointResult.ParentFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured * indicativeRatesCount
-	memberDataPointResult.MemberFuneralSumAssured = applyMaxCoverCap(applyCoverAgeLimit(groupQuote.SchemeCategories[i].FamilyFuneralMainMemberFuneralSumAssured, memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge), reinsCoverCaps[benefitTypeKey(groupQuote.SchemeCategories[i].FamilyFuneralAlias, models.BenefitTypeFun)]) * indicativeRatesCount
+		memberDataPointResult.ChildFuneralBaseRate = applyCoverAgeLimit(GetChildFuneralRate(&memberDataPointResult, groupParameter, memberDataPointResult.AverageChildAgeNextBirthday), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
+		memberDataPointResult.ChildFuneralBaseRate *= (1 + memberRegionLoading.FunRegionLoadingRate)
+		memberDataPointResult.ChildFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralChildrenFuneralSumAssured * indicativeRatesCount
+		memberDataPointResult.ParentFuneralBaseRate = applyCoverAgeLimit(GetDependantMortalityRate(&memberDataPointResult, groupParameter, memberDataPointResult.AverageDependantAgeNextBirthday, mpIncomeLevel), memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge)
+		memberDataPointResult.ParentFuneralBaseRate *= (1 + memberRegionLoading.FunRegionLoadingRate)
+		memberDataPointResult.ParentFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralParentFuneralSumAssured * indicativeRatesCount
+		memberDataPointResult.ParentFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured * indicativeRatesCount
+		memberDataPointResult.MemberFuneralSumAssured = applyMaxCoverCap(applyCoverAgeLimit(groupQuote.SchemeCategories[i].FamilyFuneralMainMemberFuneralSumAssured, memberDataPointResult.AgeNextBirthday, restriction.FunMaxCoverAge), reinsCoverCaps[benefitTypeKey(groupQuote.SchemeCategories[i].FamilyFuneralAlias, models.BenefitTypeFun)]) * indicativeRatesCount
 
-	// Child / parent / dependant reinsurance rates. No dedicated per-life
-	// reinsurance rate tables exist for these relationships, so we fall back
-	// to the direct funeral base rate plus the reinsurance funeral contingency
-	// loading. The ceded premium later uses these values × the ceded sum
-	// assured computed in GroupPricingReinsurance.
-	memberDataPointResult.ChildReinsuranceBaseRate = memberDataPointResult.ChildFuneralBaseRate
-	memberDataPointResult.ChildReinsuranceRate = memberDataPointResult.ChildReinsuranceBaseRate * (1 + memberDataPointResult.ReinsFunContingencyLoading + memberDataPointResult.ReinsFunVoluntaryLoading)
-	memberDataPointResult.ParentReinsuranceBaseRate = memberDataPointResult.ParentFuneralBaseRate
-	memberDataPointResult.ParentReinsuranceRate = memberDataPointResult.ParentReinsuranceBaseRate * (1 + memberDataPointResult.ReinsFunContingencyLoading + memberDataPointResult.ReinsFunVoluntaryLoading)
-	memberDataPointResult.DependantReinsuranceBaseRate = memberDataPointResult.ParentFuneralBaseRate
-	memberDataPointResult.DependantReinsuranceRate = memberDataPointResult.DependantReinsuranceBaseRate * (1 + memberDataPointResult.ReinsFunContingencyLoading + memberDataPointResult.ReinsFunVoluntaryLoading)
+		// Child / parent / dependant reinsurance rates. No dedicated per-life
+		// reinsurance rate tables exist for these relationships, so we fall back
+		// to the direct funeral base rate plus the reinsurance funeral contingency
+		// loading. The ceded premium later uses these values × the ceded sum
+		// assured computed in GroupPricingReinsurance.
+		memberDataPointResult.ChildReinsuranceBaseRate = memberDataPointResult.ChildFuneralBaseRate
+		memberDataPointResult.ChildReinsuranceRate = memberDataPointResult.ChildReinsuranceBaseRate * (1 + memberDataPointResult.ReinsFunContingencyLoading + memberDataPointResult.ReinsFunVoluntaryLoading)
+		memberDataPointResult.ParentReinsuranceBaseRate = memberDataPointResult.ParentFuneralBaseRate
+		memberDataPointResult.ParentReinsuranceRate = memberDataPointResult.ParentReinsuranceBaseRate * (1 + memberDataPointResult.ReinsFunContingencyLoading + memberDataPointResult.ReinsFunVoluntaryLoading)
+		memberDataPointResult.DependantReinsuranceBaseRate = memberDataPointResult.ParentFuneralBaseRate
+		memberDataPointResult.DependantReinsuranceRate = memberDataPointResult.DependantReinsuranceBaseRate * (1 + memberDataPointResult.ReinsFunContingencyLoading + memberDataPointResult.ReinsFunVoluntaryLoading)
 
-	if groupQuote.SchemeCategories[i].GlaBenefit {
-		memberDataPointResult.MainMemberFuneralRiskPremium = memberDataPointResult.LoadedGlaRate * memberDataPointResult.MemberFuneralSumAssured
-	} else {
-		memberDataPointResult.MainMemberFuneralRiskPremium = memberDataPointResult.MainMemberFuneralBaseRate * memberDataPointResult.MemberFuneralSumAssured
+		if groupQuote.SchemeCategories[i].GlaBenefit {
+			memberDataPointResult.MainMemberFuneralRiskPremium = memberDataPointResult.LoadedGlaRate * memberDataPointResult.MemberFuneralSumAssured
+		} else {
+			memberDataPointResult.MainMemberFuneralRiskPremium = memberDataPointResult.MainMemberFuneralBaseRate * memberDataPointResult.MemberFuneralSumAssured
+		}
+		memberDataPointResult.SpouseFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured * indicativeRatesCount
+		if groupQuote.SchemeCategories[i].GlaBenefit {
+			memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.LoadedSpouseGlaRate * groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured * memberDataPointResult.AverageNumberSpouse * indicativeRatesCount
+		} else {
+			memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.SpouseFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured * memberDataPointResult.AverageNumberSpouse * indicativeRatesCount
+		}
+		memberDataPointResult.ChildFuneralRiskPremium = memberDataPointResult.ChildFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralChildrenFuneralSumAssured * math.Min(memberDataPointResult.AverageNumberChildren, float64(groupQuote.SchemeCategories[i].FamilyFuneralMaxNumberChildren)) * indicativeRatesCount
+		memberDataPointResult.ParentFuneralRiskPremium = memberDataPointResult.ParentFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured * memberDataPointResult.AverageNumberDependants * indicativeRatesCount
+
+		memberDataPointResult.TotalFuneralRiskPremium = (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading + memberDataPointResult.FunSchemeSizeLoading)
+		memberDataPointResult.TotalFuneralOfficePremium = memberDataPointResult.TotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
 	}
-	memberDataPointResult.SpouseFuneralSumAssured = groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured * indicativeRatesCount
-	if groupQuote.SchemeCategories[i].GlaBenefit {
-		memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.LoadedSpouseGlaRate * groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured * memberDataPointResult.AverageNumberSpouse * indicativeRatesCount
-	} else {
-		memberDataPointResult.SpouseFuneralRiskPremium = memberDataPointResult.SpouseFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralSpouseFuneralSumAssured * memberDataPointResult.AverageNumberSpouse * indicativeRatesCount
-	}
-	memberDataPointResult.ChildFuneralRiskPremium = memberDataPointResult.ChildFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralChildrenFuneralSumAssured * math.Min(memberDataPointResult.AverageNumberChildren, float64(groupQuote.SchemeCategories[i].FamilyFuneralMaxNumberChildren)) * indicativeRatesCount
-	memberDataPointResult.ParentFuneralRiskPremium = memberDataPointResult.ParentFuneralBaseRate * groupQuote.SchemeCategories[i].FamilyFuneralAdultDependantSumAssured * memberDataPointResult.AverageNumberDependants * indicativeRatesCount
-
-	memberDataPointResult.TotalFuneralRiskPremium = (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading + memberDataPointResult.FunSchemeSizeLoading)
-	memberDataPointResult.TotalFuneralOfficePremium = memberDataPointResult.TotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
 
 	// Derive LoadedGla/PtdEducatorRate now that the parent LoadedRates are
 	// set but before the educator block so educator premiums (and their
@@ -4799,16 +4816,18 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	memberDataPointResult.ExpAdjCiRiskPremium = memberDataPointResult.ExpAdjLoadedCiRate * memberDataPointResult.CiCappedSumAssured
 	memberDataPointResult.ExpAdjSpouseGlaRiskPremium = memberDataPointResult.ExpAdjLoadedSpouseGlaRate * memberDataPointResult.SpouseGlaCappedSumAssured
 
-	memberDataPointResult.ExpAdjTotalFuneralRiskPremium = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading + memberDataPointResult.FunSchemeSizeLoading)
-	memberDataPointResult.ExpAdjTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
-	memberDataPointResult.FinalTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - (memberDataPointResult.TotalPremiumLoading + discountFraction))
+	if groupQuote.SchemeCategories[i].FamilyFuneralBenefit {
+		memberDataPointResult.ExpAdjTotalFuneralRiskPremium = memberDataPointResult.GlaExperienceAdjustment * (memberDataPointResult.MainMemberFuneralRiskPremium + memberDataPointResult.SpouseFuneralRiskPremium + memberDataPointResult.ChildFuneralRiskPremium + memberDataPointResult.ParentFuneralRiskPremium) * (1 + memberDataPointResult.FunConversionOnWithdrawalLoading + memberDataPointResult.FunSchemeSizeLoading)
+		memberDataPointResult.ExpAdjTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - memberDataPointResult.TotalPremiumLoading)
+		memberDataPointResult.FinalTotalFuneralOfficePremium = memberDataPointResult.ExpAdjTotalFuneralRiskPremium / (1.0 - (memberDataPointResult.TotalPremiumLoading + discountFraction))
 
-	// FUN override (replaces ExpAdjTotalFuneralRiskPremium and re-derives
-	// the office/final-office premiums). Sits here so it runs after the
-	// initial ExpAdj funeral computation but before the educator and
-	// conversion cascades read these values.
-	if groupQuote.ExperienceRating == "Override" {
-		applyFuneralExperienceRateOverride(&memberDataPointResult, experienceRateOverrides, groupQuote.SchemeCategories[i], discountFraction)
+		// FUN override (replaces ExpAdjTotalFuneralRiskPremium and re-derives
+		// the office/final-office premiums). Sits here so it runs after the
+		// initial ExpAdj funeral computation but before the educator and
+		// conversion cascades read these values.
+		if groupQuote.ExperienceRating == "Override" {
+			applyFuneralExperienceRateOverride(&memberDataPointResult, experienceRateOverrides, groupQuote.SchemeCategories[i], discountFraction)
+		}
 	}
 
 	// Re-derive the educator loaded rates now that ExpAdjLoaded*Rate values
@@ -6089,46 +6108,94 @@ func SaveQuoteTables(v *multipart.FileHeader, tableType string, quoteId int, use
 	DB.First(&quote, quoteId)
 	switch tableType {
 	case "Member Data":
-		// Member Data uses a local shadow struct memberDataCSV for decoding
+		// Member Data uses a local shadow struct memberDataCSV for decoding.
+		// Float fields use models.CsvFloat so empty cells decode to zero rather
+		// than aborting the whole upload — the post-decode presence check then
+		// reports an empty annual_salary as a structured blocking error (same
+		// path as missing gender / date_of_birth) instead of a raw csvutil
+		// error in the snackbar.
 		type memberDataCSV struct {
-			Year                         int            `csv:"year"`
-			SchemeName                   string         `csv:"scheme_name"`
-			MemberName                   string         `csv:"member_name"`
-			MemberIdNumber               string         `csv:"member_id_number"`
-			MemberIdType                 string         `csv:"member_id_type"`
-			SchemeCategory               string         `csv:"scheme_category"`
-			Gender                       string         `csv:"gender"`
-			Email                        string         `csv:"email"`
-			EmployeeNumber               string         `csv:"employee_number"`
-			DateOfBirth                  models.CsvTime `csv:"date_of_birth"`
-			AnnualSalary                 float64        `csv:"annual_salary"`
-			ContributionWaiverProportion float64        `csv:"contribution_waiver_proportion"`
-			EntryDate                    models.CsvTime `csv:"entry_date"`
-			ExitDate                     models.CsvTime `csv:"exit_date"`
-			EffectiveExitDate            models.CsvTime `csv:"effective_exit_date"`
+			Year                         int             `csv:"year"`
+			SchemeName                   string          `csv:"scheme_name"`
+			MemberName                   string          `csv:"member_name"`
+			MemberIdNumber               string          `csv:"member_id_number"`
+			MemberIdType                 string          `csv:"member_id_type"`
+			SchemeCategory               string          `csv:"scheme_category"`
+			Gender                       string          `csv:"gender"`
+			Email                        string          `csv:"email"`
+			EmployeeNumber               string          `csv:"employee_number"`
+			DateOfBirth                  models.CsvTime  `csv:"date_of_birth"`
+			AnnualSalary                 models.CsvFloat `csv:"annual_salary"`
+			ContributionWaiverProportion models.CsvFloat `csv:"contribution_waiver_proportion"`
+			EntryDate                    models.CsvTime  `csv:"entry_date"`
+			ExitDate                     models.CsvTime  `csv:"exit_date"`
+			EffectiveExitDate            models.CsvTime  `csv:"effective_exit_date"`
 
 			// Flattened MemberBenefits columns (option 1)
-			BenefitsGlaMultiple  float64 `csv:"benefits_gla_multiple"`
-			BenefitsSglaMultiple float64 `csv:"benefits_sgla_multiple"`
-			BenefitsPtdMultiple  float64 `csv:"benefits_ptd_multiple"`
-			BenefitsCiMultiple   float64 `csv:"benefits_ci_multiple"`
-			BenefitsTtdMultiple  float64 `csv:"benefits_ttd_multiple"`
-			BenefitsPhiMultiple  float64 `csv:"benefits_phi_multiple"`
+			BenefitsGlaMultiple  models.CsvFloat `csv:"benefits_gla_multiple"`
+			BenefitsSglaMultiple models.CsvFloat `csv:"benefits_sgla_multiple"`
+			BenefitsPtdMultiple  models.CsvFloat `csv:"benefits_ptd_multiple"`
+			BenefitsCiMultiple   models.CsvFloat `csv:"benefits_ci_multiple"`
+			BenefitsTtdMultiple  models.CsvFloat `csv:"benefits_ttd_multiple"`
+			BenefitsPhiMultiple  models.CsvFloat `csv:"benefits_phi_multiple"`
 		}
 
 		if validationErr := utils.ValidateCSVHeaders(headers, memberDataCSV{}); validationErr != nil {
 			return fmt.Errorf("%s validation failed: %v", tableType, validationErr), 0
 		}
 
-		DB.Where("quote_id = ?", quoteId).Delete(&models.GPricingMemberData{})
+		// IMPORTANT: do NOT delete existing rows here. A failed validation below must
+		// leave the user's previous good data intact so they can fix the CSV and retry.
+		// The actual DELETE happens once all validation passes, just before the bulk
+		// insert (see further down).
 		var membersData []models.GPricingMemberData
 		var validationErrors []string
+		var blockingErrors []MemberUploadBlockingError
 		for i := 1; ; i++ {
 			var row memberDataCSV
 			if err := dec.Decode(&row); err == io.EOF {
 				break
 			} else if err != nil {
 				return fmt.Errorf("error decoding Member Data at row %d: %v", i, err), 0
+			}
+
+			// Hard-required fields for pricing/valuation. Any row missing one of these
+			// blocks the entire upload — partial state in g_pricing_member_data would
+			// silently corrupt quote pricing maths. We keep decoding remaining rows
+			// so a single response can list every blocking row.
+			rowBlocked := false
+			if strings.TrimSpace(row.Gender) == "" {
+				blockingErrors = append(blockingErrors, MemberUploadBlockingError{
+					Row:            i,
+					Field:          "gender",
+					Message:        "gender is required",
+					MemberIdNumber: row.MemberIdNumber,
+					MemberName:     row.MemberName,
+				})
+				rowBlocked = true
+			}
+			if time.Time(row.DateOfBirth).IsZero() {
+				blockingErrors = append(blockingErrors, MemberUploadBlockingError{
+					Row:            i,
+					Field:          "date_of_birth",
+					Message:        "date_of_birth is required",
+					MemberIdNumber: row.MemberIdNumber,
+					MemberName:     row.MemberName,
+				})
+				rowBlocked = true
+			}
+			if float64(row.AnnualSalary) <= 0 {
+				blockingErrors = append(blockingErrors, MemberUploadBlockingError{
+					Row:            i,
+					Field:          "annual_salary",
+					Message:        "annual_salary must be greater than zero",
+					MemberIdNumber: row.MemberIdNumber,
+					MemberName:     row.MemberName,
+				})
+				rowBlocked = true
+			}
+			if rowBlocked {
+				continue
 			}
 
 			// Sanity check: if a scheme_name is provided in the CSV row, ensure it
@@ -6174,8 +6241,8 @@ func SaveQuoteTables(v *multipart.FileHeader, tableType string, quoteId int, use
 				DateOfBirth:                  time.Time(row.DateOfBirth),
 				Email:                        strings.TrimSpace(row.Email),
 				EmployeeNumber:               strings.TrimSpace(row.EmployeeNumber),
-				AnnualSalary:                 row.AnnualSalary,
-				ContributionWaiverProportion: row.ContributionWaiverProportion,
+				AnnualSalary:                 float64(row.AnnualSalary),
+				ContributionWaiverProportion: float64(row.ContributionWaiverProportion),
 				EntryDate:                    time.Time(row.EntryDate),
 				ExitDate: func() *time.Time {
 					if t := time.Time(row.ExitDate); !t.IsZero() {
@@ -6196,12 +6263,12 @@ func SaveQuoteTables(v *multipart.FileHeader, tableType string, quoteId int, use
 				// also persist the CSV-provided scheme_name if needed in future.
 				SchemeName: quote.SchemeName,
 				Benefits: models.MemberBenefits{
-					GlaMultiple:  row.BenefitsGlaMultiple,
-					SglaMultiple: row.BenefitsSglaMultiple,
-					PtdMultiple:  row.BenefitsPtdMultiple,
-					CiMultiple:   row.BenefitsCiMultiple,
-					TtdMultiple:  row.BenefitsTtdMultiple,
-					PhiMultiple:  row.BenefitsPhiMultiple,
+					GlaMultiple:  float64(row.BenefitsGlaMultiple),
+					SglaMultiple: float64(row.BenefitsSglaMultiple),
+					PtdMultiple:  float64(row.BenefitsPtdMultiple),
+					CiMultiple:   float64(row.BenefitsCiMultiple),
+					TtdMultiple:  float64(row.BenefitsTtdMultiple),
+					PhiMultiple:  float64(row.BenefitsPhiMultiple),
 				},
 			}
 			membersData = append(membersData, pp)
@@ -6209,6 +6276,19 @@ func SaveQuoteTables(v *multipart.FileHeader, tableType string, quoteId int, use
 			//if err != nil {
 			//	appLog.Error("Save Quote Tables error: ", err.Error())
 			//}
+		}
+
+		// Blocking errors short-circuit the upload entirely. We return a structured
+		// error so the controller can respond with HTTP 400 and the frontend can
+		// render a per-row report + downloadable CSV. Cap reported rows to keep the
+		// payload bounded — the user only needs enough to fix the source file.
+		if len(blockingErrors) > 0 {
+			const maxReported = 100
+			reported := blockingErrors
+			if len(reported) > maxReported {
+				reported = reported[:maxReported]
+			}
+			return &MemberUploadBlockingErrors{Errors: reported}, 0
 		}
 
 		if len(validationErrors) > 0 {
@@ -6225,6 +6305,10 @@ func SaveQuoteTables(v *multipart.FileHeader, tableType string, quoteId int, use
 		//if err != nil {
 		//	return fmt.Errorf("Member ID validation failed: %v", err), 0
 		//}
+
+		// All validation passed — only now is it safe to wipe the previous member
+		// data for this quote and replace it with the new batch.
+		DB.Where("quote_id = ?", quoteId).Delete(&models.GPricingMemberData{})
 
 		err = DB.CreateInBatches(&membersData, 100).Error
 		if err != nil {
@@ -9407,6 +9491,9 @@ func GetDiscountAuthorityForUser(userEmail string, riskRateCode string) (models.
 // quotes computed before the setting was introduced behave identically to
 // historical output.
 func GetDiscountMethod() string {
+	if DB == nil {
+		return models.DiscountMethodLoadingAdjustment
+	}
 	var s models.GroupPricingSetting
 	if err := DB.First(&s, 1).Error; err != nil {
 		return models.DiscountMethodLoadingAdjustment
@@ -9423,6 +9510,9 @@ func GetDiscountMethod() string {
 // column is empty so quotes computed before the setting was introduced
 // behave identically to historical output.
 func GetFCLMethod() string {
+	if DB == nil {
+		return models.FCLMethodPercentile
+	}
 	var s models.GroupPricingSetting
 	if err := DB.First(&s, 1).Error; err != nil {
 		return models.FCLMethodPercentile
@@ -9439,6 +9529,9 @@ func GetFCLMethod() string {
 // the column is empty so quotes computed before the setting was introduced
 // behave identically to historical output.
 func GetMedicalAidWaiverMethod() string {
+	if DB == nil {
+		return models.MedicalAidWaiverMethodFormula
+	}
 	var s models.GroupPricingSetting
 	if err := DB.First(&s, 1).Error; err != nil {
 		return models.MedicalAidWaiverMethodFormula
@@ -9455,6 +9548,9 @@ func GetMedicalAidWaiverMethod() string {
 // the row is missing or the column is empty so quotes computed before the
 // setting was introduced behave identically to historical output.
 func GetPtdBaseRateMethod() string {
+	if DB == nil {
+		return models.PtdBaseRateMethodPtdOnly
+	}
 	var s models.GroupPricingSetting
 	if err := DB.First(&s, 1).Error; err != nil {
 		return models.PtdBaseRateMethodPtdOnly
@@ -9471,6 +9567,9 @@ func GetPtdBaseRateMethod() string {
 // quotes computed before the setting was introduced behave identically to
 // historical output.
 func GetAgeMethod() string {
+	if DB == nil {
+		return models.AgeMethodAgeNextBirthday
+	}
 	var s models.GroupPricingSetting
 	if err := DB.First(&s, 1).Error; err != nil {
 		return models.AgeMethodAgeNextBirthday
@@ -9497,6 +9596,9 @@ const RiskProfileVariationToleranceDefault = 7.0
 // singleton row. Falls back to RiskProfileVariationToleranceDefault when the
 // row is missing or the stored value is non-positive.
 func GetRiskProfileVariationTolerancePct() float64 {
+	if DB == nil {
+		return RiskProfileVariationToleranceDefault
+	}
 	var s models.GroupPricingSetting
 	if err := DB.First(&s, 1).Error; err != nil {
 		return RiskProfileVariationToleranceDefault
@@ -9512,6 +9614,9 @@ func GetRiskProfileVariationTolerancePct() float64 {
 // to claim before being clamped. Falls back to FCLOverrideToleranceDefault
 // when the singleton row is missing or the value is non-positive.
 func GetFCLOverrideTolerance() float64 {
+	if DB == nil {
+		return FCLOverrideToleranceDefault
+	}
 	var s models.GroupPricingSetting
 	if err := DB.First(&s, 1).Error; err != nil {
 		return FCLOverrideToleranceDefault
@@ -12989,6 +13094,20 @@ func GetGroupSchemeCategories(id string) ([]models.SchemeCategory, error) {
 func AddMemberToScheme(member models.GPricingMemberDataInForce, user models.AppUser) (models.GPricingMemberDataInForce, error) {
 	var created models.GPricingMemberDataInForce
 	var schemecategory models.SchemeCategory
+
+	// Hard requirements: gender, date_of_birth and annual_salary drive pricing/valuation
+	// maths downstream. Reject the member outright if any is missing so we never persist
+	// a row that would silently corrupt those calculations.
+	if strings.TrimSpace(member.Gender) == "" {
+		return created, fmt.Errorf("gender is required")
+	}
+	if member.DateOfBirth.IsZero() {
+		return created, fmt.Errorf("date_of_birth is required")
+	}
+	if member.AnnualSalary <= 0 {
+		return created, fmt.Errorf("annual_salary must be greater than zero")
+	}
+
 	// Validate RSA ID before proceeding
 	idType := strings.ToUpper(strings.TrimSpace(member.MemberIdType))
 	if (idType == "RSA_ID" || idType == "ID" || idType == "RSA_ISD") && strings.TrimSpace(member.MemberIdNumber) != "" {
@@ -13059,7 +13178,7 @@ func AddMemberToScheme(member models.GPricingMemberDataInForce, user models.AppU
 		// the groupQuote.CommencementDate is  GMT time, so we need to convert it to local time
 		sastLocation, err := time.LoadLocation("Africa/Johannesburg")
 		if err != nil {
-			panic(err)
+			sastLocation = time.Local
 		}
 
 		// 2. Use the .In() method to convert the time
@@ -13151,6 +13270,245 @@ func AddMemberToScheme(member models.GPricingMemberDataInForce, user models.AppU
 		return created, err
 	}
 	return created, nil
+}
+
+// AddMembersToSchemeBulk inserts many members for an in-force scheme in a single
+// transaction. It exists to replace the per-row HTTP loop that BulkMemberEnrollment.vue
+// used to drive, which made cloud-network uploads of large CSVs take minutes.
+//
+// Semantics:
+//   - Hard-required fields (gender, date_of_birth, annual_salary) are validated up
+//     front. Any failure aborts the whole batch and returns *MemberUploadBlockingErrors
+//     so the controller can respond 400 with a structured per-row report.
+//   - Other failures (invalid RSA ID, entry date before commencement, missing
+//     scheme category) abort the batch with a regular error.
+//   - Duplicates within the batch OR against the existing scheme members are
+//     filtered when skipDuplicates is true; otherwise they abort the batch.
+//   - On success, one summary audit-log entry is written for the whole batch
+//     instead of one per row.
+func AddMembersToSchemeBulk(
+	schemeId int,
+	members []models.GPricingMemberDataInForce,
+	skipDuplicates bool,
+	user models.AppUser,
+) (int, error) {
+	if len(members) == 0 {
+		return 0, fmt.Errorf("no members provided")
+	}
+
+	// Phase 1: presence checks (no DB calls). Collect every row's failure so the
+	// frontend can show the full report from one round-trip.
+	var blockingErrors []MemberUploadBlockingError
+	for i, m := range members {
+		rowNum := i + 1
+		if strings.TrimSpace(m.Gender) == "" {
+			blockingErrors = append(blockingErrors, MemberUploadBlockingError{
+				Row:            rowNum,
+				Field:          "gender",
+				Message:        "gender is required",
+				MemberIdNumber: m.MemberIdNumber,
+				MemberName:     m.MemberName,
+			})
+		}
+		if m.DateOfBirth.IsZero() {
+			blockingErrors = append(blockingErrors, MemberUploadBlockingError{
+				Row:            rowNum,
+				Field:          "date_of_birth",
+				Message:        "date_of_birth is required",
+				MemberIdNumber: m.MemberIdNumber,
+				MemberName:     m.MemberName,
+			})
+		}
+		if m.AnnualSalary <= 0 {
+			blockingErrors = append(blockingErrors, MemberUploadBlockingError{
+				Row:            rowNum,
+				Field:          "annual_salary",
+				Message:        "annual_salary must be greater than zero",
+				MemberIdNumber: m.MemberIdNumber,
+				MemberName:     m.MemberName,
+			})
+		}
+	}
+	if len(blockingErrors) > 0 {
+		const maxReported = 100
+		reported := blockingErrors
+		if len(reported) > maxReported {
+			reported = reported[:maxReported]
+		}
+		return 0, &MemberUploadBlockingErrors{Errors: reported}
+	}
+
+	// Phase 2: bulk RSA ID validation (one external call, not N).
+	var rsaCandidates []string
+	for _, m := range members {
+		idType := strings.ToUpper(strings.TrimSpace(m.MemberIdType))
+		idNumber := strings.TrimSpace(m.MemberIdNumber)
+		if (idType == "RSA_ID" || idType == "ID" || idType == "RSA_ISD") && idNumber != "" {
+			rsaCandidates = append(rsaCandidates, idNumber)
+		}
+	}
+	rsaResults := map[string]bool{}
+	if len(rsaCandidates) > 0 {
+		r, err := utils.ValidateRSAIDsBulk(rsaCandidates)
+		if err != nil {
+			return 0, fmt.Errorf("ID validation service error: %v", err)
+		}
+		rsaResults = r
+	}
+
+	// Phase 3: load shared scheme context once (quote, scheme categories,
+	// existing-member IDs).
+	var groupQuote models.GroupPricingQuote
+	if err := DB.Preload("SchemeCategories").
+		Where("scheme_id = ? and scheme_quote_status = ? ", schemeId, models.StatusInEffect).
+		First(&groupQuote).Error; err != nil {
+		return 0, fmt.Errorf("could not load in-effect quote for scheme %d: %v", schemeId, err)
+	}
+
+	var schemeCategories []models.SchemeCategory
+	if err := DB.Where("quote_id = ?", groupQuote.ID).Find(&schemeCategories).Error; err != nil {
+		return 0, fmt.Errorf("could not load scheme categories: %v", err)
+	}
+	categoryByName := make(map[string]models.SchemeCategory, len(schemeCategories))
+	for _, c := range schemeCategories {
+		categoryByName[c.SchemeCategory] = c
+	}
+
+	var existingIDs []string
+	if err := DB.Model(&models.GPricingMemberDataInForce{}).
+		Where("scheme_id = ?", schemeId).
+		Pluck("member_id_number", &existingIDs).Error; err != nil {
+		return 0, fmt.Errorf("could not load existing members: %v", err)
+	}
+	existingIDSet := make(map[string]struct{}, len(existingIDs))
+	for _, id := range existingIDs {
+		existingIDSet[id] = struct{}{}
+	}
+
+	sastLocation, err := time.LoadLocation("Africa/Johannesburg")
+	if err != nil {
+		return 0, fmt.Errorf("could not load timezone: %v", err)
+	}
+
+	// Phase 4: per-row prep + duplicate handling.
+	prepared := make([]models.GPricingMemberDataInForce, 0, len(members))
+	seenInBatch := make(map[string]struct{}, len(members))
+	for i, m := range members {
+		rowNum := i + 1
+
+		idType := strings.ToUpper(strings.TrimSpace(m.MemberIdType))
+		idNumber := strings.TrimSpace(m.MemberIdNumber)
+		if (idType == "RSA_ID" || idType == "ID" || idType == "RSA_ISD") && idNumber != "" {
+			if valid, ok := rsaResults[idNumber]; !ok || !valid {
+				return 0, fmt.Errorf("invalid RSA ID '%s' at row %d", idNumber, rowNum)
+			}
+		}
+
+		if m.EntryDate.Before(groupQuote.CommencementDate) {
+			return 0, fmt.Errorf("row %d: entry date cannot be before scheme commencement date", rowNum)
+		}
+
+		if idNumber != "" {
+			_, inDB := existingIDSet[idNumber]
+			_, inBatch := seenInBatch[idNumber]
+			if inDB || inBatch {
+				if skipDuplicates {
+					continue
+				}
+				return 0, fmt.Errorf("row %d: member with ID Number %s already exists for this scheme", rowNum, idNumber)
+			}
+			seenInBatch[idNumber] = struct{}{}
+		}
+
+		// Apply scheme-category derived fields (mirrors AddMemberToScheme).
+		schemeCategoryKey := m.SchemeCategory
+		if schemeCategoryKey == "" {
+			schemeCategoryKey = "General"
+			m.SchemeCategory = "General"
+		}
+		cat := categoryByName[schemeCategoryKey]
+
+		m.Status = "Active"
+		m.IsOriginalMember = false
+		m.SchemeName = groupQuote.SchemeName
+		m.SchemeId = schemeId
+		m.CreationDate = time.Now()
+		m.Year = time.Now().Year()
+		m.CreatedBy = user.UserName
+
+		m.Benefits.GlaEnabled = cat.GlaBenefit
+		m.Benefits.PtdEnabled = cat.PtdBenefit
+		m.Benefits.CiEnabled = cat.CiBenefit
+		m.Benefits.SglaEnabled = cat.SglaBenefit
+		m.Benefits.PhiEnabled = cat.PtdBenefit
+		m.Benefits.TtdEnabled = cat.TtdBenefit
+		m.Benefits.GffEnabled = cat.FamilyFuneralBenefit
+
+		if groupQuote.UseGlobalSalaryMultiple {
+			m.Benefits.GlaMultiple = cat.GlaSalaryMultiple
+			m.Benefits.PtdMultiple = cat.PtdSalaryMultiple
+			m.Benefits.CiMultiple = cat.CiCriticalIllnessSalaryMultiple
+			m.Benefits.PhiMultiple = cat.PhiIncomeReplacementPercentage / 100
+			m.Benefits.TtdMultiple = cat.TtdIncomeReplacementPercentage / 100
+			m.Benefits.SglaMultiple = cat.SglaSalaryMultiple
+		} else {
+			m.Benefits.PhiMultiple = cat.PhiIncomeReplacementPercentage / 100
+			m.Benefits.TtdMultiple = cat.TtdIncomeReplacementPercentage / 100
+		}
+
+		// Match the existing per-row service: DOB stored as SAST-local time.
+		m.DateOfBirth = m.DateOfBirth.In(sastLocation)
+
+		prepared = append(prepared, m)
+	}
+
+	if len(prepared) == 0 {
+		return 0, nil
+	}
+
+	// Phase 5: single transaction — insert all, summarise audit, broadcast cache.
+	inserted := 0
+	if err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.CreateInBatches(&prepared, 100).Error; err != nil {
+			return err
+		}
+		inserted = len(prepared)
+
+		batchDetails, _ := json.Marshal(map[string]interface{}{
+			"scheme_id":   schemeId,
+			"scheme_name": groupQuote.SchemeName,
+			"count":       inserted,
+		})
+		if err := writeAudit(tx, AuditContext{
+			Area:      "group-pricing",
+			Entity:    "g_pricing_member_data_in_forces",
+			EntityID:  strconv.Itoa(schemeId),
+			Action:    "BULK_CREATE",
+			ChangedBy: user.UserName,
+		}, struct{}{}, map[string]interface{}{
+			"scheme_id": schemeId,
+			"count":     inserted,
+		}); err != nil {
+			return err
+		}
+
+		_ = tx.Create(&models.MemberActivity{
+			MemberID:       0,
+			MemberIDNumber: "",
+			Type:           "bulk_enrollment",
+			Title:          "Bulk Member Enrollment",
+			Description:    fmt.Sprintf("%d members enrolled in bulk", inserted),
+			Details:        batchDetails,
+			PerformedBy:    user.UserName,
+		})
+
+		return nil
+	}); err != nil {
+		return 0, err
+	}
+
+	broadcastCacheInvalidation("member_enrollment")
+	return inserted, nil
 }
 
 func GetSchemeMembers(schemeId string) ([]models.GPricingMemberDataInForce, error) {

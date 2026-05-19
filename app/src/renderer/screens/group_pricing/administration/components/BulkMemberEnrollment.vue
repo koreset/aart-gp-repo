@@ -358,29 +358,17 @@
               </v-col>
             </v-row>
 
-            <!-- Error Details -->
-            <div v-if="uploadResults.errors.length > 0" class="mt-4">
-              <v-expansion-panels>
-                <v-expansion-panel>
-                  <v-expansion-panel-title>
-                    <v-icon left color="error">mdi-alert</v-icon>
-                    View Errors ({{ uploadResults.errors.length }})
-                  </v-expansion-panel-title>
-                  <v-expansion-panel-text>
-                    <v-list density="compact">
-                      <v-list-item
-                        v-for="(error, index) in uploadResults.errors"
-                        :key="index"
-                      >
-                        <v-list-item-title class="text-caption text-error">
-                          Row {{ error.row }}: {{ error.message }}
-                        </v-list-item-title>
-                      </v-list-item>
-                    </v-list>
-                  </v-expansion-panel-text>
-                </v-expansion-panel>
-              </v-expansion-panels>
-            </div>
+            <MemberUploadErrorReport
+              v-if="
+                uploadResults.blockingErrors.length > 0 ||
+                uploadResults.errors.length > 0
+              "
+              class="mt-4"
+              :blocking-errors="uploadResults.blockingErrors"
+              :soft-errors="uploadResults.errors"
+              :context-label="selectedSchemeName"
+              filename-prefix="member-upload-errors"
+            />
           </v-card-text>
         </v-card>
       </v-col>
@@ -416,6 +404,7 @@
 import { ref, computed } from 'vue'
 import Papa from 'papaparse'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
+import MemberUploadErrorReport from '@/renderer/screens/group_pricing/shared/MemberUploadErrorReport.vue'
 // import { format } from 'date-fns'
 
 interface Props {
@@ -431,12 +420,21 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 // Interfaces
+interface BlockingError {
+  row: number
+  field?: string
+  message: string
+  member_id_number?: string
+  member_name?: string
+}
+
 interface UploadResult {
   success: number
   failed: number
   duplicates: number
   total: number
   errors: Array<{ row: number; message: string }>
+  blockingErrors: BlockingError[]
 }
 
 interface UploadProgress {
@@ -455,6 +453,11 @@ const skipDuplicates = ref(true)
 const inForceSchemes = computed(() =>
   props.schemes.filter((s) => s?.status === 'in_force')
 )
+
+const selectedSchemeName = computed(() => {
+  const s = props.schemes.find((x) => x.id === selectedScheme.value)
+  return s?.name ?? ''
+})
 
 const uploadProgress = ref<UploadProgress>({
   show: false,
@@ -509,19 +512,42 @@ const handleUpload = async () => {
     console.log('Validation Result:', validationResult)
 
     if (validateOnly.value) {
-      // Just show validation results
+      // Dry run: report blocking + soft errors but never upload.
       uploadResults.value = {
         success: validationResult.valid.length,
-        failed: validationResult.errors.length,
+        failed:
+          validationResult.errors.length +
+          validationResult.blockingErrors.length,
         duplicates: validationResult.duplicates.length,
         total: csvData.length,
-        errors: validationResult.errors
+        errors: validationResult.errors,
+        blockingErrors: validationResult.blockingErrors
       }
 
       uploadProgress.value.percentage = 100
-      uploadProgress.value.message = 'Validation complete'
+      uploadProgress.value.message =
+        validationResult.blockingErrors.length > 0
+          ? 'Validation found blocking errors — fix and re-validate'
+          : 'Validation complete'
+    } else if (validationResult.blockingErrors.length > 0) {
+      // GATE: any row missing gender / date_of_birth / annual_salary aborts
+      // the entire upload. No HTTP call is made — the user must correct the
+      // CSV and re-upload. This avoids wasted cloud round-trips and partial
+      // scheme state.
+      uploadResults.value = {
+        success: 0,
+        failed: validationResult.blockingErrors.length,
+        duplicates: validationResult.duplicates.length,
+        total: csvData.length,
+        errors: validationResult.errors,
+        blockingErrors: validationResult.blockingErrors
+      }
+      uploadProgress.value.percentage = 100
+      uploadProgress.value.message =
+        'Upload blocked — correct source file and re-upload'
     } else {
-      // Process the upload
+      // Process the upload via the bulk endpoint — one HTTP request, one
+      // transaction, one audit-log entry.
       uploadProgress.value.percentage = 50
       uploadProgress.value.message = 'Processing members...'
 
@@ -534,11 +560,15 @@ const handleUpload = async () => {
         failed: processResult.failed + validationResult.errors.length,
         duplicates: validationResult.duplicates.length,
         total: csvData.length,
-        errors: [...validationResult.errors, ...processResult.errors]
+        errors: [...validationResult.errors, ...processResult.errors],
+        blockingErrors: processResult.blockingErrors
       }
 
       uploadProgress.value.percentage = 100
-      uploadProgress.value.message = 'Upload complete'
+      uploadProgress.value.message =
+        processResult.blockingErrors.length > 0
+          ? 'Upload blocked by server validation — correct source file and re-upload'
+          : 'Upload complete'
 
       // Emit completion event
       console.log(
@@ -560,7 +590,8 @@ const handleUpload = async () => {
           message:
             'Failed to process file: ' + (error?.message || 'Unknown error')
         }
-      ]
+      ],
+      blockingErrors: []
     }
   } finally {
     uploading.value = false
@@ -589,16 +620,19 @@ const parseCSVFile = (file: File): Promise<any[]> => {
 const validateCSVData = (data: any[]) => {
   const valid: any[] = []
   const errors: Array<{ row: number; message: string }> = []
+  const blockingErrors: BlockingError[] = []
   const duplicates: Array<{ row: number; message: string }> = []
   const seenIds = new Set()
 
-  const requiredFields = [
+  const blockingFields: Array<keyof any> = [
+    'gender',
+    'date_of_birth',
+    'annual_salary'
+  ]
+  const otherRequiredFields = [
     'member_name',
     'member_id_number',
     'member_id_type',
-    'gender',
-    'date_of_birth',
-    'annual_salary',
     'entry_date'
   ]
 
@@ -610,8 +644,56 @@ const validateCSVData = (data: any[]) => {
   data.forEach((row, index) => {
     const rowNumber = index + 2 // +2 because CSV header is row 1, data starts at row 2
 
-    // Check for required fields
-    const missingFields = requiredFields.filter((field) => !row[field]?.trim())
+    // BLOCKING: gender / date_of_birth / annual_salary missing → reject the
+    // whole upload. These drive pricing/valuation maths and silent partial
+    // imports would corrupt downstream calculations.
+    let rowBlocked = false
+    for (const field of blockingFields as string[]) {
+      const v = row[field]
+      const isEmpty =
+        v === undefined ||
+        v === null ||
+        (typeof v === 'string' && v.trim() === '')
+      if (isEmpty) {
+        blockingErrors.push({
+          row: rowNumber,
+          field,
+          message: `${field} is required`,
+          member_id_number: row.member_id_number,
+          member_name: row.member_name
+        })
+        rowBlocked = true
+      }
+    }
+    // Non-positive salary also blocks (a 0 or negative salary is meaningless
+    // for pricing and a common source of dirty data).
+    if (
+      !rowBlocked &&
+      row.annual_salary !== undefined &&
+      row.annual_salary !== null &&
+      String(row.annual_salary).trim() !== ''
+    ) {
+      const salary = Number(row.annual_salary)
+      if (isNaN(salary) || salary <= 0) {
+        blockingErrors.push({
+          row: rowNumber,
+          field: 'annual_salary',
+          message: 'annual_salary must be a positive number',
+          member_id_number: row.member_id_number,
+          member_name: row.member_name
+        })
+        rowBlocked = true
+      }
+    }
+    if (rowBlocked) {
+      return
+    }
+
+    // Other required fields → existing per-row error (row skipped, upload
+    // still proceeds for the remaining valid rows).
+    const missingFields = otherRequiredFields.filter(
+      (field) => !row[field]?.trim()
+    )
     if (missingFields.length > 0) {
       errors.push({
         row: rowNumber,
@@ -679,15 +761,6 @@ const validateCSVData = (data: any[]) => {
       return
     }
 
-    // Validate salary
-    if (isNaN(Number(row.annual_salary)) || Number(row.annual_salary) <= 0) {
-      errors.push({
-        row: rowNumber,
-        message: 'Annual salary must be a positive number'
-      })
-      return
-    }
-
     // Validate optional premium field
     if (
       row.premium &&
@@ -744,53 +817,67 @@ const validateCSVData = (data: any[]) => {
     valid.push(memberData)
   })
 
-  return { valid, errors, duplicates }
+  return { valid, errors, duplicates, blockingErrors }
+}
+
+const toMemberPayload = (member: any) => {
+  const payload: any = {
+    ...member,
+    benefits: {
+      gla_multiple: member.benefits_gla_multiple,
+      sgla_multiple: member.benefits_sgla_multiple,
+      ptd_multiple: member.benefits_ptd_multiple,
+      ci_multiple: member.benefits_ci_multiple,
+      ttd_multiple: member.benefits_ttd_multiple,
+      phi_multiple: member.benefits_phi_multiple
+    }
+  }
+  delete payload.benefits_gla_multiple
+  delete payload.benefits_sgla_multiple
+  delete payload.benefits_ptd_multiple
+  delete payload.benefits_ci_multiple
+  delete payload.benefits_ttd_multiple
+  delete payload.benefits_phi_multiple
+  delete payload.rowNumber
+  return payload
 }
 
 const processMemberUploads = async (validMembers: any[]) => {
   const results = {
     success: 0,
     failed: 0,
-    errors: [] as Array<{ row: number; message: string }>
+    errors: [] as Array<{ row: number; message: string }>,
+    blockingErrors: [] as BlockingError[]
   }
 
-  for (let i = 0; i < validMembers.length; i++) {
-    const member = validMembers[i]
+  if (validMembers.length === 0) {
+    return results
+  }
 
-    uploadProgress.value.percentage =
-      50 + Math.round((i / validMembers.length) * 50)
-    uploadProgress.value.message = `Processing member ${i + 1} of ${validMembers.length}...`
+  uploadProgress.value.percentage = 70
+  uploadProgress.value.message = `Uploading ${validMembers.length} members in one request...`
 
-    // need to transform the member data as needed by the API. The benefits multiples need to be an object called benefits and the the multiples inside it.
-    const memberPayload = {
-      ...member,
-      benefits: {
-        gla_multiple: member.benefits_gla_multiple,
-        sgla_multiple: member.benefits_sgla_multiple,
-        ptd_multiple: member.benefits_ptd_multiple,
-        ci_multiple: member.benefits_ci_multiple,
-        ttd_multiple: member.benefits_ttd_multiple,
-        phi_multiple: member.benefits_phi_multiple
-      }
-    }
-    delete memberPayload.benefits_gla_multiple
-    delete memberPayload.benefits_sgla_multiple
-    delete memberPayload.benefits_ptd_multiple
-    delete memberPayload.benefits_ci_multiple
-    delete memberPayload.benefits_ttd_multiple
-    delete memberPayload.benefits_phi_multiple
+  const members = validMembers.map(toMemberPayload)
 
-    console.log('Adding member:', memberPayload)
-
-    try {
-      await GroupPricingService.addMember(memberPayload)
-      results.success++
-    } catch (error: any) {
-      console.error(`Failed to add member at row ${member.rowNumber}:`, error)
-      results.failed++
+  try {
+    const response = await GroupPricingService.addMembersBulk(
+      selectedScheme.value,
+      members,
+      skipDuplicates.value
+    )
+    results.success = response?.data?.inserted ?? validMembers.length
+  } catch (error: any) {
+    const data = error?.response?.data
+    // Server returned structured blocking errors → surface them to the user
+    // so they can fix the CSV and re-upload. Nothing was inserted.
+    if (data?.blocking_errors && Array.isArray(data.blocking_errors)) {
+      results.blockingErrors = data.blocking_errors
+      results.failed = data.blocking_errors.length
+    } else {
+      results.failed = validMembers.length
       results.errors.push({
-        row: member.rowNumber,
-        message: `Failed to add member: ${error?.response?.data || error?.message || 'Unknown error'}`
+        row: 0,
+        message: `Bulk upload failed: ${data?.error || error?.message || 'Unknown error'}`
       })
     }
   }
