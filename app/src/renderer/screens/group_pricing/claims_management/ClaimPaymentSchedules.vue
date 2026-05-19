@@ -8,46 +8,9 @@
               class="d-flex justify-space-between align-center flex-wrap gap-2"
             >
               <div class="d-flex align-center">
-                <v-btn
-                  icon="mdi-arrow-left"
-                  variant="text"
-                  class="mr-2"
-                  @click="goBack"
-                />
                 <span class="headline">Payment Schedules</span>
               </div>
               <div class="d-flex ga-3 align-center flex-wrap">
-                <v-chip
-                  v-if="nextCutoff"
-                  color="indigo"
-                  size="small"
-                  variant="tonal"
-                  prepend-icon="mdi-clock-outline"
-                  :title="`Next auto cut-off: ${nextCutoff}`"
-                >
-                  Next cut-off {{ nextCutoff }}
-                </v-chip>
-                <v-btn
-                  v-if="hasPermission('claims_pay:run_cutoff')"
-                  rounded
-                  size="small"
-                  variant="outlined"
-                  prepend-icon="mdi-play-circle-outline"
-                  :loading="runningCutoff"
-                  @click="runCutoffNow"
-                >
-                  Run cut-off now
-                </v-btn>
-                <v-btn
-                  v-if="hasPermission('claims_pay:admin_cutoff')"
-                  rounded
-                  size="small"
-                  variant="outlined"
-                  prepend-icon="mdi-cog-outline"
-                  :to="{ name: 'group-pricing-payment-cutoff-settings' }"
-                >
-                  Cut-off settings
-                </v-btn>
                 <div class="d-flex align-center">
                   <v-switch
                     v-model="showArchived"
@@ -69,16 +32,6 @@
                   @click="openBankProfilesDialog"
                 >
                   Bank Profiles
-                </v-btn>
-                <v-btn
-                  rounded
-                  size="small"
-                  color="primary"
-                  variant="flat"
-                  prepend-icon="mdi-plus"
-                  @click="openCreateDialog"
-                >
-                  New Payment Schedule
                 </v-btn>
               </div>
             </div>
@@ -203,7 +156,22 @@
                 >
                   <div class="workflow-stepper__num">{{ idx + 1 }}</div>
                   <div class="workflow-stepper__text">
-                    <div class="workflow-stepper__label">{{ step.label }}</div>
+                    <div class="workflow-stepper__label">
+                      {{ step.label }}
+                    </div>
+                    <div class="workflow-stepper__owner d-flex align-center ga-1">
+                      <v-icon
+                        :icon="
+                          step.owner === 'claims'
+                            ? 'mdi-clipboard-account-outline'
+                            : 'mdi-bank'
+                        "
+                        size="12"
+                      />
+                      <span>{{
+                        step.owner === 'claims' ? 'Claims' : 'Finance'
+                      }}</span>
+                    </div>
                     <div class="workflow-stepper__sub">{{ step.sub }}</div>
                   </div>
                   <v-icon
@@ -243,9 +211,7 @@
                 v-if="!loading && schedules.length === 0"
                 icon="mdi-cash-multiple"
                 title="No payment schedules yet"
-                message="Create a payment schedule from approved claims to begin a payment run."
-                action-label="Create your first payment schedule"
-                :action-fn="openCreateDialog"
+                message="Submitted payment schedules from the claims team will appear here."
               />
 
               <template v-if="schedules.length > 0">
@@ -353,76 +319,6 @@
         </base-card>
       </v-col>
     </v-row>
-
-    <!-- ── Create Schedule Dialog ── -->
-    <v-dialog v-model="createDialog" persistent max-width="800px">
-      <v-card rounded="lg">
-        <v-card-title class="text-h6 pa-4 pb-2"
-          >New Payment Schedule</v-card-title
-        >
-        <v-card-text>
-          <v-text-field
-            v-model="newScheduleDescription"
-            label="Description (optional)"
-            variant="outlined"
-            density="compact"
-            class="mb-4"
-          />
-
-          <div class="d-flex align-center justify-space-between mb-2">
-            <span class="text-subtitle-2">Select Approved Claims</span>
-            <v-chip size="small" color="primary" variant="tonal">
-              {{ selectedClaimIDs.length }} selected
-            </v-chip>
-          </div>
-          <v-row dense class="mb-2">
-            <v-col cols="6">
-              <v-text-field
-                v-model="claimFilter"
-                label="Filter by Claim Number"
-                prepend-inner-icon="mdi-magnify"
-                variant="outlined"
-                density="compact"
-                clearable
-              />
-            </v-col>
-            <v-col cols="6">
-              <v-text-field
-                v-model="benefitFilter"
-                label="Filter by Benefit"
-                prepend-inner-icon="mdi-filter-outline"
-                variant="outlined"
-                density="compact"
-                clearable
-              />
-            </v-col>
-          </v-row>
-          <DataGrid
-            :row-data="filteredApprovedClaims"
-            :column-defs="claimsColumnDefs"
-            row-selection="multiple"
-            density="compact"
-            :pagination="false"
-            @row-selection-changed="onClaimSelectionChanged"
-          />
-          <div class="text-subtitle-2 text-right mt-2">
-            Subtotal: <strong>{{ formatCurrency(selectedTotal) }}</strong>
-          </div>
-        </v-card-text>
-        <v-card-actions class="pa-4 pt-0">
-          <v-spacer />
-          <v-btn variant="text" @click="createDialog = false">Cancel</v-btn>
-          <v-btn
-            color="primary"
-            :loading="creating"
-            :disabled="selectedClaimIDs.length === 0"
-            @click="createSchedule"
-          >
-            Create Schedule
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
 
     <!-- ── Bank Profiles Management Dialog ── -->
     <v-dialog v-model="profilesDialog" max-width="700px">
@@ -668,17 +564,6 @@ interface PaymentSchedule {
   proof_of_payments: PaymentProof[]
 }
 
-interface Claim {
-  id: number
-  claim_number: string
-  member_name: string
-  member_id_number: string
-  scheme_name: string
-  benefit_alias: string
-  claim_amount: number
-  status: string
-}
-
 interface BankProfile {
   id: number
   profile_name: string
@@ -699,16 +584,6 @@ const { hasPermission } = usePermissionCheck()
 // ── State ──────────────────────────────────────────────
 const loading = ref(false)
 const schedules = ref<PaymentSchedule[]>([])
-
-const approvedClaims = ref<Claim[]>([])
-const loadingApproved = ref(false)
-const claimFilter = ref('')
-const benefitFilter = ref('')
-
-const createDialog = ref(false)
-const newScheduleDescription = ref('')
-const selectedClaimIDs = ref<number[]>([])
-const creating = ref(false)
 
 const profilesDialog = ref(false)
 const bankProfiles = ref<BankProfile[]>([])
@@ -771,33 +646,14 @@ const serviceTypeOptions = [
 ]
 
 const workflowSteps = [
-  { label: 'Draft', sub: 'Created', tone: 'muted' },
-  { label: 'Submitted', sub: 'For payment', tone: 'warning' },
-  { label: 'ACB Generated', sub: 'Sent to bank', tone: 'accent' },
-  { label: 'Reconciled', sub: 'Bank response', tone: 'info' },
-  { label: 'Paid', sub: 'Confirmed', tone: 'success' }
+  { label: 'Draft', sub: 'Created', tone: 'muted', owner: 'claims' },
+  { label: 'Submitted', sub: 'For payment', tone: 'muted', owner: 'claims' },
+  { label: 'ACB Generated', sub: 'Sent to bank', tone: 'accent', owner: 'finance' },
+  { label: 'Reconciled', sub: 'Bank response', tone: 'info', owner: 'finance' },
+  { label: 'Paid', sub: 'Confirmed', tone: 'success', owner: 'finance' }
 ]
 
 // ── Computed ────────────────────────────────────────────
-const filteredApprovedClaims = computed(() => {
-  let result = approvedClaims.value
-  if (claimFilter.value) {
-    const q = claimFilter.value.toLowerCase()
-    result = result.filter((c) => c.claim_number.toLowerCase().includes(q))
-  }
-  if (benefitFilter.value) {
-    const b = benefitFilter.value.toLowerCase()
-    result = result.filter((c) => c.benefit_alias?.toLowerCase().includes(b))
-  }
-  return result
-})
-
-const selectedTotal = computed(() => {
-  return approvedClaims.value
-    .filter((c) => selectedClaimIDs.value.includes(c.id))
-    .reduce((sum, c) => sum + c.claim_amount, 0)
-})
-
 const paymentStats = computed(() => {
   const now = new Date()
   const currentMonth = now.getMonth()
@@ -823,43 +679,6 @@ const paymentStats = computed(() => {
 
   return { activeCount, pendingValue, confirmedThisMonth, missingBank }
 })
-
-const claimsColumnDefs: ColDef<Claim>[] = [
-  {
-    checkboxSelection: true,
-    headerCheckboxSelection: true,
-    width: 48,
-    minWidth: 48,
-    maxWidth: 48,
-    pinned: 'left',
-    suppressMovable: true,
-    resizable: false
-  },
-  {
-    headerName: 'Claim #',
-    field: 'claim_number',
-    sortable: true,
-    minWidth: 120
-  },
-  { headerName: 'Member', field: 'member_name', sortable: true, minWidth: 140 },
-  { headerName: 'ID Number', field: 'member_id_number', minWidth: 120 },
-  { headerName: 'Scheme', field: 'scheme_name', sortable: true, minWidth: 140 },
-  { headerName: 'Benefit', field: 'benefit_alias', minWidth: 130 },
-  {
-    headerName: 'Amount',
-    field: 'claim_amount',
-    minWidth: 120,
-    type: 'rightAligned',
-    valueFormatter: (p) => formatCurrency(p.value)
-  },
-  {
-    headerName: 'Status',
-    field: 'status',
-    minWidth: 100,
-    cellRenderer: (p: any) =>
-      `<span class="v-chip v-chip--label v-chip--density-comfortable bg-${statusColor(p.value)}">${p.value}</span>`
-  }
-]
 
 const scheduleColumnDefs: ColDef<PaymentSchedule>[] = [
   {
@@ -1030,10 +849,6 @@ function unwrap(res: any) {
 }
 
 // ── Navigation ──────────────────────────────────────────
-function goBack() {
-  router.push({ name: 'group-pricing-claims-management' })
-}
-
 function openSchedule(schedule: PaymentSchedule) {
   router.push({
     name: 'group-pricing-claim-payment-schedule-claims',
@@ -1073,26 +888,14 @@ async function loadSchedules() {
   loading.value = true
   try {
     const res = await GroupPricingService.getPaymentSchedules(
-      showArchived.value
+      showArchived.value,
+      'finance'
     )
     schedules.value = unwrap(res) ?? []
   } catch (e: any) {
     notify('Failed to load payment schedules', 'error')
   } finally {
     loading.value = false
-  }
-}
-
-async function loadApprovedClaims() {
-  loadingApproved.value = true
-  try {
-    const res = await GroupPricingService.getClaims()
-    const all: Claim[] = unwrap(res) ?? []
-    approvedClaims.value = all.filter((c) => c.status === 'approved')
-  } catch (e: any) {
-    notify('Failed to load claims', 'error')
-  } finally {
-    loadingApproved.value = false
   }
 }
 
@@ -1105,38 +908,6 @@ async function loadBankProfiles() {
     notify('Failed to load bank profiles', 'error')
   } finally {
     loadingProfiles.value = false
-  }
-}
-
-// ── AG Grid handlers ─────────────────────────────────────
-function onClaimSelectionChanged(rows: Claim[]) {
-  selectedClaimIDs.value = rows.map((c) => c.id)
-}
-
-// ── Schedule creation ───────────────────────────────────
-async function openCreateDialog() {
-  selectedClaimIDs.value = []
-  newScheduleDescription.value = ''
-  claimFilter.value = ''
-  benefitFilter.value = ''
-  await loadApprovedClaims()
-  createDialog.value = true
-}
-
-async function createSchedule() {
-  creating.value = true
-  try {
-    await GroupPricingService.createPaymentSchedule({
-      claim_ids: selectedClaimIDs.value,
-      description: newScheduleDescription.value
-    })
-    createDialog.value = false
-    notify('Payment schedule created. Claims moved to "Submitted for Payment".')
-    await loadSchedules()
-  } catch (e: any) {
-    notify(e?.response?.data ?? 'Failed to create schedule', 'error')
-  } finally {
-    creating.value = false
   }
 }
 
@@ -1212,69 +983,7 @@ async function deleteProfile(profile: BankProfile) {
   }
 }
 
-// ── Cut-off (Phase 2) ──────────────────────────────────────
-const runningCutoff = ref(false)
-const nextCutoff = ref<string>('')
-
-function unwrapBody(res: any) {
-  const body = res?.data
-  if (body && typeof body === 'object' && 'success' in body && 'data' in body) {
-    return body.data
-  }
-  return body
-}
-
-async function loadNextCutoff() {
-  try {
-    const res = await GroupPricingService.getNextPaymentCutoff()
-    const body = unwrapBody(res)
-    if (body?.configured && body?.scheduled_at) {
-      nextCutoff.value = new Date(body.scheduled_at).toLocaleString('en-ZA', {
-        weekday: 'short',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    } else {
-      nextCutoff.value = ''
-    }
-  } catch {
-    nextCutoff.value = ''
-  }
-}
-
-async function runCutoffNow() {
-  runningCutoff.value = true
-  try {
-    const res = await GroupPricingService.runPaymentCutoffNow()
-    const run = unwrapBody(res)
-    if (run?.status === 'no_claims') {
-      snackbar.value = true
-      snackbarMessage.value =
-        'Cut-off run completed: no approved claims at this time.'
-      snackbarColor.value = 'info'
-    } else if (run?.status === 'ok') {
-      snackbar.value = true
-      snackbarMessage.value = `Schedule created with ${run.claims_count} claims (gross ${new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(run.total_amount)}).`
-      snackbarColor.value = 'success'
-    } else {
-      snackbar.value = true
-      snackbarMessage.value = run?.error_message ?? 'Cut-off failed.'
-      snackbarColor.value = 'error'
-    }
-    await loadSchedules()
-  } catch (e: any) {
-    snackbar.value = true
-    snackbarMessage.value =
-      e?.response?.data?.message ?? e?.response?.data ?? 'Failed to run cut-off'
-    snackbarColor.value = 'error'
-  } finally {
-    runningCutoff.value = false
-  }
-}
-
-onMounted(async () => {
-  await Promise.all([loadSchedules(), loadNextCutoff()])
-})
+onMounted(loadSchedules)
 </script>
 
 <style scoped>
@@ -1420,12 +1129,14 @@ onMounted(async () => {
 .workflow-stepper {
   display: flex;
   align-items: stretch;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   padding: 14px 16px;
   background: rgba(var(--v-theme-primary), 0.04);
   border: 1px solid rgba(var(--v-theme-primary), 0.1);
   border-radius: 10px;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .workflow-stepper__step {
@@ -1477,10 +1188,25 @@ onMounted(async () => {
   line-height: 1.2;
 }
 
+.workflow-stepper__step--muted .workflow-stepper__label,
+.workflow-stepper__step--muted .workflow-stepper__owner,
+.workflow-stepper__step--muted .workflow-stepper__sub {
+  color: rgba(var(--v-theme-on-surface), 0.45);
+}
+
+.workflow-stepper__owner {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), 0.7);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 .workflow-stepper__sub {
   font-size: 0.7rem;
   color: rgba(var(--v-theme-on-surface), 0.55);
   line-height: 1.2;
+  white-space: nowrap;
 }
 
 .workflow-stepper__arrow {

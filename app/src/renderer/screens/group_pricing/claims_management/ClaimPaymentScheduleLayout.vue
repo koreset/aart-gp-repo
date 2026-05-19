@@ -15,6 +15,7 @@
       Claims
     </v-tab>
     <v-tab
+      v-if="hasPermission('claims_pay:generate_acb')"
       value="group-pricing-claim-payment-schedule-acb"
       :to="tabRoute('group-pricing-claim-payment-schedule-acb')"
       prepend-icon="mdi-bank-transfer"
@@ -29,6 +30,7 @@
       Queries
     </v-tab>
     <v-tab
+      v-if="hasPermission('claims_pay:upload_response')"
       value="group-pricing-claim-payment-schedule-reconciliation"
       :to="tabRoute('group-pricing-claim-payment-schedule-reconciliation')"
       prepend-icon="mdi-scale-balance"
@@ -36,6 +38,7 @@
       Reconciliation
     </v-tab>
     <v-tab
+      v-if="hasPermission('claims_pay:upload_response')"
       value="group-pricing-claim-payment-schedule-proofs"
       :to="tabRoute('group-pricing-claim-payment-schedule-proofs')"
       prepend-icon="mdi-receipt-text-check"
@@ -293,7 +296,10 @@
                   </v-btn>
                   <v-spacer />
                   <v-btn
-                    v-if="schedule.status !== 'confirmed'"
+                    v-if="
+                      schedule.status !== 'confirmed' &&
+                      hasPermission('claims_pay:upload_response')
+                    "
                     variant="flat"
                     size="small"
                     rounded
@@ -744,7 +750,7 @@ const pipelineSteps = [
   { status: 'draft', label: 'Draft', sub: 'Created' },
   {
     status: 'claims_signed_off',
-    label: 'Claims Signed Off',
+    label: 'Payment Schedule Signed Off',
     sub: 'Head of Claims'
   },
   { status: 'finance_in_review', label: 'Finance Review', sub: 'In review' },
@@ -815,7 +821,10 @@ function downloadBlob(data: any, filename: string, type: string) {
 
 // ── Navigation ──────────────────────────────────────────
 function goBack() {
-  router.push({ name: 'group-pricing-claim-payment-schedules' })
+  const target = hasPermission('claims_pay:finance_review')
+    ? 'group-pricing-claim-payment-schedules'
+    : 'group-pricing-claim-my-submissions'
+  router.push({ name: target })
 }
 
 // ── Data loading ────────────────────────────────────────

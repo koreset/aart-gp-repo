@@ -109,35 +109,67 @@
         <v-list-item-title>Scheme Migration</v-list-item-title>
       </v-list-item>
 
-      <!-- Claims Management -->
-      <v-list-item
-        :class="{ 'disabled-item': !canAccess('navigation:manage_claims') }"
-        prepend-icon="mdi-file-clock-outline"
-        @click="
-          navigate(
-            'group-pricing-claims-management',
-            'navigation:manage_claims'
-          )
-        "
-      >
-        <v-list-item-title>Claims Management</v-list-item-title>
-      </v-list-item>
-
-      <!-- Claims Analytics -->
-      <v-list-item
-        :class="{
-          'disabled-item': !canAccess('navigation:view_claims_analytics')
-        }"
-        prepend-icon="mdi-chart-line"
-        @click="
-          navigate(
-            'group-pricing-claims-analytics',
-            'navigation:view_claims_analytics'
-          )
-        "
-      >
-        <v-list-item-title>Claims Analytics</v-list-item-title>
-      </v-list-item>
+      <!-- Claims Management (group) -->
+      <v-list-group v-model="expandedGroups" value="Claims Management">
+        <template #activator="{ props }">
+          <v-list-item
+            v-bind="props"
+            :class="{
+              'disabled-item': !canAccess('navigation:manage_claims')
+            }"
+            prepend-icon="mdi-file-clock-outline"
+            title="Claims Management"
+          ></v-list-item>
+        </template>
+        <v-list-item
+          class="second-level-item"
+          :class="{
+            'disabled-item': !canAccess('navigation:manage_claims')
+          }"
+          prepend-icon="mdi-file-document-multiple-outline"
+          @click="
+            navigateGroup(
+              'group-pricing-claims-management',
+              'Claims Management',
+              'navigation:manage_claims'
+            )
+          "
+        >
+          <v-list-item-title>Claims List</v-list-item-title>
+        </v-list-item>
+        <v-list-item
+          class="second-level-item"
+          :class="{
+            'disabled-item': !canAccess('navigation:view_claims_analytics')
+          }"
+          prepend-icon="mdi-chart-line"
+          @click="
+            navigateGroup(
+              'group-pricing-claims-analytics',
+              'Claims Management',
+              'navigation:view_claims_analytics'
+            )
+          "
+        >
+          <v-list-item-title>Claims Analytics</v-list-item-title>
+        </v-list-item>
+        <v-list-item
+          class="second-level-item"
+          :class="{
+            'disabled-item': !canAccess('claims_pay:create_schedule')
+          }"
+          prepend-icon="mdi-cash-clock"
+          @click="
+            navigateGroup(
+              'group-pricing-claim-my-submissions',
+              'Claims Management',
+              'claims_pay:create_schedule'
+            )
+          "
+        >
+          <v-list-item-title>Payment Schedules</v-list-item-title>
+        </v-list-item>
+      </v-list-group>
 
       <!-- Bordereaux Management -->
       <v-list-item
@@ -294,14 +326,14 @@
         </v-list-item>
         <v-list-item
           :class="{
-            'disabled-item': !canAccess('claims_pay:create_schedule')
+            'disabled-item': !canAccess('claims_pay:finance_review')
           }"
           prepend-icon="mdi-cash-check"
           @click="
             navigateGroup(
               'group-pricing-claim-payment-schedules',
               'Finance',
-              'claims_pay:create_schedule'
+              'claims_pay:finance_review'
             )
           "
         >

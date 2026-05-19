@@ -1110,7 +1110,8 @@ const transitions: Record<
     { label: 'Request evidence', value: 'pending_evidence', color: 'warning' }
   ],
   decided: [],
-  declined: []
+  declined: [],
+  auto_accepted: []
 }
 const allowedTransitions = computed(() =>
   caseFile.value ? transitions[caseFile.value.status] || [] : []
@@ -1133,6 +1134,7 @@ const statusIcon = (status: string) => {
   if (status === 'declined') return 'mdi-close-octagon-outline'
   if (status === 'in_review') return 'mdi-eye-outline'
   if (status === 'postponed') return 'mdi-pause-circle-outline'
+  if (status === 'auto_accepted') return 'mdi-shield-check-outline'
   return 'mdi-clipboard-clock-outline'
 }
 
@@ -1147,6 +1149,7 @@ const workflowSteps = computed(() => {
   const isDecided = status === 'decided'
   const isDeclined = status === 'declined'
   const isPostponed = status === 'postponed'
+  const isAutoAccepted = status === 'auto_accepted'
 
   // Pill state: 'done' | 'active' | 'pending'.
   const pillFor = (state: 'done' | 'active' | 'pending') => ({
@@ -1158,6 +1161,7 @@ const workflowSteps = computed(() => {
   if (isDecided) third = { state: 'active', color: 'success' }
   else if (isDeclined) third = { state: 'active', color: 'error' }
   else if (isPostponed) third = { state: 'active', color: 'grey-darken-1' }
+  else if (isAutoAccepted) third = { state: 'active', color: 'grey-darken-1' }
   else third = pillFor('pending')
 
   return [
@@ -1183,14 +1187,18 @@ const workflowSteps = computed(() => {
         ? 'Declined'
         : isPostponed
           ? 'Postponed'
-          : isDecided
-            ? 'Decided'
-            : 'Decided',
+          : isAutoAccepted
+            ? 'Auto-accepted'
+            : isDecided
+              ? 'Decided'
+              : 'Decided',
       icon: isDeclined
         ? 'mdi-close-octagon-outline'
         : isPostponed
           ? 'mdi-pause-circle-outline'
-          : 'mdi-check-circle-outline',
+          : isAutoAccepted
+            ? 'mdi-shield-check-outline'
+            : 'mdi-check-circle-outline',
       ...third
     }
   ]
@@ -1200,6 +1208,7 @@ const statusColor = (status: string) => {
   if (status === 'declined') return 'error'
   if (status === 'in_review') return 'info'
   if (status === 'postponed') return 'grey'
+  if (status === 'auto_accepted') return 'grey'
   return 'warning'
 }
 const format = (n: number) =>

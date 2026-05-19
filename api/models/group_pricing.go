@@ -3073,6 +3073,11 @@ const (
 	UWCaseStatusDecided         UWCaseStatus = "decided"
 	UWCaseStatusPostponed       UWCaseStatus = "postponed"
 	UWCaseStatusDeclined        UWCaseStatus = "declined"
+	// UWCaseStatusAutoAccepted — terminal status set by the system when a
+	// member's tier drops below short-form on re-calc (Within FCL). The case
+	// no longer requires underwriting; preserved for audit rather than
+	// deleted so the history of the case is intact.
+	UWCaseStatusAutoAccepted UWCaseStatus = "auto_accepted"
 )
 
 // UWDecisionOutcome — accept / postpone / decline on a single benefit.
@@ -4185,18 +4190,19 @@ type ClaimPaymentScheduleItem struct {
 // Outcome lifecycle: open → resolved | cancelled.
 // Table name: claim_payment_schedule_queries
 type ClaimPaymentScheduleQuery struct {
-	ID             int        `json:"id" gorm:"primaryKey;autoIncrement"`
-	ScheduleID     int        `json:"schedule_id" gorm:"index"`
-	ScheduleItemID int        `json:"schedule_item_id" gorm:"index"`
-	ClaimID        int        `json:"claim_id" gorm:"index"`
-	ClaimNumber    string     `json:"claim_number"`
-	ReasonCode     string     `json:"reason_code" gorm:"size:64;index"`
-	Notes          string     `json:"notes"`
-	Outcome        string     `json:"outcome" gorm:"size:32;default:'open'"`
-	RaisedBy       string     `json:"raised_by"`
-	RaisedAt       time.Time  `json:"raised_at" gorm:"autoCreateTime"`
-	ResolvedBy     string     `json:"resolved_by"`
-	ResolvedAt     *time.Time `json:"resolved_at"`
+	ID              int        `json:"id" gorm:"primaryKey;autoIncrement"`
+	ScheduleID      int        `json:"schedule_id" gorm:"index"`
+	ScheduleItemID  int        `json:"schedule_item_id" gorm:"index"`
+	ClaimID         int        `json:"claim_id" gorm:"index"`
+	ClaimNumber     string     `json:"claim_number"`
+	ReasonCode      string     `json:"reason_code" gorm:"size:64;index"`
+	Notes           string     `json:"notes"`
+	Outcome         string     `json:"outcome" gorm:"size:32;default:'open'"`
+	RaisedBy        string     `json:"raised_by"`
+	RaisedAt        time.Time  `json:"raised_at" gorm:"autoCreateTime"`
+	ResolutionNotes string     `json:"resolution_notes"`
+	ResolvedBy      string     `json:"resolved_by"`
+	ResolvedAt      *time.Time `json:"resolved_at"`
 }
 
 // AuthorityMatrix gates state transitions on payment schedules by role and

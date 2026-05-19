@@ -31,7 +31,10 @@
                   Analytics
                 </v-btn>
                 <v-btn
-                  v-if="hasPermission('claims_pay:create_schedule')"
+                  v-if="
+                    hasPermission('claims_pay:create_schedule') ||
+                    hasPermission('claims_pay:finance_review')
+                  "
                   size="small"
                   variant="outlined"
                   class="mr-2"
@@ -39,7 +42,9 @@
                   prepend-icon="mdi-cash-check"
                   @click="
                     router.push({
-                      name: 'group-pricing-claim-payment-schedules'
+                      name: hasPermission('claims_pay:create_schedule')
+                        ? 'group-pricing-claim-my-submissions'
+                        : 'group-pricing-claim-payment-schedules'
                     })
                   "
                 >
@@ -245,11 +250,6 @@ import { statusCellRenderer } from '@/renderer/utils/statusCellRenderer'
 import { currencyFormatter, dateFormatter } from '@/renderer/utils/formatters'
 import { useGridHeight } from '@/renderer/composables/useGridHeight'
 import { useStatusBarStore } from '@/renderer/store/statusBar'
-import {
-  isEditableClaimStatus,
-  isSubmittableClaimStatus
-} from '@/renderer/utils/claimStatus'
-
 const gridHeight = useGridHeight(380)
 const statusBarStore = useStatusBarStore()
 const { hasPermission } = usePermissionCheck()
@@ -417,14 +417,6 @@ const claimsColumnDefs = [
     valueFormatter: dateFormatter
   },
   {
-    headerName: 'Status',
-    field: 'status',
-    filter: true,
-    sortable: true,
-    minWidth: 150,
-    cellRenderer: (params: any) => statusCellRenderer(params.value)
-  },
-  {
     headerName: 'Priority',
     field: 'priority',
     filter: true,
@@ -440,52 +432,13 @@ const claimsColumnDefs = [
     minWidth: 130
   },
   {
-    headerName: 'Actions',
+    headerName: 'Status',
+    field: 'status',
+    filter: true,
+    sortable: true,
     pinned: 'right' as const,
-    width: 220,
-    sortable: false,
-    filter: false,
-    resizable: false,
-    cellRenderer: (params: any) => {
-      const viewBtn = `
-        background:#1976D2;color:#fff;border:none;border-radius:4px;
-        padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;
-        line-height:1.6;
-      `
-      const editBtn = `
-        background:#fff;color:#1976D2;border:1px solid #1976D2;border-radius:4px;
-        padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;
-        line-height:1.6;margin-left:4px;
-      `
-      const submitBtn = `
-        background:#2E7D32;color:#fff;border:none;border-radius:4px;
-        padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;
-        line-height:1.6;margin-left:4px;
-      `
-      const showEdit = isEditableClaimStatus(params.data?.status)
-      const showSubmit = isSubmittableClaimStatus(params.data?.status)
-      return (
-        `<button data-action="view" style="${viewBtn}">View</button>` +
-        (showEdit
-          ? `<button data-action="edit" style="${editBtn}">Edit</button>`
-          : '') +
-        (showSubmit
-          ? `<button data-action="submit" style="${submitBtn}">Submit</button>`
-          : '')
-      )
-    },
-    onCellClicked: (params: any) => {
-      const action = (
-        params.event?.target as HTMLElement | undefined
-      )?.getAttribute?.('data-action')
-      if (action === 'edit') {
-        editClaim(params)
-      } else if (action === 'submit') {
-        promptSubmitForAssessment(params)
-      } else {
-        viewClaimDetails(params)
-      }
-    }
+    minWidth: 160,
+    cellRenderer: (params: any) => statusCellRenderer(params.value)
   }
 ]
 
@@ -608,51 +561,6 @@ const viewClaimDetails = (claim: any) => {
     name: 'group-pricing-claim-details',
     params: { id: claimRow.id }
   })
-}
-
-const editClaim = (claim: any) => {
-  const claimRow = claim.data
-  if (!claimRow?.id) return
-  router.push({
-    name: 'group-pricing-claim-edit',
-    params: { id: claimRow.id }
-  })
-}
-
-const promptSubmitForAssessment = (claim: any) => {
-  const claimRow = claim.data
-  if (!claimRow?.id) return
-  confirmTitle.value = 'Submit for Assessment'
-  confirmMessage.value = `Send claim ${claimRow.claim_number || claimRow.id} to the assessment queue? It will no longer appear in Drafts.`
-  confirmCallback.value = () => submitClaimForAssessment(claimRow.id)
-  confirmDialog.value = true
-}
-
-const submitClaimForAssessment = async (claimId: number) => {
-  try {
-    await GroupPricingService.submitClaimForAssessment(claimId)
-    showSnackbar('Claim submitted for assessment', 'success')
-    await loadClaims()
-  } catch (error: any) {
-    const status = error?.response?.status
-    if (status === 422) {
-      const missing: string[] = error?.response?.data?.missing || []
-      showSnackbar(
-        missing.length
-          ? `Cannot submit: missing ${missing.join(', ')}.`
-          : 'Claim is incomplete and cannot be submitted.',
-        'error'
-      )
-    } else if (status === 409) {
-      showSnackbar(
-        'This claim cannot be submitted in its current status.',
-        'error'
-      )
-    } else {
-      console.error('Error submitting claim for assessment:', error)
-      showSnackbar('Error submitting claim. Please try again.', 'error')
-    }
-  }
 }
 
 const handleNewClaimSave = async (claimData: any) => {

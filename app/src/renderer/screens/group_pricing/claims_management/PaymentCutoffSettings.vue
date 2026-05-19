@@ -279,7 +279,7 @@ function runColor(status: string) {
 }
 
 function goBack() {
-  router.push({ name: 'group-pricing-claim-payment-schedules' })
+  router.push({ name: 'group-pricing-claim-my-submissions' })
 }
 
 async function loadConfig() {

@@ -81,7 +81,202 @@
             >
           </template>
         </v-list-item>
+
+        <v-divider class="my-2" />
+
+        <v-list-item>
+          <template #prepend>
+            <v-icon
+              :color="uwSummary ? 'success' : 'grey'"
+              class="mr-4"
+            >
+              {{
+                uwSummary ? 'mdi-shield-check-outline' : 'mdi-shield-outline'
+              }}
+            </v-icon>
+          </template>
+          <v-list-item-title>Underwriting</v-list-item-title>
+          <v-list-item-subtitle v-if="uwSummary && uwSummary.total_cases > 0">
+            {{ uwSummary.total_cases }}
+            member{{ uwSummary.total_cases === 1 ? '' : 's' }} above FCL sent
+            for underwriting
+            <span class="ml-2 text-medium-emphasis">·</span>
+            <v-chip
+              v-if="uwSummary.pending_evidence_count > 0"
+              size="x-small"
+              color="warning"
+              variant="tonal"
+              class="ml-2"
+            >
+              {{ uwSummary.pending_evidence_count }} pending evidence
+            </v-chip>
+            <v-chip
+              v-if="uwSummary.in_review_count > 0"
+              size="x-small"
+              color="info"
+              variant="tonal"
+              class="ml-2"
+            >
+              {{ uwSummary.in_review_count }} in review
+            </v-chip>
+            <v-chip
+              v-if="uwSummary.decided_count > 0"
+              size="x-small"
+              color="success"
+              variant="tonal"
+              class="ml-2"
+            >
+              {{ uwSummary.decided_count }} decided
+            </v-chip>
+            <v-chip
+              v-if="uwSummary.postponed_count > 0"
+              size="x-small"
+              color="grey"
+              variant="tonal"
+              class="ml-2"
+            >
+              {{ uwSummary.postponed_count }} postponed
+            </v-chip>
+            <v-chip
+              v-if="uwSummary.declined_count > 0"
+              size="x-small"
+              color="error"
+              variant="tonal"
+              class="ml-2"
+            >
+              {{ uwSummary.declined_count }} declined
+            </v-chip>
+            <v-chip
+              v-if="uwSummary.auto_accepted_count > 0"
+              size="x-small"
+              color="grey"
+              variant="tonal"
+              class="ml-2"
+            >
+              {{ uwSummary.auto_accepted_count }} auto-accepted
+            </v-chip>
+          </v-list-item-subtitle>
+          <v-list-item-subtitle v-else-if="uwSummary">
+            All members within free cover limit — no underwriting required
+          </v-list-item-subtitle>
+          <v-list-item-subtitle v-else class="text-medium-emphasis">
+            Calculate the quote to see underwriting workload
+          </v-list-item-subtitle>
+
+          <template #append>
+            <v-btn
+              v-if="uwSummary && uwSummary.total_cases > 0"
+              rounded
+              color="primary"
+              variant="outlined"
+              size="small"
+              :loading="uwCasesLoading"
+              @click="openUWDialog"
+            >
+              <v-icon left color="primary">mdi-information</v-icon>
+              <span>View</span>
+            </v-btn>
+          </template>
+        </v-list-item>
+
+        <v-list-item v-if="hasUWTierData" class="uw-tier-breakdown">
+          <v-row dense>
+            <v-col cols="4" class="text-center">
+              <div class="text-caption mb-1">
+                Within FCL <span class="text-grey">(auto-accept)</span>
+              </div>
+              <v-chip color="success" variant="tonal" size="small">
+                {{ uwTierCounts.within }}
+              </v-chip>
+            </v-col>
+            <v-col cols="4" class="text-center">
+              <div class="text-caption mb-1">
+                Short-form / tele-UW
+                <span class="text-grey">(modestly above FCL)</span>
+              </div>
+              <v-chip color="warning" variant="tonal" size="small">
+                {{ uwTierCounts.short }}
+              </v-chip>
+            </v-col>
+            <v-col cols="4" class="text-center">
+              <div class="text-caption mb-1">
+                Full underwriting
+                <span class="text-grey">(significantly above FCL)</span>
+              </div>
+              <v-chip color="error" variant="tonal" size="small">
+                {{ uwTierCounts.full }}
+              </v-chip>
+            </v-col>
+          </v-row>
+        </v-list-item>
       </v-list>
+
+      <v-dialog v-model="uwDialogOpen" max-width="1200" scrollable>
+        <v-card>
+          <v-card-title class="d-flex align-center">
+            <span>Members submitted for underwriting</span>
+            <v-spacer />
+            <v-btn
+              variant="outlined"
+              color="primary"
+              size="small"
+              :disabled="uwCases.length === 0"
+              @click="exportUWCasesCSV"
+            >
+              <v-icon left>mdi-download</v-icon>
+              Export CSV
+            </v-btn>
+            <v-btn
+              icon
+              variant="text"
+              class="ml-2"
+              @click="uwDialogOpen = false"
+            >
+              <v-icon>mdi-close</v-icon>
+            </v-btn>
+          </v-card-title>
+          <v-card-text style="max-height: 70vh">
+            <v-data-table
+              :headers="uwDialogHeaders"
+              :items="uwCases"
+              :loading="uwCasesLoading"
+              density="compact"
+              :items-per-page="25"
+              :items-per-page-options="[25, 50, 100, -1]"
+            >
+              <template #[`item.tier`]="{ item }">
+                <span :class="`text-${uwTierColor(item.tier)}`">
+                  {{ uwTierLabel(item.tier) }}
+                </span>
+              </template>
+              <template #[`item.fcl_excess_ratio`]="{ item }">
+                {{
+                  item.fcl_excess_ratio
+                    ? item.fcl_excess_ratio.toFixed(2) + '×'
+                    : '—'
+                }}
+              </template>
+              <template #[`item.gla_sum_assured`]="{ item }">
+                {{
+                  item.gla_sum_assured
+                    ? Number(item.gla_sum_assured).toLocaleString()
+                    : '—'
+                }}
+              </template>
+              <template #[`item.status`]="{ item }">
+                {{ item.status.replace(/_/g, ' ') }}
+              </template>
+              <template #[`item.updated_at`]="{ item }">
+                {{
+                  item.updated_at
+                    ? new Date(item.updated_at).toLocaleString()
+                    : '—'
+                }}
+              </template>
+            </v-data-table>
+          </v-card-text>
+        </v-card>
+      </v-dialog>
 
       <loading-indicator :loadingData="loadingData" :label="loadingLabel" />
 
@@ -339,6 +534,164 @@ const emit = defineEmits(['quote-updated'])
 const rowCount: any = ref(0)
 const shouldExportAll = ref(true)
 
+interface UWSummary {
+  quote_id: number
+  total_cases: number
+  pending_evidence_count: number
+  in_review_count: number
+  decided_count: number
+  postponed_count: number
+  declined_count: number
+  auto_accepted_count: number
+}
+const uwSummary = ref<UWSummary | null>(null)
+const loadUWSummary = async () => {
+  if (!props.quote?.id) return
+  try {
+    const res = await GroupPricingService.listUnderwritingCaseQuoteSummaries({
+      quote_id: props.quote.id
+    })
+    const rows = (res.data || []) as UWSummary[]
+    uwSummary.value = rows.find((r) => r.quote_id === props.quote.id) || {
+      quote_id: props.quote.id,
+      total_cases: 0,
+      pending_evidence_count: 0,
+      in_review_count: 0,
+      decided_count: 0,
+      postponed_count: 0,
+      declined_count: 0,
+      auto_accepted_count: 0
+    }
+  } catch (err) {
+    console.error('Failed to load underwriting summary', err)
+    uwSummary.value = null
+  }
+}
+watch(
+  () => props.quote?.calculation_completed_at,
+  () => {
+    loadUWSummary()
+  }
+)
+
+interface UWCaseRow {
+  id: number
+  member_name: string
+  member_id_number: string
+  category: string
+  tier: number
+  fcl_excess_ratio: number
+  gla_sum_assured: number
+  status: string
+  assigned_underwriter_email: string
+  updated_at: string
+}
+const uwDialogOpen = ref(false)
+const uwCases = ref<UWCaseRow[]>([])
+const uwCasesLoading = ref(false)
+const uwDialogHeaders = [
+  { title: 'Member', key: 'member_name' },
+  { title: 'ID Number', key: 'member_id_number' },
+  { title: 'Category', key: 'category' },
+  { title: 'Tier', key: 'tier' },
+  { title: 'SA / FCL', key: 'fcl_excess_ratio' },
+  { title: 'GLA SA', key: 'gla_sum_assured' },
+  { title: 'Status', key: 'status' },
+  { title: 'Assignee', key: 'assigned_underwriter_email' },
+  { title: 'Last activity', key: 'updated_at' }
+]
+const uwTierLabel = (tier: number) =>
+  tier === 2 ? 'Full UW' : tier === 1 ? 'Short-form' : 'Within FCL'
+const uwTierColor = (tier: number) =>
+  tier === 2 ? 'error' : tier === 1 ? 'warning' : 'success'
+
+const openUWDialog = async () => {
+  uwDialogOpen.value = true
+  if (uwCases.value.length > 0) return
+  uwCasesLoading.value = true
+  try {
+    const res = await GroupPricingService.listUnderwritingCases({
+      quote_id: props.quote.id
+    })
+    uwCases.value = (res.data || []) as UWCaseRow[]
+  } catch (err) {
+    console.error('Failed to load underwriting cases', err)
+    uwCases.value = []
+  } finally {
+    uwCasesLoading.value = false
+  }
+}
+
+// Refetch the dialog list when calc completes, so an already-open dialog
+// reflects the latest data.
+watch(
+  () => props.quote?.calculation_completed_at,
+  () => {
+    uwCases.value = []
+    if (uwDialogOpen.value) openUWDialog()
+  }
+)
+
+const uwTierCounts = computed(() => {
+  const out = { within: 0, short: 0, full: 0 }
+  for (const rs of (props.resultSummaries ?? []) as any[]) {
+    out.within += Number(rs.within_free_cover_limit_count ?? 0)
+    out.short += Number(rs.short_form_underwriting_count ?? 0)
+    out.full += Number(rs.full_underwriting_count ?? 0)
+  }
+  return out
+})
+const hasUWTierData = computed(
+  () =>
+    uwTierCounts.value.within +
+      uwTierCounts.value.short +
+      uwTierCounts.value.full >
+    0
+)
+
+const exportUWCasesCSV = () => {
+  if (uwCases.value.length === 0) return
+  const headers = [
+    'Member',
+    'ID Number',
+    'Category',
+    'Tier',
+    'SA / FCL',
+    'GLA SA',
+    'Status',
+    'Assignee',
+    'Last activity'
+  ]
+  const escape = (v: any) => {
+    const s = v === null || v === undefined ? '' : String(v)
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const rows = uwCases.value.map((c) => [
+    c.member_name,
+    c.member_id_number,
+    c.category,
+    uwTierLabel(c.tier),
+    c.fcl_excess_ratio ? c.fcl_excess_ratio.toFixed(2) + 'x' : '',
+    c.gla_sum_assured ?? '',
+    c.status.replace(/_/g, ' '),
+    c.assigned_underwriter_email,
+    c.updated_at ? new Date(c.updated_at).toISOString() : ''
+  ])
+  const csv =
+    headers.map(escape).join(',') +
+    '\n' +
+    rows.map((r) => r.map(escape).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `quote_${props.quote.id}_underwriting_cases.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  window.URL.revokeObjectURL(url)
+}
+
 const columnDefs: any = ref([])
 const selectedTable = ref('')
 const loadingData = ref(false)
@@ -578,6 +931,8 @@ const calculateManualCredibility = async () => {
 onMounted(async () => {
   // Fetch result summary or other initial result data
   console.log('Quote ID:', props.quote)
+
+  loadUWSummary()
 
   // Load parameter bases for manual credibility calculation
   try {

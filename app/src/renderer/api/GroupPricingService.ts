@@ -1065,14 +1065,21 @@ export default {
     })
   },
 
-  getPaymentSchedules(includeArchived = false) {
-    return Api.get('/group-pricing/claims/payment-schedules', {
-      params: includeArchived ? { include_archived: 1 } : {}
-    })
+  getPaymentSchedules(includeArchived = false, scope?: 'claims' | 'finance') {
+    const params: Record<string, string | number> = {}
+    if (includeArchived) params.include_archived = 1
+    if (scope) params.scope = scope
+    return Api.get('/group-pricing/claims/payment-schedules', { params })
   },
 
   getPaymentSchedule(scheduleId) {
     return Api.get(`/group-pricing/claims/payment-schedules/${scheduleId}`)
+  },
+
+  discardPaymentSchedule(scheduleId) {
+    return Api.delete(
+      `/group-pricing/claims/payment-schedules/${scheduleId}`
+    )
   },
 
   updatePaymentScheduleNotes(scheduleId, notes) {
@@ -1250,6 +1257,20 @@ export default {
   getScheduleQueries(scheduleId) {
     return Api.get(
       `/group-pricing/claims/payment-schedules/${scheduleId}/queries`
+    )
+  },
+
+  postScheduleFollowup(scheduleId, notes) {
+    return Api.post(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/followups`,
+      { notes }
+    )
+  },
+
+  resolveScheduleQuery(queryId, response) {
+    return Api.post(
+      `/group-pricing/claims/payment-schedules/queries/${queryId}/resolve`,
+      { response }
     )
   },
 

@@ -333,10 +333,11 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.DELETE("underwriting/rule-sets/:rule_set_id", RequirePermission("underwriting:admin"), controllers.DeleteUWRuleSet)
 			groupPricing.POST("underwriting/rule-sets/seed-starter", RequirePermission("underwriting:admin"), controllers.SeedStarterRuleSet)
 			// Claim payment schedules
-			groupPricing.POST("claims/payment-schedules", controllers.CreatePaymentSchedule)
+			groupPricing.POST("claims/payment-schedules", RequirePermission("claims_pay:create_schedule"), controllers.CreatePaymentSchedule)
 			groupPricing.GET("claims/payment-schedules", controllers.GetPaymentSchedules)
 			groupPricing.GET("claims/payment-schedules/:schedule_id", controllers.GetPaymentSchedule)
-			groupPricing.PATCH("claims/payment-schedules/:schedule_id/notes", controllers.UpdatePaymentScheduleNotes)
+			groupPricing.DELETE("claims/payment-schedules/:schedule_id", RequirePermission("claims_pay:create_schedule"), controllers.DiscardPaymentSchedule)
+			groupPricing.PATCH("claims/payment-schedules/:schedule_id/notes", RequirePermission("claims_pay:create_schedule"), controllers.UpdatePaymentScheduleNotes)
 			groupPricing.GET("claims/payment-schedules/:schedule_id/export", controllers.ExportPaymentScheduleCSV)
 			groupPricing.POST("claims/payment-schedules/:schedule_id/proof", controllers.UploadPaymentProof)
 			groupPricing.GET("claims/payment-schedules/:schedule_id/proof", controllers.GetPaymentProofs)
@@ -369,6 +370,8 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.POST("claims/payment-schedules/:schedule_id/finance/authorise-second", RequirePermission("claims_pay:authorise_second"), controllers.SecondAuthorisePaymentSchedule)
 			groupPricing.POST("claims/payment-schedules/:schedule_id/archive", RequirePermission("claims_pay:archive"), controllers.ArchivePaymentSchedule)
 			groupPricing.GET("claims/payment-schedules/:schedule_id/queries", controllers.GetScheduleQueries)
+			groupPricing.POST("claims/payment-schedules/:schedule_id/followups", RequirePermission("claims_pay:create_schedule"), controllers.PostScheduleFollowup)
+			groupPricing.POST("claims/payment-schedules/queries/:query_id/resolve", RequirePermission("claims_pay:finance_review"), controllers.ResolveScheduleQuery)
 			groupPricing.GET("claims/payment-schedules/:schedule_id/audit", controllers.GetScheduleAuditTrail)
 			// Authority matrix admin
 			groupPricing.GET("claims/authority-matrix", RequirePermission("claims_pay:admin_authority"), controllers.ListAuthorityMatrix)

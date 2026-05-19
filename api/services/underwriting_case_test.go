@@ -22,6 +22,11 @@ func TestUnderwritingCaseTransitionMatrix(t *testing.T) {
 		{models.UWCaseStatusDeclined, models.UWCaseStatusInReview, false},
 		{models.UWCaseStatusPostponed, models.UWCaseStatusInReview, true},
 		{models.UWCaseStatusPostponed, models.UWCaseStatusPendingEvidence, true},
+		{models.UWCaseStatusPendingEvidence, models.UWCaseStatusAutoAccepted, true},
+		{models.UWCaseStatusInReview, models.UWCaseStatusAutoAccepted, true},
+		{models.UWCaseStatusPostponed, models.UWCaseStatusAutoAccepted, true},
+		{models.UWCaseStatusAutoAccepted, models.UWCaseStatusInReview, false},
+		{models.UWCaseStatusAutoAccepted, models.UWCaseStatusPendingEvidence, false},
 	}
 	for _, tc := range cases {
 		got := allowedUWCaseTransitions[tc.from][tc.to]

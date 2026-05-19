@@ -34,9 +34,23 @@ func CreatePaymentSchedule(c *gin.Context) {
 
 // GetPaymentSchedules handles GET /group-pricing/claims/payment-schedules.
 // Pass ?include_archived=1 to also surface archived schedules.
+// Pass ?scope=claims to limit to schedules the current user created,
+// or ?scope=finance to exclude drafts (the finance hub list).
 func GetPaymentSchedules(c *gin.Context) {
 	includeArchived := c.Query("include_archived") == "1" || c.Query("include_archived") == "true"
-	schedules, err := services.GetPaymentSchedules(includeArchived)
+	opts := services.GetPaymentSchedulesOptions{
+		IncludeArchived: includeArchived,
+	}
+	switch c.Query("scope") {
+	case string(services.ScopeClaims):
+		opts.Scope = services.ScopeClaims
+		if user, ok := c.MustGet("user").(models.AppUser); ok {
+			opts.CreatedBy = user.UserName
+		}
+	case string(services.ScopeFinance):
+		opts.Scope = services.ScopeFinance
+	}
+	schedules, err := services.GetPaymentSchedules(opts)
 	if err != nil {
 		InternalError(c, err)
 		return
@@ -737,6 +751,73 @@ func ArchivePaymentSchedule(c *gin.Context) {
 		return
 	}
 	OK(c, schedule)
+}
+
+// DiscardPaymentSchedule handles DELETE /claims/payment-schedules/:schedule_id.
+// Only drafts can be discarded — once signed off, finance owns the schedule.
+// All line-item claims are returned to "approved" so the next cut-off picks
+// them up again.
+func DiscardPaymentSchedule(c *gin.Context) {
+	id, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	if err := services.DiscardDraftSchedule(id, user); err != nil {
+		BadRequest(c, err)
+		return
+	}
+	OK(c, gin.H{"discarded": true, "schedule_id": id})
+}
+
+// PostScheduleFollowup handles POST /claims/payment-schedules/:schedule_id/followups
+// Body: { "notes": "..." }
+// Records a claims-side follow-up note on a submitted schedule. The note shows
+// up in the existing Queries panel for finance to resolve.
+func PostScheduleFollowup(c *gin.Context) {
+	id, ok := parseScheduleID(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		Notes string `json:"notes"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		BadRequest(c, err)
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	row, err := services.RaiseClaimsFollowup(id, req.Notes, user)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+	OK(c, row)
+}
+
+// ResolveScheduleQuery handles POST /claims/payment-schedules/queries/:query_id/resolve
+// Body: { "response": "..." }
+// Finance uses this to respond to a claims follow-up or close out a line query.
+func ResolveScheduleQuery(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("query_id"))
+	if err != nil {
+		BadRequestMsg(c, "invalid query_id")
+		return
+	}
+	var req struct {
+		Response string `json:"response"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		BadRequest(c, err)
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	row, err := services.ResolveScheduleQuery(id, req.Response, user)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+	OK(c, row)
 }
 
 // GetScheduleQueries handles GET /claims/payment-schedules/:schedule_id/queries

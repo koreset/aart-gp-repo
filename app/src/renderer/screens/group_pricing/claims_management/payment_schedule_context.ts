@@ -58,8 +58,9 @@ export interface ScheduleQuery {
   outcome: string
   raised_by: string
   raised_at: string
+  resolution_notes?: string
   resolved_by?: string
-  resolved_at?: string
+  resolved_at?: string | null
 }
 
 export interface ScheduleAuditRow {

@@ -31,22 +31,26 @@ const uwCaseAttachmentDir = "tmp/uploads/underwriting_cases"
 // separately by AssignUnderwritingCase).
 var allowedUWCaseTransitions = map[models.UWCaseStatus]map[models.UWCaseStatus]bool{
 	models.UWCaseStatusPendingEvidence: {
-		models.UWCaseStatusInReview:  true,
-		models.UWCaseStatusDeclined:  true,
-		models.UWCaseStatusPostponed: true,
+		models.UWCaseStatusInReview:     true,
+		models.UWCaseStatusDeclined:     true,
+		models.UWCaseStatusPostponed:    true,
+		models.UWCaseStatusAutoAccepted: true,
 	},
 	models.UWCaseStatusInReview: {
 		models.UWCaseStatusDecided:         true,
 		models.UWCaseStatusDeclined:        true,
 		models.UWCaseStatusPostponed:       true,
 		models.UWCaseStatusPendingEvidence: true,
+		models.UWCaseStatusAutoAccepted:    true,
 	},
 	models.UWCaseStatusPostponed: {
 		models.UWCaseStatusPendingEvidence: true,
 		models.UWCaseStatusInReview:        true,
+		models.UWCaseStatusAutoAccepted:    true,
 	},
-	// Decided and Declined are terminal — re-opening is not supported here.
-	// A new case is created by re-running CreateCasesForQuote after re-rate.
+	// Decided, Declined and AutoAccepted are terminal — re-opening is not
+	// supported here. A new case is created by re-running CreateCasesForQuote
+	// after re-rate.
 }
 
 // UnderwritingCaseFilter narrows ListUnderwritingCases results.
@@ -75,13 +79,13 @@ func CreateCasesForQuote(quoteID int, actor string) ([]models.UnderwritingCase, 
 
 	out := make([]models.UnderwritingCase, 0, len(ratings))
 	for _, r := range ratings {
-		if r.UnderwritingTier < UnderwritingTierShortForm {
-			continue
-		}
 		memberID := idLookup[memberLookupKey(r.MemberName, r.Category)]
 		c, created, err := upsertCaseForMember(quoteID, memberID, r, actor)
 		if err != nil {
 			return nil, err
+		}
+		if c == nil {
+			continue
 		}
 		out = append(out, *c)
 		if created {
@@ -102,6 +106,7 @@ func upsertCaseForMember(quoteID int, memberID string, r models.MemberRatingResu
 	err := q.First(&existing).Error
 
 	if err == nil {
+		previousStatus := existing.Status
 		existing.Tier = r.UnderwritingTier
 		existing.FCLExcessRatio = r.FCLExcessRatio
 		existing.GlaSumAssured = r.GlaSumAssured
@@ -114,6 +119,21 @@ func upsertCaseForMember(quoteID int, memberID string, r models.MemberRatingResu
 		if memberID != "" && existing.MemberIdNumber == "" {
 			existing.MemberIdNumber = memberID
 		}
+		// Auto-close when the member's new tier drops below short-form — the
+		// case no longer needs underwriting. Only safe to do from non-terminal
+		// statuses where no human has committed a decision; if a human paused
+		// (postponed) or is actively reviewing, leave the workflow intact so
+		// their context is preserved.
+		autoClosed := false
+		if r.UnderwritingTier < UnderwritingTierShortForm &&
+			(existing.Status == models.UWCaseStatusPendingEvidence ||
+				existing.Status == models.UWCaseStatusInReview) {
+			now := time.Now()
+			existing.Status = models.UWCaseStatusAutoAccepted
+			existing.DecidedAt = &now
+			existing.DecidedBy = "system"
+			autoClosed = true
+		}
 		if err := DB.Save(&existing).Error; err != nil {
 			return nil, false, fmt.Errorf("refresh case: %w", err)
 		}
@@ -121,10 +141,21 @@ func upsertCaseForMember(quoteID int, memberID string, r models.MemberRatingResu
 			"tier":             r.UnderwritingTier,
 			"fcl_excess_ratio": r.FCLExcessRatio,
 		})
+		if autoClosed {
+			recordCaseEvent(existing.ID, "status_changed", "system", map[string]any{
+				"from": previousStatus,
+				"to":   models.UWCaseStatusAutoAccepted,
+				"note": "member tier dropped below short-form on re-calc; no underwriting required",
+			})
+		}
 		return &existing, false, nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, false, fmt.Errorf("lookup case: %w", err)
+	}
+
+	if r.UnderwritingTier < UnderwritingTierShortForm {
+		return nil, false, nil
 	}
 
 	fcl := loadQuoteFreeCoverLimit(quoteID)
@@ -212,6 +243,7 @@ type UnderwritingQuoteSummary struct {
 	DecidedCount         int        `json:"decided_count"`
 	PostponedCount       int        `json:"postponed_count"`
 	DeclinedCount        int        `json:"declined_count"`
+	AutoAcceptedCount    int        `json:"auto_accepted_count"`
 	TopTier              int        `json:"top_tier"`
 	LatestActivityAt     *time.Time `json:"latest_activity_at,omitempty"`
 }
@@ -239,6 +271,7 @@ func ListUnderwritingCaseQuoteSummaries(filter UnderwritingCaseFilter) ([]Underw
             SUM(CASE WHEN uc.status = ? THEN 1 ELSE 0 END) AS decided_count,
             SUM(CASE WHEN uc.status = ? THEN 1 ELSE 0 END) AS postponed_count,
             SUM(CASE WHEN uc.status = ? THEN 1 ELSE 0 END) AS declined_count,
+            SUM(CASE WHEN uc.status = ? THEN 1 ELSE 0 END) AS auto_accepted_count,
             MAX(uc.tier) AS top_tier,
             MAX(uc.updated_at) AS latest_activity_at`,
 			models.UWCaseStatusPendingEvidence,
@@ -246,6 +279,7 @@ func ListUnderwritingCaseQuoteSummaries(filter UnderwritingCaseFilter) ([]Underw
 			models.UWCaseStatusDecided,
 			models.UWCaseStatusPostponed,
 			models.UWCaseStatusDeclined,
+			models.UWCaseStatusAutoAccepted,
 		).
 		Joins("LEFT JOIN group_pricing_quotes gpq ON gpq.id = uc.quote_id").
 		Group("uc.quote_id, gpq.quote_name, gpq.scheme_name, gpq.broker_name, gpq.status").

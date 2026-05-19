@@ -3741,12 +3741,16 @@ func MovementPopulateRatesPerMember(memberDataPointResult *models.MemberRatingRe
 	if memberDataPointResult.GlaSumAssured > groupQuote.FreeCoverLimit {
 		memberDataPointResult.ExceedsFreeCoverLimitIndicator = 1
 	}
+	effectiveFCL := memberDataPointResult.AppliedFreeCoverLimit
+	if effectiveFCL <= 0 {
+		effectiveFCL = groupQuote.FreeCoverLimit
+	}
 	memberDataPointResult.UnderwritingTier, memberDataPointResult.FCLExcessRatio = ClassifyTier(map[string]float64{
 		"gla":    memberDataPointResult.GlaSumAssured,
 		"ptd":    memberDataPointResult.PtdSumAssured,
 		"ci":     memberDataPointResult.CiSumAssured,
 		"sgla":   memberDataPointResult.SpouseGlaSumAssured,
-	}, groupQuote.FreeCoverLimit, nil)
+	}, effectiveFCL, nil)
 
 	//memberDataPointResult.GlaExperienceAdjustedAnnualPremium = memberDataPointResult.GlaRiskPremium
 	//memberDataPointResult.PtdExperienceAdjustedAnnualPremium = memberDataPointResult.PtdRiskPremium
@@ -4842,12 +4846,16 @@ func PopulateRatesPerMember(i int, indicativeRatesCount float64, indicativeMembe
 	if memberDataPointResult.GlaSumAssured > groupQuote.FreeCoverLimit {
 		memberDataPointResult.ExceedsFreeCoverLimitIndicator = 1
 	}
+	effectiveFCL := groupQuote.FreeCoverLimit
+	if effectiveFCL <= 0 {
+		effectiveFCL = calculatedFreeCoverLimit
+	}
 	memberDataPointResult.UnderwritingTier, memberDataPointResult.FCLExcessRatio = ClassifyTier(map[string]float64{
 		"gla":  memberDataPointResult.GlaSumAssured,
 		"ptd":  memberDataPointResult.PtdSumAssured,
 		"ci":   memberDataPointResult.CiSumAssured,
 		"sgla": memberDataPointResult.SpouseGlaSumAssured,
-	}, groupQuote.FreeCoverLimit, nil)
+	}, effectiveFCL, nil)
 
 	//memberDataPointResult.GlaExperienceAdjustedAnnualPremium = memberDataPointResult.GlaRiskPremium
 	//memberDataPointResult.PtdExperienceAdjustedAnnualPremium = memberDataPointResult.PtdRiskPremium
@@ -13805,6 +13813,7 @@ var memberRatingResultSummarySlimColumns = []string{
 	"final_ttd_annual_office_premium",
 	"final_ttd_annual_outsourced_amount",
 	"financial_year",
+	"full_underwriting_count",
 	"fun_reinsurance_premium_proportion",
 	"gla_reinsurance_premium_proportion",
 	"gla_risk_rate_per1000_sa",
@@ -13858,6 +13867,7 @@ var memberRatingResultSummarySlimColumns = []string{
 	"scheme_id",
 	"severe_illness_maximum_benefit",
 	"sgla_reinsurance_premium_proportion",
+	"short_form_underwriting_count",
 	"sgla_risk_rate_per1000_sa",
 	"spouse_gla_maximum_benefit",
 	"tax_saver_benefit",
@@ -13909,6 +13919,7 @@ var memberRatingResultSummarySlimColumns = []string{
 	"ttd_maximum_monthly_benefit",
 	"ttd_reinsurance_premium_proportion",
 	"ttd_risk_rate_per1000_sa",
+	"within_free_cover_limit_count",
 }
 
 // GetGroupPricingQuoteResultSummarySlim is the read-path counterpart to

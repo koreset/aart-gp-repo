@@ -125,6 +125,14 @@
                   icon="mdi-close-circle-outline"
                 />
               </v-col>
+              <v-col cols="6" md="3">
+                <stat-card
+                  title="Auto-accepted"
+                  :value="statsByStatus.auto_accepted"
+                  color="grey"
+                  icon="mdi-shield-check-outline"
+                />
+              </v-col>
             </v-row>
 
             <div :style="{ height: gridHeight, width: '100%' }">
@@ -251,7 +259,8 @@ const statusOptions = [
   { text: 'In review', value: 'in_review' },
   { text: 'Decided', value: 'decided' },
   { text: 'Postponed', value: 'postponed' },
-  { text: 'Declined', value: 'declined' }
+  { text: 'Declined', value: 'declined' },
+  { text: 'Auto-accepted', value: 'auto_accepted' }
 ]
 const tierOptions = [
   { text: 'Tier 1 — short-form', value: '1' },
@@ -264,7 +273,8 @@ const statsByStatus = computed(() => {
     in_review: 0,
     decided: 0,
     postponed: 0,
-    declined: 0
+    declined: 0,
+    auto_accepted: 0
   }
   for (const c of cases.value) {
     if (out[c.status] !== undefined) out[c.status]++
@@ -287,6 +297,7 @@ const statusColor = (status: string) => {
   if (status === 'declined') return 'error'
   if (status === 'in_review') return 'info'
   if (status === 'postponed') return 'grey'
+  if (status === 'auto_accepted') return 'grey'
   return 'warning'
 }
 

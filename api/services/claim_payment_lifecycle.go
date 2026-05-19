@@ -272,6 +272,34 @@ func removeLineItem(scheduleID, itemID int, outcome string, req QueryRequest, us
 	})
 }
 
+// ResolveScheduleQuery marks an open query as resolved, stamping the resolver
+// and storing their reply. Either team can resolve a query they did not raise
+// — finance closes out a line query, and the same handler is reused by finance
+// to respond to a claims follow-up.
+func ResolveScheduleQuery(queryID int, response string, user models.AppUser) (models.ClaimPaymentScheduleQuery, error) {
+	var query models.ClaimPaymentScheduleQuery
+	response = strings.TrimSpace(response)
+	if response == "" {
+		return query, errors.New("response is required")
+	}
+	if err := DB.First(&query, queryID).Error; err != nil {
+		return query, err
+	}
+	if query.Outcome == "resolved" || query.Outcome == "cancelled" {
+		return query, fmt.Errorf("query is already %s", query.Outcome)
+	}
+	now := time.Now()
+	if err := DB.Model(&query).Updates(map[string]interface{}{
+		"outcome":          "resolved",
+		"resolution_notes": response,
+		"resolved_by":      user.UserName,
+		"resolved_at":      &now,
+	}).Error; err != nil {
+		return query, err
+	}
+	return query, DB.First(&query, queryID).Error
+}
+
 // GetScheduleQueries returns all finance queries raised against a schedule.
 func GetScheduleQueries(scheduleID int) ([]models.ClaimPaymentScheduleQuery, error) {
 	var rows []models.ClaimPaymentScheduleQuery
@@ -510,6 +538,97 @@ func getScheduleItem(id int) (models.ClaimPaymentScheduleItem, error) {
 	var item models.ClaimPaymentScheduleItem
 	err := DB.First(&item, id).Error
 	return item, err
+}
+
+// DiscardDraftSchedule hard-deletes a draft schedule and returns each of its
+// line-item claims to "approved" so the next cut-off picks them up. Only drafts
+// can be discarded — once a schedule has been signed off, finance owns it.
+func DiscardDraftSchedule(scheduleID int, user models.AppUser) error {
+	schedule, err := GetPaymentSchedule(scheduleID)
+	if err != nil {
+		return err
+	}
+	if schedule.Status != "draft" {
+		return fmt.Errorf("only draft schedules can be discarded (current: %s)", schedule.Status)
+	}
+
+	now := time.Now()
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var items []models.ClaimPaymentScheduleItem
+		if err := tx.Where("schedule_id = ?", scheduleID).Find(&items).Error; err != nil {
+			return err
+		}
+
+		// Return each underlying claim to "approved" with an audit row.
+		for _, item := range items {
+			var claim models.GroupSchemeClaim
+			if err := tx.Select("id, status, claim_number").First(&claim, item.ClaimID).Error; err != nil {
+				continue
+			}
+			if err := tx.Create(&models.GroupSchemeClaimStatusAudit{
+				ClaimID:       claim.ID,
+				OldStatus:     claim.Status,
+				NewStatus:     "approved",
+				StatusMessage: fmt.Sprintf("Draft payment schedule %s discarded", schedule.ScheduleNumber),
+				ChangedBy:     user.UserName,
+				ChangedAt:     now,
+			}).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&models.GroupSchemeClaim{}).Where("id = ?", claim.ID).Update("status", "approved").Error; err != nil {
+				return err
+			}
+		}
+
+		// Record the discard in the schedule audit trail before deleting rows.
+		if err := recordAudit(tx, scheduleID, schedule.Status, "discarded", user.UserName, "Draft discarded by claims user"); err != nil {
+			return err
+		}
+
+		// Wipe related rows. Drafts shouldn't have queries or ACB records, but
+		// these deletes are safe no-ops if there aren't any.
+		if err := tx.Where("schedule_id = ?", scheduleID).Delete(&models.ClaimPaymentScheduleQuery{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("schedule_id = ?", scheduleID).Delete(&models.ClaimPaymentScheduleItem{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Delete(&models.ClaimPaymentSchedule{}, scheduleID).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+// RaiseClaimsFollowup records a claims-side follow-up note on a submitted
+// payment schedule. Reuses the queries table so the existing Queries panel
+// surfaces it to finance, who can resolve it with the same controls used for
+// finance-raised line queries. The follow-up is scoped to the schedule (no
+// line item), so ScheduleItemID is left at zero.
+func RaiseClaimsFollowup(scheduleID int, notes string, user models.AppUser) (models.ClaimPaymentScheduleQuery, error) {
+	var row models.ClaimPaymentScheduleQuery
+	notes = strings.TrimSpace(notes)
+	if notes == "" {
+		return row, errors.New("notes are required")
+	}
+	schedule, err := GetPaymentSchedule(scheduleID)
+	if err != nil {
+		return row, err
+	}
+	if schedule.Status == "draft" {
+		return row, errors.New("follow-ups can only be raised after the schedule has been signed off")
+	}
+	row = models.ClaimPaymentScheduleQuery{
+		ScheduleID: scheduleID,
+		ReasonCode: "claims_followup",
+		Notes:      notes,
+		Outcome:    "open",
+		RaisedBy:   user.UserName,
+	}
+	if err := DB.Create(&row).Error; err != nil {
+		return row, err
+	}
+	return row, nil
 }
 
 // outstandingReinsuranceRecoveries returns the claim numbers of lines that

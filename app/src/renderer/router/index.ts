@@ -8,13 +8,15 @@ import { useGroupUserPermissionsStore } from '../store/group_user'
 const checkPermissions = async (to: any, _from: any) => {
   const store = useGroupUserPermissionsStore()
   const required = to.meta.required_permission as string | undefined
-  if (!required) return true
+  const requiredAny = to.meta.required_permissions_any as string[] | undefined
+  if (!required && (!requiredAny || requiredAny.length === 0)) return true
   await store.waitUntilLoaded()
   // Bootstrap mode: user has no role assigned (fresh install) — allow
   // access so an initial admin can be configured.
   if (!store.hasRole) return true
   if (store.hasPermission('system:admin')) return true
-  if (store.hasPermission(required)) return true
+  if (required && store.hasPermission(required)) return true
+  if (requiredAny && requiredAny.some((p) => store.hasPermission(p))) return true
   return { name: 'group-pricing-dashboard' }
 }
 
@@ -296,6 +298,23 @@ const router = createRouter({
       name: 'group-pricing-claim-payment-schedules',
       component: () =>
         import('../screens/group_pricing/claims_management/ClaimPaymentSchedules.vue'),
+      meta: { required_permission: 'claims_pay:finance_review' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/claims-management/my-submissions',
+      name: 'group-pricing-claim-my-submissions',
+      component: () =>
+        import('../screens/group_pricing/claims_management/ClaimMySubmissions.vue'),
+      meta: { required_permission: 'claims_pay:create_schedule' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/claims-management/my-submissions/:scheduleId/claims',
+      name: 'group-pricing-claim-my-submissions-claims',
+      component: () =>
+        import('../screens/group_pricing/claims_management/ClaimScheduleClaimsList.vue'),
+      props: true,
       meta: { required_permission: 'claims_pay:create_schedule' },
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
@@ -305,7 +324,12 @@ const router = createRouter({
       component: () =>
         import('../screens/group_pricing/claims_management/ClaimPaymentScheduleLayout.vue'),
       props: true,
-      meta: { required_permission: 'claims_pay:create_schedule' },
+      meta: {
+        required_permissions_any: [
+          'claims_pay:create_schedule',
+          'claims_pay:finance_review'
+        ]
+      },
       beforeEnter: (to, from) => checkPermissions(to, from),
       redirect: (to) => ({
         name: 'group-pricing-claim-payment-schedule-claims',
@@ -322,7 +346,9 @@ const router = createRouter({
           path: 'acb',
           name: 'group-pricing-claim-payment-schedule-acb',
           component: () =>
-            import('../screens/group_pricing/claims_management/ClaimPaymentScheduleACB.vue')
+            import('../screens/group_pricing/claims_management/ClaimPaymentScheduleACB.vue'),
+          meta: { required_permission: 'claims_pay:generate_acb' },
+          beforeEnter: (to, from) => checkPermissions(to, from)
         },
         {
           path: 'queries',
@@ -334,13 +360,17 @@ const router = createRouter({
           path: 'reconciliation',
           name: 'group-pricing-claim-payment-schedule-reconciliation',
           component: () =>
-            import('../screens/group_pricing/claims_management/ClaimPaymentScheduleReconciliation.vue')
+            import('../screens/group_pricing/claims_management/ClaimPaymentScheduleReconciliation.vue'),
+          meta: { required_permission: 'claims_pay:upload_response' },
+          beforeEnter: (to, from) => checkPermissions(to, from)
         },
         {
           path: 'proofs',
           name: 'group-pricing-claim-payment-schedule-proofs',
           component: () =>
-            import('../screens/group_pricing/claims_management/ClaimPaymentScheduleProofs.vue')
+            import('../screens/group_pricing/claims_management/ClaimPaymentScheduleProofs.vue'),
+          meta: { required_permission: 'claims_pay:upload_response' },
+          beforeEnter: (to, from) => checkPermissions(to, from)
         }
       ]
     },

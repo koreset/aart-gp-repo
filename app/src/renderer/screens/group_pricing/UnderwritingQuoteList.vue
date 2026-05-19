@@ -141,6 +141,7 @@ interface QuoteSummary {
   decided_count: number
   postponed_count: number
   declined_count: number
+  auto_accepted_count: number
   top_tier: number
   latest_activity_at: string | null
 }
@@ -156,7 +157,8 @@ const statusOptions = [
   { text: 'In review', value: 'in_review' },
   { text: 'Decided', value: 'decided' },
   { text: 'Postponed', value: 'postponed' },
-  { text: 'Declined', value: 'declined' }
+  { text: 'Declined', value: 'declined' },
+  { text: 'Auto-accepted', value: 'auto_accepted' }
 ]
 const tierOptions = [
   { text: 'Tier 1 — short-form', value: '1' },
@@ -270,6 +272,13 @@ const columnDefs = [
     maxWidth: 130,
     cellStyle: (p: any) =>
       p.value > 0 ? { color: '#b91c1c', fontWeight: '600' } : null
+  },
+  {
+    headerName: 'Auto-accepted',
+    field: 'auto_accepted_count',
+    sortable: true,
+    minWidth: 130,
+    maxWidth: 150
   },
   {
     headerName: 'Total',

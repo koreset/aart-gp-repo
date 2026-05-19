@@ -187,20 +187,47 @@ func CreatePaymentSchedule(req CreatePaymentScheduleRequest, user models.AppUser
 	return GetPaymentSchedule(schedule.ID)
 }
 
-// GetPaymentSchedules returns all payment schedules (newest first), including
-// item counts. Archived schedules are hidden by default so the list stays
-// focused on live work; pass includeArchived=true (e.g. from the "Show
-// archived" toggle) to surface the full history.
-func GetPaymentSchedules(includeArchived ...bool) ([]models.ClaimPaymentSchedule, error) {
-	includeArch := false
-	if len(includeArchived) > 0 {
-		includeArch = includeArchived[0]
-	}
+// PaymentScheduleScope narrows the set of schedules returned by
+// GetPaymentSchedules so each hub sees a meaningfully different list:
+//   - ScopeClaims  → schedules the given user created (their drafts and
+//     submissions they're tracking).
+//   - ScopeFinance → schedules that have been submitted (no drafts), regardless
+//     of who created them.
+//   - ScopeAll     → no scope filter (used by admin / legacy callers).
+type PaymentScheduleScope string
+
+const (
+	ScopeAll     PaymentScheduleScope = ""
+	ScopeClaims  PaymentScheduleScope = "claims"
+	ScopeFinance PaymentScheduleScope = "finance"
+)
+
+// GetPaymentSchedulesOptions is the filter set for GetPaymentSchedules.
+// CreatedBy is only consulted when Scope == ScopeClaims.
+type GetPaymentSchedulesOptions struct {
+	IncludeArchived bool
+	Scope           PaymentScheduleScope
+	CreatedBy       string
+}
+
+// GetPaymentSchedules returns payment schedules (newest first), including item
+// counts. Archived schedules are hidden by default so the list stays focused on
+// live work; pass IncludeArchived=true to surface the full history. Scope
+// narrows the list further — see PaymentScheduleScope.
+func GetPaymentSchedules(opts GetPaymentSchedulesOptions) ([]models.ClaimPaymentSchedule, error) {
 	var schedules []models.ClaimPaymentSchedule
 	err := DBReadWithResilience(context.Background(), func(d *gorm.DB) error {
 		q := d.Preload("Items").Preload("ProofOfPayments").Order("created_at DESC")
-		if !includeArch {
+		if !opts.IncludeArchived {
 			q = q.Where("LOWER(status) <> ?", "archived")
+		}
+		switch opts.Scope {
+		case ScopeClaims:
+			if opts.CreatedBy != "" {
+				q = q.Where("created_by = ?", opts.CreatedBy)
+			}
+		case ScopeFinance:
+			q = q.Where("LOWER(status) <> ?", "draft")
 		}
 		return q.Find(&schedules).Error
 	})
