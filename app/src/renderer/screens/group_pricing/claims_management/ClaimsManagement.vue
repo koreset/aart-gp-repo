@@ -339,6 +339,7 @@ const claimStatuses = [
   { text: 'Additional Info Required', value: 'additional_info_required' },
   { text: 'Approved', value: 'approved' },
   { text: 'Submitted for Payment', value: 'submitted_for_payment' },
+  { text: 'Finance Rejected', value: 'finance_rejected' },
   { text: 'Paid', value: 'paid' },
   { text: 'Declined', value: 'declined' },
   { text: 'Cancelled', value: 'cancelled' }

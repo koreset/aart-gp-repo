@@ -17723,6 +17723,24 @@ func GetSchemeMemberRating(schemeId, quoteId, memberId string) (models.MemberRat
 	return memberRating, nil
 }
 
+// stampApprovedFields populates or clears the assessment's approved_*
+// trio based on AssessmentOutcome. When the outcome lands on approved /
+// partial_approval the trio is stamped with the current RecommendedAmount,
+// the supplied timestamp, and the actor's username. For any other outcome
+// the trio is reset so the drift check can't latch onto a stale approval.
+func stampApprovedFields(assessment *models.GroupSchemeClaimAssessment, user models.AppUser, now time.Time) {
+	outcome := strings.ToLower(strings.TrimSpace(assessment.AssessmentOutcome))
+	if outcome == "approved" || outcome == "partial_approval" || outcome == "partially_approved" {
+		assessment.ApprovedAmount = assessment.RecommendedAmount
+		assessment.ApprovedAt = &now
+		assessment.ApprovedBy = user.UserName
+		return
+	}
+	assessment.ApprovedAmount = 0
+	assessment.ApprovedAt = nil
+	assessment.ApprovedBy = ""
+}
+
 // CreateClaimAssessment creates a new assessment linked to a claim
 func CreateClaimAssessment(assessment models.GroupSchemeClaimAssessment, user models.AppUser) (models.GroupSchemeClaimAssessment, error) {
 	// Ensure claim exists
@@ -17736,6 +17754,7 @@ func CreateClaimAssessment(assessment models.GroupSchemeClaimAssessment, user mo
 	if assessment.AssessmentTimestamp == nil {
 		assessment.AssessmentTimestamp = &now
 	}
+	stampApprovedFields(&assessment, user, now)
 	if err := DB.Create(&assessment).Error; err != nil {
 		return assessment, err
 	}
@@ -17804,6 +17823,12 @@ func UpdateClaimAssessment(assessmentID int, payload models.GroupSchemeClaimAsse
 	existing.AssessmentTimestamp = payload.AssessmentTimestamp
 	// keep ClaimID unchanged; CreatedBy remains original
 
+	// Phase 5: stamp / clear the approved_* audit trio so the schedule-time
+	// drift check has a stable source of truth. Re-evaluated on every update
+	// so toggling outcome away from approved nulls the audit, and re-approval
+	// re-stamps it with the latest figure + actor.
+	stampApprovedFields(&existing, user, time.Now())
+
 	if err := DB.Save(&existing).Error; err != nil {
 		return existing, err
 	}
@@ -17816,6 +17841,22 @@ func UpdateClaimAssessment(assessmentID int, payload models.GroupSchemeClaimAsse
 		Action:    "UPDATE",
 		ChangedBy: user.UserName,
 	}, before, existing)
+
+	// Phase 5: when the assessor re-approves a previously finance-rejected
+	// claim, clear the snapshot columns so the banner stops rendering. The
+	// status_audit table preserves the historical rejection.
+	outcome := strings.ToLower(strings.TrimSpace(existing.AssessmentOutcome))
+	if outcome == "approved" || outcome == "partial_approval" || outcome == "partially_approved" {
+		_ = DB.Model(&models.GroupSchemeClaim{}).
+			Where("id = ? AND finance_rejected_at IS NOT NULL", existing.ClaimID).
+			Updates(map[string]interface{}{
+				"finance_rejected_at":               nil,
+				"finance_rejected_by":               "",
+				"finance_rejection_reason_code":     "",
+				"finance_rejection_notes":           "",
+				"finance_rejection_schedule_number": "",
+			}).Error
+	}
 
 	// Log structured claim assessment activity
 	var claim models.GroupSchemeClaim

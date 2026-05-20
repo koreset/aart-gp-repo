@@ -1,128 +1,218 @@
 <template>
-  <v-container>
+  <div>
     <v-row>
-      <!-- Claim Summary Card -->
+      <!-- Claim Summary -->
       <v-col cols="12" md="9">
-        <v-card class="mb-4">
-          <v-card-title class="bg-primary text-white">
-            <div class="d-flex justify-space-between align-center w-100">
-              <span>{{ claim?.claim_number }}</span>
-              <div class="d-flex align-center gap-2">
-                <v-chip :color="getStatusColor(claim?.status)" size="small">
-                  {{ formatStatus(claim?.status) }}
-                </v-chip>
-                <v-btn
-                  icon="mdi-close"
-                  variant="text"
-                  color="white"
-                  size="small"
-                  @click="$emit('close')"
-                />
-              </div>
-            </div>
-          </v-card-title>
-          <v-card-text>
-            <v-row class="mt-2">
-              <v-col cols="12" md="6">
-                <div class="mb-3">
-                  <strong>Member:</strong> {{ claim?.member_name }}<br />
-                  <strong>ID Number:</strong> {{ claim?.member_id_number
-                  }}<br />
-                  <strong>Scheme:</strong> {{ claim?.scheme_name }}
+        <section class="page-section mb-4">
+          <div class="section-header">
+            <span class="section-label">Claim summary</span>
+            <span class="section-divider" />
+            <v-chip
+              :color="getStatusColor(claim?.status)"
+              size="small"
+              variant="flat"
+            >
+              {{ formatStatus(claim?.status) }}
+            </v-chip>
+          </div>
+          <v-row dense>
+            <v-col cols="12" sm="6" md="3">
+              <v-card
+                variant="outlined"
+                rounded="lg"
+                class="meta-card h-100 pa-3 d-flex flex-column"
+              >
+                <div class="meta-card__label">Member</div>
+                <div class="meta-card__value meta-card__value--text">{{
+                  claim?.member_name || '—'
+                }}</div>
+                <div class="meta-card__hint">
+                  ID {{ claim?.member_id_number || '—' }}
                 </div>
-              </v-col>
-              <v-col cols="12" md="6">
-                <div class="mb-3">
-                  <strong>Benefit Type:</strong> {{ claim?.benefit_alias
-                  }}<br />
-                  <strong>Member Type: </strong> {{ claim?.member_type }} <br />
-                  <strong>Claim Amount:</strong>
-                  {{ formatCurrency(claim?.claim_amount) }}<br />
-                  <strong>Priority:</strong>
+              </v-card>
+            </v-col>
+            <v-col cols="12" sm="6" md="3">
+              <v-card
+                variant="outlined"
+                rounded="lg"
+                class="meta-card h-100 pa-3 d-flex flex-column"
+              >
+                <div class="meta-card__label">Scheme / Benefit</div>
+                <div class="meta-card__value meta-card__value--text">{{
+                  claim?.scheme_name || '—'
+                }}</div>
+                <div class="meta-card__hint">
+                  {{ claim?.benefit_alias || '—' }} ·
+                  {{ claim?.member_type || '—' }}
+                </div>
+              </v-card>
+            </v-col>
+            <v-col cols="12" sm="6" md="3">
+              <v-card
+                variant="outlined"
+                rounded="lg"
+                class="meta-card h-100 pa-3 d-flex flex-column"
+              >
+                <div class="meta-card__label">Claim Amount</div>
+                <div class="meta-card__value">{{
+                  formatCurrency(claim?.claim_amount)
+                }}</div>
+                <div class="meta-card__hint d-flex align-center gap-2">
+                  <span>Priority:</span>
                   <v-chip
                     :color="getPriorityColor(claim?.priority)"
                     size="x-small"
-                    class="ml-1"
+                    variant="flat"
                   >
-                    {{ claim?.priority?.toUpperCase() }}
+                    {{ claim?.priority?.toUpperCase() || '—' }}
                   </v-chip>
                 </div>
-              </v-col>
-            </v-row>
-            <v-row>
-              <v-col cols="12" md="6">
-                <strong>Date of Event:</strong>
-                {{ formatDate(claim?.date_of_event) }}
-              </v-col>
-              <v-col cols="12" md="6">
-                <strong>Date Notified:</strong>
-                {{ formatDate(claim?.date_notified) }} <br />
-                <strong>Date of Transaction:</strong>
-                {{ formatDate(claim?.date_registered) }}
-              </v-col>
-            </v-row>
-            <!-- Show claimant information if available -->
-            <v-row
-              v-if="
-                claim?.claimant_name ||
-                claim?.claimant_id_number ||
-                claim?.claimant_contact_number
-              "
-            >
-              <v-col cols="12">
-                <v-divider class="my-2" />
-                <div class="text-subtitle-2 text-primary mb-2">
-                  <v-icon start color="primary">mdi-account</v-icon>
-                  Claimant Information
+              </v-card>
+            </v-col>
+            <v-col cols="12" sm="6" md="3">
+              <v-card
+                variant="outlined"
+                rounded="lg"
+                class="meta-card h-100 pa-3 d-flex flex-column"
+              >
+                <div class="meta-card__label">Dates</div>
+                <div class="meta-card__value meta-card__value--text">{{
+                  formatDate(claim?.date_of_event)
+                }}</div>
+                <div class="meta-card__hint">
+                  Event · Notified {{ formatDate(claim?.date_notified) }}
                 </div>
-              </v-col>
+              </v-card>
+            </v-col>
+          </v-row>
+
+          <!-- Claimant information -->
+          <template
+            v-if="
+              claim?.claimant_name ||
+              claim?.claimant_id_number ||
+              claim?.claimant_contact_number
+            "
+          >
+            <div class="section-header mt-4">
+              <span class="section-label">Claimant information</span>
+              <span class="section-divider" />
+            </div>
+            <v-row dense>
               <v-col v-if="claim?.claimant_name" cols="12" md="6">
-                <strong>Claimant Name:</strong> {{ claim.claimant_name }}
-              </v-col>
-              <v-col v-if="claim?.claimant_id_number" cols="12" md="6">
-                <strong>Claimant ID Number:</strong>
-                {{ claim.claimant_id_number }}
+                <v-card
+                  variant="outlined"
+                  rounded="lg"
+                  class="meta-card h-100 pa-3 d-flex flex-column"
+                >
+                  <div class="meta-card__label">Claimant</div>
+                  <div class="meta-card__value meta-card__value--text">{{
+                    claim.claimant_name
+                  }}</div>
+                  <div class="meta-card__hint">
+                    {{ claim?.claimant_id_number || '—' }} ·
+                    {{ claim?.relationship_to_member || '—' }}
+                  </div>
+                </v-card>
               </v-col>
               <v-col v-if="claim?.claimant_contact_number" cols="12" md="6">
-                <strong>Contact Number:</strong>
-                {{ claim.claimant_contact_number }}
-              </v-col>
-              <v-col v-if="claim?.relationship_to_member" cols="12" md="6">
-                <strong>Relationship:</strong>
-                {{ claim.relationship_to_member }}
-              </v-col>
-            </v-row>
-            <!-- Show decline information if claim is declined -->
-            <v-row v-if="claim?.status === 'declined'">
-              <v-col cols="12">
-                <v-divider class="my-2" />
-                <div class="bg-error-lighten-4 pa-3 rounded">
-                  <div class="text-subtitle-2 text-error mb-2">
-                    <v-icon start color="error">mdi-information</v-icon>
-                    Decline Information
-                  </div>
-                  <div v-if="claim?.decline_reason" class="mb-2">
-                    <strong>Reason:</strong>
-                    {{ getDeclineReasonText(claim.decline_reason) }}
-                  </div>
-                  <div v-if="claim?.decline_details" class="mb-2">
-                    <strong>Details:</strong> {{ claim.decline_details }}
-                  </div>
-                  <div v-if="claim?.declined_date" class="text-caption">
-                    <strong>Declined on:</strong>
-                    {{ formatDate(claim.declined_date) }}
-                  </div>
-                </div>
+                <v-card
+                  variant="outlined"
+                  rounded="lg"
+                  class="meta-card h-100 pa-3 d-flex flex-column"
+                >
+                  <div class="meta-card__label">Contact</div>
+                  <div class="meta-card__value meta-card__value--text">{{
+                    claim.claimant_contact_number
+                  }}</div>
+                  <div v-if="claim?.claimant_email" class="meta-card__hint">{{
+                    claim.claimant_email
+                  }}</div>
+                </v-card>
               </v-col>
             </v-row>
-          </v-card-text>
-        </v-card>
+          </template>
+        </section>
+
+        <!-- Finance rejection banner (Phase 5) -->
+        <v-alert
+          v-if="claim?.status === 'finance_rejected'"
+          type="error"
+          variant="tonal"
+          density="compact"
+          class="mb-4"
+          icon="mdi-cancel"
+        >
+          <div class="text-subtitle-2 mb-2">
+            Finance rejected — pending acknowledgement
+          </div>
+          <div v-if="claim?.finance_rejection_reason_code" class="text-body-2 mb-1">
+            <strong>Reason:</strong> {{ claim.finance_rejection_reason_code }}
+          </div>
+          <div v-if="claim?.finance_rejection_notes" class="text-body-2 mb-1">
+            <strong>Notes:</strong> {{ claim.finance_rejection_notes }}
+          </div>
+          <div
+            v-if="claim?.finance_rejected_by || claim?.finance_rejected_at"
+            class="text-caption mb-1"
+          >
+            <span v-if="claim?.finance_rejected_by">
+              <strong>Rejected by:</strong> {{ claim.finance_rejected_by }}
+            </span>
+            <span v-if="claim?.finance_rejected_at">
+              · {{ formatDate(claim.finance_rejected_at) }}
+            </span>
+          </div>
+          <div
+            v-if="claim?.finance_rejection_schedule_number"
+            class="text-caption mb-3"
+          >
+            <strong>Source schedule:</strong>
+            {{ claim.finance_rejection_schedule_number }}
+          </div>
+          <v-btn
+            color="error"
+            size="small"
+            variant="flat"
+            prepend-icon="mdi-check-decagram-outline"
+            :loading="acknowledgingRejection"
+            :disabled="!hasPermission('claims:assess')"
+            @click="financeRejectionDialog = true"
+          >
+            Acknowledge &amp; open for editing
+          </v-btn>
+        </v-alert>
+
+        <!-- Decline information banner -->
+        <v-alert
+          v-if="claim?.status === 'declined'"
+          type="error"
+          variant="tonal"
+          density="compact"
+          class="mb-4"
+          icon="mdi-information"
+        >
+          <div class="text-subtitle-2 mb-2">Decline information</div>
+          <div v-if="claim?.decline_reason" class="text-body-2 mb-1">
+            <strong>Reason:</strong>
+            {{ getDeclineReasonText(claim.decline_reason) }}
+          </div>
+          <div v-if="claim?.decline_details" class="text-body-2 mb-1">
+            <strong>Details:</strong> {{ claim.decline_details }}
+          </div>
+          <div v-if="claim?.declined_date" class="text-caption">
+            <strong>Declined on:</strong>
+            {{ formatDate(claim.declined_date) }}
+          </div>
+        </v-alert>
       </v-col>
 
       <!-- Action Panel -->
       <v-col cols="12" md="3">
-        <v-card class="mb-4">
-          <v-card-title class="bg-secondary text-white">Actions</v-card-title>
+        <v-card variant="outlined" rounded="lg" class="mb-4">
+          <v-card-title class="text-subtitle-1 bg-grey-lighten-4">
+            Actions
+          </v-card-title>
           <v-card-text>
             <div class="d-flex mt-4 flex-column gap-2">
               <v-btn
@@ -197,10 +287,10 @@
 
       <!-- Assessment History -->
       <v-col v-if="assessmentHistory.length > 0" cols="12">
-        <v-card class="mb-4">
-          <v-card-title class="bg-primary text-white"
-            >Assessment History</v-card-title
-          >
+        <v-card variant="outlined" rounded="lg" class="mb-4">
+          <v-card-title class="text-subtitle-1 bg-grey-lighten-4">
+            Assessment history
+          </v-card-title>
           <v-card-text>
             <v-timeline density="compact">
               <v-timeline-item
@@ -229,10 +319,10 @@
 
       <!-- Supporting Documents -->
       <v-col cols="12" md="6">
-        <v-card class="mb-4">
-          <v-card-title class="bg-primary text-white"
-            >Supporting Documents</v-card-title
-          >
+        <v-card variant="outlined" rounded="lg" class="mb-4">
+          <v-card-title class="text-subtitle-1 bg-grey-lighten-4">
+            Supporting documents
+          </v-card-title>
           <v-card-text>
             <v-list density="compact">
               <v-list-item
@@ -273,10 +363,10 @@
 
       <!-- Missing Documents -->
       <v-col v-if="missingDocs.length !== 0" cols="12" md="6">
-        <v-card class="mb-4">
-          <v-card-title class="bg-primary text-white"
-            >Missing Documents</v-card-title
-          >
+        <v-card variant="outlined" rounded="lg" class="mb-4">
+          <v-card-title class="text-subtitle-1 bg-grey-lighten-4">
+            Missing documents
+          </v-card-title>
           <v-card-text>
             <v-list density="compact">
               <v-list-item
@@ -297,19 +387,18 @@
 
       <!-- Communication Log -->
       <v-col cols="12" md="6">
-        <v-card class="mb-4">
-          <v-card-title class="bg-teal text-white">
-            <div class="d-flex justify-space-between align-center w-100">
-              <span>Communication Log</span>
-              <v-btn
-                icon="mdi-refresh"
-                variant="text"
-                color="white"
-                size="small"
-                :loading="communicationsLoading"
-                @click="loadCommunications"
-              />
-            </div>
+        <v-card variant="outlined" rounded="lg" class="mb-4">
+          <v-card-title
+            class="text-subtitle-1 bg-grey-lighten-4 d-flex justify-space-between align-center"
+          >
+            <span>Communication log</span>
+            <v-btn
+              icon="mdi-refresh"
+              variant="text"
+              size="small"
+              :loading="communicationsLoading"
+              @click="loadCommunications"
+            />
           </v-card-title>
           <v-card-text>
             <!-- Loading State -->
@@ -373,18 +462,17 @@
 
       <!-- Detailed Assessments -->
       <v-col v-if="claimAssessments.length > 0" cols="12">
-        <v-card class="mb-4">
-          <v-card-title class="bg-purple text-white">
-            <div class="d-flex justify-space-between align-center w-100">
-              <span>Detailed Assessments ({{ claimAssessments.length }})</span>
-              <v-btn
-                icon="mdi-refresh"
-                variant="text"
-                color="white"
-                size="small"
-                @click="loadAssessments"
-              />
-            </div>
+        <v-card variant="outlined" rounded="lg" class="mb-4">
+          <v-card-title
+            class="text-subtitle-1 bg-grey-lighten-4 d-flex justify-space-between align-center"
+          >
+            <span>Detailed assessments ({{ claimAssessments.length }})</span>
+            <v-btn
+              icon="mdi-refresh"
+              variant="text"
+              size="small"
+              @click="loadAssessments"
+            />
           </v-card-title>
           <v-card-text>
             <v-expansion-panels variant="accordion">
@@ -727,20 +815,19 @@
 
     <!-- Document Viewer Dialog -->
     <v-dialog v-model="documentViewerDialog" max-width="900px">
-      <v-card>
-        <v-card-title class="bg-primary text-white">
-          <div class="d-flex justify-space-between align-center w-100">
-            <span>{{
-              currentDocument?.filename || currentDocument?.name
-            }}</span>
-            <v-btn
-              icon="mdi-close"
-              variant="text"
-              color="white"
-              size="small"
-              @click="documentViewerDialog = false"
-            />
-          </div>
+      <v-card rounded="lg">
+        <v-card-title
+          class="text-subtitle-1 bg-grey-lighten-4 d-flex justify-space-between align-center"
+        >
+          <span>{{
+            currentDocument?.filename || currentDocument?.name
+          }}</span>
+          <v-btn
+            icon="mdi-close"
+            variant="text"
+            size="small"
+            @click="documentViewerDialog = false"
+          />
         </v-card-title>
         <v-card-text class="pa-0">
           <div v-if="documentUrl" style="height: 600px">
@@ -834,7 +921,41 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
-  </v-container>
+
+    <!-- Acknowledge finance rejection confirmation -->
+    <v-dialog v-model="financeRejectionDialog" max-width="460px">
+      <v-card rounded="lg">
+        <v-card-title class="text-h6 pa-4 pb-2">
+          Acknowledge finance rejection?
+        </v-card-title>
+        <v-card-text>
+          <div class="text-body-2 mb-3">
+            You're about to acknowledge the finance rejection on claim
+            <strong>{{ claim?.claim_number }}</strong>.
+          </div>
+          <div class="text-body-2 text-medium-emphasis">
+            The claim will move to <strong>draft</strong> so the capturer can
+            edit the flagged sections and submit it for assessment again.
+            The rejection reason stays visible on the claim until it's
+            re-approved, so the capturer knows exactly what to fix.
+          </div>
+        </v-card-text>
+        <v-card-actions class="pa-4 pt-0">
+          <v-spacer />
+          <v-btn variant="text" @click="financeRejectionDialog = false">
+            Cancel
+          </v-btn>
+          <v-btn
+            color="error"
+            :loading="acknowledgingRejection"
+            @click="acknowledgeFinanceRejection"
+          >
+            Acknowledge
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -878,6 +999,27 @@ const communicationDialog = ref(false)
 const confirmDialog = ref(false)
 const documentViewerDialog = ref(false)
 const declineDialog = ref(false)
+const financeRejectionDialog = ref(false)
+const acknowledgingRejection = ref(false)
+
+async function acknowledgeFinanceRejection() {
+  if (!props.claim?.id) return
+  acknowledgingRejection.value = true
+  try {
+    const res = await GroupPricingService.acknowledgeFinanceRejection(
+      props.claim.id
+    )
+    const updated = (res.data && (res.data.data ?? res.data)) || null
+    financeRejectionDialog.value = false
+    if (updated) {
+      emit('update', updated)
+    }
+  } catch (err: any) {
+    console.error('Failed to acknowledge finance rejection', err)
+  } finally {
+    acknowledgingRejection.value = false
+  }
+}
 
 // Form data
 const requestInfoMessage = ref('')
@@ -2045,5 +2187,76 @@ onBeforeUnmount(() => {
 
 .gap-2 > * + * {
   margin-top: 8px;
+}
+
+/* Shared visual language with ClaimPaymentScheduleLayout — same tokens so
+ * the claim detail view reads as part of the same page family. */
+.page-section {
+  margin-bottom: 28px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.section-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: rgb(var(--v-theme-primary));
+}
+
+.section-divider {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    rgba(var(--v-theme-primary), 0.18),
+    rgba(var(--v-theme-primary), 0.02)
+  );
+}
+
+.meta-card {
+  min-height: 96px;
+  transition: border-color 0.15s ease;
+}
+
+.meta-card:hover {
+  border-color: rgba(var(--v-theme-primary), 0.4);
+}
+
+.meta-card__label {
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  margin-bottom: 4px;
+}
+
+.meta-card__value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: rgba(var(--v-theme-on-surface), 0.95);
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.meta-card__value--text {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.meta-card__hint {
+  margin-top: auto;
+  padding-top: 4px;
+  font-size: 0.72rem;
+  color: rgba(var(--v-theme-on-surface), 0.55);
 }
 </style>

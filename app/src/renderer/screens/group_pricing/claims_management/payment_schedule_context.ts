@@ -5,6 +5,23 @@ export interface RiskFlags {
   contestable?: boolean
   recent_reinstatement?: boolean
   fraud_risk_level?: string
+  // Phase 5: cross-claim duplicate signals. Refs arrays carry short
+  // pre-formatted strings ready for the tooltip — never raw rows.
+  id_paid_before?: boolean
+  id_paid_before_refs?: string[]
+  account_used_before?: boolean
+  account_used_before_refs?: string[]
+}
+
+export interface BankVerificationStatus {
+  has_result: boolean
+  status: 'complete' | 'failed' | 'pending' | ''
+  verified: boolean
+  verified_at?: string | null
+  stale: boolean
+  stale_reason?: string
+  provider_request_id?: string
+  last_attempt: number
 }
 
 export interface ScheduleItem {
@@ -40,6 +57,11 @@ export interface ScheduleItem {
   reinsurance_recovery_raised_at?: string
   duplicate_beneficiary_flag?: boolean
   duplicate_beneficiary_cleared?: boolean
+  // Phase 5 — pre-authorisation amount drift
+  approved_amount_snapshot?: number
+  amount_drift_resolved?: boolean
+  amount_drift_resolved_by?: string
+  amount_drift_resolved_at?: string
   bank_name?: string
   bank_branch_code?: string
   bank_account_number?: string

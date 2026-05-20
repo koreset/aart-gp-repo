@@ -708,6 +708,31 @@ func RejectScheduleLineItem(c *gin.Context) {
 	OK(c, schedule)
 }
 
+// AcknowledgeFinanceRejection handles
+// POST /group-pricing/claims/:claim_id/finance-rejection/acknowledge
+//
+// Moves a finance-rejected claim back to under_assessment so the assessor
+// can edit and re-approve. Refuses when the claim isn't currently in
+// finance_rejected status — guards against double-clicks or stale UI.
+func AcknowledgeFinanceRejection(c *gin.Context) {
+	claimID, err := strconv.Atoi(c.Param("claim_id"))
+	if err != nil {
+		BadRequestMsg(c, "invalid claim_id")
+		return
+	}
+	user := c.MustGet("user").(models.AppUser)
+	claim, err := services.AcknowledgeFinanceRejection(claimID, user)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			NotFound(c, "claim not found")
+			return
+		}
+		BadRequest(c, err)
+		return
+	}
+	OK(c, claim)
+}
+
 // FirstAuthorisePaymentSchedule handles POST /claims/payment-schedules/:schedule_id/finance/authorise-first
 func FirstAuthorisePaymentSchedule(c *gin.Context) {
 	id, ok := parseScheduleID(c)

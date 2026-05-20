@@ -67,6 +67,9 @@ func CreatePaymentSchedule(req CreatePaymentScheduleRequest, user models.AppUser
 	for _, c := range claims {
 		lower := strings.ToLower(c.Status)
 		if lower != "approved" && lower != "submitted_for_payment" {
+			if lower == ClaimStatusFinanceRejected {
+				return models.ClaimPaymentSchedule{}, fmt.Errorf("claim %s was finance-rejected and is pending claims acknowledgement — it cannot be added to a new schedule", c.ClaimNumber)
+			}
 			return models.ClaimPaymentSchedule{}, fmt.Errorf("claim %s has status '%s' — only approved claims can be added to a payment schedule", c.ClaimNumber, c.Status)
 		}
 
@@ -113,6 +116,11 @@ func CreatePaymentSchedule(req CreatePaymentScheduleRequest, user models.AppUser
 			LineStatus:                  "pending",
 			ReinsuranceRecoveryRequired: recovery.Required,
 			ReinsuranceRecoveryAmount:   recovery.Amount,
+			// Snapshot the assessor's approved amount so the drift check has
+			// a stable reference point. Zero means "no approval recorded" —
+			// drift is suppressed on legacy claims that pre-date the
+			// approved_amount column.
+			ApprovedAmountSnapshot:  LatestApprovedAmountForClaim(DB, c.ID),
 		})
 	}
 
@@ -409,11 +417,15 @@ func UploadPaymentProof(scheduleID int, fileHeader *multipart.FileHeader, notes 
 	}
 	switch schedule.Status {
 	case "submitted_to_bank", "submitted":
-		// allowed — bank has the payment file; uploading proof closes the loop.
+		// allowed — bank has the in-system ACB payment file; uploading proof closes the loop.
+	case "finance_second_authorised":
+		// allowed — payment was processed outside the in-system ACB flow
+		// (manual EFT, external banking portal, RTGS, etc.). Proof upload
+		// closes the loop without requiring an ACB file to be generated first.
 	case "confirmed":
 		return models.ClaimPaymentProof{}, errors.New("this schedule is already confirmed — payment has been processed")
 	default:
-		return models.ClaimPaymentProof{}, fmt.Errorf("schedule must be submitted to the bank before proof can be uploaded (current status: %s)", schedule.Status)
+		return models.ClaimPaymentProof{}, fmt.Errorf("schedule must be fully authorised before proof can be uploaded (current status: %s)", schedule.Status)
 	}
 
 	// Validate CSV contents before accepting the upload
@@ -474,12 +486,16 @@ func UploadPaymentProof(scheduleID int, fileHeader *multipart.FileHeader, notes 
 		if err := tx.Model(&models.ClaimPaymentSchedule{}).Where("id = ?", scheduleID).Update("status", "confirmed").Error; err != nil {
 			return err
 		}
+		auditNote := fmt.Sprintf("Proof uploaded: %s", fileHeader.Filename)
+		if fromStatus == "finance_second_authorised" {
+			auditNote = fmt.Sprintf("Proof uploaded (ACB bypassed — external payment channel): %s", fileHeader.Filename)
+		}
 		if err := tx.Create(&models.PaymentScheduleAudit{
 			ScheduleID: scheduleID,
 			FromStatus: fromStatus,
 			ToStatus:   "confirmed",
 			Actor:      user.UserName,
-			Notes:      fmt.Sprintf("Proof uploaded: %s", fileHeader.Filename),
+			Notes:      auditNote,
 		}).Error; err != nil {
 			return err
 		}

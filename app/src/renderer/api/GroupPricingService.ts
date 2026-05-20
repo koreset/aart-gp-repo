@@ -2601,6 +2601,39 @@ export default {
       { params }
     )
   },
+  // ----- Finance rejection acknowledgement (Phase 5) -----
+  acknowledgeFinanceRejection(claimId: number | string) {
+    return Api.post(
+      `/group-pricing/claims/${claimId}/finance-rejection/acknowledge`
+    )
+  },
+  // ----- Pre-authorisation verification (Phase 5) -----
+  getLineBankVerification(
+    scheduleId: number | string,
+    itemId: number | string
+  ) {
+    return Api.get(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/items/${itemId}/bank-verification`
+    )
+  },
+  reverifyLineBankAccount(
+    scheduleId: number | string,
+    itemId: number | string
+  ) {
+    return Api.post(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/items/${itemId}/bank-verification/reverify`
+    )
+  },
+  acknowledgeAmountDrift(
+    scheduleId: number | string,
+    itemId: number | string,
+    note?: string
+  ) {
+    return Api.post(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/items/${itemId}/amount-drift/acknowledge`,
+      { note: note || '' }
+    )
+  },
   // ----- Claim payment confirmation letters -----
   getClaimPaymentLetterDocx(claimId: number | string) {
     return Api.get(`/group-pricing/claims/${claimId}/payment-letter.docx`, {

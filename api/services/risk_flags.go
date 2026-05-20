@@ -17,6 +17,14 @@ type RiskFlags struct {
 	Contestable         bool   `json:"contestable"`
 	RecentReinstatement bool   `json:"recent_reinstatement"`
 	FraudRiskLevel      string `json:"fraud_risk_level"`
+	// Cross-claim duplicate signals (Phase 5). Each Refs slice carries a
+	// human-readable list of prior claim references the UI can render in a
+	// tooltip — e.g. "CLM-12345 · R 5,000 · paid". Truncated server-side to
+	// the most recent few entries so the JSON column stays small.
+	IDPaidBefore          bool     `json:"id_paid_before"`
+	IDPaidBeforeRefs      []string `json:"id_paid_before_refs,omitempty"`
+	AccountUsedBefore     bool     `json:"account_used_before"`
+	AccountUsedBeforeRefs []string `json:"account_used_before_refs,omitempty"`
 }
 
 // ComputeRiskFlags derives the risk flags for a claim at schedule-generation
@@ -36,6 +44,13 @@ func ComputeRiskFlags(claim models.GroupSchemeClaim, db *gorm.DB) RiskFlags {
 	flags.RecentReinstatement = false
 	flags.FraudRiskLevel = latestFraudRiskLevel(claim.ID, db)
 
+	// Phase 5: cross-claim duplicate signals. Best-effort — if the lookup
+	// errors (e.g. transient DB blip) we leave the flags clear rather than
+	// blocking the schedule generation.
+	if idHits, accountHits, err := CheckCrossClaimDuplicates(db, claim); err == nil {
+		flags = DecorateRiskFlagsWithCrossClaim(flags, idHits, accountHits)
+	}
+
 	return flags
 }
 
@@ -47,6 +62,20 @@ func MarshalRiskFlags(f RiskFlags) models.JSON {
 		return models.JSON("{}")
 	}
 	return models.JSON(b)
+}
+
+// UnmarshalRiskFlags is the inverse of MarshalRiskFlags. Returns a zero-value
+// RiskFlags (all defaults) when the input is empty or malformed so callers
+// don't need to plumb errors through every read site.
+func UnmarshalRiskFlags(raw models.JSON) RiskFlags {
+	var f RiskFlags
+	if len(raw) == 0 {
+		return f
+	}
+	if err := json.Unmarshal([]byte(raw), &f); err != nil {
+		return RiskFlags{}
+	}
+	return f
 }
 
 // bankingChangedRecently looks for a status audit row mentioning a banking

@@ -135,7 +135,7 @@
               <!-- Conditional notices (locked, duplicates, sanctions) -->
               <v-alert
                 v-if="schedule.locked_at"
-                type="info"
+                color="primary"
                 variant="tonal"
                 density="compact"
                 class="mb-4"

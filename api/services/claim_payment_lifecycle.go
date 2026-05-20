@@ -172,20 +172,30 @@ func VerifyLineItem(scheduleID, itemID int, user models.AppUser) (models.ClaimPa
 // from the schedule and the underlying claim is returned to "approved" so it
 // can be picked up on the next cut-off after claims has resolved the issue.
 // The schedule's totals are recomputed.
+// ClaimStatusFinanceRejected is the terminal status applied to a claim when
+// finance rejects its payment-schedule line. The claim is held out of the
+// auto cut-off scheduler until an assessor explicitly acknowledges via the
+// AcknowledgeFinanceRejection endpoint.
+const ClaimStatusFinanceRejected = "finance_rejected"
+
 func QueryLineItem(scheduleID, itemID int, req QueryRequest, user models.AppUser) error {
 	return removeLineItem(scheduleID, itemID, "queried", req, user)
 }
 
-// RejectLineItem rejects a line outright — same removal flow as a query but
-// the audit row records the harsher outcome.
+// RejectLineItem rejects a line outright. Unlike a query (which sends the
+// claim back to "approved" for the next cut-off), rejection marks the
+// underlying claim as "finance_rejected" and snapshots the reason onto the
+// claim so the claim-side banner can render without joining audits. The
+// claim is held until an assessor acknowledges.
 func RejectLineItem(scheduleID, itemID int, req QueryRequest, user models.AppUser) error {
 	return removeLineItem(scheduleID, itemID, "rejected", req, user)
 }
 
 // removeLineItem is the shared body for query/reject. The line row is kept
-// (LineStatus updated; ScheduleID retained for historical lookup) but the
-// schedule totals are recomputed to exclude it, and the underlying claim is
-// returned to "approved".
+// (LineStatus updated; ScheduleID retained for historical lookup) and the
+// schedule totals are recomputed to exclude it. The underlying claim is
+// returned to "approved" for a query, or moved to "finance_rejected" for a
+// rejection.
 func removeLineItem(scheduleID, itemID int, outcome string, req QueryRequest, user models.AppUser) error {
 	if strings.TrimSpace(req.ReasonCode) == "" {
 		return errors.New("reason_code is required")
@@ -236,20 +246,42 @@ func removeLineItem(scheduleID, itemID int, outcome string, req QueryRequest, us
 			return err
 		}
 
-		// Return the underlying claim to "approved" with an audit trail.
+		// Transition the underlying claim depending on the line outcome.
+		// Query → "approved" (claim eligible for next cut-off, current behaviour).
+		// Reject → "finance_rejected" (held until an assessor acknowledges; the
+		// reason is snapshotted onto the claim so the banner can render from
+		// the claim row alone).
 		var claim models.GroupSchemeClaim
 		if err := tx.Select("id, status, claim_number").First(&claim, item.ClaimID).Error; err == nil {
+			newStatus := "approved"
+			statusMessage := fmt.Sprintf("Returned from payment schedule %s — %s (%s)", schedule.ScheduleNumber, outcome, req.ReasonCode)
+			updates := map[string]interface{}{"status": newStatus}
+
+			if outcome == "rejected" {
+				newStatus = ClaimStatusFinanceRejected
+				statusMessage = fmt.Sprintf("Finance rejected via schedule %s — %s: %s", schedule.ScheduleNumber, req.ReasonCode, req.Notes)
+				rejectedAt := now
+				updates = map[string]interface{}{
+					"status":                            newStatus,
+					"finance_rejected_at":               &rejectedAt,
+					"finance_rejected_by":               user.UserName,
+					"finance_rejection_reason_code":     req.ReasonCode,
+					"finance_rejection_notes":           req.Notes,
+					"finance_rejection_schedule_number": schedule.ScheduleNumber,
+				}
+			}
+
 			if err := tx.Create(&models.GroupSchemeClaimStatusAudit{
 				ClaimID:       claim.ID,
 				OldStatus:     claim.Status,
-				NewStatus:     "approved",
-				StatusMessage: fmt.Sprintf("Returned from payment schedule %s — %s (%s)", schedule.ScheduleNumber, outcome, req.ReasonCode),
+				NewStatus:     newStatus,
+				StatusMessage: statusMessage,
 				ChangedBy:     user.UserName,
 				ChangedAt:     now,
 			}).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&models.GroupSchemeClaim{}).Where("id = ?", claim.ID).Update("status", "approved").Error; err != nil {
+			if err := tx.Model(&models.GroupSchemeClaim{}).Where("id = ?", claim.ID).Updates(updates).Error; err != nil {
 				return err
 			}
 		}
@@ -270,6 +302,71 @@ func removeLineItem(scheduleID, itemID int, outcome string, req QueryRequest, us
 
 		return recordAudit(tx, scheduleID, schedule.Status, schedule.Status, user.UserName, fmt.Sprintf("Line %s (%s): %s", item.ClaimNumber, outcome, req.ReasonCode))
 	})
+}
+
+// AcknowledgeFinanceRejection moves a claim out of finance_rejected and back
+// to "draft" — separation of duties means the capturer (claims:lodge) edits
+// the fields that finance flagged (banking, amount, etc.) and then submits
+// the claim for assessment again. The assessor then re-runs assessment and
+// approval. This keeps each role bounded to its own workflow stage.
+//
+// The finance_rejection_* snapshot columns are intentionally retained so the
+// capturer can see exactly what finance flagged while editing. They're
+// cleared the next time the claim is re-approved (handled in
+// UpdateClaimAssessment).
+//
+// Also marks any open ClaimPaymentScheduleQuery rows tied to this rejection
+// as "resolved" with the actor / timestamp, so the analytics view stays
+// honest.
+func AcknowledgeFinanceRejection(claimID int, user models.AppUser) (models.GroupSchemeClaim, error) {
+	var claim models.GroupSchemeClaim
+	if err := DB.First(&claim, claimID).Error; err != nil {
+		return claim, err
+	}
+	if !strings.EqualFold(claim.Status, ClaimStatusFinanceRejected) {
+		return claim, fmt.Errorf("claim %s is not finance-rejected (current status: %s)", claim.ClaimNumber, claim.Status)
+	}
+
+	now := time.Now()
+	if err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.GroupSchemeClaim{}).
+			Where("id = ?", claim.ID).
+			Update("status", "draft").Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&models.GroupSchemeClaimStatusAudit{
+			ClaimID:       claim.ID,
+			OldStatus:     ClaimStatusFinanceRejected,
+			NewStatus:     "draft",
+			StatusMessage: "Finance rejection acknowledged — claim returned to capturer for amendment and re-submission for assessment",
+			ChangedBy:     user.UserName,
+			ChangedAt:     now,
+		}).Error; err != nil {
+			return err
+		}
+		// Best-effort: close any open queries for this claim raised against
+		// the rejection. We resolve every open "rejected" outcome row so the
+		// analytics view shows the loop closed; if no rows exist the update
+		// is a no-op.
+		if err := tx.Model(&models.ClaimPaymentScheduleQuery{}).
+			Where("claim_id = ? AND outcome = ?", claim.ID, "rejected").
+			Where("(resolved_at IS NULL OR resolved_at = ?)", time.Time{}).
+			Updates(map[string]interface{}{
+				"resolved_by": user.UserName,
+				"resolved_at": &now,
+			}).Error; err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		return claim, err
+	}
+
+	// Reload so the controller returns the updated row.
+	if err := DB.First(&claim, claimID).Error; err != nil {
+		return claim, err
+	}
+	return claim, nil
 }
 
 // ResolveScheduleQuery marks an open query as resolved, stamping the resolver
@@ -338,6 +435,9 @@ func FinanceFirstAuthorise(scheduleID int, user models.AppUser) (models.ClaimPay
 	}
 	if dupes, err := outstandingDuplicateBeneficiaries(scheduleID); err == nil && len(dupes) > 0 {
 		return schedule, fmt.Errorf("duplicate beneficiary across this schedule on: %s — review and clear each flag", strings.Join(dupes, ", "))
+	}
+	if drifts, err := outstandingAmountDrifts(scheduleID); err == nil && len(drifts) > 0 {
+		return schedule, fmt.Errorf("amount drift outstanding on: %s — acknowledge or query each line before authorising", strings.Join(drifts, ", "))
 	}
 	if missing, err := outstandingReinsuranceRecoveries(scheduleID); err == nil && len(missing) > 0 {
 		return schedule, fmt.Errorf("reinsurance recovery not yet raised for: %s — record the recovery before authorising", strings.Join(missing, ", "))

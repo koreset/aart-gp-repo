@@ -3937,6 +3937,16 @@ type GroupSchemeClaim struct {
 	Declines []GroupSchemeClaimDecline `json:"declines" gorm:"foreignKey:ClaimID;references:ID"`
 	// StatusAudits keeps the history of status changes for this claim
 	StatusAudits []GroupSchemeClaimStatusAudit `json:"status_audits" gorm:"foreignKey:ClaimID;references:ID"`
+	// Finance rejection snapshot (Phase 5). Populated when a payment-schedule
+	// line is rejected by finance — the claim moves to status="finance_rejected"
+	// and these columns carry the reason / actor / source schedule so the
+	// claim detail view can render a banner without joining audit tables. The
+	// columns are cleared the next time the claim is re-approved.
+	FinanceRejectedAt              *time.Time `json:"finance_rejected_at"`
+	FinanceRejectedBy              string     `json:"finance_rejected_by"`
+	FinanceRejectionReasonCode     string     `json:"finance_rejection_reason_code"`
+	FinanceRejectionNotes          string     `json:"finance_rejection_notes"`
+	FinanceRejectionScheduleNumber string     `json:"finance_rejection_schedule_number"`
 }
 
 type SupportingDocument struct {
@@ -4013,6 +4023,12 @@ type GroupSchemeClaimAssessment struct {
 	AssessmentDate        string      `json:"assessment_date"`
 	AssessmentOutcome     string      `json:"assessment_outcome"`
 	RecommendedAmount     float64     `json:"recommended_amount"`
+	// Approval audit — populated by Create/UpdateClaimAssessment when the
+	// outcome lands on "approved" or "partial_approval". This is the frozen
+	// figure the pre-authorisation drift check compares against.
+	ApprovedAmount        float64     `json:"approved_amount"`
+	ApprovedAt            *time.Time  `json:"approved_at"`
+	ApprovedBy            string      `json:"approved_by"`
 	MedicalOfficer        string      `json:"medical_officer"`
 	MedicalAssessmentDate *string     `json:"medical_assessment_date"`
 	DisabilityPercentage  *string     `json:"disability_percentage"`
@@ -4181,6 +4197,16 @@ type ClaimPaymentScheduleItem struct {
 	// manually cleared before first authorisation.
 	DuplicateBeneficiaryFlag    bool       `json:"duplicate_beneficiary_flag"`
 	DuplicateBeneficiaryCleared bool       `json:"duplicate_beneficiary_cleared"`
+	// Pre-authorisation amount-drift fields (Phase 5).
+	// ApprovedAmountSnapshot freezes assessment.ApprovedAmount at the moment
+	// the schedule is generated so finance can see what the assessor approved
+	// even if the assessment is later edited. Drift = GrossAmount minus this
+	// snapshot. AmountDriftResolved is stamped when finance acknowledges the
+	// drift (must happen before first authorisation when drift is non-zero).
+	ApprovedAmountSnapshot   float64    `json:"approved_amount_snapshot"`
+	AmountDriftResolved      bool       `json:"amount_drift_resolved"`
+	AmountDriftResolvedBy    string     `json:"amount_drift_resolved_by"`
+	AmountDriftResolvedAt    *time.Time `json:"amount_drift_resolved_at"`
 	CreatedAt                   time.Time  `json:"created_at" gorm:"autoCreateTime"`
 }
 
