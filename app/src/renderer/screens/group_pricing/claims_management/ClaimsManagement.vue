@@ -223,6 +223,14 @@
       </v-card>
     </v-dialog>
 
+    <!-- Payment Letter Dialog (for paid claims) -->
+    <payment-letter-dialog
+      v-model="paymentLetterDialog"
+      :claim-id="paymentLetterClaim?.id ?? null"
+      :claimant-email="paymentLetterClaim?.claimant_email ?? ''"
+      :claimant-phone="paymentLetterClaim?.claimant_contact_number ?? ''"
+    />
+
     <!-- Snackbar for notifications -->
     <v-snackbar v-model="snackbar" :color="snackbarColor" :timeout="3000">
       {{ snackbarMessage }}
@@ -245,6 +253,7 @@ import EmptyState from '@/renderer/components/EmptyState.vue'
 import DataGrid from '@/renderer/components/tables/DataGrid.vue'
 import RegisterClaimDialog from './components/RegisterClaimDialog.vue'
 import BulkClaimsUpload from './components/BulkClaimsUpload.vue'
+import PaymentLetterDialog from './components/PaymentLetterDialog.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import { statusCellRenderer } from '@/renderer/utils/statusCellRenderer'
 import { currencyFormatter, dateFormatter } from '@/renderer/utils/formatters'
@@ -296,6 +305,13 @@ const router = useRouter()
 const newClaimDialog = ref(false)
 const bulkUploadDialog = ref(false)
 const confirmDialog = ref(false)
+const paymentLetterDialog = ref(false)
+const paymentLetterClaim = ref<any>(null)
+
+function openPaymentLetter(claim: any) {
+  paymentLetterClaim.value = claim
+  paymentLetterDialog.value = true
+}
 
 // Filter states
 const searchQuery = ref('')
@@ -439,6 +455,24 @@ const claimsColumnDefs = [
     pinned: 'right' as const,
     minWidth: 160,
     cellRenderer: (params: any) => statusCellRenderer(params.value)
+  },
+  {
+    headerName: 'Letter',
+    width: 90,
+    minWidth: 90,
+    sortable: false,
+    filter: false,
+    resizable: false,
+    pinned: 'right' as const,
+    cellRenderer: (params: any) => {
+      if (params.data?.status !== 'paid') return ''
+      return `<button data-action="letter" title="Payment confirmation letter" style="background:transparent;border:none;cursor:pointer;color:#1976D2;font-size:18px;line-height:1">📄</button>`
+    },
+    onCellClicked: (params: any) => {
+      if (params.data?.status === 'paid' && hasPermission('claims_pay:generate_letter')) {
+        openPaymentLetter(params.data)
+      }
+    }
   }
 ]
 

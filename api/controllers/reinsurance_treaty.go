@@ -3,6 +3,7 @@ package controllers
 import (
 	"api/models"
 	"api/services"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -83,6 +84,10 @@ func DeleteTreaty(c *gin.Context) {
 		return
 	}
 	if err := services.DeleteTreaty(id); err != nil {
+		if errors.Is(err, services.ErrTreatyNotDeletable) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -104,6 +109,10 @@ func LinkSchemeToTreaty(c *gin.Context) {
 	}
 	link, err := services.LinkSchemeToTreaty(treatyID, req, user)
 	if err != nil {
+		if errors.Is(err, services.ErrSchemeTreatyConflict) {
+			BadRequest(c, err)
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -125,10 +134,27 @@ func BulkLinkSchemesToTreaty(c *gin.Context) {
 	}
 	created, err := services.BulkLinkSchemesToTreaty(treatyID, req, user)
 	if err != nil {
+		if errors.Is(err, services.ErrSchemeTreatyConflict) {
+			BadRequest(c, err)
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("%d scheme(s) linked", created), "data": created})
+}
+
+// ListSchemeTreatyConflicts handles GET /group-pricing/reinsurance/treaties/scheme-link-conflicts.
+// Returns every (scheme, line_of_business, treaty_type) tuple that has ≥2
+// active treaty links. Drives the conflict banner + report on the Treaty
+// Management screen so admins can clean up legacy data.
+func ListSchemeTreatyConflicts(c *gin.Context) {
+	conflicts, err := services.ListAllSchemeTreatyConflicts(nil)
+	if err != nil {
+		InternalError(c, err)
+		return
+	}
+	OK(c, gin.H{"count": len(conflicts), "conflicts": conflicts})
 }
 
 // GetTreatySchemeLinks handles GET /group-pricing/reinsurance/treaties/:id/schemes

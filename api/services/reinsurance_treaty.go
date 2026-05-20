@@ -165,8 +165,17 @@ func UpdateTreaty(id int, req models.UpdateTreatyRequest, user models.AppUser) (
 	if req.RenewalDate != "" {
 		t.RenewalDate = req.RenewalDate
 	}
-	if req.Status != "" {
+	if req.Status != "" && req.Status != t.Status {
+		prev := t.Status
 		t.Status = req.Status
+		now := time.Now()
+		if req.Status == "active" {
+			t.ActivatedBy = user.UserName
+			t.ActivatedAt = &now
+		} else if prev == "active" {
+			t.DeactivatedBy = user.UserName
+			t.DeactivatedAt = &now
+		}
 	}
 	if req.Currency != "" {
 		t.Currency = req.Currency
@@ -316,16 +325,38 @@ func UpdateTreaty(id int, req models.UpdateTreatyRequest, user models.AppUser) (
 	return t, nil
 }
 
-// DeleteTreaty deletes a treaty by ID
+// ErrTreatyNotDeletable is returned when a non-draft treaty deletion is attempted.
+// Once a treaty has been activated, it must be deactivated (kept for traceability) rather than deleted.
+var ErrTreatyNotDeletable = fmt.Errorf("only draft treaties can be deleted; deactivate active or historical treaties instead")
+
+// DeleteTreaty deletes a treaty by ID. Only treaties in 'draft' status are deletable.
 func DeleteTreaty(id int) error {
+	t, err := GetTreatyByID(id)
+	if err != nil {
+		return err
+	}
+	if t.Status != "draft" {
+		return ErrTreatyNotDeletable
+	}
 	if err := DB.Delete(&models.ReinsuranceTreaty{}, id).Error; err != nil {
 		return fmt.Errorf("failed to delete treaty: %w", err)
 	}
 	return nil
 }
 
-// LinkSchemeToTreaty creates a scheme–treaty link
+// LinkSchemeToTreaty creates a scheme–treaty link. Rejects with
+// ErrSchemeTreatyConflict (wrapped via FormatConflictError) when the
+// requested scheme is already on another active treaty of the same
+// (line_of_business, treaty_type).
 func LinkSchemeToTreaty(treatyID int, req models.LinkSchemeRequest, user models.AppUser) (models.TreatySchemeLink, error) {
+	conflicts, err := FindConflictsForNewLinks(DB, treatyID, []int{req.SchemeID})
+	if err != nil {
+		return models.TreatySchemeLink{}, fmt.Errorf("failed to check scheme-treaty conflicts: %w", err)
+	}
+	if cErr := FormatConflictError(conflicts); cErr != nil {
+		return models.TreatySchemeLink{}, cErr
+	}
+
 	link := models.TreatySchemeLink{
 		TreatyID:        treatyID,
 		SchemeID:        req.SchemeID,
@@ -341,8 +372,20 @@ func LinkSchemeToTreaty(treatyID int, req models.LinkSchemeRequest, user models.
 	return link, nil
 }
 
-// BulkLinkSchemesToTreaty links multiple schemes to a treaty in one operation, skipping already-linked ones
+// BulkLinkSchemesToTreaty links multiple schemes to a treaty in one
+// operation, skipping already-linked ones. Rejects the WHOLE batch with
+// ErrSchemeTreatyConflict when any requested scheme is already on another
+// active treaty of the same (line_of_business, treaty_type); the error
+// names every conflicting scheme so the admin can fix them in one pass.
 func BulkLinkSchemesToTreaty(treatyID int, req models.BulkLinkSchemesRequest, user models.AppUser) (int, error) {
+	conflicts, err := FindConflictsForNewLinks(DB, treatyID, req.SchemeIDs)
+	if err != nil {
+		return 0, fmt.Errorf("failed to check scheme-treaty conflicts: %w", err)
+	}
+	if cErr := FormatConflictError(conflicts); cErr != nil {
+		return 0, cErr
+	}
+
 	created := 0
 	for _, schemeID := range req.SchemeIDs {
 		var existing int64

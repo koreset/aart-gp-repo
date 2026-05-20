@@ -20,8 +20,13 @@ type ReinsuranceTreaty struct {
 	ExpiryDate     string `json:"expiry_date" gorm:"default:''"`
 	RenewalDate    string `json:"renewal_date" gorm:"default:''"`
 	// Status: draft | active | expired | cancelled | under_negotiation
-	Status   string `json:"status" gorm:"default:'draft'"`
-	Currency string `json:"currency" gorm:"default:'ZAR'"`
+	Status string `json:"status" gorm:"default:'draft'"`
+	// TreatyBasis: risk_attaching | loss_occurring.
+	// risk_attaching → matches against the member's EntryDate (policy inception).
+	// loss_occurring → matches against the claim's DateOfEvent.
+	// Default is risk_attaching (the SA group-life norm).
+	TreatyBasis string `json:"treaty_basis" gorm:"default:'risk_attaching';size:32"`
+	Currency    string `json:"currency" gorm:"default:'ZAR'"`
 	// RetentionType: fixed_amount | percentage
 	RetentionType        string  `json:"retention_type" gorm:"default:'percentage'"`
 	RetentionAmount      float64 `json:"retention_amount" gorm:"default:0"`
@@ -77,10 +82,14 @@ type ReinsuranceTreaty struct {
 	IsRunOff        bool      `json:"is_run_off" gorm:"default:false"`
 	RunOffStartDate string    `json:"run_off_start_date" gorm:"default:''"`
 	Notes           string    `json:"notes" gorm:"type:text"`
-	CreatedBy       string    `json:"created_by" gorm:"default:''"`
-	UpdatedBy       string    `json:"updated_by" gorm:"default:''"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	CreatedBy       string     `json:"created_by" gorm:"default:''"`
+	UpdatedBy       string     `json:"updated_by" gorm:"default:''"`
+	ActivatedBy     string     `json:"activated_by" gorm:"default:''"`
+	ActivatedAt     *time.Time `json:"activated_at"`
+	DeactivatedBy   string     `json:"deactivated_by" gorm:"default:''"`
+	DeactivatedAt   *time.Time `json:"deactivated_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 // TreatySchemeLink links a scheme to a reinsurance treaty with optional cession override

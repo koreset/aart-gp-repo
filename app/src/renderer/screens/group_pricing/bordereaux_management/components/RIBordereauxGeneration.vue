@@ -91,6 +91,7 @@
                       variant="outlined"
                       density="compact"
                       clearable
+                      no-data-text="No active treaties. Activate a treaty on the RI Treaty Management tab."
                       @update:model-value="loadRuns"
                     />
                   </v-col>
@@ -166,6 +167,13 @@
                 label="Treaty *"
                 variant="outlined"
                 density="compact"
+                no-data-text="No active treaties. Activate a treaty on the RI Treaty Management tab."
+                :hint="
+                  activeTreaties.length === 0
+                    ? 'No active treaties yet — activate a treaty on the RI Treaty Management tab first.'
+                    : ''
+                "
+                persistent-hint
                 @update:model-value="onGenTreatySelected"
               />
             </v-col>

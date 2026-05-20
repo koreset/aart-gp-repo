@@ -72,6 +72,7 @@ func CreatePaymentSchedule(req CreatePaymentScheduleRequest, user models.AppUser
 
 		deductions := ComputeDeductions(c, DB)
 		flags := ComputeRiskFlags(c, DB)
+		recovery := ComputeReinsuranceRecovery(c, DB)
 		net := c.ClaimAmount - deductions.Total()
 		grossTotal += c.ClaimAmount
 		deductionsTotal += deductions.Total()
@@ -107,9 +108,11 @@ func CreatePaymentSchedule(req CreatePaymentScheduleRequest, user models.AppUser
 			BankAccountNumber:       c.BankAccountNumber,
 			BankAccountType:         c.BankAccountType,
 			AccountHolderName:       c.AccountHolderName,
-			RiskFlags:               MarshalRiskFlags(flags),
-			ApprovalReference:       buildApprovalReference(c, DB),
-			LineStatus:              "pending",
+			RiskFlags:                   MarshalRiskFlags(flags),
+			ApprovalReference:           buildApprovalReference(c, DB),
+			LineStatus:                  "pending",
+			ReinsuranceRecoveryRequired: recovery.Required,
+			ReinsuranceRecoveryAmount:   recovery.Amount,
 		})
 	}
 

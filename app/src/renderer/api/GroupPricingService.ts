@@ -1968,6 +1968,9 @@ export default {
       `/group-pricing/reinsurance/treaties/active/scheme/${schemeId}`
     )
   },
+  getSchemeTreatyConflicts() {
+    return Api.get('/group-pricing/reinsurance/treaties/scheme-link-conflicts')
+  },
 
   // RI Bordereaux Generation
   generateRIMemberBordereaux(data) {
@@ -2597,5 +2600,45 @@ export default {
       null,
       { params }
     )
+  },
+  // ----- Claim payment confirmation letters -----
+  getClaimPaymentLetterDocx(claimId: number | string) {
+    return Api.get(`/group-pricing/claims/${claimId}/payment-letter.docx`, {
+      responseType: 'blob'
+    })
+  },
+  getClaimPaymentLetterPdf(claimId: number | string) {
+    return Api.get(`/group-pricing/claims/${claimId}/payment-letter.pdf`, {
+      responseType: 'blob'
+    })
+  },
+  getClaimPaymentLetterHistory(claimId: number | string) {
+    return Api.get(`/group-pricing/claims/${claimId}/payment-letter/history`)
+  },
+  sendClaimPaymentLetter(
+    claimId: number | string,
+    payload: { letter_id: number; channel: string; recipient?: string }
+  ) {
+    return Api.post(
+      `/group-pricing/claims/${claimId}/payment-letter/send`,
+      payload
+    )
+  },
+  getScheduleLetterBundle(
+    scheduleId: number | string,
+    format: 'docx' | 'pdf' = 'docx'
+  ) {
+    return Api.get(
+      `/group-pricing/claims/payment-schedules/${scheduleId}/payment-letters.zip`,
+      { params: { format }, responseType: 'blob' }
+    )
+  },
+  getPaymentLetterSettings() {
+    return Api.get('/group-pricing/settings/payment-letter')
+  },
+  updatePaymentLetterSettings(formData: FormData) {
+    return Api.put('/group-pricing/settings/payment-letter', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
   }
 }

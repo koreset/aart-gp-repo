@@ -270,6 +270,19 @@
                 />
               </v-col>
             </v-row>
+            <v-row>
+              <v-col cols="12" md="6">
+                <v-text-field
+                  v-model="formData.claimant_email"
+                  label="Email Address"
+                  hint="Used to email payment confirmation letters and other correspondence"
+                  persistent-hint
+                  variant="outlined"
+                  density="compact"
+                  :rules="formData.claimant_email ? [rules.email] : []"
+                />
+              </v-col>
+            </v-row>
           </v-card-text>
         </v-card>
       </v-col>
@@ -1265,6 +1278,7 @@ const formData = ref({
   claimant_id_number: '',
   relationship_to_member: '',
   claimant_contact_number: '',
+  claimant_email: '',
   bank_name: '',
   bank_branch_code: '',
   bank_account_number: '',
@@ -1630,6 +1644,10 @@ const rules = {
   numericOnly: (value: string) => {
     if (!value) return true
     return /^\d+$/.test(value) || 'Only numeric characters allowed'
+  },
+  email: (value: string) => {
+    if (!value) return true
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) || 'Invalid email address'
   },
   eventDateMin: (value: string) => {
     if (!value) return true
@@ -2113,6 +2131,7 @@ watch(requiresClaimantInfo, (needsClaimant) => {
     formData.value.claimant_id_number = ''
     formData.value.relationship_to_member = ''
     formData.value.claimant_contact_number = ''
+    formData.value.claimant_email = ''
   }
 })
 
@@ -2177,6 +2196,7 @@ const hydrateFromClaim = (claim: ExistingClaim) => {
     claimant_id_number: claim.claimant_id_number || '',
     relationship_to_member: claim.relationship_to_member || '',
     claimant_contact_number: claim.claimant_contact_number || '',
+    claimant_email: claim.claimant_email || '',
     bank_name: claim.bank_name || '',
     bank_branch_code: claim.bank_branch_code || '',
     bank_account_number: claim.bank_account_number || '',

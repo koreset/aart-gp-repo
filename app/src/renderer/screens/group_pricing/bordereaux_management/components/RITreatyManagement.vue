@@ -91,6 +91,32 @@
               </v-col>
             </v-row>
 
+            <!-- Scheme-treaty conflict banner -->
+            <v-alert
+              v-if="conflictCount > 0"
+              type="warning"
+              variant="tonal"
+              density="compact"
+              class="mb-4"
+              icon="mdi-alert-circle-outline"
+            >
+              <div class="d-flex align-center justify-space-between">
+                <div>
+                  <strong>{{ conflictCount }} scheme(s)</strong> have
+                  conflicting active treaty links (same line of business and
+                  treaty type). New links to these schemes will be blocked
+                  until the conflicts are resolved.
+                </div>
+                <v-btn
+                  variant="text"
+                  size="small"
+                  @click="showConflictDialog = true"
+                >
+                  Review
+                </v-btn>
+              </div>
+            </v-alert>
+
             <!-- Filters -->
             <v-card variant="outlined" class="mb-4">
               <v-card-text>
@@ -181,6 +207,26 @@
           editingTreaty ? 'Edit Treaty' : 'New Reinsurance Treaty'
         }}</v-card-title>
         <v-card-text>
+          <v-alert
+            v-if="editingTreaty && (form.activated_by || form.deactivated_by)"
+            type="info"
+            variant="tonal"
+            density="compact"
+            class="mb-4"
+          >
+            <div v-if="form.activated_by" class="text-body-2">
+              <strong>Activated</strong> by {{ form.activated_by }}
+              <span v-if="form.activated_at"
+                >on {{ formatDateTime(form.activated_at) }}</span
+              >
+            </div>
+            <div v-if="form.deactivated_by" class="text-body-2">
+              <strong>Deactivated</strong> by {{ form.deactivated_by }}
+              <span v-if="form.deactivated_at"
+                >on {{ formatDateTime(form.deactivated_at) }}</span
+              >
+            </div>
+          </v-alert>
           <v-form ref="treatyForm">
             <v-row>
               <v-col cols="12" sm="6">
@@ -258,6 +304,17 @@
                   label="Line of Business"
                   variant="outlined"
                   density="compact"
+                />
+              </v-col>
+              <v-col cols="12" sm="6">
+                <v-select
+                  v-model="form.treaty_basis"
+                  :items="basisOptions"
+                  label="Treaty Basis"
+                  variant="outlined"
+                  density="compact"
+                  hint="Risk attaching → matches member entry date. Loss occurring → matches claim date of event."
+                  persistent-hint
                 />
               </v-col>
               <v-col cols="12" sm="6">
@@ -1072,6 +1129,100 @@
       </v-card>
     </v-dialog>
 
+    <!-- Activate Confirm -->
+    <!-- Scheme-treaty conflict report -->
+    <v-dialog v-model="showConflictDialog" max-width="720" scrollable>
+      <v-card>
+        <v-card-title>Scheme-Treaty Conflicts</v-card-title>
+        <v-card-text style="max-height: 60vh">
+          <p class="text-body-2 mb-3">
+            Each row shows a scheme that is currently linked to more than one
+            active treaty of the same line of business and treaty type. Unlink
+            the scheme from one of the listed treaties to resolve the
+            conflict.
+          </p>
+          <v-list density="compact">
+            <v-list-item
+              v-for="c in conflicts"
+              :key="`${c.scheme_id}-${c.line_of_business}-${c.treaty_type}`"
+              class="mb-2"
+            >
+              <v-list-item-title class="text-body-2 font-weight-medium">
+                {{ c.scheme_name || `Scheme #${c.scheme_id}` }}
+                <span class="text-caption text-medium-emphasis ms-2">
+                  ({{ c.line_of_business }} / {{ c.treaty_type }})
+                </span>
+              </v-list-item-title>
+              <v-list-item-subtitle class="mt-1">
+                <v-chip
+                  v-for="t in c.treaties"
+                  :key="t.treaty_id"
+                  size="x-small"
+                  variant="outlined"
+                  class="me-1"
+                >
+                  {{ t.treaty_number }}
+                  <span v-if="t.treaty_name" class="ms-1 text-medium-emphasis">
+                    — {{ t.treaty_name }}
+                  </span>
+                </v-chip>
+              </v-list-item-subtitle>
+            </v-list-item>
+          </v-list>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="showConflictDialog = false">
+            Close
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="showActivateDialog" max-width="420">
+      <v-card>
+        <v-card-title>Activate Treaty</v-card-title>
+        <v-card-text>
+          Activate <strong>{{ activatingTreaty?.treaty_name }}</strong
+          >? Active treaties become available for RI bordereaux generation.
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="showActivateDialog = false"
+            >Cancel</v-btn
+          >
+          <v-btn color="success" :loading="activating" @click="confirmActivate"
+            >Activate</v-btn
+          >
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Deactivate Confirm -->
+    <v-dialog v-model="showDeactivateDialog" max-width="460">
+      <v-card>
+        <v-card-title>Deactivate Treaty</v-card-title>
+        <v-card-text>
+          Deactivate <strong>{{ deactivatingTreaty?.treaty_name }}</strong
+          >? The treaty will be marked as <strong>Cancelled</strong> and removed
+          from bordereaux generation, but kept on record for traceability.
+          Activated treaties cannot be deleted.
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="showDeactivateDialog = false"
+            >Cancel</v-btn
+          >
+          <v-btn
+            color="warning"
+            :loading="deactivating"
+            @click="confirmDeactivate"
+            >Deactivate</v-btn
+          >
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- Delete Confirm -->
     <v-dialog v-model="showDeleteDialog" max-width="420">
       <v-card>
@@ -1135,10 +1286,16 @@ const filters = ref({
 const showFormDialog = ref(false)
 const showSchemesDialog = ref(false)
 const showDeleteDialog = ref(false)
+const showActivateDialog = ref(false)
+const showDeactivateDialog = ref(false)
 const showBulkUnlinkDialog = ref(false)
 const editingTreaty = ref(null)
 const selectedTreaty = ref(null)
 const deletingTreaty = ref(null)
+const activatingTreaty = ref(null)
+const activating = ref(false)
+const deactivatingTreaty = ref(null)
+const deactivating = ref(false)
 const selectedLinkRows = ref([])
 const snackbar = ref({ show: false, message: '', color: 'success' })
 
@@ -1180,6 +1337,7 @@ const defaultForm = () => ({
   broker_name: '',
   treaty_type: 'proportional',
   line_of_business: 'group_life',
+  treaty_basis: 'risk_attaching',
   effective_date: '',
   expiry_date: '',
   renewal_date: '',
@@ -1581,6 +1739,16 @@ const lobOptions = [
   { title: 'Group Health', value: 'group_health' },
   { title: 'Credit Life', value: 'credit_life' }
 ]
+const basisOptions = [
+  {
+    title: 'Risk Attaching (policy inception within treaty period)',
+    value: 'risk_attaching'
+  },
+  {
+    title: 'Loss Occurring (date of loss within treaty period)',
+    value: 'loss_occurring'
+  }
+]
 
 // Helper function to parse formatted currency values
 const parseFormattedNumber = (val) => {
@@ -1763,6 +1931,19 @@ const formatCurrency = (v) =>
     ? 'R ' + Number(v).toLocaleString('en-ZA', { minimumFractionDigits: 0 })
     : '—'
 
+const formatDateTime = (v) => {
+  if (!v) return ''
+  const d = new Date(v)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleString('en-ZA', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 const columnDefs = [
   { field: 'treaty_number', headerName: 'Treaty No.', width: 140 },
   { field: 'treaty_name', headerName: 'Name', flex: 1, minWidth: 160 },
@@ -1783,7 +1964,17 @@ const columnDefs = [
     width: 120,
     cellRenderer: (p) => {
       const c = statusColor[p.value] || 'grey'
-      return `<v-chip style="padding:2px 8px;border-radius:12px;font-size:12px;background:var(--v-theme-${c}20);color:var(--v-theme-${c})">${p.value}</v-chip>`
+      const parts = []
+      if (p.data?.activated_by)
+        parts.push(
+          `Activated by ${p.data.activated_by}${p.data.activated_at ? ' on ' + formatDateTime(p.data.activated_at) : ''}`
+        )
+      if (p.data?.deactivated_by)
+        parts.push(
+          `Deactivated by ${p.data.deactivated_by}${p.data.deactivated_at ? ' on ' + formatDateTime(p.data.deactivated_at) : ''}`
+        )
+      const title = parts.join('\n').replace(/"/g, '&quot;')
+      return `<v-chip title="${title}" style="padding:2px 8px;border-radius:12px;font-size:12px;background:var(--v-theme-${c}20);color:var(--v-theme-${c})">${p.value}</v-chip>`
     }
   },
   {
@@ -1828,9 +2019,23 @@ function showContextMenu(event, data) {
   if (activeMenuCleanup) activeMenuCleanup()
 
   const menuItems = [
+    ...(data.status === 'draft'
+      ? [{ label: 'Activate', color: '#2e7d32', fn: () => activateTreaty(data) }]
+      : []),
+    ...(data.status === 'active'
+      ? [
+          {
+            label: 'Deactivate',
+            color: '#ef6c00',
+            fn: () => deactivateTreaty(data)
+          }
+        ]
+      : []),
     { label: 'Edit', color: '#1976d2', fn: () => openEditDialog(data) },
     { label: 'Schemes', color: '#388e3c', fn: () => openSchemesDialog(data) },
-    { label: 'Delete', color: '#d32f2f', fn: () => openDeleteDialog(data) }
+    ...(data.status === 'draft'
+      ? [{ label: 'Delete', color: '#d32f2f', fn: () => openDeleteDialog(data) }]
+      : [])
   ]
 
   const menu = document.createElement('div')
@@ -1884,6 +2089,23 @@ const notify = (message, color = 'success') => {
   snackbar.value = { show: true, message, color }
 }
 
+// ── Scheme-treaty conflict tracking ─────────────────────────────────
+const conflicts = ref([])
+const conflictCount = ref(0)
+const showConflictDialog = ref(false)
+
+async function loadConflicts() {
+  try {
+    const res = await GroupPricingService.getSchemeTreatyConflicts()
+    const body = res?.data?.data ?? res?.data ?? {}
+    conflicts.value = body.conflicts ?? []
+    conflictCount.value = body.count ?? conflicts.value.length
+  } catch {
+    // Silent — banner just stays hidden. A snackbar here would fire
+    // every page load against tenants without the new endpoint deployed.
+  }
+}
+
 async function loadTreaties() {
   loading.value = true
   try {
@@ -1924,6 +2146,50 @@ function openCreateDialog() {
   showIncomeLevel3.value = false
   showFormDialog.value = true
   nextTick(() => treatyForm.value?.resetValidation())
+}
+
+function activateTreaty(treaty) {
+  activatingTreaty.value = treaty
+  showActivateDialog.value = true
+}
+
+async function confirmActivate() {
+  if (!activatingTreaty.value) return
+  activating.value = true
+  try {
+    await GroupPricingService.updateTreaty(activatingTreaty.value.id, {
+      status: 'active'
+    })
+    notify('Treaty activated', 'success')
+    showActivateDialog.value = false
+    await loadTreaties()
+  } catch (err) {
+    notify(err?.response?.data?.error || 'Failed to activate treaty', 'error')
+  } finally {
+    activating.value = false
+  }
+}
+
+function deactivateTreaty(treaty) {
+  deactivatingTreaty.value = treaty
+  showDeactivateDialog.value = true
+}
+
+async function confirmDeactivate() {
+  if (!deactivatingTreaty.value) return
+  deactivating.value = true
+  try {
+    await GroupPricingService.updateTreaty(deactivatingTreaty.value.id, {
+      status: 'cancelled'
+    })
+    notify('Treaty deactivated', 'success')
+    showDeactivateDialog.value = false
+    await loadTreaties()
+  } catch (err) {
+    notify(err?.response?.data?.error || 'Failed to deactivate treaty', 'error')
+  } finally {
+    deactivating.value = false
+  }
 }
 
 function openEditDialog(treaty) {
@@ -2033,8 +2299,13 @@ async function addSchemeLinks() {
     linkForm.value = { cession_override: 0, effective_date: '' }
     selectedSchemes.value = []
     await loadSchemeLinks(selectedTreaty.value.id)
+    loadConflicts()
   } catch (e) {
-    notify(e.response?.data?.error || 'Failed to link schemes', 'error')
+    const msg =
+      e.response?.data?.message ||
+      e.response?.data?.error ||
+      'Failed to link schemes'
+    notify(msg, 'error')
   } finally {
     savingLink.value = false
   }
@@ -2060,6 +2331,7 @@ async function executeBulkUnlink() {
     showBulkUnlinkDialog.value = false
     selectedLinkRows.value = []
     await loadSchemeLinks(selectedTreaty.value.id)
+    loadConflicts()
   } catch {
     notify('Failed to remove links', 'error')
   } finally {
@@ -2193,5 +2465,6 @@ onMounted(() => {
   loadStats()
   loadBrokers()
   loadReinsurers()
+  loadConflicts()
 })
 </script>

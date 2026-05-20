@@ -101,6 +101,11 @@ func BaseData(initTables bool) {
 	// to gp_default_roles.json never reach existing installs without this sync.
 	syncDefaultRoleNavigation(gpDefaultRoles)
 
+	// Add (never remove) a managed allowlist of claims_pay:* perms on existing
+	// default roles. Add-only — so admins who deliberately revoked a permission
+	// keep that revocation across upgrades.
+	syncDefaultRoleClaimsPayAdditive(gpDefaultRoles)
+
 	// Strip role_permissions entries that point at disabled slugs from
 	// gp_permissions.json. Idempotent: subsequent runs find no rows.
 	purgeDisabledPermissionAssignments(gpPermissions)
@@ -416,6 +421,74 @@ func syncDefaultRoleNavigation(defaultRoles []DefaultRole) {
 	}
 
 	log.Info().Msg("Default role navigation sync complete")
+}
+
+// claimsPayAdditiveSlugs is the allowlist of claims_pay:* permissions that
+// syncDefaultRoleClaimsPayAdditive will add (never remove) on existing default
+// roles to match gp_default_roles.json. Add-only semantics differ from
+// syncDefaultRoleNavigation's reconcile-both: nav slugs are pure menu
+// visibility, whereas claims_pay slugs gate authorisation steps that admins
+// may legitimately want to scope to specific people.
+var claimsPayAdditiveSlugs = []string{
+	"claims_pay:generate_acb",
+	"claims_pay:finance_review",
+	"claims_pay:authorise_first",
+	"claims_pay:authorise_second",
+	"claims_pay:upload_response",
+	"claims_pay:reconcile",
+	"claims_pay:retry_failed",
+	"claims_pay:archive",
+	"claims_pay:view_exceptions",
+}
+
+func syncDefaultRoleClaimsPayAdditive(defaultRoles []DefaultRole) {
+	if len(defaultRoles) == 0 {
+		return
+	}
+
+	managed := make(map[string]bool, len(claimsPayAdditiveSlugs))
+	for _, slug := range claimsPayAdditiveSlugs {
+		managed[slug] = true
+	}
+
+	for _, dr := range defaultRoles {
+		var role models.GPUserRole
+		if err := DB.Where("role_name = ?", dr.RoleName).Preload("Permissions").First(&role).Error; err != nil {
+			continue
+		}
+
+		currentSlugs := make(map[string]bool, len(role.Permissions))
+		for _, p := range role.Permissions {
+			currentSlugs[p.Slug] = true
+		}
+
+		missing := make([]string, 0)
+		for _, slug := range dr.Permissions {
+			if managed[slug] && !currentSlugs[slug] {
+				missing = append(missing, slug)
+			}
+		}
+		if len(missing) == 0 {
+			continue
+		}
+
+		var addPerms []models.GPPermission
+		if err := DB.Where("slug IN ?", missing).Find(&addPerms).Error; err != nil {
+			log.Error().Err(err).Msgf("Failed to load missing claims_pay perms for role: %s", dr.RoleName)
+			continue
+		}
+		if len(addPerms) == 0 {
+			continue
+		}
+
+		if err := DB.Model(&role).Association("Permissions").Append(&addPerms); err != nil {
+			log.Error().Err(err).Msgf("Failed to add claims_pay permissions to role: %s", dr.RoleName)
+			continue
+		}
+		log.Info().Msgf("Added %d claims_pay permission(s) to role: %s (%v)", len(addPerms), dr.RoleName, missing)
+	}
+
+	log.Info().Msg("Default role claims_pay additive sync complete")
 }
 
 // purgeDisabledPermissionAssignments removes role_permissions rows that point

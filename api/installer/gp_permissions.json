@@ -537,6 +537,33 @@
     "parent_slug": "navigation:claims_payments",
     "display_order": 101
   },
+  {
+    "slug": "claims_pay:generate_letter",
+    "name": "Generate Payment Confirmation Letter",
+    "description": "Download a payment confirmation letter for a paid claim (PDF or DOCX), or bundle one letter per claim for a confirmed payment schedule.",
+    "category": "Claims",
+    "tier": "special",
+    "parent_slug": "navigation:claims_payments",
+    "display_order": 102
+  },
+  {
+    "slug": "claims_pay:send_letter",
+    "name": "Send Payment Confirmation Letter",
+    "description": "Send a generated payment confirmation letter to the claimant via email (or other channels as they come online).",
+    "category": "Claims",
+    "tier": "special",
+    "parent_slug": "navigation:claims_payments",
+    "display_order": 103
+  },
+  {
+    "slug": "claims_pay:configure_letter_settings",
+    "name": "Configure Payment Letter Settings",
+    "description": "Configure letterhead, address, signatory, and templated intro/closing text used for all payment confirmation letters.",
+    "category": "Claims",
+    "tier": "special",
+    "parent_slug": "navigation:claims_payments",
+    "display_order": 104
+  },
 
   {
     "slug": "navigation:manage_bordereaux",

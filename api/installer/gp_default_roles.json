@@ -79,6 +79,7 @@
       "navigation:manage_claims", "navigation:view_claims_analytics", "navigation:manage_bordereaux",
       "navigation:view_claims", "navigation:view_reinsurance",
       "claims:lodge", "claims:view_analytics",
+      "claims_pay:generate_letter",
       "bordereaux:view", "bordereaux:generate_outbound",
       "reinsurance:view"
     ]
@@ -92,6 +93,7 @@
       "claims:lodge", "claims:assess", "claims:approve", "claims:reject",
       "claims:pay", "claims:view_medical", "claims:view_analytics",
       "claims_pay:create_schedule",
+      "claims_pay:generate_letter",
       "bordereaux:view", "bordereaux:generate_outbound",
       "reinsurance:view"
     ]
@@ -105,6 +107,7 @@
       "claims:lodge", "claims:assess", "claims:approve", "claims:reject",
       "claims:pay", "claims:view_medical", "claims:refer_committee", "claims:view_analytics",
       "claims_pay:create_schedule",
+      "claims_pay:generate_letter", "claims_pay:send_letter",
       "bordereaux:view", "bordereaux:generate_outbound",
       "reinsurance:view"
     ]
@@ -122,6 +125,7 @@
       "claims_pay:create_schedule", "claims_pay:generate_acb", "claims_pay:authorise_payment",
       "claims_pay:upload_response", "claims_pay:reconcile", "claims_pay:retry_failed",
       "claims_pay:manage_bank_profiles",
+      "claims_pay:generate_letter", "claims_pay:send_letter", "claims_pay:configure_letter_settings",
       "bordereaux:view", "bordereaux:generate_outbound",
       "reinsurance:view"
     ]
@@ -154,7 +158,12 @@
       "premiums:adjustment_note", "premiums:bulk_import",
       "premiums:reconcile", "premiums:manage_arrears", "premiums:approve_suspension",
       "premiums:generate_statement",
-      "claims_pay:generate_acb"
+      "claims_pay:generate_acb", "claims_pay:finance_review",
+      "claims_pay:authorise_first", "claims_pay:authorise_second",
+      "claims_pay:upload_response", "claims_pay:reconcile",
+      "claims_pay:retry_failed", "claims_pay:archive",
+      "claims_pay:view_exceptions",
+      "claims_pay:generate_letter", "claims_pay:send_letter"
     ]
   },
   {

@@ -3917,6 +3917,7 @@ type GroupSchemeClaim struct {
 	ClaimantIDNumber         string                          `json:"claimant_id_number"`
 	RelationshipToMember     string                          `json:"relationship_to_member"`
 	ClaimantContactNumber    string                          `json:"claimant_contact_number"`
+	ClaimantEmail            string                          `json:"claimant_email"`
 	BankName                 string                          `json:"bank_name"`
 	BankBranchCode           string                          `json:"bank_branch_code"`
 	BankAccountNumber        string                          `json:"bank_account_number"`

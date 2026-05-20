@@ -83,8 +83,13 @@
             <empty-state
               v-else-if="!schedule"
               icon="mdi-file-document-remove-outline"
-              title="Payment schedule not found"
-              message="This schedule may have been deleted or you do not have access."
+              :title="
+                loadError ? 'Cannot load payment schedule' : 'Payment schedule not found'
+              "
+              :message="
+                loadError ||
+                'This schedule may have been deleted or you do not have access.'
+              "
               action-label="Back to Payment Schedules"
               :action-fn="goBack"
             />
@@ -270,45 +275,110 @@
                     </template>
                     {{ acbBlockedReason }}
                   </v-tooltip>
-                  <v-btn
+                  <v-tooltip
                     v-if="
                       schedule.acb_file_generated &&
                       hasPermission('claims_pay:upload_response')
                     "
-                    variant="outlined"
-                    size="small"
-                    rounded
-                    prepend-icon="mdi-file-upload"
-                    @click="openResponseDialog"
+                    location="bottom"
+                    max-width="320"
                   >
-                    Upload Bank Response
-                  </v-btn>
-                  <v-btn
+                    <template #activator="{ props: tipProps }">
+                      <v-btn
+                        v-bind="tipProps"
+                        variant="outlined"
+                        size="small"
+                        rounded
+                        prepend-icon="mdi-file-upload"
+                        append-icon="mdi-information-outline"
+                        @click="openResponseDialog"
+                      >
+                        Upload Bank Response
+                      </v-btn>
+                    </template>
+                    Reconciliation step. Upload the bank's response file (ACB
+                    .txt or .csv) to mark each line paid, failed, or unmatched.
+                    Failed lines can be retried — the schedule is not closed.
+                  </v-tooltip>
+                  <v-tooltip
                     v-if="canArchive"
-                    variant="outlined"
-                    size="small"
-                    rounded
-                    prepend-icon="mdi-archive-outline"
-                    :loading="archiving"
-                    @click="archive"
+                    location="bottom"
+                    max-width="320"
                   >
-                    Archive
-                  </v-btn>
+                    <template #activator="{ props: tipProps }">
+                      <v-btn
+                        v-bind="tipProps"
+                        variant="outlined"
+                        size="small"
+                        rounded
+                        prepend-icon="mdi-archive-outline"
+                        append-icon="mdi-information-outline"
+                        :loading="archiving"
+                        @click="archive"
+                      >
+                        Archive
+                      </v-btn>
+                    </template>
+                    Closes the schedule for further activity. Use once payment
+                    is confirmed and reconciliation is complete — the schedule
+                    is hidden from active queues but kept on the audit trail.
+                  </v-tooltip>
+                  <v-menu
+                    v-if="canGenerateLetters"
+                    location="bottom"
+                  >
+                    <template #activator="{ props: menuProps }">
+                      <v-btn
+                        v-bind="menuProps"
+                        variant="outlined"
+                        size="small"
+                        rounded
+                        prepend-icon="mdi-file-document-multiple-outline"
+                        :loading="generatingLetters"
+                      >
+                        Generate Letters
+                      </v-btn>
+                    </template>
+                    <v-list density="compact">
+                      <v-list-item
+                        prepend-icon="mdi-file-pdf-box"
+                        title="Download as PDF (.zip)"
+                        @click="downloadScheduleLetters('pdf')"
+                      />
+                      <v-list-item
+                        prepend-icon="mdi-file-word-box"
+                        title="Download as DOCX (.zip)"
+                        @click="downloadScheduleLetters('docx')"
+                      />
+                    </v-list>
+                  </v-menu>
                   <v-spacer />
-                  <v-btn
+                  <v-tooltip
                     v-if="
                       schedule.status !== 'confirmed' &&
                       hasPermission('claims_pay:upload_response')
                     "
-                    variant="flat"
-                    size="small"
-                    rounded
-                    color="success"
-                    prepend-icon="mdi-upload"
-                    @click="openProofDialog"
+                    location="bottom"
+                    max-width="320"
                   >
-                    Upload Proof of Payment
-                  </v-btn>
+                    <template #activator="{ props: tipProps }">
+                      <v-btn
+                        v-bind="tipProps"
+                        variant="flat"
+                        size="small"
+                        rounded
+                        color="success"
+                        prepend-icon="mdi-upload"
+                        append-icon="mdi-information-outline"
+                        @click="openProofDialog"
+                      >
+                        Upload Proof of Payment
+                      </v-btn>
+                    </template>
+                    Final closure. Attach evidence the money has cleared (bank
+                    statement, stamped batch). Marks every claim as Paid and
+                    the schedule as Confirmed — this action is irreversible.
+                  </v-tooltip>
                 </div>
               </section>
 
@@ -647,6 +717,7 @@ const { hasPermission } = usePermissionCheck()
 // ── State ──────────────────────────────────────────────
 const loading = ref(false)
 const schedule = ref<PaymentSchedule | null>(null)
+const loadError = ref('')
 
 const exporting = ref(false)
 const downloadingProof = ref<number | null>(null)
@@ -838,8 +909,24 @@ async function loadSchedule() {
   try {
     const res = await GroupPricingService.getPaymentSchedule(id)
     schedule.value = unwrap(res)
+    loadError.value = ''
   } catch (e: any) {
-    notify('Failed to load payment schedule', 'error')
+    const status = e?.response?.status
+    const serverMsg =
+      e?.response?.data?.message ??
+      (typeof e?.response?.data === 'string' ? e.response.data : '') ??
+      ''
+    if (status === 403) {
+      loadError.value =
+        'You do not have permission to view this payment schedule. Ask an administrator to grant the Finance Manager role (or the appropriate claims_pay permissions).'
+    } else if (status === 404) {
+      loadError.value = 'This payment schedule no longer exists.'
+    } else {
+      loadError.value = `Failed to load payment schedule${
+        status ? ` (HTTP ${status})` : ''
+      }${serverMsg ? `: ${serverMsg}` : '.'}`
+    }
+    notify(loadError.value, 'error')
     schedule.value = null
   } finally {
     loading.value = false
@@ -1420,6 +1507,47 @@ const canArchive = computed(() => {
     schedule.value.status === 'confirmed' && hasPermission('claims_pay:archive')
   )
 })
+
+const canGenerateLetters = computed(() => {
+  if (!schedule.value) return false
+  return (
+    (schedule.value.status === 'confirmed' ||
+      schedule.value.status === 'archived') &&
+    hasPermission('claims_pay:generate_letter')
+  )
+})
+
+const generatingLetters = ref(false)
+
+async function downloadScheduleLetters(format: 'docx' | 'pdf') {
+  if (!schedule.value) return
+  generatingLetters.value = true
+  try {
+    const res = await GroupPricingService.getScheduleLetterBundle(
+      schedule.value.id,
+      format
+    )
+    downloadBlob(
+      res.data,
+      `PaymentLetters_${schedule.value.schedule_number}.zip`,
+      'application/zip'
+    )
+  } catch (err: any) {
+    const status = err?.response?.status
+    const msg =
+      err?.response?.data?.error ||
+      err?.response?.data?.message ||
+      err?.message ||
+      'Failed to generate letter bundle'
+    if (status === 501) {
+      alert(msg)
+    } else {
+      alert(msg)
+    }
+  } finally {
+    generatingLetters.value = false
+  }
+}
 
 // ── Phase 3 banner counters ───────────────────────────────
 const outstandingDuplicates = computed(() => {

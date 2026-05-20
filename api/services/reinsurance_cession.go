@@ -157,9 +157,10 @@ func CalculateMemberCessionWithIncome(annualIncome float64, treaty models.Reinsu
 }
 
 // CalculateClaimCession computes the ceded portion of a claim for XL or proportional treaties.
-// For proportional/quota_share treaties the three-tier sum-assured structure is applied to the
-// claim amount so that the reinsurer's share mirrors the cession proportion that was in effect
-// when the risk was accepted.
+// For three-tier proportional treaties prefer ComputeClaimRecovery — it routes through the
+// canonical CoveredSumsAssured pipeline so cession lines up exactly with what the pricing
+// flow recorded for the member. This function is the fallback when caller context (scheme
+// categories, quote, member rating summary) isn't available.
 func CalculateClaimCession(claimAmount float64, treaty models.ReinsuranceTreaty) (ceded, retention float64, belowRetention bool) {
 	switch treaty.TreatyType {
 	case "xl_risk", "xl_event":
@@ -408,6 +409,75 @@ func GenerateRIMemberBordereaux(req models.GenerateRIBordereauxRequest, user mod
 	return run, nil
 }
 
+// pickClaimCoveredAndCeded maps a claim's benefit code to the matching covered/ceded SA
+// pair on the canonical SumsAssuredResult. Returns 0, 0 for benefit codes we don't recognise.
+func pickClaimCoveredAndCeded(benefitCode string, sa models.SumsAssuredResult) (covered, ceded float64) {
+	switch strings.ToLower(strings.TrimSpace(benefitCode)) {
+	case "gla", "group_life", "group_life_assurance":
+		return sa.GlaCoveredSumAssured, sa.GlaCededSumAssured
+	case "ptd", "permanent_total_disability":
+		return sa.PtdCoveredSumAssured, sa.PtdCededSumAssured
+	case "ci", "critical_illness", "dread_disease":
+		return sa.CiCoveredSumAssured, sa.CiCededSumAssured
+	case "sgla", "spouse_gla":
+		return sa.SglaCoveredSumAssured, sa.SglaCededSumAssured
+	case "phi":
+		return sa.PhiMonthlyBenefit, sa.PhiCededMonthlyBenefit
+	case "ttd":
+		return sa.TtdMonthlyBenefit, sa.TtdCededMonthlyBenefit
+	case "funeral", "family_funeral", "main_member_funeral", "mm_funeral":
+		return sa.MmFuneralSumAssured, sa.MmCededFuneralSumAssured
+	case "spouse_funeral", "sp_funeral":
+		return sa.SpFuneralSumAssured, sa.SpCededFuneralSumAssured
+	case "child_funeral", "ch_funeral":
+		return sa.ChFuneralSumAssured, sa.ChCededFuneralSumAssured
+	case "parent_funeral", "par_funeral":
+		return sa.ParFuneralSumAssured, sa.ParCededFuneralSumAssured
+	case "extended_funeral", "dep_funeral":
+		return sa.DepFuneralSumAssured, sa.DepCededFuneralSumAssured
+	}
+	return 0, 0
+}
+
+// claimCessionViaCoveredSA computes a claim's ceded portion by routing through the canonical
+// CoveredSumsAssured pipeline: the member's covered SA for the claim's benefit drives the
+// cession ratio, which is then applied to the claim amount. Falls back to CalculateClaimCession
+// when the member, scheme category, quote, or member-rating summary can't be resolved — that
+// keeps XL/surplus/flat-% treaties working and gives a sensible answer when pricing artefacts
+// are missing.
+func claimCessionViaCoveredSA(
+	cl models.GroupSchemeClaim,
+	schemeID int,
+	treaty models.ReinsuranceTreaty,
+	quote models.GroupPricingQuote,
+	categories []models.SchemeCategory,
+	mrssList []models.MemberRatingResultSummary,
+) (ceded, retention float64, belowRetention bool) {
+	if quote.ID == 0 || len(categories) == 0 {
+		return CalculateClaimCession(cl.ClaimAmount, treaty)
+	}
+
+	var member models.GPricingMemberDataInForce
+	if err := DB.Where("scheme_id = ? AND member_id_number = ?", schemeID, cl.MemberIDNumber).First(&member).Error; err != nil {
+		return CalculateClaimCession(cl.ClaimAmount, treaty)
+	}
+
+	category, _ := MapMemberToCategory(member, categories)
+	mrss, _ := MapMemberToMemberRatingResultSummary(member, mrssList)
+	sa := CoveredSumsAssured(member, category, quote, treaty, mrss)
+
+	coveredSA, cededSA := pickClaimCoveredAndCeded(cl.BenefitCode, sa)
+	if coveredSA <= 0 {
+		return CalculateClaimCession(cl.ClaimAmount, treaty)
+	}
+
+	ratio := cededSA / coveredSA
+	ceded = cl.ClaimAmount * ratio
+	retention = cl.ClaimAmount - ceded
+	belowRetention = ceded == 0
+	return ceded, retention, belowRetention
+}
+
 // GenerateRIClaimsBordereaux creates an RIBordereauxRun of type claims_run
 func GenerateRIClaimsBordereaux(req models.GenerateRIBordereauxRequest, user models.AppUser) (models.RIBordereauxRun, error) {
 	treaty, err := GetTreatyByID(req.TreatyID)
@@ -465,8 +535,21 @@ func GenerateRIClaimsBordereaux(req models.GenerateRIBordereauxRequest, user mod
 		var scheme models.GroupScheme
 		DB.First(&scheme, schemeID)
 
+		// Preload the inputs CoveredSumsAssured needs so every claim resolves
+		// against the same canonical SA the pricing flow stored.
+		var quote models.GroupPricingQuote
+		DB.Where("scheme_id = ? AND scheme_quote_status = ?", schemeID, "in_effect").First(&quote)
+		var categories []models.SchemeCategory
+		if quote.ID != 0 {
+			DB.Where("quote_id = ?", quote.ID).Find(&categories)
+		}
+		var mrssList []models.MemberRatingResultSummary
+		if quote.ID != 0 {
+			DB.Where("quote_id = ?", quote.ID).Find(&mrssList)
+		}
+
 		for _, cl := range claims {
-			ceded, retention, below := CalculateClaimCession(cl.ClaimAmount, treaty)
+			ceded, retention, below := claimCessionViaCoveredSA(cl, schemeID, treaty, quote, categories, mrssList)
 
 			// Derive paid vs outstanding split from claim status
 			var grossPaid, grossOutstanding float64
@@ -491,6 +574,8 @@ func GenerateRIClaimsBordereaux(req models.GenerateRIBordereauxRequest, user mod
 				GrossClaimAmount:        cl.ClaimAmount,
 				ExcessRetention:         retention,
 				CededClaimAmount:        ceded,
+				RecoveryReceived:        ceded,
+				Recoveries:              ceded,
 				ClaimStatus:             cl.Status,
 				IsBelowRetention:        below,
 				CauseOfLoss:             cl.BenefitCode,

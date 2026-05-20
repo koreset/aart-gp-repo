@@ -189,6 +189,9 @@ func MigrateGroupPricingTables() error {
 		&models.EmailTemplate{},
 		&models.EmailOutbox{},
 		&models.GroupPricingSetting{},
+		&models.PaymentLetterSetting{},
+		&models.ClaimPaymentLetter{},
+		&models.ClaimPaymentLetterDelivery{},
 		// Generic table-requirement framework (also auto-migrated lazily by
 		// services.EnsureTableConfigurations on every boot). Listed here so a
 		// fresh install creates these in the same bootstrap pass as everything

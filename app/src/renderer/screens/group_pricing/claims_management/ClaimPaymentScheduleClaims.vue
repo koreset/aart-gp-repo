@@ -297,6 +297,14 @@
                     @click="downloadTaxCertificate(taxCertForItem(item.id)!)"
                   />
                 </template>
+                <v-btn
+                  v-if="canGenerateLetter"
+                  size="x-small"
+                  variant="text"
+                  icon="mdi-file-document-check-outline"
+                  title="Payment confirmation letter"
+                  @click="openLetterDialog(item)"
+                />
               </div>
             </td>
             <td v-if="isFinanceReview">
@@ -490,6 +498,13 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <payment-letter-dialog
+      v-model="letterDialog"
+      :claim-id="letterClaimId"
+      :claimant-email="letterClaimContact.email"
+      :claimant-phone="letterClaimContact.phone"
+    />
   </div>
 </template>
 
@@ -500,6 +515,7 @@ import {
   type ScheduleItem,
   type RiskFlags
 } from './payment_schedule_context'
+import PaymentLetterDialog from './components/PaymentLetterDialog.vue'
 
 const ctx = inject(PAYMENT_SCHEDULE_CONTEXT)
 if (!ctx) {
@@ -562,6 +578,29 @@ const isFinanceReview = computed(
     schedule.value?.status === 'finance_in_review' &&
     hasPermission('claims_pay:finance_review')
 )
+
+const canGenerateLetter = computed(
+  () =>
+    (schedule.value?.status === 'confirmed' ||
+      schedule.value?.status === 'archived') &&
+    hasPermission('claims_pay:generate_letter')
+)
+
+const letterDialog = ref(false)
+const letterClaimId = ref<number | null>(null)
+const letterClaimContact = ref<{ email: string; phone: string }>({
+  email: '',
+  phone: ''
+})
+
+function openLetterDialog(item: ScheduleItem) {
+  letterClaimId.value = item.claim_id
+  // Schedule items hold the bank/beneficiary snapshot, not the claim contact
+  // details. The dialog falls back to "no recipient" — the user can type one
+  // or jump out to edit the claim record.
+  letterClaimContact.value = { email: '', phone: '' }
+  letterDialog.value = true
+}
 
 function parseRiskFlags(item: ScheduleItem): RiskFlags {
   const raw = item.risk_flags

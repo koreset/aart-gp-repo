@@ -391,6 +391,14 @@ const router = createRouter({
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {
+      path: '/group-pricing/claims-management/payment-letter-settings',
+      name: 'group-pricing-payment-letter-settings',
+      component: () =>
+        import('../screens/group_pricing/claims_management/PaymentLetterSettings.vue'),
+      meta: { required_permission: 'claims_pay:configure_letter_settings' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
       path: '/group-pricing/claims-management/payment-exceptions',
       name: 'group-pricing-claim-payment-exceptions',
       component: () =>
