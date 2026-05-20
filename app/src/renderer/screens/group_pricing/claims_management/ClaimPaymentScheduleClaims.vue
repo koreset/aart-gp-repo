@@ -499,7 +499,7 @@
       </v-card>
     </v-dialog>
 
-    <payment-letter-dialog
+    <PaymentLetterDialog
       v-model="letterDialog"
       :claim-id="letterClaimId"
       :claimant-email="letterClaimContact.email"

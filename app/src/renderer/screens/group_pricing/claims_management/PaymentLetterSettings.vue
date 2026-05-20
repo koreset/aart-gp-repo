@@ -28,11 +28,11 @@
                 letter — letterhead at the top, signatory block at the bottom,
                 and intro / closing paragraphs in the body. Tokens you can use
                 in the intro / closing text:
-                <code>{{ '{{claimant_name}}' }}</code>,
-                <code>{{ '{{claim_number}}' }}</code>,
-                <code>{{ '{{amount}}' }}</code>,
-                <code>{{ '{{paid_at}}' }}</code>,
-                <code>{{ '{{member_name}}' }}</code>.
+                <code v-pre>{{claimant_name}}</code>,
+                <code v-pre>{{claim_number}}</code>,
+                <code v-pre>{{amount}}</code>,
+                <code v-pre>{{paid_at}}</code>,
+                <code v-pre>{{member_name}}</code>.
               </div>
             </v-alert>
 

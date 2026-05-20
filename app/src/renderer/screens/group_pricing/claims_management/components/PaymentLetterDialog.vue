@@ -406,7 +406,7 @@ function close() {
   emit('update:modelValue', false)
 }
 
-function downloadBlob(data: BlobPart, filename: string, type: string) {
+function downloadBlob(data: any, filename: string, type: string) {
   const blob = new Blob([data], { type })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

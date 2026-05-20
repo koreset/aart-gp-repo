@@ -224,7 +224,7 @@
     </v-dialog>
 
     <!-- Payment Letter Dialog (for paid claims) -->
-    <payment-letter-dialog
+    <PaymentLetterDialog
       v-model="paymentLetterDialog"
       :claim-id="paymentLetterClaim?.id ?? null"
       :claimant-email="paymentLetterClaim?.claimant_email ?? ''"
