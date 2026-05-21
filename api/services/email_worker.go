@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	appLog "api/log"
 	"api/models"
-	"api/services/crypto"
 	"api/services/email"
 	"math/rand"
 	"sync"
@@ -15,7 +14,7 @@ import (
 )
 
 // emailWorker concurrency bounds — lower than calculations because each send
-// is IO-bound on an external SMTP server. 5 is plenty for Phase 1.
+// is IO-bound on an external mail provider (SMTP or Graph). 5 is plenty.
 const maxConcurrentEmailSends = 5
 
 var (
@@ -94,13 +93,7 @@ func sendEmailRow(row models.EmailOutbox) {
 
 	var settings models.EmailSettings
 	if err := DB.Where("license_id = ?", row.LicenseId).First(&settings).Error; err != nil {
-		markEmailFailed(row, "no SMTP settings configured for license", logger, true)
-		return
-	}
-
-	password, err := crypto.Decrypt(settings.AuthPasswordEncrypted)
-	if err != nil {
-		markEmailFailed(row, "decrypt SMTP password: "+err.Error(), logger, true)
+		markEmailFailed(row, "no email settings configured for license", logger, true)
 		return
 	}
 
@@ -140,7 +133,11 @@ func sendEmailRow(row models.EmailOutbox) {
 		Attachments: attachments,
 	}
 
-	mailer := email.NewSMTPMailer(settings, password)
+	mailer, err := BuildMailer(settings)
+	if err != nil {
+		markEmailFailed(row, err.Error(), logger, true)
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 

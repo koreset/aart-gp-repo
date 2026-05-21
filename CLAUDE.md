@@ -64,6 +64,7 @@ yarn test                    # e2e (builds first, then playwright)
 - **Models:** `api/models/` — GORM model definitions
 - **Migrations:** `api/migrations/<dialect>/` — generated SQL migration files. Schema changes are diff-based: `tools/generate_migration.go` produces a delta against the connected DB; `services.RunMigrationsOnStartup` applies pending files on every boot, recording versions in the `migrations` table. See `api/MIGRATIONS.md` for the full system, dev workflow, and remote-DB usage.
 - **Config:** `api/config/config.go` — DB config via env vars (`DB_HOST`, `DB_USER`, `DB_PORT`, `DB_PWD`, `DB_NAME`)
+- **Email:** per-license outbox-queue system (`email_settings`/`email_templates`/`email_outbox`) with two providers — SMTP relay and Microsoft 365 (Graph). Secrets are encrypted with `APP_SECRET`. See `api/EMAIL.md` for provider setup, deployment gotchas, and troubleshooting.
 - **Auth:** JWT-based authentication; protected routes use `GetActiveUser()` middleware
 - **WebSocket:** endpoint at `/ws` with query-param auth
 

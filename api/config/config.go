@@ -34,6 +34,15 @@ var (
 	// when BAVProvider == "mock"; wired via MOCK_BAV_ASYNC.
 	MockBAVAsync bool
 
+	// Microsoft Graph (Office 365) email — optional global app-only credentials.
+	// Used as a fallback by the email mailer when a license configures the
+	// "microsoft_graph" provider but leaves graph_client_id/secret blank, i.e.
+	// when a single central multi-tenant Azure app serves all licenses (each
+	// license then records only its tenant id). Wired via GRAPH_CLIENT_ID /
+	// GRAPH_CLIENT_SECRET. Leave unset when each client registers their own app.
+	GraphClientID     string
+	GraphClientSecret string
+
 	// BordereauxFileRetentionDays is the age (in days) after which generated
 	// bordereaux output files and terminal-status inbound confirmation/submission
 	// uploads are deleted from disk by the retention sweeper. DB rows are kept;
@@ -78,6 +87,9 @@ func init() {
 	if BAVProvider == "" {
 		BAVProvider = "verifynow"
 	}
+
+	GraphClientID = os.Getenv("GRAPH_CLIENT_ID")
+	GraphClientSecret = os.Getenv("GRAPH_CLIENT_SECRET")
 
 	switch strings.ToLower(os.Getenv("MOCK_BAV_ASYNC")) {
 	case "1", "true", "yes", "on":
