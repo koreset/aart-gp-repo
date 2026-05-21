@@ -4,7 +4,9 @@
       <v-col>
         <base-card :show-actions="false">
           <template #header>
-            <div class="d-flex justify-space-between align-center flex-wrap gap-2">
+            <div
+              class="d-flex justify-space-between align-center flex-wrap gap-2"
+            >
               <div class="d-flex align-center">
                 <v-btn
                   icon="mdi-arrow-left"
@@ -80,7 +82,9 @@
               />
 
               <empty-state
-                v-if="!loading && (!schedule?.items || schedule.items.length === 0)"
+                v-if="
+                  !loading && (!schedule?.items || schedule.items.length === 0)
+                "
                 icon="mdi-file-document-outline"
                 title="No claims on this schedule"
                 message="Line items will appear here once the schedule has been generated."
@@ -293,8 +297,7 @@ function downloadCsv() {
     (it.net_payable || it.claim_amount || 0).toFixed(2)
   ])
   const csv =
-    '﻿' +
-    [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n')
+    '﻿' + [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

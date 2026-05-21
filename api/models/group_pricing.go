@@ -814,6 +814,44 @@ type GPricingMemberData struct {
 	IsOriginalMember             bool       `json:"is_original_member"`
 }
 
+// ToInForce maps a GPricingMemberData row to its in-force counterpart.
+// Bulk-enrollment fields (BatchID, RowIndex, ValidationStatus) are left as
+// zero values, matching the migration defaults for non-batch members.
+func (m GPricingMemberData) ToInForce() GPricingMemberDataInForce {
+	return GPricingMemberDataInForce{
+		Year:                         m.Year,
+		SchemeName:                   m.SchemeName,
+		MemberName:                   m.MemberName,
+		MemberIdNumber:               m.MemberIdNumber,
+		MemberIdType:                 m.MemberIdType,
+		SchemeCategory:               m.SchemeCategory,
+		Gender:                       m.Gender,
+		DateOfBirth:                  m.DateOfBirth,
+		AnnualSalary:                 m.AnnualSalary,
+		AddressLine1:                 m.AddressLine1,
+		AddressLine2:                 m.AddressLine2,
+		City:                         m.City,
+		Province:                     m.Province,
+		PostalCode:                   m.PostalCode,
+		PhoneNumber:                  m.PhoneNumber,
+		Email:                        m.Email,
+		EmployeeNumber:               m.EmployeeNumber,
+		Occupation:                   m.Occupation,
+		OccupationalClass:            m.OccupationalClass,
+		Benefits:                     m.Benefits,
+		ContributionWaiverProportion: m.ContributionWaiverProportion,
+		CreationDate:                 m.CreationDate,
+		EntryDate:                    m.EntryDate,
+		ExitDate:                     m.ExitDate,
+		EffectiveExitDate:            m.EffectiveExitDate,
+		CreatedBy:                    m.CreatedBy,
+		QuoteId:                      m.QuoteId,
+		SchemeId:                     m.SchemeId,
+		Status:                       m.Status,
+		IsOriginalMember:             m.IsOriginalMember,
+	}
+}
+
 type GPricingMemberDataInForce struct {
 	ID                    int            `json:"id" gorm:"primary_key"`
 	Year                  int            `json:"year" csv:"year"`
@@ -851,6 +889,9 @@ type GPricingMemberDataInForce struct {
 	SchemeId                     int        `json:"scheme_id" csv:"scheme_id"`
 	Status                       string     `json:"status" csv:"status"`
 	IsOriginalMember             bool       `json:"is_original_member" csv:"is_original_member"`
+	BatchID                      int        `json:"batch_id" csv:"batch_id" gorm:"index"`
+	RowIndex                     int        `json:"row_index" csv:"row_index"`
+	ValidationStatus             string     `json:"validation_status" csv:"validation_status" gorm:"size:16"`
 }
 
 // UnmarshalJSON implements custom parsing to accept both full RFC3339 datetimes
@@ -942,6 +983,48 @@ func (g *GPricingMemberDataInForce) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// Bulk enrollment batch status values.
+const (
+	BulkEnrollmentBatchPendingApproval = "pending_approval"
+	BulkEnrollmentBatchApproved        = "approved"
+	BulkEnrollmentBatchRejected        = "rejected"
+	BulkEnrollmentBatchCancelled       = "cancelled"
+)
+
+// Bulk enrollment per-row validation status values.
+const (
+	BulkEnrollmentRowValid          = "valid"
+	BulkEnrollmentRowSoftError      = "soft_error"
+	BulkEnrollmentRowBlockingError  = "blocking_error"
+	BulkEnrollmentMemberDraftStatus = "draft"
+)
+
+type BulkEnrollmentBatch struct {
+	ID                 int        `json:"id" gorm:"primary_key"`
+	SchemeID           int        `json:"scheme_id" gorm:"index;not null"`
+	QuoteID            int        `json:"quote_id"`
+	Status             string     `json:"status" gorm:"size:32;index;default:'pending_approval'"`
+	MemberCount        int        `json:"member_count"`
+	ValidCount         int        `json:"valid_count"`
+	BlockingCount      int        `json:"blocking_count"`
+	SoftErrorCount     int        `json:"soft_error_count"`
+	FileName           string     `json:"file_name" gorm:"size:512"`
+	FileSizeBytes      int64      `json:"file_size_bytes"`
+	FileChecksum       string     `json:"file_checksum" gorm:"size:64"`
+	SkipDuplicates     bool       `json:"skip_duplicates"`
+	ValidationReport   string     `json:"validation_report" gorm:"type:text"`
+	ExternalIDCheckRun bool       `json:"external_id_check_run"`
+	ExternalIDCheckAt  *time.Time `json:"external_id_check_at"`
+	UploadedBy         string     `json:"uploaded_by" gorm:"size:128"`
+	UploadedAt         time.Time  `json:"uploaded_at" gorm:"autoCreateTime"`
+	ApprovedBy         string     `json:"approved_by" gorm:"size:128"`
+	ApprovedAt         *time.Time `json:"approved_at" gorm:"type:datetime;index"`
+	RejectedBy         string     `json:"rejected_by" gorm:"size:128"`
+	RejectedAt         *time.Time `json:"rejected_at" gorm:"type:datetime;index"`
+	RejectedReason     string     `json:"rejected_reason" gorm:"size:1000"`
+	Notes              string     `json:"notes" gorm:"size:1000"`
 }
 
 type MemberBenefits struct {
@@ -3918,6 +4001,10 @@ type GroupSchemeClaim struct {
 	RelationshipToMember     string                          `json:"relationship_to_member"`
 	ClaimantContactNumber    string                          `json:"claimant_contact_number"`
 	ClaimantEmail            string                          `json:"claimant_email"`
+	// ClaimantIdentityType is "IDNumber" or "Passport" — captured explicitly
+	// at claim registration so the BAV provider call doesn't have to guess.
+	// Defaults to IDNumber on legacy claims via migration backfill.
+	ClaimantIdentityType     string                          `json:"claimant_identity_type" gorm:"size:16"`
 	BankName                 string                          `json:"bank_name"`
 	BankBranchCode           string                          `json:"bank_branch_code"`
 	BankAccountNumber        string                          `json:"bank_account_number"`

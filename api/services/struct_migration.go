@@ -335,6 +335,8 @@ func getStructType(structName string) (reflect.Type, error) {
 		return reflect.TypeOf(models.GPricingMemberData{}), nil
 	case "GPricingMemberDataInForce":
 		return reflect.TypeOf(models.GPricingMemberDataInForce{}), nil
+	case "BulkEnrollmentBatch":
+		return reflect.TypeOf(models.BulkEnrollmentBatch{}), nil
 	case "CiRate":
 		return reflect.TypeOf(models.CiRate{}), nil
 	case "GlaRate":
@@ -637,6 +639,24 @@ func getStructType(structName string) (reflect.Type, error) {
 		return reflect.TypeOf(models.MatchingRule{}), nil
 	case "OnRiskLetter":
 		return reflect.TypeOf(models.OnRiskLetter{}), nil
+
+	// General Ledger (operational, independent of IFRS17/CSM)
+	case "GLAccount":
+		return reflect.TypeOf(models.GLAccount{}), nil
+	case "AccountingPeriod":
+		return reflect.TypeOf(models.AccountingPeriod{}), nil
+	case "JournalEntry":
+		return reflect.TypeOf(models.JournalEntry{}), nil
+	case "JournalLine":
+		return reflect.TypeOf(models.JournalLine{}), nil
+	case "PostingRule":
+		return reflect.TypeOf(models.PostingRule{}), nil
+	case "BankAccount":
+		return reflect.TypeOf(models.BankAccount{}), nil
+	case "BankStatementLine":
+		return reflect.TypeOf(models.BankStatementLine{}), nil
+	case "GLAuditLog":
+		return reflect.TypeOf(models.GLAuditLog{}), nil
 
 	// --- Base tables ---
 	case "BaseAssumptionVariable":

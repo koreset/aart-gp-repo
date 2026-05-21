@@ -523,6 +523,21 @@ func UploadPaymentProof(scheduleID int, fileHeader *multipart.FileHeader, notes 
 				return err
 			}
 		}
+
+		// Operational GL: post the confirmed schedule as a balanced JE.
+		// Failing to post (e.g. missing posting rule, period closed) rolls
+		// the whole confirmation back — finance must fix the GL config
+		// before the schedule can be confirmed.
+		if schedule.NetTotal > 0 {
+			schemeID := 0
+			if len(schedule.Items) > 0 {
+				schemeID = schedule.Items[0].SchemeID
+			}
+			desc := fmt.Sprintf("Schedule %s confirmed (proof: %s)", schedule.ScheduleNumber, fileHeader.Filename)
+			if _, err := GLPost(tx, "claim_payment.confirmed", "claim_payment", schedule.ID, schedule.NetTotal, desc, schemeID, user.UserName); err != nil {
+				return fmt.Errorf("GL posting failed: %w", err)
+			}
+		}
 		return nil
 	})
 	if txErr != nil {

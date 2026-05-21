@@ -708,10 +708,14 @@ func ExecuteMigration(files map[string]*multipart.FileHeader, user models.AppUse
 			// Delete any existing in-force data for this quote
 			tx.Where("quote_id = ?", quote.ID).Delete(&models.GPricingMemberDataInForce{})
 
-			var gmdif []models.GPricingMemberDataInForce
-			err = tx.Model(&models.GPricingMemberData{}).Where("quote_id = ?", quote.ID).Find(&gmdif).Error
+			var sourceMembers []models.GPricingMemberData
+			err = tx.Where("quote_id = ?", quote.ID).Find(&sourceMembers).Error
 			if err != nil {
 				return fmt.Errorf("failed to load member data for in-force copy: %v", err)
+			}
+			gmdif := make([]models.GPricingMemberDataInForce, len(sourceMembers))
+			for i, m := range sourceMembers {
+				gmdif[i] = m.ToInForce()
 			}
 
 			for i := range gmdif {

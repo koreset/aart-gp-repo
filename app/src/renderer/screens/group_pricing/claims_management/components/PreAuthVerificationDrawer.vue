@@ -18,7 +18,9 @@
     <div v-if="item" class="pa-4">
       <div class="text-caption text-medium-emphasis mb-1">Claim</div>
       <div class="text-subtitle-2">{{ item.claim_number }}</div>
-      <div class="text-body-2 mb-4">{{ item.beneficiary_name || item.member_name }}</div>
+      <div class="text-body-2 mb-4">{{
+        item.beneficiary_name || item.member_name
+      }}</div>
 
       <!-- Banking -->
       <v-card variant="outlined" rounded="lg" class="mb-3">
@@ -29,14 +31,16 @@
         <v-card-text class="pa-3 pt-1">
           <div class="text-body-2 mb-1">
             <strong>{{ item.bank_name || '—' }}</strong>
-            <span class="text-medium-emphasis">·
-              {{ maskedAccount }}</span>
+            <span class="text-medium-emphasis">· {{ maskedAccount }}</span>
           </div>
           <div v-if="loadingBank" class="text-center py-2">
             <v-progress-circular indeterminate size="20" />
           </div>
           <template v-else-if="bankStatus">
-            <div v-if="!bankStatus.has_result" class="text-body-2 text-medium-emphasis">
+            <div
+              v-if="!bankStatus.has_result"
+              class="text-body-2 text-medium-emphasis"
+            >
               No verification recorded yet.
             </div>
             <template v-else>
@@ -48,10 +52,16 @@
               >
                 {{ bankChipLabel }}
               </v-chip>
-              <div v-if="bankStatus.verified_at" class="text-caption text-medium-emphasis">
+              <div
+                v-if="bankStatus.verified_at"
+                class="text-caption text-medium-emphasis"
+              >
                 {{ relativeAge(bankStatus.verified_at) }}
               </div>
-              <div v-if="bankStatus.stale_reason" class="text-caption text-warning mt-1">
+              <div
+                v-if="bankStatus.stale_reason"
+                class="text-caption text-warning mt-1"
+              >
                 {{ bankStatus.stale_reason }}
               </div>
             </template>
@@ -63,7 +73,8 @@
             density="compact"
             variant="tonal"
             class="mt-2"
-          >{{ bankError }}</v-alert>
+            >{{ bankError }}</v-alert
+          >
 
           <v-btn
             color="primary"
@@ -76,7 +87,8 @@
             :disabled="!!reverifyDisabledReason"
             :title="reverifyDisabledReason"
             @click="reverify"
-          >Re-verify now</v-btn>
+            >Re-verify now</v-btn
+          >
         </v-card-text>
       </v-card>
 
@@ -89,11 +101,15 @@
         <v-card-text class="pa-3 pt-1">
           <div class="d-flex justify-space-between text-body-2">
             <span class="text-medium-emphasis">Approved</span>
-            <strong>{{ formatCurrency(item.approved_amount_snapshot ?? 0) }}</strong>
+            <strong>{{
+              formatCurrency(item.approved_amount_snapshot ?? 0)
+            }}</strong>
           </div>
           <div class="d-flex justify-space-between text-body-2">
             <span class="text-medium-emphasis">Scheduled</span>
-            <strong>{{ formatCurrency(item.gross_amount ?? item.claim_amount ?? 0) }}</strong>
+            <strong>{{
+              formatCurrency(item.gross_amount ?? item.claim_amount ?? 0)
+            }}</strong>
           </div>
           <v-divider class="my-2" />
           <div class="d-flex justify-space-between text-body-2">
@@ -104,11 +120,16 @@
             <v-icon size="x-small">mdi-check-circle-outline</v-icon>
             Amount matches the approved figure.
           </div>
-          <div v-else-if="item.amount_drift_resolved" class="text-caption text-medium-emphasis mt-2">
-            Drift acknowledged by {{ item.amount_drift_resolved_by || 'finance' }}.
+          <div
+            v-else-if="item.amount_drift_resolved"
+            class="text-caption text-medium-emphasis mt-2"
+          >
+            Drift acknowledged by
+            {{ item.amount_drift_resolved_by || 'finance' }}.
           </div>
           <div v-else class="text-caption text-warning mt-2">
-            Drift outstanding — acknowledge or query the line before authorising.
+            Drift outstanding — acknowledge or query the line before
+            authorising.
           </div>
           <div v-if="hasDrift && !item.amount_drift_resolved" class="mt-3">
             <v-btn
@@ -117,7 +138,8 @@
               variant="flat"
               :loading="acknowledging"
               @click="acknowledge"
-            >Acknowledge drift</v-btn>
+              >Acknowledge drift</v-btn
+            >
           </div>
         </v-card-text>
       </v-card>
@@ -125,24 +147,37 @@
       <!-- Cross-claim signals -->
       <v-card variant="outlined" rounded="lg" class="mb-3">
         <v-card-title class="text-subtitle-2 pa-3 pb-1 d-flex align-center">
-          <v-icon size="small" class="mr-2">mdi-account-multiple-outline</v-icon>
+          <v-icon size="small" class="mr-2"
+            >mdi-account-multiple-outline</v-icon
+          >
           Cross-claim duplicates
         </v-card-title>
         <v-card-text class="pa-3 pt-1">
-          <div v-if="!idHits.length && !accountHits.length" class="text-caption text-success">
+          <div
+            v-if="!idHits.length && !accountHits.length"
+            class="text-caption text-success"
+          >
             <v-icon size="x-small">mdi-check-circle-outline</v-icon>
             No prior claims found for this ID or bank account.
           </div>
           <template v-else>
             <div v-if="idHits.length" class="mb-3">
-              <div class="text-caption text-warning mb-1">Same claimant ID:</div>
+              <div class="text-caption text-warning mb-1"
+                >Same claimant ID:</div
+              >
               <div v-for="r in idHits" :key="`id-${r}`" class="text-caption">
                 • {{ r }}
               </div>
             </div>
             <div v-if="accountHits.length">
-              <div class="text-caption text-warning mb-1">Same bank account:</div>
-              <div v-for="r in accountHits" :key="`acc-${r}`" class="text-caption">
+              <div class="text-caption text-warning mb-1"
+                >Same bank account:</div
+              >
+              <div
+                v-for="r in accountHits"
+                :key="`acc-${r}`"
+                class="text-caption"
+              >
                 • {{ r }}
               </div>
             </div>
@@ -157,7 +192,10 @@
           Other risk flags
         </v-card-title>
         <v-card-text class="pa-3 pt-1">
-          <div v-if="!otherFlags.length" class="text-caption text-medium-emphasis">
+          <div
+            v-if="!otherFlags.length"
+            class="text-caption text-medium-emphasis"
+          >
             No other risk flags on this line.
           </div>
           <div v-else class="d-flex flex-wrap gap-1">
@@ -167,7 +205,8 @@
               size="x-small"
               color="warning"
               variant="flat"
-            >{{ flag }}</v-chip>
+              >{{ flag }}</v-chip
+            >
           </div>
         </v-card-text>
       </v-card>

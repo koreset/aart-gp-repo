@@ -18,19 +18,6 @@
                   Bulk Upload
                 </v-btn>
                 <v-btn
-                  v-if="hasPermission('claims:view_analytics')"
-                  size="small"
-                  variant="outlined"
-                  class="mr-2"
-                  rounded
-                  prepend-icon="mdi-chart-line"
-                  @click="
-                    router.push({ name: 'group-pricing-claims-analytics' })
-                  "
-                >
-                  Analytics
-                </v-btn>
-                <v-btn
                   v-if="
                     hasPermission('claims_pay:create_schedule') ||
                     hasPermission('claims_pay:finance_review')
@@ -49,6 +36,21 @@
                   "
                 >
                   Payment Schedules
+                </v-btn>
+                <v-btn
+                  v-if="hasPermission('claims:view_regular_income')"
+                  size="small"
+                  variant="outlined"
+                  class="mr-2"
+                  rounded
+                  prepend-icon="mdi-cash-multiple"
+                  @click="
+                    router.push({
+                      name: 'group-pricing-regular-income-claims'
+                    })
+                  "
+                >
+                  Regular Income Claims
                 </v-btn>
                 <v-btn
                   v-if="hasPermission('claims:lodge')"
@@ -245,7 +247,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import { usePermissionCheck } from '@/renderer/composables/usePermissionCheck'
 import StatCard from '@/renderer/components/StatCard.vue'
@@ -300,6 +302,7 @@ const claims = ref<Claim[]>([])
 const schemes = ref<Scheme[]>([])
 
 const router = useRouter()
+const route = useRoute()
 
 // Dialog states
 const newClaimDialog = ref(false)
@@ -470,7 +473,10 @@ const claimsColumnDefs = [
       return `<button data-action="letter" title="Payment confirmation letter" style="background:transparent;border:none;cursor:pointer;color:#1976D2;font-size:18px;line-height:1">📄</button>`
     },
     onCellClicked: (params: any) => {
-      if (params.data?.status === 'paid' && hasPermission('claims_pay:generate_letter')) {
+      if (
+        params.data?.status === 'paid' &&
+        hasPermission('claims_pay:generate_letter')
+      ) {
         openPaymentLetter(params.data)
       }
     }
@@ -579,7 +585,10 @@ const loadClaims = async () => {
 
 const loadSchemes = async () => {
   try {
-    const response = await GroupPricingService.getSchemesInforce()
+    // Use coverage-history so the filter only shows schemes a claim could
+    // ever have been lodged against (currently in-force, or in-force at
+    // some point in the past). Pre-quote schemes are excluded.
+    const response = await GroupPricingService.getSchemesWithCoverageHistory()
     schemes.value = response.data || []
   } catch (error) {
     console.error('Error loading schemes:', error)
@@ -663,10 +672,36 @@ const confirmAction = () => {
   confirmDialog.value = false
 }
 
+// Apply filter pre-selections from drill-down query params (e.g. from Claims Analytics).
+// Supported: ?status=approved, ?scheme_id=12, ?benefit_alias=GLA, ?search=foo
+const applyQueryFilters = () => {
+  const q = route.query
+  if (typeof q.status === 'string' && q.status) {
+    selectedStatus.value = q.status
+  }
+  if (typeof q.scheme_id === 'string' && q.scheme_id) {
+    const sid = parseInt(q.scheme_id, 10)
+    if (!Number.isNaN(sid)) selectedScheme.value = sid
+  } else if (typeof q.scheme_id === 'number') {
+    selectedScheme.value = q.scheme_id
+  }
+  if (typeof q.benefit_alias === 'string' && q.benefit_alias) {
+    const match = benefitMaps.value.find(
+      (b: any) => b.benefit_alias === q.benefit_alias
+    )
+    if (match) selectedBenefitType.value = match
+  }
+  if (typeof q.search === 'string' && q.search) {
+    searchQuery.value = q.search
+  }
+}
+
 // Lifecycle
 onMounted(async () => {
   const res = await GroupPricingService.getBenefitMaps()
   benefitMaps.value = res.data
+
+  applyQueryFilters()
 
   loadClaims()
   loadSchemes()

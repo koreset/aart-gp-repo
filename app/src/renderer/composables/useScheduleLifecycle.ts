@@ -8,10 +8,22 @@ export interface PipelineStep {
 
 export const SCHEDULE_PIPELINE_STEPS: PipelineStep[] = [
   { status: 'draft', label: 'Draft', sub: 'Created' },
-  { status: 'claims_signed_off', label: 'Payment Schedule Signed Off', sub: 'Head of Claims' },
+  {
+    status: 'claims_signed_off',
+    label: 'Payment Schedule Signed Off',
+    sub: 'Head of Claims'
+  },
   { status: 'finance_in_review', label: 'Finance Review', sub: 'In review' },
-  { status: 'finance_first_authorised', label: '1st Authorisation', sub: 'Finance' },
-  { status: 'finance_second_authorised', label: '2nd Authorisation', sub: 'Finance' },
+  {
+    status: 'finance_first_authorised',
+    label: '1st Authorisation',
+    sub: 'Finance'
+  },
+  {
+    status: 'finance_second_authorised',
+    label: '2nd Authorisation',
+    sub: 'Finance'
+  },
   { status: 'submitted_to_bank', label: 'Submitted to Bank', sub: 'ACB run' },
   { status: 'confirmed', label: 'Paid / Confirmed', sub: 'Proof uploaded' }
 ]
@@ -39,7 +51,10 @@ const STATUS_LABELS: Record<string, string> = SCHEDULE_PIPELINE_STEPS.reduce(
     acc[step.status] = step.label
     return acc
   },
-  { archived: 'Archived', submitted: 'Submitted to Bank' } as Record<string, string>
+  { archived: 'Archived', submitted: 'Submitted to Bank' } as Record<
+    string,
+    string
+  >
 )
 
 export function useScheduleLifecycle(

@@ -94,7 +94,7 @@ func ReverifyLineBankAccount(c *gin.Context) {
 		FirstName:         firstName,
 		Surname:           surname,
 		IdentityNumber:    claim.ClaimantIDNumber,
-		IdentityType:      detectIdentityType(claim.ClaimantIDNumber),
+		IdentityType:      resolveIdentityType(claim),
 		BankAccountNumber: item.BankAccountNumber,
 		BankBranchCode:    item.BankBranchCode,
 		BankAccountType:   item.BankAccountType,
@@ -201,11 +201,20 @@ func loadScheduleItem(scheduleID, itemID int) (models.ClaimPaymentScheduleItem, 
 	return item, nil
 }
 
-// detectIdentityType mirrors the heuristic the claim registration form uses
-// (ClaimRegistrationForm.vue): 13 digits → South African ID number,
-// otherwise → Passport. The claim model doesn't store identity_type today,
-// so this is the only signal we have at re-verify time. VerifyNow expects
-// the literal strings "IDNumber" or "Passport".
+// resolveIdentityType prefers the value the user explicitly captured on the
+// claim (ClaimantIdentityType) and falls back to the 13-digit heuristic for
+// legacy rows where the column is still empty.
+func resolveIdentityType(claim models.GroupSchemeClaim) string {
+	if t := strings.TrimSpace(claim.ClaimantIdentityType); t != "" {
+		return t
+	}
+	return detectIdentityType(claim.ClaimantIDNumber)
+}
+
+// detectIdentityType mirrors the heuristic the claim registration form used
+// before the explicit identity_type column was added: 13 digits → South
+// African ID number, otherwise → Passport. Kept as the fallback path for
+// legacy claims where ClaimantIdentityType is empty.
 func detectIdentityType(idNumber string) string {
 	trimmed := strings.TrimSpace(idNumber)
 	if len(trimmed) == 13 {

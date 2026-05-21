@@ -161,7 +161,9 @@
             </td>
             <td class="text-right">
               <div class="d-flex align-center justify-end gap-1">
-                <span>{{ formatCurrency(item.gross_amount ?? item.claim_amount) }}</span>
+                <span>{{
+                  formatCurrency(item.gross_amount ?? item.claim_amount)
+                }}</span>
                 <v-menu
                   v-if="showDrift(item)"
                   :close-on-content-click="false"
@@ -180,7 +182,9 @@
                     />
                   </template>
                   <v-card max-width="320" rounded="lg">
-                    <v-card-title class="text-subtitle-2 pa-3 pb-1 d-flex align-center">
+                    <v-card-title
+                      class="text-subtitle-2 pa-3 pb-1 d-flex align-center"
+                    >
                       <v-icon size="small" class="mr-2" color="warning"
                         >mdi-alert-decagram-outline</v-icon
                       >
@@ -189,19 +193,26 @@
                     <v-card-text class="pa-3 pt-1">
                       <div class="text-body-2 mb-1">
                         Approved:
-                        <strong>{{ formatCurrency(item.approved_amount_snapshot ?? 0) }}</strong>
+                        <strong>{{
+                          formatCurrency(item.approved_amount_snapshot ?? 0)
+                        }}</strong>
                       </div>
                       <div class="text-body-2 mb-1">
                         Scheduled:
-                        <strong>{{ formatCurrency(item.gross_amount ?? item.claim_amount) }}</strong>
+                        <strong>{{
+                          formatCurrency(item.gross_amount ?? item.claim_amount)
+                        }}</strong>
                       </div>
                       <div class="text-body-2 mb-3">
                         Drift:
-                        <strong :class="driftDeltaClass(item)">{{ driftDeltaLabel(item) }}</strong>
+                        <strong :class="driftDeltaClass(item)">{{
+                          driftDeltaLabel(item)
+                        }}</strong>
                       </div>
                       <div class="text-caption text-medium-emphasis mb-3">
-                        Acknowledge once you've confirmed the drift is intentional, or
-                        query the line so the claim returns to claims for resolution.
+                        Acknowledge once you've confirmed the drift is
+                        intentional, or query the line so the claim returns to
+                        claims for resolution.
                       </div>
                       <div class="d-flex gap-2">
                         <v-btn
@@ -210,13 +221,15 @@
                           variant="flat"
                           :loading="acknowledgingDriftId === item.id"
                           @click="acknowledgeDrift(item)"
-                        >Acknowledge</v-btn>
+                          >Acknowledge</v-btn
+                        >
                         <v-btn
                           color="warning"
                           size="small"
                           variant="outlined"
                           @click="openQueryDialog(item, 'query')"
-                        >Query</v-btn>
+                          >Query</v-btn
+                        >
                       </div>
                     </v-card-text>
                   </v-card>
@@ -269,8 +282,8 @@
                     >
                   </template>
                   <strong>Banking details changed in the last 30 days.</strong>
-                  Verify call-back evidence with the claimant before
-                  authorising — query the line if no evidence is on file.
+                  Verify call-back evidence with the claimant before authorising
+                  — query the line if no evidence is on file.
                 </v-tooltip>
 
                 <v-tooltip
@@ -307,8 +320,8 @@
                     >
                   </template>
                   <strong>Policy was reinstated recently.</strong>
-                  Check that the cause of claim occurred after the
-                  reinstatement effective date.
+                  Check that the cause of claim occurred after the reinstatement
+                  effective date.
                 </v-tooltip>
 
                 <v-tooltip
@@ -326,9 +339,7 @@
                       Fraud: {{ fraudLevel(item) }}
                     </v-chip>
                   </template>
-                  <strong
-                    >Fraud risk score: {{ fraudLevel(item) }}.</strong
-                  >
+                  <strong>Fraud risk score: {{ fraudLevel(item) }}.</strong>
                   {{ fraudGuidance(fraudLevel(item)) }}
                 </v-tooltip>
 
@@ -373,13 +384,16 @@
                       ID paid before
                     </v-chip>
                   </template>
-                  <strong>This claimant ID has been paid on a prior claim.</strong>
+                  <strong
+                    >This claimant ID has been paid on a prior claim.</strong
+                  >
                   <div class="mt-1">
                     <div
                       v-for="r in idPaidRefs(item)"
                       :key="r"
                       class="text-caption"
-                    >• {{ r }}</div>
+                      >• {{ r }}</div
+                    >
                   </div>
                   Verify the new claim is unrelated, or query the line.
                 </v-tooltip>
@@ -405,9 +419,11 @@
                       v-for="r in accountUsedRefs(item)"
                       :key="r"
                       class="text-caption"
-                    >• {{ r }}</div>
+                      >• {{ r }}</div
+                    >
                   </div>
-                  Confirm the account belongs to this claimant or query the line.
+                  Confirm the account belongs to this claimant or query the
+                  line.
                 </v-tooltip>
               </div>
             </td>
@@ -546,15 +562,11 @@
                     />
                   </template>
                   <strong>Verify line.</strong> Marks this line as ready for
-                  first authorisation. Use once you've confirmed bank
-                  details, deductions, and any flagged risks are acceptable.
+                  first authorisation. Use once you've confirmed bank details,
+                  deductions, and any flagged risks are acceptable.
                 </v-tooltip>
 
-                <v-tooltip
-                  v-if="canQuery(item)"
-                  location="top"
-                  max-width="280"
-                >
+                <v-tooltip v-if="canQuery(item)" location="top" max-width="280">
                   <template #activator="{ props: tipProps }">
                     <v-btn
                       v-bind="tipProps"
@@ -570,11 +582,7 @@
                   approval queue for the next cut-off.
                 </v-tooltip>
 
-                <v-tooltip
-                  v-if="canQuery(item)"
-                  location="top"
-                  max-width="280"
-                >
+                <v-tooltip v-if="canQuery(item)" location="top" max-width="280">
                   <template #activator="{ props: tipProps }">
                     <v-btn
                       v-bind="tipProps"
@@ -586,9 +594,9 @@
                     />
                   </template>
                   <strong>Reject line.</strong> Removes the line from the
-                  schedule and marks the claim as <em>finance-rejected</em>.
-                  The claim is held out of the next cut-off until a claims
-                  assessor acknowledges the rejection and re-approves it.
+                  schedule and marks the claim as <em>finance-rejected</em>. The
+                  claim is held out of the next cut-off until a claims assessor
+                  acknowledges the rejection and re-approves it.
                 </v-tooltip>
 
                 <v-tooltip
@@ -610,8 +618,8 @@
                     />
                   </template>
                   <strong>Clear duplicate beneficiary flag.</strong> Confirms
-                  you've reviewed and accepted that the same beneficiary
-                  appears on another line — unblocks first authorisation.
+                  you've reviewed and accepted that the same beneficiary appears
+                  on another line — unblocks first authorisation.
                 </v-tooltip>
               </div>
             </td>
@@ -718,23 +726,25 @@
           <div class="text-body-2 mb-3">
             You're about to verify claim
             <strong>{{ verifyItem?.claim_number }}</strong> for
-            <strong>{{ verifyItem?.beneficiary_name || verifyItem?.member_name }}</strong>
-            ({{ formatCurrency(verifyItem?.net_payable ?? verifyItem?.claim_amount ?? 0) }}).
+            <strong>{{
+              verifyItem?.beneficiary_name || verifyItem?.member_name
+            }}</strong>
+            ({{
+              formatCurrency(
+                verifyItem?.net_payable ?? verifyItem?.claim_amount ?? 0
+              )
+            }}).
           </div>
           <div class="text-body-2 text-medium-emphasis">
-            Verifying marks the line as ready for first authorisation.
-            Confirm you've reviewed bank details, deductions, and any
-            flagged risks before proceeding.
+            Verifying marks the line as ready for first authorisation. Confirm
+            you've reviewed bank details, deductions, and any flagged risks
+            before proceeding.
           </div>
         </v-card-text>
         <v-card-actions class="pa-4 pt-0">
           <v-spacer />
           <v-btn variant="text" @click="verifyDialog = false">Cancel</v-btn>
-          <v-btn
-            color="success"
-            :loading="verifying"
-            @click="confirmVerify"
-          >
+          <v-btn color="success" :loading="verifying" @click="confirmVerify">
             Verify
           </v-btn>
         </v-card-actions>

@@ -72,3 +72,18 @@ func (m *MemberRatingResultSummary) BeforeSave(tx *gorm.DB) error {
 	}
 	return nil
 }
+
+// BeforeSave scrubs any NaN/Inf float fields to 0 before persisting. Per-row
+// member ratings carry dozens of computed ratios (FCLExcessRatio, salary
+// multiples, capped sums) — a single divide-by-zero upstream propagates a
+// NaN through the row and aborts the whole CreateInBatches with
+// "Unknown column 'NaN' in 'field list'".
+func (m *MemberRatingResult) BeforeSave(tx *gorm.DB) error {
+	scrubbed := sanitizeFloat64NaNInf(reflect.ValueOf(m).Elem())
+	if len(scrubbed) > 0 {
+		tx.Logger.Warn(tx.Statement.Context,
+			"MemberRatingResult: sanitized non-finite float fields to 0 before save (quote_id=%d, member=%q, fields=%v)",
+			m.QuoteId, m.MemberName, scrubbed)
+	}
+	return nil
+}

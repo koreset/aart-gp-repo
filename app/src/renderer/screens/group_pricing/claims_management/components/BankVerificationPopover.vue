@@ -22,8 +22,12 @@
           {{ chipLabel }}
         </v-chip>
         <div class="bav-trigger__meta">
-          <div class="bav-trigger__bank">{{ bankName || 'No bank on file' }}</div>
-          <div v-if="maskedAccount" class="bav-trigger__account">{{ maskedAccount }}</div>
+          <div class="bav-trigger__bank">{{
+            bankName || 'No bank on file'
+          }}</div>
+          <div v-if="maskedAccount" class="bav-trigger__account">{{
+            maskedAccount
+          }}</div>
         </div>
       </button>
     </template>
@@ -47,7 +51,10 @@
           <v-progress-circular indeterminate size="24" />
         </div>
         <template v-else>
-          <div v-if="!status?.has_result" class="text-body-2 text-medium-emphasis">
+          <div
+            v-if="!status?.has_result"
+            class="text-body-2 text-medium-emphasis"
+          >
             No verification has been recorded for this claim yet.
           </div>
           <template v-else>
@@ -57,16 +64,24 @@
                 size="small"
                 variant="flat"
                 class="mr-2"
-              >{{ chipLabel }}</v-chip>
-              <span v-if="status.verified_at" class="text-caption text-medium-emphasis">
+                >{{ chipLabel }}</v-chip
+              >
+              <span
+                v-if="status.verified_at"
+                class="text-caption text-medium-emphasis"
+              >
                 {{ relativeAge(status.verified_at) }}
               </span>
             </div>
             <div
               v-if="status.stale && status.stale_reason"
               class="text-body-2 text-warning mb-2"
-            >{{ status.stale_reason }}</div>
-            <div v-if="status.provider_request_id" class="text-caption text-medium-emphasis">
+              >{{ status.stale_reason }}</div
+            >
+            <div
+              v-if="status.provider_request_id"
+              class="text-caption text-medium-emphasis"
+            >
               Provider ref: {{ status.provider_request_id }}
             </div>
             <div class="text-caption text-medium-emphasis">
@@ -83,8 +98,13 @@
             class="mb-2"
             closable
             @click:close="reverifyError = ''"
-          >{{ reverifyError }}</v-alert>
-          <v-tooltip :disabled="!reverifyDisabledReason" location="top" max-width="280">
+            >{{ reverifyError }}</v-alert
+          >
+          <v-tooltip
+            :disabled="!reverifyDisabledReason"
+            location="top"
+            max-width="280"
+          >
             <template #activator="{ props: tipProps }">
               <span v-bind="tipProps">
                 <v-btn
@@ -95,7 +115,8 @@
                   :loading="reverifying"
                   :disabled="!!reverifyDisabledReason"
                   @click="reverify"
-                >Re-verify now</v-btn>
+                  >Re-verify now</v-btn
+                >
               </span>
             </template>
             {{ reverifyDisabledReason }}
@@ -158,7 +179,8 @@ const chipColor = computed(() => {
 })
 
 const chipIcon = computed(() => {
-  if (!status.value || !status.value.has_result) return 'mdi-help-circle-outline'
+  if (!status.value || !status.value.has_result)
+    return 'mdi-help-circle-outline'
   if (status.value.status === 'failed') return 'mdi-close-circle-outline'
   if (status.value.status === 'pending') return 'mdi-clock-outline'
   if (status.value.stale) return 'mdi-alert-outline'
@@ -200,7 +222,10 @@ async function reverify() {
   reverifying.value = true
   reverifyError.value = ''
   try {
-    await GroupPricingService.reverifyLineBankAccount(props.scheduleId, props.itemId)
+    await GroupPricingService.reverifyLineBankAccount(
+      props.scheduleId,
+      props.itemId
+    )
     await load()
     emit('reverified')
   } catch (err: any) {

@@ -4,7 +4,9 @@
     <div class="stat-card__body">
       <div class="stat-card__head">
         <span class="stat-card__label">{{ title }}</span>
-        <v-icon v-if="icon" class="stat-card__icon" size="20">{{ icon }}</v-icon>
+        <v-icon v-if="icon" class="stat-card__icon" size="20">{{
+          icon
+        }}</v-icon>
       </div>
       <v-skeleton-loader
         v-if="loading"

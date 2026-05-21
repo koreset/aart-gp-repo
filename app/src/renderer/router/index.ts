@@ -16,7 +16,8 @@ const checkPermissions = async (to: any, _from: any) => {
   if (!store.hasRole) return true
   if (store.hasPermission('system:admin')) return true
   if (required && store.hasPermission(required)) return true
-  if (requiredAny && requiredAny.some((p) => store.hasPermission(p))) return true
+  if (requiredAny && requiredAny.some((p) => store.hasPermission(p)))
+    return true
   return { name: 'group-pricing-dashboard' }
 }
 
@@ -183,6 +184,23 @@ const router = createRouter({
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {
+      path: '/group-pricing/administration/member-management/bulk-enrollment',
+      name: 'group-pricing-bulk-enrollment',
+      component: () =>
+        import('../screens/group_pricing/administration/BulkEnrollment.vue'),
+      meta: { required_permission: 'navigation:manage_members' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/administration/member-management/bulk-enrollment/batches/:batchId',
+      name: 'group-pricing-bulk-enrollment-batch',
+      component: () =>
+        import('../screens/group_pricing/administration/BulkEnrollmentBatchReview.vue'),
+      props: true,
+      meta: { required_permission: 'navigation:manage_members' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
       path: '/group-pricing/administration/member-management/:id',
       name: 'group-pricing-member-details',
       component: () =>
@@ -243,8 +261,24 @@ const router = createRouter({
       path: '/group-pricing/claims-management',
       name: 'group-pricing-claims-management',
       component: () =>
-        import('../screens/group_pricing/claims_management/ClaimsManagement.vue'),
+        import('../screens/group_pricing/claims_management/ClaimsHome.vue'),
       meta: { required_permission: 'navigation:manage_claims' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/claims-management/regular-income',
+      name: 'group-pricing-regular-income-claims',
+      component: () =>
+        import('../screens/group_pricing/claims_management/RegularIncomeHome.vue'),
+      meta: { required_permission: 'claims:view_regular_income' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/claims-management/cpi-index',
+      name: 'group-pricing-cpi-index',
+      component: () =>
+        import('../screens/group_pricing/claims_management/CpiIndexManagement.vue'),
+      meta: { required_permission: 'claims:view_regular_income' },
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
     {
@@ -439,6 +473,108 @@ const router = createRouter({
       component: () =>
         import('../screens/group_pricing/claims_management/ClaimsAnalytics.vue'),
       meta: { required_permission: 'navigation:manage_claims' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+
+    // ── Finance: General Ledger (tabbed layout) ─────────────────────────────
+    {
+      path: '/group-pricing/finance/general-ledger',
+      component: () =>
+        import('../screens/group_pricing/finance/GeneralLedgerLayout.vue'),
+      redirect: { name: 'group-pricing-gl-journals' },
+      children: [
+        {
+          path: 'journals',
+          name: 'group-pricing-gl-journals',
+          component: () =>
+            import('../screens/group_pricing/finance/JournalEntries.vue'),
+          meta: { required_permission: 'gl:view' },
+          beforeEnter: (to, from) => checkPermissions(to, from)
+        },
+        {
+          path: 'trial-balance',
+          name: 'group-pricing-gl-trial-balance',
+          component: () =>
+            import('../screens/group_pricing/finance/TrialBalance.vue'),
+          meta: { required_permission: 'gl:view' },
+          beforeEnter: (to, from) => checkPermissions(to, from)
+        },
+        {
+          path: 'chart-of-accounts',
+          name: 'group-pricing-gl-chart-of-accounts',
+          component: () =>
+            import('../screens/group_pricing/finance/ChartOfAccounts.vue'),
+          meta: { required_permission: 'gl:view' },
+          beforeEnter: (to, from) => checkPermissions(to, from)
+        },
+        {
+          path: 'periods',
+          name: 'group-pricing-gl-periods',
+          component: () =>
+            import('../screens/group_pricing/finance/AccountingPeriods.vue'),
+          meta: { required_permission: 'gl:view' },
+          beforeEnter: (to, from) => checkPermissions(to, from)
+        },
+        {
+          path: 'posting-rules',
+          name: 'group-pricing-gl-posting-rules',
+          component: () =>
+            import('../screens/group_pricing/finance/PostingRules.vue'),
+          meta: { required_permission: 'gl:view' },
+          beforeEnter: (to, from) => checkPermissions(to, from)
+        },
+        {
+          path: 'audit-log',
+          name: 'group-pricing-gl-audit-log',
+          component: () =>
+            import('../screens/group_pricing/finance/AuditLog.vue'),
+          meta: { required_permission: 'gl:view_audit' },
+          beforeEnter: (to, from) => checkPermissions(to, from)
+        }
+      ]
+    },
+    // ── Finance: Cash & Banking (tabbed layout) ─────────────────────────────
+    {
+      path: '/group-pricing/finance/cash-banking',
+      component: () =>
+        import('../screens/group_pricing/finance/CashAndBankingLayout.vue'),
+      redirect: { name: 'group-pricing-gl-bank-accounts' },
+      children: [
+        {
+          path: 'accounts',
+          name: 'group-pricing-gl-bank-accounts',
+          component: () =>
+            import('../screens/group_pricing/finance/BankAccounts.vue'),
+          meta: { required_permission: 'gl:view' },
+          beforeEnter: (to, from) => checkPermissions(to, from)
+        },
+        {
+          path: 'reconciliation',
+          name: 'group-pricing-gl-bank-reconciliation',
+          component: () =>
+            import('../screens/group_pricing/finance/BankReconciliation.vue'),
+          meta: { required_permission: 'gl:bank_rec' },
+          beforeEnter: (to, from) => checkPermissions(to, from)
+        }
+      ]
+    },
+    // Detail routes stay full-bleed (no tab bar wrapper).
+    {
+      path: '/group-pricing/finance/journals/:id',
+      name: 'group-pricing-gl-journal-detail',
+      component: () =>
+        import('../screens/group_pricing/finance/JournalEntryDetail.vue'),
+      props: true,
+      meta: { required_permission: 'gl:view' },
+      beforeEnter: (to, from) => checkPermissions(to, from)
+    },
+    {
+      path: '/group-pricing/finance/accounts/:id/ledger',
+      name: 'group-pricing-gl-account-ledger',
+      component: () =>
+        import('../screens/group_pricing/finance/GeneralLedger.vue'),
+      props: true,
+      meta: { required_permission: 'gl:view' },
       beforeEnter: (to, from) => checkPermissions(to, from)
     },
 

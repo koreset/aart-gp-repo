@@ -3,6 +3,7 @@ package services
 import (
 	appLog "api/log"
 	"api/models"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -65,6 +66,7 @@ func MigrateGroupPricingTables() error {
 		&models.Broker{},
 		&models.GPricingMemberData{},
 		&models.GPricingMemberDataInForce{},
+		&models.BulkEnrollmentBatch{},
 		&models.GroupPricingClaimsExperience{},
 		&models.GroupPricingExperienceRateOverride{},
 		&models.MemberRatingResult{},
@@ -508,4 +510,114 @@ func CreateDatabaseIndexesForMigration() error {
 
 	appLog.Info("Database index creation completed")
 	return nil
+}
+
+// SeedGeneralLedger bootstraps the operational General Ledger with a default
+// chart of accounts, the MVP posting rules that hook claim payments and
+// premium reconciliation into the ledger, and one open accounting period for
+// the current month.
+//
+// Idempotent: every record is keyed on a unique column (Code, EventKey, or
+// Name) and inserted only if missing. Safe to run on every boot. Errors are
+// logged but never propagate; a broken seed should not crash the API, and
+// finance can correct config via the /gl admin UI.
+func SeedGeneralLedger() {
+	if DB == nil {
+		appLog.Warn("SeedGeneralLedger called with nil DB — skipping")
+		return
+	}
+
+	defaultAccounts := []models.GLAccount{
+		{Code: "1000", Name: "Bank", AccountType: "asset", NormalBalance: "debit", IsActive: true, Description: "Operational bank account"},
+		{Code: "1100", Name: "Premium Receivable", AccountType: "asset", NormalBalance: "debit", IsActive: true, Description: "Outstanding premium invoices"},
+		{Code: "1200", Name: "Suspense", AccountType: "asset", NormalBalance: "debit", IsActive: true, Description: "Unallocated premium receipts"},
+		{Code: "2000", Name: "Claims Liability", AccountType: "liability", NormalBalance: "credit", IsActive: true, Description: "Approved claims awaiting payment"},
+		{Code: "2100", Name: "Refunds Payable", AccountType: "liability", NormalBalance: "credit", IsActive: true, Description: "Premium overpayments due for refund"},
+		{Code: "4000", Name: "Premium Income", AccountType: "income", NormalBalance: "credit", IsActive: true, Description: "Earned premium revenue"},
+		{Code: "6000", Name: "Bad Debt Expense", AccountType: "expense", NormalBalance: "debit", IsActive: true, Description: "Written-off premium receivables"},
+	}
+	for _, a := range defaultAccounts {
+		var existing models.GLAccount
+		err := DB.Where("code = ?", a.Code).First(&existing).Error
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			appLog.WithField("code", a.Code).WithField("error", err.Error()).Warn("Failed to check existing GL account")
+			continue
+		}
+		if err := DB.Create(&a).Error; err != nil {
+			appLog.WithField("code", a.Code).WithField("error", err.Error()).Warn("Failed to seed GL account")
+		}
+	}
+
+	accountIDByCode := make(map[string]int)
+	var allAccounts []models.GLAccount
+	if err := DB.Find(&allAccounts).Error; err == nil {
+		for _, a := range allAccounts {
+			accountIDByCode[a.Code] = a.ID
+		}
+	}
+
+	defaultRules := []struct {
+		EventKey  string
+		Debit     string
+		Credit    string
+		Notes     string
+	}{
+		{"claim_payment.confirmed", "2000", "1000", "Confirmed claim payment: clear liability, drain bank"},
+		{"premium_allocation.created", "1000", "1100", "Premium allocated to invoice: bank up, receivable down"},
+		{"premium_allocation.reversed", "1100", "1000", "Allocation reversed: restore receivable, undo bank entry"},
+		{"premium.write_off", "6000", "1100", "Write-off uncollectable premium"},
+		{"premium.refund", "2100", "1000", "Refund overpayment to payer"},
+	}
+	for _, r := range defaultRules {
+		drID, drOK := accountIDByCode[r.Debit]
+		crID, crOK := accountIDByCode[r.Credit]
+		if !drOK || !crOK {
+			appLog.WithField("event_key", r.EventKey).Warn("Skipping posting rule seed — referenced account not present")
+			continue
+		}
+		var existing models.PostingRule
+		err := DB.Where("event_key = ?", r.EventKey).First(&existing).Error
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			appLog.WithField("event_key", r.EventKey).WithField("error", err.Error()).Warn("Failed to check existing posting rule")
+			continue
+		}
+		rule := models.PostingRule{
+			EventKey:        r.EventKey,
+			DebitAccountID:  drID,
+			CreditAccountID: crID,
+			IsActive:        true,
+			Notes:           r.Notes,
+		}
+		if err := DB.Create(&rule).Error; err != nil {
+			appLog.WithField("event_key", r.EventKey).WithField("error", err.Error()).Warn("Failed to seed posting rule")
+		}
+	}
+
+	now := time.Now()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	monthEnd := monthStart.AddDate(0, 1, 0).Add(-time.Second)
+	periodName := now.Format("2006-01")
+	var existing models.AccountingPeriod
+	err := DB.Where("name = ?", periodName).First(&existing).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		period := models.AccountingPeriod{
+			Name:      periodName,
+			StartDate: monthStart,
+			EndDate:   monthEnd,
+			Status:    "open",
+		}
+		if err := DB.Create(&period).Error; err != nil {
+			appLog.WithField("name", periodName).WithField("error", err.Error()).Warn("Failed to seed accounting period")
+		}
+	} else if err != nil {
+		appLog.WithField("name", periodName).WithField("error", err.Error()).Warn("Failed to check existing accounting period")
+	}
+
+	appLog.Info("General Ledger seeding completed")
 }

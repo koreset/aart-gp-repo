@@ -135,23 +135,23 @@
             )
           "
         >
-          <v-list-item-title>Claims List</v-list-item-title>
+          <v-list-item-title>Claims</v-list-item-title>
         </v-list-item>
         <v-list-item
           class="second-level-item"
           :class="{
-            'disabled-item': !canAccess('navigation:view_claims_analytics')
+            'disabled-item': !canAccess('claims:view_regular_income')
           }"
-          prepend-icon="mdi-chart-line"
+          prepend-icon="mdi-cash-multiple"
           @click="
             navigateGroup(
-              'group-pricing-claims-analytics',
+              'group-pricing-regular-income-claims',
               'Claims Management',
-              'navigation:view_claims_analytics'
+              'claims:view_regular_income'
             )
           "
         >
-          <v-list-item-title>Claims Analytics</v-list-item-title>
+          <v-list-item-title>Regular Income Claims</v-list-item-title>
         </v-list-item>
         <v-list-item
           class="second-level-item"
@@ -353,6 +353,33 @@
           "
         >
           <v-list-item-title>Payment Exceptions</v-list-item-title>
+        </v-list-item>
+        <v-divider class="my-1" />
+        <v-list-item
+          :class="{ 'disabled-item': !canAccess('gl:view') }"
+          prepend-icon="mdi-book-open-page-variant-outline"
+          @click="
+            navigateGroup(
+              'group-pricing-gl-journals',
+              'Finance',
+              'gl:view'
+            )
+          "
+        >
+          <v-list-item-title>General Ledger</v-list-item-title>
+        </v-list-item>
+        <v-list-item
+          :class="{ 'disabled-item': !canAccess('gl:view') }"
+          prepend-icon="mdi-bank-outline"
+          @click="
+            navigateGroup(
+              'group-pricing-gl-bank-accounts',
+              'Finance',
+              'gl:view'
+            )
+          "
+        >
+          <v-list-item-title>Cash &amp; Banking</v-list-item-title>
         </v-list-item>
       </v-list-group>
 

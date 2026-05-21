@@ -109,10 +109,28 @@
       <!-- Claim Details Section -->
       <v-col cols="12">
         <v-card variant="outlined" class="mb-4">
-          <v-card-title class="text-subtitle-1 bg-grey-lighten-4">
+          <v-card-title
+            class="text-subtitle-1 bg-grey-lighten-4 d-flex align-center cursor-pointer"
+            @click="toggleSection('claim_info')"
+          >
+            <v-icon
+              :icon="isSectionOpen('claim_info') ? 'mdi-chevron-down' : 'mdi-chevron-right'"
+              size="small"
+              class="mr-1"
+            />
             Claim Information
+            <v-spacer />
+            <v-chip
+              :color="statusFor('claim_info').color"
+              size="x-small"
+              variant="flat"
+              :prepend-icon="statusFor('claim_info').icon"
+            >
+              {{ statusFor('claim_info').label }}
+            </v-chip>
           </v-card-title>
-          <v-card-text class="pt-4">
+          <v-expand-transition>
+            <v-card-text v-show="isSectionOpen('claim_info')" class="pt-4">
             <v-row>
               <v-col cols="12" md="6">
                 <v-select
@@ -216,16 +234,35 @@
               </v-col>
             </v-row>
           </v-card-text>
+          </v-expand-transition>
         </v-card>
       </v-col>
 
       <!-- Claimant Information Section (for dependants) -->
       <v-col v-if="requiresClaimantInfo" cols="12">
         <v-card variant="outlined" class="mb-4">
-          <v-card-title class="text-subtitle-1 bg-grey-lighten-4">
+          <v-card-title
+            class="text-subtitle-1 bg-grey-lighten-4 d-flex align-center cursor-pointer"
+            @click="toggleSection('claimant_info')"
+          >
+            <v-icon
+              :icon="isSectionOpen('claimant_info') ? 'mdi-chevron-down' : 'mdi-chevron-right'"
+              size="small"
+              class="mr-1"
+            />
             Claimant Information
+            <v-spacer />
+            <v-chip
+              :color="statusFor('claimant_info').color"
+              size="x-small"
+              variant="flat"
+              :prepend-icon="statusFor('claimant_info').icon"
+            >
+              {{ statusFor('claimant_info').label }}
+            </v-chip>
           </v-card-title>
-          <v-card-text class="pt-4">
+          <v-expand-transition>
+            <v-card-text v-show="isSectionOpen('claimant_info')" class="pt-4">
             <v-row>
               <v-col cols="12" md="6">
                 <v-text-field
@@ -236,15 +273,25 @@
                   :rules="requiresClaimantInfo ? [rules.required] : []"
                 />
               </v-col>
-              <v-col cols="12" md="6">
+              <v-col cols="12" md="3">
+                <v-select
+                  v-model="formData.claimant_identity_type"
+                  :items="identityTypes"
+                  label="ID Type *"
+                  variant="outlined"
+                  density="compact"
+                  :rules="requiresClaimantInfo ? [rules.required] : []"
+                />
+              </v-col>
+              <v-col cols="12" md="3">
                 <v-text-field
                   v-model="formData.claimant_id_number"
-                  label="Claimant ID Number *"
+                  :label="claimantIdNumberLabel"
                   variant="outlined"
                   density="compact"
                   :rules="
                     requiresClaimantInfo
-                      ? [rules.required, rules.idOrPassport]
+                      ? [rules.required, rules.idOrPassportTyped]
                       : []
                   "
                 />
@@ -265,8 +312,15 @@
                 <v-text-field
                   v-model="formData.claimant_contact_number"
                   label="Contact Number"
+                  hint="South African mobile, e.g. 0821234567 or +27821234567"
+                  persistent-hint
                   variant="outlined"
                   density="compact"
+                  :rules="
+                    formData.claimant_contact_number
+                      ? [rules.saMobile]
+                      : []
+                  "
                 />
               </v-col>
             </v-row>
@@ -284,6 +338,7 @@
               </v-col>
             </v-row>
           </v-card-text>
+          </v-expand-transition>
         </v-card>
       </v-col>
 
@@ -291,29 +346,27 @@
       <v-col cols="12">
         <v-card variant="outlined" class="mb-4">
           <v-card-title
-            class="text-subtitle-1 bg-grey-lighten-4 d-flex justify-space-between align-center"
+            class="text-subtitle-1 bg-grey-lighten-4 d-flex align-center cursor-pointer"
+            @click="toggleSection('banking')"
           >
+            <v-icon
+              :icon="isSectionOpen('banking') ? 'mdi-chevron-down' : 'mdi-chevron-right'"
+              size="small"
+              class="mr-1"
+            />
             Banking Details
+            <v-spacer />
             <v-chip
-              v-if="formData.bank_verification_status === 'verified'"
-              color="success"
-              size="small"
+              :color="statusFor('banking').color"
+              size="x-small"
               variant="flat"
+              :prepend-icon="statusFor('banking').icon"
             >
-              <v-icon size="small" class="mr-1">mdi-check-circle</v-icon>
-              Verified
-            </v-chip>
-            <v-chip
-              v-else-if="formData.bank_verification_status === 'failed'"
-              color="error"
-              size="small"
-              variant="flat"
-            >
-              <v-icon size="small" class="mr-1">mdi-alert-circle</v-icon>
-              Verification Failed
+              {{ statusFor('banking').label }}
             </v-chip>
           </v-card-title>
-          <v-card-text class="pt-4">
+          <v-expand-transition>
+            <v-card-text v-show="isSectionOpen('banking')" class="pt-4">
             <v-row>
               <v-col cols="12" md="6">
                 <v-select
@@ -462,25 +515,44 @@
               </div>
             </v-expand-transition>
           </v-card-text>
+          </v-expand-transition>
         </v-card>
       </v-col>
 
       <!-- Supporting Documentation -->
       <v-col cols="12">
         <v-card variant="outlined" class="mb-4">
-          <v-card-title class="text-subtitle-1 bg-grey-lighten-4">
+          <v-card-title
+            class="text-subtitle-1 bg-grey-lighten-4 d-flex align-center cursor-pointer"
+            @click="toggleSection('documents')"
+          >
+            <v-icon
+              :icon="isSectionOpen('documents') ? 'mdi-chevron-down' : 'mdi-chevron-right'"
+              size="small"
+              class="mr-1"
+            />
             Supporting Documentation
             <v-chip
               v-if="formData.benefit_type"
-              size="small"
+              size="x-small"
               color="primary"
               variant="tonal"
               class="ml-2"
             >
               {{ formData.benefit_type.value?.benefit_alias }}
             </v-chip>
+            <v-spacer />
+            <v-chip
+              :color="statusFor('documents').color"
+              size="x-small"
+              variant="flat"
+              :prepend-icon="statusFor('documents').icon"
+            >
+              {{ statusFor('documents').label }}
+            </v-chip>
           </v-card-title>
-          <v-card-text class="pt-4">
+          <v-expand-transition>
+            <v-card-text v-show="isSectionOpen('documents')" class="pt-4">
             <v-alert
               v-if="!formData.benefit_type"
               type="info"
@@ -581,6 +653,7 @@
                             color="success"
                             variant="tonal"
                             size="small"
+                            @click="previewExistingAttachment(att)"
                             @click:close="
                               removeExistingAttachment(docType.code, att.id)
                             "
@@ -593,6 +666,9 @@
                               att.document_name ||
                               `Attachment #${att.id}`
                             }}
+                            <v-icon end size="x-small"
+                              >mdi-eye-outline</v-icon
+                            >
                           </v-chip>
                         </v-chip-group>
                       </div>
@@ -614,6 +690,7 @@
                             color="primary"
                             variant="tonal"
                             size="small"
+                            @click="previewLocalFile(file)"
                             @click:close="
                               removeDocumentFile(docType.code, fileIndex)
                             "
@@ -622,6 +699,9 @@
                               >mdi-file-document</v-icon
                             >
                             {{ file.name }} ({{ formatFileSize(file.size) }})
+                            <v-icon end size="x-small"
+                              >mdi-eye-outline</v-icon
+                            >
                           </v-chip>
                         </v-chip-group>
                       </div>
@@ -651,6 +731,7 @@
                           color="grey-darken-1"
                           variant="tonal"
                           size="small"
+                          @click="previewExistingAttachment(att)"
                           @click:close="
                             removeExistingAttachment(
                               att.document_type || '__other',
@@ -664,6 +745,7 @@
                             att.document_name ||
                             `Attachment #${att.id}`
                           }}
+                          <v-icon end size="x-small">mdi-eye-outline</v-icon>
                         </v-chip>
                       </v-chip-group>
                     </v-card-text>
@@ -702,23 +784,43 @@
               </v-alert>
             </div>
           </v-card-text>
+          </v-expand-transition>
         </v-card>
       </v-col>
 
       <!-- Claim Description -->
       <v-col cols="12">
         <v-card variant="outlined" class="mb-4">
-          <v-card-title class="text-subtitle-1 bg-grey-lighten-4">
-            Claim Description
-          </v-card-title>
-          <v-card-text class="pt-4">
-            <v-textarea
-              v-model="formData.description"
-              label="Detailed Description of Claim"
-              variant="outlined"
-              rows="4"
+          <v-card-title
+            class="text-subtitle-1 bg-grey-lighten-4 d-flex align-center cursor-pointer"
+            @click="toggleSection('description')"
+          >
+            <v-icon
+              :icon="isSectionOpen('description') ? 'mdi-chevron-down' : 'mdi-chevron-right'"
+              size="small"
+              class="mr-1"
             />
-          </v-card-text>
+            Claim Description
+            <v-spacer />
+            <v-chip
+              :color="statusFor('description').color"
+              size="x-small"
+              variant="flat"
+              :prepend-icon="statusFor('description').icon"
+            >
+              {{ statusFor('description').label }}
+            </v-chip>
+          </v-card-title>
+          <v-expand-transition>
+            <v-card-text v-show="isSectionOpen('description')" class="pt-4">
+              <v-textarea
+                v-model="formData.description"
+                label="Detailed Description of Claim"
+                variant="outlined"
+                rows="4"
+              />
+            </v-card-text>
+          </v-expand-transition>
         </v-card>
       </v-col>
 
@@ -765,6 +867,68 @@
       </v-col>
     </v-row>
   </v-form>
+
+  <!-- Document preview dialog -->
+  <v-dialog v-model="previewDialog" max-width="900px">
+    <v-card rounded="lg">
+      <v-card-title
+        class="text-subtitle-1 bg-grey-lighten-4 d-flex justify-space-between align-center"
+      >
+        <span class="text-truncate">{{ previewName }}</span>
+        <v-btn
+          icon="mdi-close"
+          variant="text"
+          size="small"
+          @click="previewDialog = false"
+        />
+      </v-card-title>
+      <v-card-text class="pa-0">
+        <div v-if="previewLoading" class="text-center py-8">
+          <v-progress-circular indeterminate />
+        </div>
+        <v-alert
+          v-else-if="previewError"
+          type="error"
+          variant="tonal"
+          class="ma-3"
+        >{{ previewError }}</v-alert>
+        <template v-else>
+          <iframe
+            v-if="isPdf(previewName, previewMime) && previewUrl"
+            :src="previewUrl"
+            title="Document preview"
+            style="width: 100%; height: 70vh; border: none"
+          />
+          <div
+            v-else-if="isImage(previewName, previewMime) && previewUrl"
+            class="d-flex justify-center align-center pa-3"
+            style="max-height: 70vh; overflow: auto"
+          >
+            <img
+              :src="previewUrl"
+              :alt="previewName"
+              style="max-width: 100%; max-height: 70vh"
+            />
+          </div>
+          <div v-else class="pa-4 text-body-2 text-medium-emphasis">
+            Preview not available for this file type. Use the download link
+            below to open it in another application.
+            <div class="mt-3">
+              <v-btn
+                v-if="previewUrl"
+                color="primary"
+                variant="outlined"
+                size="small"
+                prepend-icon="mdi-download"
+                :href="previewUrl"
+                :download="previewName"
+              >Download</v-btn>
+            </div>
+          </div>
+        </template>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script setup lang="ts">
@@ -828,6 +992,207 @@ const loading = ref(false)
 const claimAmountLoading = ref(false)
 const serverBenefitsResponse = ref<string[]>([])
 const showMissingDocsDialog = ref(false)
+
+// Collapsible section state. Member Information is always shown — every
+// other section can be folded so the form scans like a checklist on revisit.
+// New claims start expanded so capturers don't miss empty fields; edit mode
+// starts collapsed since the data is already there for review.
+type SectionKey =
+  | 'claim_info'
+  | 'claimant_info'
+  | 'banking'
+  | 'documents'
+  | 'description'
+
+const allSectionKeys: SectionKey[] = [
+  'claim_info',
+  'claimant_info',
+  'banking',
+  'documents',
+  'description'
+]
+
+const openSections = ref<Set<SectionKey>>(new Set(allSectionKeys))
+
+function isSectionOpen(key: SectionKey): boolean {
+  return openSections.value.has(key)
+}
+
+function toggleSection(key: SectionKey) {
+  if (openSections.value.has(key)) {
+    openSections.value.delete(key)
+  } else {
+    openSections.value.add(key)
+  }
+  // Trigger Vue reactivity on Set mutation.
+  openSections.value = new Set(openSections.value)
+}
+
+// Document preview dialog. Handles both unsaved File uploads (via
+// URL.createObjectURL) and existing attachments (fetched as a blob from the
+// server). The blob URL is revoked when the dialog closes so we don't leak
+// memory.
+const previewDialog = ref(false)
+const previewLoading = ref(false)
+const previewError = ref('')
+const previewUrl = ref('')
+const previewMime = ref('')
+const previewName = ref('')
+
+function isPdf(name: string, mime: string): boolean {
+  return (
+    mime.includes('pdf') || /\.pdf$/i.test(name)
+  )
+}
+
+function isImage(name: string, mime: string): boolean {
+  return mime.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(name)
+}
+
+function previewLocalFile(file: File) {
+  closePreview()
+  previewUrl.value = URL.createObjectURL(file)
+  previewMime.value = file.type || ''
+  previewName.value = file.name
+  previewError.value = ''
+  previewDialog.value = true
+}
+
+async function previewExistingAttachment(att: any) {
+  closePreview()
+  previewLoading.value = true
+  previewName.value = att.filename || att.document_name || `Attachment #${att.id}`
+  previewError.value = ''
+  try {
+    const res = await GroupPricingService.getClaimsAttachement(
+      props.claim?.id ?? 0,
+      att.id
+    )
+    const blob = res.data as Blob
+    previewMime.value = blob.type || att.content_type || ''
+    previewUrl.value = URL.createObjectURL(blob)
+    previewDialog.value = true
+  } catch (err: any) {
+    previewError.value =
+      err?.response?.data?.error ||
+      err?.response?.data?.message ||
+      err?.message ||
+      'Failed to load attachment'
+    previewDialog.value = true
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+function closePreview() {
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value)
+  }
+  previewUrl.value = ''
+  previewMime.value = ''
+  previewName.value = ''
+  previewError.value = ''
+}
+
+watch(previewDialog, (open) => {
+  if (!open) closePreview()
+})
+
+// Section status — surfaces completion at a glance on the collapsed title.
+interface SectionStatus {
+  color: string
+  label: string
+  icon: string
+}
+
+const claimInfoStatus = computed<SectionStatus>(() => {
+  const f = formData.value
+  const ok =
+    !!f.benefit_type &&
+    !!f.claim_amount &&
+    f.claim_amount > 0 &&
+    !!f.member_type &&
+    !!f.date_of_event
+  return ok
+    ? { color: 'success', label: 'Complete', icon: 'mdi-check-circle' }
+    : { color: 'warning', label: 'Incomplete', icon: 'mdi-alert-circle-outline' }
+})
+
+const claimantInfoStatus = computed<SectionStatus>(() => {
+  const f = formData.value
+  if (!requiresClaimantInfo.value)
+    return { color: 'grey', label: 'Not required', icon: 'mdi-minus-circle-outline' }
+  const ok =
+    !!f.claimant_name &&
+    !!f.claimant_id_number &&
+    !!f.claimant_identity_type &&
+    !!f.relationship_to_member
+  return ok
+    ? { color: 'success', label: 'Complete', icon: 'mdi-check-circle' }
+    : { color: 'warning', label: 'Incomplete', icon: 'mdi-alert-circle-outline' }
+})
+
+const bankingStatus = computed<SectionStatus>(() => {
+  const f = formData.value
+  const filled =
+    !!f.bank_name &&
+    !!f.bank_branch_code &&
+    !!f.bank_account_number &&
+    !!f.bank_account_type &&
+    !!f.account_holder_name
+  if (!filled)
+    return { color: 'warning', label: 'Incomplete', icon: 'mdi-alert-circle-outline' }
+  if (f.bank_verification_status === 'verified')
+    return { color: 'success', label: 'Verified', icon: 'mdi-check-circle' }
+  if (f.bank_verification_status === 'failed')
+    return { color: 'error', label: 'Verification failed', icon: 'mdi-close-circle' }
+  return { color: 'info', label: 'Awaiting verification', icon: 'mdi-clock-outline' }
+})
+
+const documentsStatus = computed<SectionStatus>(() => {
+  if (!formData.value.benefit_type)
+    return { color: 'grey', label: 'Pick a benefit', icon: 'mdi-help-circle-outline' }
+  if (allRequiredDocumentsUploaded.value)
+    return { color: 'success', label: 'All uploaded', icon: 'mdi-check-circle' }
+  const missing = missingRequiredDocuments.value.length
+  if (missing > 0)
+    return {
+      color: 'warning',
+      label: `${missing} required missing`,
+      icon: 'mdi-alert-circle-outline'
+    }
+  return { color: 'info', label: 'Optional only', icon: 'mdi-information-outline' }
+})
+
+const descriptionStatus = computed<SectionStatus>(() => {
+  return formData.value.description?.trim()
+    ? { color: 'success', label: 'Added', icon: 'mdi-check-circle' }
+    : { color: 'grey', label: 'Optional', icon: 'mdi-minus-circle-outline' }
+})
+
+function statusFor(key: SectionKey): SectionStatus {
+  switch (key) {
+    case 'claim_info':
+      return claimInfoStatus.value
+    case 'claimant_info':
+      return claimantInfoStatus.value
+    case 'banking':
+      return bankingStatus.value
+    case 'documents':
+      return documentsStatus.value
+    case 'description':
+      return descriptionStatus.value
+  }
+}
+
+// Auto-collapse all sections in edit mode (where data is already there for
+// quick review). New claims keep everything open so the capturer doesn't
+// miss an empty section.
+onMounted(() => {
+  if (isEditMode.value) {
+    openSections.value = new Set()
+  }
+})
 
 // Document types mapping based on benefit codes
 const documentTypesMapping = {
@@ -1275,6 +1640,7 @@ const formData = ref({
   priority: 'medium',
   cause_type: 'non-accidental',
   claimant_name: '',
+  claimant_identity_type: 'IDNumber' as 'IDNumber' | 'Passport',
   claimant_id_number: '',
   relationship_to_member: '',
   claimant_contact_number: '',
@@ -1360,6 +1726,17 @@ const accidentTypes = [
 ]
 
 const relationships = ['Spouse', 'Child', 'Parent', 'Sibling', 'Other']
+
+const identityTypes = [
+  { title: 'ID Number', value: 'IDNumber' },
+  { title: 'Passport', value: 'Passport' }
+]
+
+const claimantIdNumberLabel = computed(() =>
+  formData.value.claimant_identity_type === 'Passport'
+    ? 'Passport Number *'
+    : 'SA ID Number *'
+)
 
 const bankOptions = [
   'FNB',
@@ -1488,7 +1865,14 @@ const verifyBankingDetails = async () => {
 
     const idNumber =
       formData.value.claimant_id_number || formData.value.member_id_number
-    const identityType = /^\d{13}$/.test(idNumber) ? 'IDNumber' : 'Passport'
+    // Prefer the user's explicit selection when they're verifying claimant
+    // banking. Fall back to the 13-digit heuristic for the member-only path
+    // where there's no claimant_identity_type captured (e.g. self claims).
+    const identityType = formData.value.claimant_id_number
+      ? formData.value.claimant_identity_type
+      : /^\d{13}$/.test(idNumber)
+      ? 'IDNumber'
+      : 'Passport'
 
     const res = await GroupPricingService.verifyBankAccount({
       first_name: firstName,
@@ -1630,6 +2014,31 @@ const rules = {
       return true
     }
     return 'Invalid ID number or passport format'
+  },
+  // Validates against the user's explicit ID-type selection rather than
+  // auto-detecting. Keeps the BAV call and the claim record in sync.
+  idOrPassportTyped: (value: string) => {
+    if (!value) return true
+    const type = formData.value.claimant_identity_type
+    if (type === 'IDNumber') {
+      return /^\d{13}$/.test(value) || 'SA ID number must be 13 digits'
+    }
+    // Passport
+    return (
+      /^[A-Za-z0-9]{6,12}$/.test(value) ||
+      'Passport must be 6–12 letters or digits'
+    )
+  },
+  // SA mobile numbers: 10 digits starting 06/07/08, or +27/27 + 9 digits.
+  // Spaces / dashes are stripped before matching so users can paste any
+  // common format.
+  saMobile: (value: string) => {
+    if (!value) return true
+    const cleaned = String(value).replace(/[\s-]/g, '')
+    return (
+      /^(?:\+27|27|0)[6-8]\d{8}$/.test(cleaned) ||
+      'Enter a valid SA mobile number (e.g. 0821234567 or +27821234567)'
+    )
   },
   dateNotFuture: (value: string) => {
     if (!value) return true
@@ -2128,6 +2537,7 @@ watch(
 watch(requiresClaimantInfo, (needsClaimant) => {
   if (!needsClaimant) {
     formData.value.claimant_name = ''
+    formData.value.claimant_identity_type = 'IDNumber'
     formData.value.claimant_id_number = ''
     formData.value.relationship_to_member = ''
     formData.value.claimant_contact_number = ''
@@ -2193,6 +2603,11 @@ const hydrateFromClaim = (claim: ExistingClaim) => {
     priority: claim.priority || formData.value.priority,
     cause_type: claim.cause_type || formData.value.cause_type,
     claimant_name: claim.claimant_name || '',
+    claimant_identity_type:
+      claim.claimant_identity_type ||
+      (/^\d{13}$/.test(claim.claimant_id_number || '')
+        ? 'IDNumber'
+        : 'Passport'),
     claimant_id_number: claim.claimant_id_number || '',
     relationship_to_member: claim.relationship_to_member || '',
     claimant_contact_number: claim.claimant_contact_number || '',

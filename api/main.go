@@ -303,6 +303,11 @@ func startApplication(initTables bool, s service.Service) {
 		log.WithField("error", err.Error()).Warn("Failed to seed base benefit maps")
 	}
 
+	// Seed default chart of accounts, posting rules, and the current
+	// accounting period for the operational General Ledger. Idempotent;
+	// safe on every boot.
+	services.SeedGeneralLedger()
+
 	services.StartGroupSchemeStatusUpdater()
 	services.StartNotificationOverdueSweeper()
 	services.StartDeadlineOverdueSweeper()

@@ -150,10 +150,19 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.DELETE("scheme-category-masters/:id", controllers.DeleteSchemeCategoryMaster)
 			groupPricing.GET("region-loadings/regions", controllers.GetRegionsForRiskCode)
 			groupPricing.GET("schemes/in-force-v2", controllers.GetGroupSchemesInForce)
+			groupPricing.GET("schemes/coverage-history", controllers.GetGroupSchemesEverInForce)
 			groupPricing.GET("schemes/:id", controllers.GetGroupScheme)
 			groupPricing.GET("schemes/:id/quotes", controllers.GetQuotesForScheme)
 			groupPricing.POST("schemes/:id/members", controllers.AddMemberToScheme)
 			groupPricing.POST("schemes/:id/members/bulk", controllers.AddMembersToSchemeBulk)
+			// Bulk enrollment with approval workflow: members land as draft tied
+			// to a BulkEnrollmentBatch and only flip to active once approved.
+			groupPricing.POST("schemes/:id/bulk-enrollment/batches", controllers.CreateBulkEnrollmentBatch)
+			groupPricing.GET("schemes/:id/bulk-enrollment/batches", controllers.ListBulkEnrollmentBatches)
+			groupPricing.GET("bulk-enrollment/batches/:batchId", controllers.GetBulkEnrollmentBatch)
+			groupPricing.POST("bulk-enrollment/batches/:batchId/external-id-check", controllers.RunExternalIDCheckOnBatch)
+			groupPricing.POST("bulk-enrollment/batches/:batchId/approve", RequirePermission("navigation:approve_bulk_enrollment"), controllers.ApproveBulkEnrollmentBatch)
+			groupPricing.POST("bulk-enrollment/batches/:batchId/reject", RequirePermission("navigation:approve_bulk_enrollment"), controllers.RejectBulkEnrollmentBatch)
 			groupPricing.GET("schemes/:id/members", controllers.GetSchemeMembers)
 			// Paginated members with optional filters: page, pageSize, search, schemeId, status
 			groupPricing.GET("members/paginated", controllers.GetMembersPaginated)
@@ -246,6 +255,17 @@ func ConfigureRouter(router *gin.Engine) {
 			groupPricing.GET("claims/dashboard", controllers.GetGroupSchemeClaimsDashboard)
 			groupPricing.POST("claims", controllers.GroupSchemeSubmitClaim)
 			groupPricing.GET("claims", controllers.GetGroupSchemeClaims)
+			// Regular Income Claims (PHI/TTD) — joined with latest member-in-force
+			// snapshot and scheme-category benefit rules for the claims-admin grid
+			// and actuarial export.
+			groupPricing.GET("claims/regular-income", RequirePermission("claims:view_regular_income"), controllers.GetRegularIncomeClaims)
+			groupPricing.GET("claims/regular-income/metrics", RequirePermission("claims:view_regular_income"), controllers.GetRegularIncomeClaimsMetrics)
+			// CPI index reference table — used by Regular Income Claims and
+			// actuarial extracts. View permission is shared with the claims
+			// list; mutate permission is separate so admins can upload.
+			groupPricing.GET("cpi-indices", RequirePermission("claims:view_regular_income"), controllers.GetCpiIndices)
+			groupPricing.POST("cpi-indices", RequirePermission("claims:manage_cpi_indices"), controllers.UpsertCpiIndex)
+			groupPricing.POST("cpi-indices/upload", RequirePermission("claims:manage_cpi_indices"), controllers.UploadCpiIndices)
 			groupPricing.POST("claims/calculate-amount", controllers.GetUpdatedClaimAmount)
 			groupPricing.GET("claims/:claim_id", controllers.GetGroupSchemeClaim)
 			groupPricing.PUT("claims/:claim_id", controllers.UpdateGroupSchemeClaim)
@@ -769,6 +789,72 @@ func ConfigureRouter(router *gin.Engine) {
 			conversations.DELETE("messages/:message_id", controllers.DeleteMessage)
 			conversations.POST(":id/participants", controllers.AddParticipant)
 			conversations.POST(":id/read", controllers.MarkConversationRead)
+		}
+
+		// ─── Operational General Ledger ─────────────────────────────────
+		// Persistent double-entry layer for claim payments, premium
+		// receipts, write-offs, and refunds. Completely independent of
+		// the IFRS17/CSM reporting stack — different chart, different
+		// journal, no cross-FK.
+		//
+		// All mutating endpoints follow a maker/checker pattern: the
+		// /request-* (or /draft, /submit) endpoint stages the change,
+		// the /approve-* (or /post) endpoint commits it. The approver
+		// must be a different user from the requester — enforced at
+		// the service layer (HTTP 409 on self-approval).
+		gl := apiv1.Group("gl")
+		{
+			// Chart of accounts — maker/checker.
+			gl.GET("accounts", RequirePermission("gl:view"), controllers.ListGLAccounts)
+			gl.POST("accounts", RequirePermission("gl:manage_accounts"), controllers.RequestCreateGLAccount)
+			gl.GET("accounts/:id", RequirePermission("gl:view"), controllers.GetGLAccount)
+			gl.PUT("accounts/:id", RequirePermission("gl:manage_accounts"), controllers.RequestUpdateGLAccount)
+			gl.DELETE("accounts/:id", RequirePermission("gl:manage_accounts"), controllers.RequestDeactivateGLAccount)
+			gl.POST("accounts/:id/approve-change", RequirePermission("gl:approve_account"), controllers.ApproveGLAccountChange)
+			gl.GET("accounts/:id/ledger", RequirePermission("gl:view"), controllers.GetAccountLedger)
+
+			// Accounting periods — two-step close.
+			gl.GET("periods", RequirePermission("gl:view"), controllers.ListAccountingPeriods)
+			gl.POST("periods", RequirePermission("gl:manage_accounts"), controllers.CreateAccountingPeriod)
+			gl.POST("periods/:id/request-close", RequirePermission("gl:request_close_period"), controllers.RequestClosePeriod)
+			gl.POST("periods/:id/close", RequirePermission("gl:close_period"), controllers.ClosePeriod)
+
+			// Posting rules — maker/checker.
+			gl.GET("posting-rules", RequirePermission("gl:view"), controllers.ListPostingRules)
+			gl.POST("posting-rules", RequirePermission("gl:manage_rules"), controllers.RequestCreatePostingRule)
+			gl.PUT("posting-rules/:id", RequirePermission("gl:manage_rules"), controllers.RequestUpdatePostingRule)
+			gl.DELETE("posting-rules/:id", RequirePermission("gl:manage_rules"), controllers.RequestDeletePostingRule)
+			gl.POST("posting-rules/:id/approve-change", RequirePermission("gl:approve_rule"), controllers.ApprovePostingRuleChange)
+
+			// Journals — draft → submit → approve → post; request → approve reversal.
+			gl.GET("journals", RequirePermission("gl:view"), controllers.ListJournalEntries)
+			gl.GET("journals/:id", RequirePermission("gl:view"), controllers.GetJournalEntry)
+			gl.POST("journals", RequirePermission("gl:draft_journal"), controllers.DraftManualJournal)
+			gl.PUT("journals/:id", RequirePermission("gl:draft_journal"), controllers.UpdateDraftJournal)
+			gl.DELETE("journals/:id", RequirePermission("gl:draft_journal"), controllers.DiscardDraftJournal)
+			gl.POST("journals/:id/submit", RequirePermission("gl:draft_journal"), controllers.SubmitManualJournal)
+			gl.POST("journals/:id/approve", RequirePermission("gl:approve_journal"), controllers.ApproveManualJournal)
+			gl.POST("journals/:id/post", RequirePermission("gl:post_journal"), controllers.PostApprovedJournal)
+			gl.POST("journals/:id/request-reverse", RequirePermission("gl:reverse"), controllers.RequestReverseJournal)
+			gl.POST("journals/:id/approve-reverse", RequirePermission("gl:approve_reverse"), controllers.ApproveReverseJournal)
+
+			gl.GET("trial-balance", RequirePermission("gl:view"), controllers.GetTrialBalance)
+			gl.GET("audit-log", RequirePermission("gl:view_audit"), controllers.ListGLAuditLog)
+			gl.GET("audit-log/users", RequirePermission("gl:view_audit"), controllers.ListGLAuditLogUsers)
+		}
+
+		bankAccounts := apiv1.Group("bank-accounts")
+		{
+			bankAccounts.GET("", RequirePermission("gl:view"), controllers.ListBankAccounts)
+			bankAccounts.POST("", RequirePermission("gl:manage_accounts"), controllers.RequestCreateBankAccount)
+			bankAccounts.PUT(":id", RequirePermission("gl:manage_accounts"), controllers.RequestUpdateBankAccount)
+			bankAccounts.DELETE(":id", RequirePermission("gl:manage_accounts"), controllers.RequestDeactivateBankAccount)
+			bankAccounts.POST(":id/approve-change", RequirePermission("gl:approve_bank_account"), controllers.ApproveBankAccountChange)
+			bankAccounts.POST(":id/statement", RequirePermission("gl:bank_rec"), controllers.ImportBankStatement)
+			bankAccounts.GET(":id/statement-lines", RequirePermission("gl:bank_rec"), controllers.ListStatementLines)
+			bankAccounts.POST("statement-lines/match", RequirePermission("gl:bank_rec"), controllers.MatchStatementLine)
+			bankAccounts.POST("statement-lines/:id/ignore", RequirePermission("gl:bank_rec"), controllers.IgnoreStatementLine)
+			bankAccounts.POST("statement-lines/:id/review", RequirePermission("gl:review_reconciliation"), controllers.ReviewStatementLine)
 		}
 
 	}

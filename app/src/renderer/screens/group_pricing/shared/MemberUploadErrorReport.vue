@@ -10,10 +10,12 @@
       >
         <div class="font-weight-bold">Upload blocked</div>
         <div class="text-body-2 mt-1">
-          {{ blockingErrors.length }} member{{ blockingErrors.length === 1 ? '' : 's' }}
-          {{ blockingErrors.length === 1 ? 'is' : 'are' }} missing required fields
-          (gender, date of birth, annual salary). Please correct the source file
-          and re-upload.
+          {{ blockingErrors.length }} member{{
+            blockingErrors.length === 1 ? '' : 's'
+          }}
+          {{ blockingErrors.length === 1 ? 'is' : 'are' }} missing required
+          fields (gender, date of birth, annual salary). Please correct the
+          source file and re-upload.
         </div>
       </v-alert>
 
@@ -43,8 +45,10 @@
                 :key="`block-${idx}`"
               >
                 <v-list-item-title class="text-caption text-error">
-                  Row {{ err.row }}<span v-if="err.member_id_number">
-                    ({{ err.member_id_number }})</span>: {{ err.message }}
+                  Row {{ err.row
+                  }}<span v-if="err.member_id_number">
+                    ({{ err.member_id_number }})</span
+                  >: {{ err.message }}
                 </v-list-item-title>
               </v-list-item>
             </v-list>

@@ -104,8 +104,8 @@
                 <div>
                   <strong>{{ conflictCount }} scheme(s)</strong> have
                   conflicting active treaty links (same line of business and
-                  treaty type). New links to these schemes will be blocked
-                  until the conflicts are resolved.
+                  treaty type). New links to these schemes will be blocked until
+                  the conflicts are resolved.
                 </div>
                 <v-btn
                   variant="text"
@@ -1138,8 +1138,7 @@
           <p class="text-body-2 mb-3">
             Each row shows a scheme that is currently linked to more than one
             active treaty of the same line of business and treaty type. Unlink
-            the scheme from one of the listed treaties to resolve the
-            conflict.
+            the scheme from one of the listed treaties to resolve the conflict.
           </p>
           <v-list density="compact">
             <v-list-item
@@ -2020,7 +2019,13 @@ function showContextMenu(event, data) {
 
   const menuItems = [
     ...(data.status === 'draft'
-      ? [{ label: 'Activate', color: '#2e7d32', fn: () => activateTreaty(data) }]
+      ? [
+          {
+            label: 'Activate',
+            color: '#2e7d32',
+            fn: () => activateTreaty(data)
+          }
+        ]
       : []),
     ...(data.status === 'active'
       ? [
@@ -2034,7 +2039,13 @@ function showContextMenu(event, data) {
     { label: 'Edit', color: '#1976d2', fn: () => openEditDialog(data) },
     { label: 'Schemes', color: '#388e3c', fn: () => openSchemesDialog(data) },
     ...(data.status === 'draft'
-      ? [{ label: 'Delete', color: '#d32f2f', fn: () => openDeleteDialog(data) }]
+      ? [
+          {
+            label: 'Delete',
+            color: '#d32f2f',
+            fn: () => openDeleteDialog(data)
+          }
+        ]
       : [])
   ]
 

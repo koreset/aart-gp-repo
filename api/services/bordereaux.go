@@ -3077,7 +3077,7 @@ func GetMemberBordereaux(schemeIDs []int, req GenerateBordereauxRequest, templat
 			err = DB.WithContext(ctx).
 				Table("g_pricing_member_data_in_forces"). // Explicitly specify the table name
 				Select(selectedVariables). // Use .Select() to specify columns
-				Where("scheme_id IN ?", schemeIDs). // Example condition
+				Where("scheme_id IN ? AND status <> ?", schemeIDs, models.BulkEnrollmentMemberDraftStatus).
 				Find(&rows).
 				Error
 		}
@@ -3096,7 +3096,7 @@ func GetMemberBordereaux(schemeIDs []int, req GenerateBordereauxRequest, templat
 			err = DB.WithContext(ctx).
 				Table("g_pricing_member_data_in_forces").
 				Select(selectedVariables).
-				Where("scheme_id IN ?", schemeIDs).
+				Where("scheme_id IN ? AND status <> ?", schemeIDs, models.BulkEnrollmentMemberDraftStatus).
 				// The string inside Preload() must match the field name in the struct (i.e., 'Beneficiaries')
 				Preload("Beneficiaries").
 				Find(&rows).

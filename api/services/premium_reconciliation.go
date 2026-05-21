@@ -292,6 +292,12 @@ func AllocatePayment(req models.AllocatePaymentRequest, user models.AppUser) ([]
 			if err := tx.Save(&invoiceItem).Error; err != nil {
 				return err
 			}
+
+			// Operational GL: post each allocation as a balanced JE.
+			desc := fmt.Sprintf("Payment %d → invoice %d", req.PaymentID, line.InvoiceID)
+			if _, err := GLPost(tx, "premium_allocation.created", "premium_allocation", alloc.ID, line.Amount, desc, invoiceItem.SchemeID, user.UserName); err != nil {
+				return fmt.Errorf("GL posting failed: %w", err)
+			}
 		}
 
 		// Update payment reconciliation item
@@ -371,6 +377,17 @@ func ReverseAllocations(req models.ReverseAllocationRequest, user models.AppUser
 				return err
 			}
 
+			// Operational GL: post the reversal as a balanced JE.
+			schemeID := 0
+			var invoiceItem models.ReconciliationItem
+			if e := tx.Where("item_type = ? AND invoice_id = ?", "invoice", original.InvoiceID).First(&invoiceItem).Error; e == nil {
+				schemeID = invoiceItem.SchemeID
+			}
+			desc := fmt.Sprintf("Reversal of allocation #%d", original.ID)
+			if _, e := GLPost(tx, "premium_allocation.reversed", "premium_allocation_reversal", reversal.ID, original.AllocatedAmount, desc, schemeID, user.UserName); e != nil {
+				return fmt.Errorf("GL posting failed: %w", e)
+			}
+
 			reversals = append(reversals, reversal)
 		}
 
@@ -434,7 +451,15 @@ func WriteOffBalance(req models.WriteOffRequest, user models.AppUser) (models.Pa
 
 		// Update invoice if applicable
 		if invoiceID > 0 {
-			return applyAllocationToInvoice(tx, invoiceID, req.Amount)
+			if err := applyAllocationToInvoice(tx, invoiceID, req.Amount); err != nil {
+				return err
+			}
+		}
+
+		// Operational GL: post the write-off as bad debt against receivable.
+		desc := fmt.Sprintf("Write-off: %s", req.Reason)
+		if _, err := GLPost(tx, "premium.write_off", "write_off", alloc.ID, req.Amount, desc, item.SchemeID, user.UserName); err != nil {
+			return fmt.Errorf("GL posting failed: %w", err)
 		}
 		return nil
 	})
@@ -488,7 +513,16 @@ func RefundOverpayment(req models.RefundRequest, user models.AppUser) (models.Pa
 		}
 		now := time.Now()
 		item.LastActionDate = &now
-		return tx.Save(&item).Error
+		if err := tx.Save(&item).Error; err != nil {
+			return err
+		}
+
+		// Operational GL: post the refund (clear refunds-payable / drain bank).
+		desc := fmt.Sprintf("Refund via %s: %s", req.RefundMethod, req.Reason)
+		if _, err := GLPost(tx, "premium.refund", "refund", alloc.ID, req.Amount, desc, item.SchemeID, user.UserName); err != nil {
+			return fmt.Errorf("GL posting failed: %w", err)
+		}
+		return nil
 	})
 
 	return alloc, err

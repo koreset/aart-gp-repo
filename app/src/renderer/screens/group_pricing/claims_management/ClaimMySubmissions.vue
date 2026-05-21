@@ -4,7 +4,9 @@
       <v-col>
         <base-card :show-actions="false">
           <template #header>
-            <div class="d-flex justify-space-between align-center flex-wrap gap-2">
+            <div
+              class="d-flex justify-space-between align-center flex-wrap gap-2"
+            >
               <div class="d-flex align-center">
                 <v-btn
                   icon="mdi-arrow-left"
@@ -101,9 +103,7 @@
                         icon="mdi-bank"
                       />
                       <span>
-                        {{
-                          isClaimsStep(step.status) ? step.sub : 'Finance'
-                        }}
+                        {{ isClaimsStep(step.status) ? step.sub : 'Finance' }}
                       </span>
                     </div>
                   </div>
@@ -291,7 +291,11 @@
               </tr>
               <tr>
                 <th class="text-left">Total amount</th>
-                <td><strong>{{ formatCurrency(active.total_amount) }}</strong></td>
+                <td
+                  ><strong>{{
+                    formatCurrency(active.total_amount)
+                  }}</strong></td
+                >
               </tr>
               <tr>
                 <th class="text-left">Created by</th>
@@ -369,10 +373,7 @@
                     <v-icon size="12" icon="mdi-reply" class="mr-1" />
                     <strong>{{ q.resolved_by }}:</strong>
                     {{ q.resolution_notes }}
-                    <span
-                      v-if="q.resolved_at"
-                      class="text-medium-emphasis"
-                    >
+                    <span v-if="q.resolved_at" class="text-medium-emphasis">
                       · {{ formatDate(q.resolved_at) }}
                     </span>
                   </div>
@@ -389,7 +390,11 @@
             rows="3"
             placeholder="e.g. Please confirm expected payment date for this run."
             :disabled="!canFollowup"
-            :hint="canFollowup ? '' : 'Follow-ups can be posted once the schedule has been signed off.'"
+            :hint="
+              canFollowup
+                ? ''
+                : 'Follow-ups can be posted once the schedule has been signed off.'
+            "
             persistent-hint
           />
           <div class="d-flex justify-end mt-2">
@@ -431,11 +436,7 @@
         <v-card-actions class="pa-4 pt-0">
           <v-spacer />
           <v-btn variant="text" @click="confirmDiscard = false">Cancel</v-btn>
-          <v-btn
-            color="error"
-            :loading="discarding"
-            @click="discardDraft"
-          >
+          <v-btn color="error" :loading="discarding" @click="discardDraft">
             Discard draft
           </v-btn>
         </v-card-actions>
@@ -525,8 +526,18 @@ const canFollowup = computed(() => {
 const headers = [
   { title: 'Schedule', key: 'schedule_number', sortable: true },
   { title: 'Status', key: 'status', sortable: true },
-  { title: 'Claims', key: 'claims_count', sortable: true, align: 'end' as const },
-  { title: 'Total', key: 'total_amount', sortable: true, align: 'end' as const },
+  {
+    title: 'Claims',
+    key: 'claims_count',
+    sortable: true,
+    align: 'end' as const
+  },
+  {
+    title: 'Total',
+    key: 'total_amount',
+    sortable: true,
+    align: 'end' as const
+  },
   { title: 'Submitted by', key: 'created_by', sortable: true },
   { title: 'Submitted at', key: 'created_at', sortable: true },
   { title: '', key: 'actions', sortable: false, align: 'end' as const }
@@ -696,7 +707,10 @@ async function signOff() {
     await loadSchedules()
   } catch (e: any) {
     const msg = e?.response?.data?.error || 'Failed to sign off schedule'
-    notify(typeof msg === 'string' ? msg : 'Failed to sign off schedule', 'error')
+    notify(
+      typeof msg === 'string' ? msg : 'Failed to sign off schedule',
+      'error'
+    )
   } finally {
     signingOff.value = false
   }

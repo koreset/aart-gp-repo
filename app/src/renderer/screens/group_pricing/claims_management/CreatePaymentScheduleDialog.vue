@@ -139,7 +139,12 @@ const claimsColumnDefs: ColDef<Claim>[] = [
     suppressMovable: true,
     resizable: false
   },
-  { headerName: 'Claim #', field: 'claim_number', sortable: true, minWidth: 120 },
+  {
+    headerName: 'Claim #',
+    field: 'claim_number',
+    sortable: true,
+    minWidth: 120
+  },
   { headerName: 'Member', field: 'member_name', sortable: true, minWidth: 140 },
   { headerName: 'ID Number', field: 'member_id_number', minWidth: 120 },
   { headerName: 'Scheme', field: 'scheme_name', sortable: true, minWidth: 140 },
@@ -201,7 +206,10 @@ async function createSchedule() {
     emit('created', schedule)
     emit('update:modelValue', false)
   } catch (e: any) {
-    const msg = e?.response?.data?.error || e?.response?.data || 'Failed to create schedule'
+    const msg =
+      e?.response?.data?.error ||
+      e?.response?.data ||
+      'Failed to create schedule'
     emit('error', typeof msg === 'string' ? msg : 'Failed to create schedule')
   } finally {
     creating.value = false

@@ -34,7 +34,10 @@ export const STATUS_COLORS: Record<string, { hex: string; label: string }> = {
   declined: { hex: '#D32F2F', label: 'Declined' },
   payment_failed: { hex: '#D32F2F', label: 'Payment Failed' },
   submitted_for_payment: { hex: '#1976D2', label: 'Submitted for Payment' },
-  finance_rejected: { hex: '#C62828', label: 'Finance Rejected' }
+  finance_rejected: { hex: '#C62828', label: 'Finance Rejected' },
+  notified: { hex: '#1976D2', label: 'Notified' },
+  in_payment: { hex: '#4CAF50', label: 'In Payment' },
+  ombud_claim: { hex: '#7B1FA2', label: 'Ombud Claim' }
 }
 
 export const CHART_COLORS = [

@@ -343,9 +343,7 @@
 
     <v-dialog v-model="blockingErrorsDialog" max-width="900" scrollable>
       <v-card>
-        <v-card-title class="text-h6">
-          Member upload blocked
-        </v-card-title>
+        <v-card-title class="text-h6"> Member upload blocked </v-card-title>
         <v-card-text>
           <MemberUploadErrorReport
             :blocking-errors="blockingErrors"

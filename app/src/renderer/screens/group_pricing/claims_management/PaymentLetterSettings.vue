@@ -24,15 +24,16 @@
               class="mb-4"
             >
               <div class="text-body-2">
-                These details appear on every claim payment confirmation
-                letter — letterhead at the top, signatory block at the bottom,
-                and intro / closing paragraphs in the body. Tokens you can use
-                in the intro / closing text:
-                <code v-pre>{{claimant_name}}</code>,
-                <code v-pre>{{claim_number}}</code>,
-                <code v-pre>{{amount}}</code>,
-                <code v-pre>{{paid_at}}</code>,
-                <code v-pre>{{member_name}}</code>.
+                These details appear on every claim payment confirmation letter
+                — letterhead at the top, signatory block at the bottom, and
+                intro / closing paragraphs in the body. Tokens you can use in
+                the intro / closing text:
+                <code v-pre>{{ claimant_name }}</code
+                >, <code v-pre>{{ claim_number }}</code
+                >, <code v-pre>{{ amount }}</code
+                >, <code v-pre>{{ paid_at }}</code
+                >, <code v-pre>{{ member_name }}</code
+                >.
               </div>
             </v-alert>
 

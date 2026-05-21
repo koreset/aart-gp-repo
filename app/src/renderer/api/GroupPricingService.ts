@@ -438,6 +438,13 @@ export default {
   getSchemesInforcev2() {
     return Api.get('/group-pricing/schemes/in-force-v2')
   },
+  // Returns the universe of schemes the claims surfaces care about:
+  // currently in-force plus any that were once in-force and have since
+  // expired / lapsed / gone out-of-force / been cancelled. Excludes
+  // pre-quote schemes (draft, submitted, quoted, etc.).
+  getSchemesWithCoverageHistory() {
+    return Api.get('/group-pricing/schemes/coverage-history')
+  },
   getScheme(id) {
     return Api.get('/group-pricing/schemes/' + id)
   },
@@ -609,10 +616,51 @@ export default {
       member
     )
   },
+  /**
+   * @deprecated Use createBulkEnrollmentBatch — members now flow through the
+   * approval workflow. This direct-insert endpoint is kept for one release for
+   * any callers we haven't migrated yet.
+   */
   addMembersBulk(schemeId, members, skipDuplicates = true) {
+    return Api.post('/group-pricing/schemes/' + schemeId + '/members/bulk', {
+      members,
+      skip_duplicates: skipDuplicates
+    })
+  },
+  createBulkEnrollmentBatch(schemeId, members, opts) {
+    const o = opts || {}
     return Api.post(
-      '/group-pricing/schemes/' + schemeId + '/members/bulk',
-      { members, skip_duplicates: skipDuplicates }
+      `/group-pricing/schemes/${schemeId}/bulk-enrollment/batches`,
+      {
+        members,
+        skip_duplicates: o.skipDuplicates ?? true,
+        file_name: o.fileName ?? '',
+        file_size_bytes: o.fileSizeBytes ?? 0,
+        file_checksum: o.fileChecksum ?? ''
+      }
+    )
+  },
+  listBulkEnrollmentBatches(schemeId, status) {
+    const q = status ? `?status=${encodeURIComponent(status)}` : ''
+    return Api.get(
+      `/group-pricing/schemes/${schemeId}/bulk-enrollment/batches${q}`
+    )
+  },
+  getBulkEnrollmentBatch(batchId) {
+    return Api.get(`/group-pricing/bulk-enrollment/batches/${batchId}`)
+  },
+  runExternalIdCheckOnBatch(batchId) {
+    return Api.post(
+      `/group-pricing/bulk-enrollment/batches/${batchId}/external-id-check`
+    )
+  },
+  approveBulkEnrollmentBatch(batchId) {
+    return Api.post(`/group-pricing/bulk-enrollment/batches/${batchId}/approve`)
+  },
+  rejectBulkEnrollmentBatch(batchId, reason) {
+    return Api.post(
+      `/group-pricing/bulk-enrollment/batches/${batchId}/reject`,
+      { reason }
     )
   },
   getMembersInForce(schemeId) {
@@ -680,6 +728,69 @@ export default {
   getClaims() {
     return Api.get('/group-pricing/claims')
   },
+  getRegularIncomeClaims(
+    filters: {
+      scheme_id?: number | string | null
+      region?: string | null
+      occupational_class?: string | null
+      display_status?: string | null
+    } = {}
+  ) {
+    const params = new URLSearchParams()
+    if (filters.scheme_id) params.append('scheme_id', String(filters.scheme_id))
+    if (filters.region) params.append('region', filters.region)
+    if (filters.occupational_class)
+      params.append('occupational_class', filters.occupational_class)
+    if (filters.display_status)
+      params.append('display_status', filters.display_status)
+    const qs = params.toString()
+    return Api.get(
+      qs
+        ? `/group-pricing/claims/regular-income?${qs}`
+        : '/group-pricing/claims/regular-income'
+    )
+  },
+  getCpiIndices() {
+    return Api.get('/group-pricing/cpi-indices')
+  },
+  upsertCpiIndex(payload: {
+    year_index: number
+    month_index: number
+    cpi_index: number
+  }) {
+    return Api.post('/group-pricing/cpi-indices', payload, {
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' }
+    })
+  },
+  uploadCpiIndices(file: File) {
+    const fd = new FormData()
+    fd.append('file', file)
+    return Api.post('/group-pricing/cpi-indices/upload', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+  getRegularIncomeClaimsMetrics(
+    filters: {
+      scheme_id?: number | string | null
+      region?: string | null
+      occupational_class?: string | null
+      display_status?: string | null
+    } = {}
+  ) {
+    const params = new URLSearchParams()
+    if (filters.scheme_id) params.append('scheme_id', String(filters.scheme_id))
+    if (filters.region) params.append('region', filters.region)
+    if (filters.occupational_class)
+      params.append('occupational_class', filters.occupational_class)
+    if (filters.display_status)
+      params.append('display_status', filters.display_status)
+    const qs = params.toString()
+    return Api.get(
+      qs
+        ? `/group-pricing/claims/regular-income/metrics?${qs}`
+        : '/group-pricing/claims/regular-income/metrics'
+    )
+  },
   getClaim(claimId: number | string) {
     return Api.get(`/group-pricing/claims/${claimId}`)
   },
@@ -690,6 +801,8 @@ export default {
       benefit_type?: any
       from?: any
       to?: any
+      limit?: any
+      large_claim_threshold?: any
     } = {}
   ) {
     // Build query parameters from filters
@@ -701,6 +814,16 @@ export default {
       queryParams.append('benefit_type', filters.benefit_type)
     if (filters.from) queryParams.append('from', filters.from)
     if (filters.to) queryParams.append('to', filters.to)
+    if (filters.limit !== undefined && filters.limit !== null)
+      queryParams.append('limit', filters.limit.toString())
+    if (
+      filters.large_claim_threshold !== undefined &&
+      filters.large_claim_threshold !== null
+    )
+      queryParams.append(
+        'large_claim_threshold',
+        filters.large_claim_threshold.toString()
+      )
     const queryString = queryParams.toString()
     const url = queryString
       ? `/group-pricing/claims/dashboard?${queryString}`
@@ -1083,9 +1206,7 @@ export default {
   },
 
   discardPaymentSchedule(scheduleId) {
-    return Api.delete(
-      `/group-pricing/claims/payment-schedules/${scheduleId}`
-    )
+    return Api.delete(`/group-pricing/claims/payment-schedules/${scheduleId}`)
   },
 
   updatePaymentScheduleNotes(scheduleId, notes) {

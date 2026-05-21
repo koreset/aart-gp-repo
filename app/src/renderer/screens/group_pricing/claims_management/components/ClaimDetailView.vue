@@ -146,7 +146,10 @@
           <div class="text-subtitle-2 mb-2">
             Finance rejected — pending acknowledgement
           </div>
-          <div v-if="claim?.finance_rejection_reason_code" class="text-body-2 mb-1">
+          <div
+            v-if="claim?.finance_rejection_reason_code"
+            class="text-body-2 mb-1"
+          >
             <strong>Reason:</strong> {{ claim.finance_rejection_reason_code }}
           </div>
           <div v-if="claim?.finance_rejection_notes" class="text-body-2 mb-1">
@@ -819,9 +822,7 @@
         <v-card-title
           class="text-subtitle-1 bg-grey-lighten-4 d-flex justify-space-between align-center"
         >
-          <span>{{
-            currentDocument?.filename || currentDocument?.name
-          }}</span>
+          <span>{{ currentDocument?.filename || currentDocument?.name }}</span>
           <v-btn
             icon="mdi-close"
             variant="text"
@@ -931,13 +932,14 @@
         <v-card-text>
           <div class="text-body-2 mb-3">
             You're about to acknowledge the finance rejection on claim
-            <strong>{{ claim?.claim_number }}</strong>.
+            <strong>{{ claim?.claim_number }}</strong
+            >.
           </div>
           <div class="text-body-2 text-medium-emphasis">
             The claim will move to <strong>draft</strong> so the capturer can
-            edit the flagged sections and submit it for assessment again.
-            The rejection reason stays visible on the claim until it's
-            re-approved, so the capturer knows exactly what to fix.
+            edit the flagged sections and submit it for assessment again. The
+            rejection reason stays visible on the claim until it's re-approved,
+            so the capturer knows exactly what to fix.
           </div>
         </v-card-text>
         <v-card-actions class="pa-4 pt-0">

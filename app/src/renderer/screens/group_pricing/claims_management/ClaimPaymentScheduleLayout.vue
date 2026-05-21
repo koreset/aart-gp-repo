@@ -84,7 +84,9 @@
               v-else-if="!schedule"
               icon="mdi-file-document-remove-outline"
               :title="
-                loadError ? 'Cannot load payment schedule' : 'Payment schedule not found'
+                loadError
+                  ? 'Cannot load payment schedule'
+                  : 'Payment schedule not found'
               "
               :message="
                 loadError ||
@@ -323,10 +325,7 @@
                     is confirmed and reconciliation is complete — the schedule
                     is hidden from active queues but kept on the audit trail.
                   </v-tooltip>
-                  <v-menu
-                    v-if="canGenerateLetters"
-                    location="bottom"
-                  >
+                  <v-menu v-if="canGenerateLetters" location="bottom">
                     <template #activator="{ props: menuProps }">
                       <v-btn
                         v-bind="menuProps"
@@ -376,8 +375,8 @@
                       </v-btn>
                     </template>
                     Final closure. Attach evidence the money has cleared (bank
-                    statement, stamped batch). Marks every claim as Paid and
-                    the schedule as Confirmed — this action is irreversible.
+                    statement, stamped batch). Marks every claim as Paid and the
+                    schedule as Confirmed — this action is irreversible.
                   </v-tooltip>
                 </div>
               </section>

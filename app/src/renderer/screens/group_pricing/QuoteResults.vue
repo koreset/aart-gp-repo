@@ -86,10 +86,7 @@
 
         <v-list-item>
           <template #prepend>
-            <v-icon
-              :color="uwSummary ? 'success' : 'grey'"
-              class="mr-4"
-            >
+            <v-icon :color="uwSummary ? 'success' : 'grey'" class="mr-4">
               {{
                 uwSummary ? 'mdi-shield-check-outline' : 'mdi-shield-outline'
               }}

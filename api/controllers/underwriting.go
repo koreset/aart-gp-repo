@@ -293,10 +293,10 @@ func RecreateUnderwritingCasesForQuote(c *gin.Context) {
 		return
 	}
 	user := c.MustGet("user").(models.AppUser)
-	cases, err := services.CreateCasesForQuote(quoteID, user.UserEmail)
+	result, err := services.CreateCasesForQuote(quoteID, user.UserEmail)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, cases)
+	c.JSON(http.StatusOK, result)
 }

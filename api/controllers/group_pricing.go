@@ -1241,6 +1241,18 @@ func GetGroupSchemesInForce(c *gin.Context) {
 	c.JSON(http.StatusOK, groupSchemes)
 }
 
+// GetGroupSchemesEverInForce returns schemes that currently are or have
+// previously been in-force. Backs the claims-filter dropdown so users only
+// see schemes a claim could plausibly be filed against.
+func GetGroupSchemesEverInForce(c *gin.Context) {
+	groupSchemes, err := services.GetGroupSchemesEverInForce()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, groupSchemes)
+}
+
 func GetGroupScheme(c *gin.Context) {
 	id := c.Param("id")
 	groupScheme, err := services.GetGroupScheme(id)
@@ -1898,6 +1910,16 @@ func GetGroupSchemeClaimsDashboard(c *gin.Context) {
 		}
 	}
 
+	// Optional large-claim threshold (rand value, e.g. 1000000) for the RI watch tile.
+	if thrStr := c.Query("large_claim_threshold"); thrStr != "" {
+		if thr, err := strconv.ParseFloat(thrStr, 64); err == nil && thr > 0 {
+			filters.LargeClaimThreshold = thr
+		} else {
+			c.JSON(http.StatusBadRequest, "invalid large_claim_threshold")
+			return
+		}
+	}
+
 	data, err := services.GetGroupSchemeClaimsDashboardData(filters)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
@@ -2245,6 +2267,56 @@ func GetGroupSchemeClaims(c *gin.Context) {
 		populateAttachmentViewerURLs(claims[ci].Attachments)
 	}
 	c.JSON(http.StatusOK, claims)
+}
+
+// regularIncomeFiltersFromQuery reads the shared filter set used by both the
+// Regular Income Claims list endpoint and its metrics companion.
+func regularIncomeFiltersFromQuery(c *gin.Context) (services.RegularIncomeClaimsFilters, error) {
+	var f services.RegularIncomeClaimsFilters
+	if sid := strings.TrimSpace(c.Query("scheme_id")); sid != "" {
+		id, err := strconv.Atoi(sid)
+		if err != nil {
+			return f, fmt.Errorf("invalid scheme_id")
+		}
+		f.SchemeID = &id
+	}
+	f.Region = strings.TrimSpace(c.Query("region"))
+	f.OccupationalClass = strings.TrimSpace(c.Query("occupational_class"))
+	f.DisplayStatus = strings.TrimSpace(c.Query("display_status"))
+	return f, nil
+}
+
+// GetRegularIncomeClaims serves the PHI/TTD claims list with member +
+// scheme-category context for the Regular Income Claims grid.
+func GetRegularIncomeClaims(c *gin.Context) {
+	filters, err := regularIncomeFiltersFromQuery(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	rows, err := services.GetRegularIncomeClaims(filters)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, rows)
+}
+
+// GetRegularIncomeClaimsMetrics returns counts by region / occupation class /
+// display status for the same row set, plus a generated_at timestamp so the
+// UI can show "Last updated …" next to the refresh button.
+func GetRegularIncomeClaimsMetrics(c *gin.Context) {
+	filters, err := regularIncomeFiltersFromQuery(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	data, err := services.GetRegularIncomeClaimsMetrics(filters)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, data)
 }
 
 func GetUpdatedClaimAmount(c *gin.Context) {

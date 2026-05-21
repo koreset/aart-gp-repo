@@ -84,7 +84,7 @@
             <v-row v-if="schemes">
               <v-col>
                 <!-- Search Input -->
-                <v-row class="mb-4">
+                <v-row class="mb-4" align="center">
                   <v-col cols="12" md="6">
                     <v-text-field
                       v-model="search"
@@ -97,6 +97,11 @@
                       class="search-box"
                     ></v-text-field>
                   </v-col>
+                  <v-col cols="12" md="6" class="d-flex justify-end align-center">
+                    <v-chip size="small" variant="tonal" color="info">
+                      Showing in-force &amp; accepted schemes only
+                    </v-chip>
+                  </v-col>
                 </v-row>
                 <v-data-table
                   v-model:model-value="selectedScheme"
@@ -105,7 +110,7 @@
                   class="table-row"
                   density="compact"
                   :headers="headers"
-                  :items="schemes"
+                  :items="visibleSchemes"
                   :search="search"
                   return-object
                 >
@@ -150,6 +155,15 @@
             <v-btn
               color="primary"
               variant="outlined"
+              prepend-icon="mdi-refresh"
+              :loading="isLoading"
+              @click="loadSchemes"
+            >
+              Refresh
+            </v-btn>
+            <v-btn
+              color="primary"
+              variant="outlined"
               prepend-icon="mdi-microsoft-excel"
               :disabled="!schemes || schemes.length === 0"
               @click="exportToExcel"
@@ -183,22 +197,39 @@ const confirmDialog = ref()
 const schemes: any = ref([])
 const selectedScheme: any = ref([])
 const claims: any = ref([])
+const isLoading = ref(false)
 
 const columnDefs: any = ref([])
 const rowData = ref([])
 const search = ref('')
 
-// KPI computeds
-const activeSchemeCount = computed(() => {
+// Scheme management only surfaces schemes that have an active relationship
+// with the insurer — in_force (live cover) or accepted (signed, awaiting cover
+// start). Earlier-stage statuses (quoted, draft, etc.) belong to the quote
+// workflow and would clutter member/claims admin if shown here.
+const isManagedScheme = (s: any) => {
+  const status = s.status?.toLowerCase()
   return (
-    schemes.value.filter(
-      (s: any) =>
-        s.status?.toLowerCase() === 'in_force' ||
-        s.status?.toLowerCase() === 'active' ||
-        s.in_force
-    ).length || schemes.value.length
+    status === 'in_force' ||
+    status === 'accepted' ||
+    status === 'active' ||
+    s.in_force === true
   )
-})
+}
+
+const isInForce = (s: any) =>
+  s.status?.toLowerCase() === 'in_force' ||
+  s.status?.toLowerCase() === 'active' ||
+  s.in_force === true
+
+const visibleSchemes = computed(() =>
+  schemes.value.filter(isManagedScheme)
+)
+
+// KPI computeds
+const activeSchemeCount = computed(() =>
+  visibleSchemes.value.filter(isInForce).length
+)
 
 const totalMembers = computed(() => {
   return schemes.value.reduce(
@@ -396,24 +427,39 @@ const exportToExcel = () => {
   XLSX.writeFile(wb, filename)
 }
 
-onMounted(() => {
-  GroupPricingService.getSchemesInforce().then((res) => {
-    const data = res.data?.data ?? res.data
-    if (data && data.length > 0) {
-      rowData.value = data
-      schemes.value = data
-      createColumnDefs(data)
-    } else {
-      schemes.value = []
+const loadSchemes = async () => {
+  isLoading.value = true
+  try {
+    const [schemesRes, claimsRes] = await Promise.allSettled([
+      GroupPricingService.getSchemesInforce(),
+      GroupPricingService.getClaims()
+    ])
+
+    if (schemesRes.status === 'fulfilled') {
+      const data =
+        schemesRes.value.data?.data ?? schemesRes.value.data
+      if (data && data.length > 0) {
+        rowData.value = data
+        schemes.value = data
+        createColumnDefs(data)
+      } else {
+        schemes.value = []
+      }
     }
-  })
-  GroupPricingService.getClaims()
-    .then((res) => {
-      claims.value = res.data?.data ?? res.data ?? []
-    })
-    .catch(() => {
+
+    if (claimsRes.status === 'fulfilled') {
+      claims.value =
+        claimsRes.value.data?.data ?? claimsRes.value.data ?? []
+    } else {
       claims.value = []
-    })
+    }
+  } finally {
+    isLoading.value = false
+  }
+}
+
+onMounted(() => {
+  loadSchemes()
 })
 
 const createColumnDefs = (data: any) => {

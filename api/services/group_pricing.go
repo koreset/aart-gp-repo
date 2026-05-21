@@ -624,9 +624,14 @@ func AcceptGroupPricingQuote(quoteId string, commencementDate string, term strin
 		}
 
 		if quote.QuoteType == "New Business" {
-			err = tx.Model(&models.GPricingMemberData{}).Where("quote_id = ?", quoteId).Find(&gmdif).Error
+			var sourceMembers []models.GPricingMemberData
+			err = tx.Where("quote_id = ?", quoteId).Find(&sourceMembers).Error
 			if err != nil {
 				return err
+			}
+			gmdif = make([]models.GPricingMemberDataInForce, len(sourceMembers))
+			for i, m := range sourceMembers {
+				gmdif[i] = m.ToInForce()
 			}
 
 			// Collect RSA IDs for bulk validation via CheckID API
@@ -989,7 +994,7 @@ func GetGroupPricingQuote(id string) (models.GroupPricingQuote, error) {
 		if quote.QuoteType == "Renewal" {
 			// For Renewal quotes, MemberDataCount must come from GPMemberDataInforce table using SchemeName
 			var inforceCount int64
-			DB.WithContext(ctx).Model(&models.GPricingMemberDataInForce{}).Where("scheme_name = ?", quote.SchemeName).Count(&inforceCount)
+			DB.WithContext(ctx).Model(&models.GPricingMemberDataInForce{}).Where("scheme_name = ? AND status <> ?", quote.SchemeName, models.BulkEnrollmentMemberDraftStatus).Count(&inforceCount)
 			quote.MemberDataCount = int(inforceCount)
 		} else {
 			quote.MemberDataCount = int(counts.MemberDataCount)
@@ -1116,6 +1121,9 @@ func DeleteGroupPricingQuote(id string, user models.AppUser) error {
 			return err
 		}
 		if err := tx.Where("quote_id = ?", id).Delete(&models.HistoricalCredibilityData{}).Error; err != nil {
+			return err
+		}
+		if err := DeleteUnderwritingCasesForQuote(tx, quote.ID); err != nil {
 			return err
 		}
 
@@ -1296,8 +1304,12 @@ func CalculateGroupPricingQuote(quoteId string, basis string, credibility float6
 	// Spawn / refresh underwriting cases for every tier-1+ member now that
 	// member ratings are persisted. Idempotent — existing cases are refreshed
 	// with the latest tier snapshot; underwriter decisions are preserved.
-	if _, err := CreateCasesForQuote(intQuoteID(quoteId), user.UserEmail); err != nil {
+	// Indicative-data quotes are short-circuited; we log the skip so the
+	// calc-completion trail still shows that underwriting was considered.
+	if uwResult, err := CreateCasesForQuote(intQuoteID(quoteId), user.UserEmail); err != nil {
 		logger.WithField("error", err.Error()).Error("Failed to create underwriting cases")
+	} else if uwResult.Skipped {
+		logger.WithField("reason", uwResult.SkipReason).Info("Underwriting case identification skipped")
 	}
 
 	// Stamp the calculation completion time on the quote so the UI can show
@@ -1536,14 +1548,14 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 			})
 		} else {
 			if groupQuote.QuoteType == "Renewal" {
-				memberDataErr = DB.Model(&models.GPricingMemberDataInForce{}).Where("scheme_id = ? and scheme_category=?", groupQuote.SchemeID, selectedSchemeCategory).Scan(&memberMps).Error
+				memberDataErr = DB.Model(&models.GPricingMemberDataInForce{}).Where("scheme_id = ? and scheme_category=? AND status <> ?", groupQuote.SchemeID, selectedSchemeCategory, models.BulkEnrollmentMemberDraftStatus).Scan(&memberMps).Error
 			} else {
 				memberDataErr = DB.Where("quote_id = ? and scheme_category=?", groupQuote.ID, selectedSchemeCategory).Find(&memberMps).Error
 			}
 
 			if groupQuote.ExperienceRating == "Yes" && len(memberMps) > 0 {
 				if groupQuote.QuoteType == "Renewal" {
-					DB.Model(&models.GPricingMemberDataInForce{}).Where("scheme_id = ?", groupQuote.SchemeID).Scan(&experienceMemberMps)
+					DB.Model(&models.GPricingMemberDataInForce{}).Where("scheme_id = ? AND status <> ?", groupQuote.SchemeID, models.BulkEnrollmentMemberDraftStatus).Scan(&experienceMemberMps)
 				} else {
 					DB.Where("quote_id = ?", groupQuote.ID).Find(&experienceMemberMps)
 				}
@@ -1921,6 +1933,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
         SELECT annual_salary, benefits_gla_multiple, 2 as priority
         FROM g_pricing_member_data_in_forces
         WHERE scheme_id = '%d'
+        AND status <> 'draft'
         AND NOT EXISTS (SELECT 1 FROM g_pricing_member_data WHERE quote_id = '%d')
     ) as combined_data
     ORDER BY annual_salary`,
@@ -2765,7 +2778,7 @@ func calculateForCategory(quoteId string, basis string, credibility float64, use
 	historicalCredibilityData.SchemeID = groupQuote.SchemeID
 	var totalSchemeMemberCount int64
 	if groupQuote.QuoteType == "Renewal" {
-		DB.Model(&models.GPricingMemberDataInForce{}).Where("scheme_name = ?", groupQuote.SchemeName).Count(&totalSchemeMemberCount)
+		DB.Model(&models.GPricingMemberDataInForce{}).Where("scheme_name = ? AND status <> ?", groupQuote.SchemeName, models.BulkEnrollmentMemberDraftStatus).Count(&totalSchemeMemberCount)
 	} else {
 		DB.Model(&models.GPricingMemberData{}).Where("quote_id = ?", groupQuote.ID).Count(&totalSchemeMemberCount)
 	}
@@ -6307,8 +6320,14 @@ func SaveQuoteTables(v *multipart.FileHeader, tableType string, quoteId int, use
 		//}
 
 		// All validation passed — only now is it safe to wipe the previous member
-		// data for this quote and replace it with the new batch.
+		// data for this quote and replace it with the new batch. Any
+		// underwriting cases tied to that prior set are cleared too, since
+		// their member snapshots no longer reflect reality; CreateCasesForQuote
+		// will re-generate cases for the new batch on the next quote calc.
 		DB.Where("quote_id = ?", quoteId).Delete(&models.GPricingMemberData{})
+		if err := DeleteUnderwritingCasesForQuote(nil, quoteId); err != nil {
+			return fmt.Errorf("failed to clear underwriting cases: %v", err), 0
+		}
 
 		err = DB.CreateInBatches(&membersData, 100).Error
 		if err != nil {
@@ -6359,6 +6378,9 @@ func DeleteQuoteTableData(tableType string, quoteId int) error {
 	switch tableType {
 	case "Member Data":
 		DB.Where("quote_id = ?", quoteId).Delete(&models.GPricingMemberData{})
+		if err := DeleteUnderwritingCasesForQuote(nil, quoteId); err != nil {
+			return err
+		}
 	case "Claims Experience":
 		DB.Where("quote_id = ?", quoteId).Delete(&models.GroupPricingClaimsExperience{})
 	case "Member Rating Results":
@@ -12309,6 +12331,30 @@ func GetGroupSchemesInforce() ([]models.GroupScheme, error) {
 	return groupSchemes, nil
 }
 
+// GetGroupSchemesEverInForce returns the universe of schemes that the claims
+// surface should know about: currently in-force schemes plus any that were
+// in-force at some point but have since expired, lapsed, gone out-of-force,
+// or been cancelled. This keeps the claims-filter dropdown from showing
+// pre-quote schemes (draft, submitted, quoted, etc.) that a claim could
+// never have been lodged against, while still surfacing closed-book schemes
+// where historical claims may still need follow-up.
+func GetGroupSchemesEverInForce() ([]models.GroupScheme, error) {
+	var groupSchemes []models.GroupScheme
+	statuses := []models.Status{
+		models.StatusInForce,
+		models.StatusOutOfForce,
+		models.StatusExpired,
+		models.StatusLapsed,
+		models.StatusCancelled,
+	}
+	err := DB.Where("status IN ?", statuses).Find(&groupSchemes).Error
+	if err != nil {
+		return nil, err
+	}
+	hydrateSchemesTreatyLinkFlag(groupSchemes)
+	return groupSchemes, nil
+}
+
 // claimsAggForITD is the per-scheme claims roll-up used to compute ITD ALR.
 // Status set is {approved, paid} — both represent claims the insurer has
 // committed to on the book. Declined / withdrawn / pending are excluded.
@@ -13376,7 +13422,7 @@ func AddMembersToSchemeBulk(
 
 	var existingIDs []string
 	if err := DB.Model(&models.GPricingMemberDataInForce{}).
-		Where("scheme_id = ?", schemeId).
+		Where("scheme_id = ? AND status <> ?", schemeId, models.BulkEnrollmentMemberDraftStatus).
 		Pluck("member_id_number", &existingIDs).Error; err != nil {
 		return 0, fmt.Errorf("could not load existing members: %v", err)
 	}
@@ -13520,7 +13566,7 @@ func GetSchemeMembers(schemeId string) ([]models.GPricingMemberDataInForce, erro
 	logger.Debug("Retrieving scheme members")
 
 	var members []models.GPricingMemberDataInForce
-	err := DB.Where("scheme_id = ?", schemeId).Find(&members).Error
+	err := DB.Where("scheme_id = ? AND status <> ?", schemeId, models.BulkEnrollmentMemberDraftStatus).Find(&members).Error
 	if err != nil {
 		logger.WithField("error", err.Error()).Error("Failed to retrieve scheme members")
 		return nil, err
@@ -13592,8 +13638,10 @@ func GetMemberInForceByIdNumber(idNumber string) (models.GPricingMemberDataInFor
 	logger.Debug("Retrieving member in-force by IdNumber")
 
 	var member models.GPricingMemberDataInForce
-	// Prefer Active members, then by most recent entry date
-	if err := DB.Where("member_id_number = ?", idNumber).
+	// Prefer Active members, then by most recent entry date. Excludes draft rows
+	// from pending bulk-enrollment batches so unapproved members are invisible
+	// to claims, beneficiary, and other downstream lookups by ID number.
+	if err := DB.Where("member_id_number = ? AND status <> ?", idNumber, models.BulkEnrollmentMemberDraftStatus).
 		Order("CASE WHEN status = 'Active' THEN 0 ELSE 1 END").
 		Order("entry_date DESC").
 		First(&member).Error; err != nil {
@@ -13993,7 +14041,8 @@ func GetMembersPaginated(page, pageSize int, search, schemeId, status string) ([
 		total   int64
 	)
 
-	db := DB.Model(&models.GPricingMemberDataInForce{})
+	db := DB.Model(&models.GPricingMemberDataInForce{}).
+		Where("status <> ?", models.BulkEnrollmentMemberDraftStatus)
 
 	if schemeId != "" {
 		db = db.Where("scheme_id = ?", schemeId)
@@ -16618,6 +16667,9 @@ type ClaimsDashboardFilters struct {
 	To       *time.Time
 	// Limit controls the number of rows for the top claims table
 	Limit int
+	// LargeClaimThreshold is the floor (inclusive) used to count "large claims" for the RI
+	// watch tile. Falls back to 1_000_000 when zero/negative.
+	LargeClaimThreshold float64
 }
 
 func getDOBFromSAID(id string) (time.Time, error) {
@@ -16664,7 +16716,7 @@ func GetGroupSchemeClaimsDashboardData(f ClaimsDashboardFilters) (map[string]int
 			q = q.Where("group_scheme_claims.scheme_id = ?", *f.SchemeID)
 		}
 		if f.Benefit != "" {
-			q = q.Where("group_scheme_claims.benefit_type = ?", f.Benefit)
+			q = q.Where("group_scheme_claims.benefit_alias = ?", f.Benefit)
 		}
 		if f.From != nil {
 			q = q.Where("group_scheme_claims.creation_date >= ?", *f.From)
@@ -16916,12 +16968,14 @@ func GetGroupSchemeClaimsDashboardData(f ClaimsDashboardFilters) (map[string]int
 		DateNotified string    `json:"date_notified"`
 	}
 	var topClaims []topClaimRow
+	// Note: the DB column is `benefit_alias` — alias it as benefit_type so the struct
+	// field BenefitType (and JSON key "benefit_type" consumed by the frontend) populates correctly.
 	if err := applyClaimFilters(DB.Model(&models.GroupSchemeClaim{}), f).
-		Select("id, claim_number, member_name, scheme_name, benefit_type, claim_amount, status, creation_date, date_notified").
+		Select("id, claim_number, member_name, scheme_name, benefit_alias AS benefit_type, claim_amount, status, creation_date, date_notified").
 		Order("claim_amount DESC").
 		Limit(topLimit).
 		Scan(&topClaims).Error; err != nil {
-		return nil, err
+		return nil, fmt.Errorf("top_claims: %w", err)
 	}
 
 	// Top 5 performing assessors for the given period (by assessment count)
@@ -16945,7 +16999,7 @@ func GetGroupSchemeClaimsDashboardData(f ClaimsDashboardFilters) (map[string]int
 			assessQ = assessQ.Where("c.scheme_id = ?", *f.SchemeID)
 		}
 		if f.Benefit != "" {
-			assessQ = assessQ.Where("c.benefit_type = ?", f.Benefit)
+			assessQ = assessQ.Where("c.benefit_alias = ?", f.Benefit)
 		}
 	}
 	if err := assessQ.Select("assessor_name AS name, COUNT(*) AS cnt").
@@ -16978,7 +17032,7 @@ func GetGroupSchemeClaimsDashboardData(f ClaimsDashboardFilters) (map[string]int
 			drQ = drQ.Where("c.scheme_id = ?", *f.SchemeID)
 		}
 		if f.Benefit != "" {
-			drQ = drQ.Where("c.benefit_type = ?", f.Benefit)
+			drQ = drQ.Where("c.benefit_alias = ?", f.Benefit)
 		}
 	}
 	if err := drQ.Select("primary_reason AS reason, COUNT(*) AS cnt").
@@ -17063,7 +17117,7 @@ func GetGroupSchemeClaimsDashboardData(f ClaimsDashboardFilters) (map[string]int
 	// Use fresh query and join with GPricingMemberDataInForce to get member's DOB
 	ageQ := applyClaimFilters(DB.Model(&models.GroupSchemeClaim{}), f)
 	if err := ageQ.Where("LOWER(group_scheme_claims.status) IN ?", []string{"approved", "paid"}).
-		Joins("JOIN g_pricing_member_data_in_forces m ON m.member_id_number = group_scheme_claims.member_id_number").
+		Joins("JOIN g_pricing_member_data_in_forces m ON m.member_id_number = group_scheme_claims.member_id_number AND m.status <> 'draft'").
 		Select("DISTINCT m.date_of_birth, group_scheme_claims.id").
 		Scan(&memberDOBs).Error; err != nil {
 		return nil, err
@@ -17106,15 +17160,183 @@ func GetGroupSchemeClaimsDashboardData(f ClaimsDashboardFilters) (map[string]int
 		ageDistribution = append(ageDistribution, ageBucket{Label: label, Count: bucketCount})
 	}
 
+	// --- Additional analytics aggregations (financial / operational / risk / scheme) ---
+
+	// Average claim amount across approved + paid claims
+	var avgClaimAmount float64
+	avgAmtQ := applyClaimFilters(DB.Model(&models.GroupSchemeClaim{}), f)
+	if err := avgAmtQ.Where("LOWER(status) IN ?", []string{"approved", "paid"}).
+		Select("COALESCE(AVG(claim_amount),0)").Scan(&avgClaimAmount).Error; err != nil {
+		return nil, fmt.Errorf("avg_claim_amount: %w", err)
+	}
+
+	// Total outstanding exposure: sum of claim_amount for non-terminal (open) claims
+	var totalExposure float64
+	exposureQ := applyClaimFilters(DB.Model(&models.GroupSchemeClaim{}), f)
+	if err := exposureQ.Where("LOWER(status) NOT IN ?", []string{"approved", "declined", "paid"}).
+		Select("COALESCE(SUM(claim_amount),0)").Scan(&totalExposure).Error; err != nil {
+		return nil, fmt.Errorf("total_exposure: %w", err)
+	}
+
+	// Large claims watch: count of approved/paid claims at-or-above threshold
+	largeThreshold := f.LargeClaimThreshold
+	if largeThreshold <= 0 {
+		largeThreshold = 1000000.0
+	}
+	var largeClaimsCount int64
+	largeQ := applyClaimFilters(DB.Model(&models.GroupSchemeClaim{}), f)
+	if err := largeQ.Where("LOWER(status) IN ? AND claim_amount >= ?", []string{"approved", "paid"}, largeThreshold).
+		Count(&largeClaimsCount).Error; err != nil {
+		return nil, fmt.Errorf("large_claims_count: %w", err)
+	}
+
+	// Aging buckets for open claims (days since creation_date)
+	type openClaimRow struct {
+		CreationDate time.Time
+	}
+	var openClaims []openClaimRow
+	openQ := applyClaimFilters(DB.Model(&models.GroupSchemeClaim{}), f)
+	if err := openQ.Where("LOWER(status) NOT IN ?", []string{"approved", "declined", "paid"}).
+		Select("creation_date").Scan(&openClaims).Error; err != nil {
+		return nil, fmt.Errorf("aging_buckets: %w", err)
+	}
+	agingLabels := []string{"0-7", "8-14", "15-30", "31-60", "60+"}
+	agingCounts := make(map[string]int, len(agingLabels))
+	nowAging := time.Now()
+	for _, oc := range openClaims {
+		days := nowAging.Sub(oc.CreationDate).Hours() / 24.0
+		switch {
+		case days <= 7:
+			agingCounts["0-7"]++
+		case days <= 14:
+			agingCounts["8-14"]++
+		case days <= 30:
+			agingCounts["15-30"]++
+		case days <= 60:
+			agingCounts["31-60"]++
+		default:
+			agingCounts["60+"]++
+		}
+	}
+	agingBuckets := make([]map[string]interface{}, 0, len(agingLabels))
+	for _, lbl := range agingLabels {
+		agingBuckets = append(agingBuckets, map[string]interface{}{
+			"label": lbl,
+			"count": agingCounts[lbl],
+		})
+	}
+
+	// Breakdown by cause type (top 6 + Other). Group by the column directly
+	// to avoid dialect-specific issues with grouping by alias.
+	var byCauseRaw []kv
+	causeQ := applyClaimFilters(DB.Model(&models.GroupSchemeClaim{}), f)
+	if err := causeQ.Select("COALESCE(NULLIF(TRIM(cause_type),''),'unspecified') as k, COUNT(*) as v").
+		Group("cause_type").Order("v DESC").Scan(&byCauseRaw).Error; err != nil {
+		return nil, fmt.Errorf("by_cause_type aggregation: %w", err)
+	}
+	byCauseType := make([]map[string]interface{}, 0)
+	var otherCount int64
+	for i, r := range byCauseRaw {
+		if i < 6 {
+			byCauseType = append(byCauseType, map[string]interface{}{"label": strings.ToLower(r.K), "count": r.V})
+		} else {
+			otherCount += r.V
+		}
+	}
+	if otherCount > 0 {
+		byCauseType = append(byCauseType, map[string]interface{}{"label": "other", "count": otherCount})
+	}
+
+	// Breakdown by member type (principal / spouse / child / ...)
+	var byMemberRaw []kv
+	memberQ := applyClaimFilters(DB.Model(&models.GroupSchemeClaim{}), f)
+	if err := memberQ.Select("COALESCE(NULLIF(TRIM(member_type),''),'unspecified') as k, COUNT(*) as v").
+		Group("member_type").Order("v DESC").Scan(&byMemberRaw).Error; err != nil {
+		return nil, fmt.Errorf("by_member_type aggregation: %w", err)
+	}
+	byMemberType := make([]map[string]interface{}, 0, len(byMemberRaw))
+	for _, r := range byMemberRaw {
+		byMemberType = append(byMemberType, map[string]interface{}{"label": strings.ToLower(r.K), "count": r.V})
+	}
+
+	// Top schemes by claim count and total amount
+	type schemeRow struct {
+		SchemeName  string  `gorm:"column:scheme_name" json:"scheme_name"`
+		Cnt         int64   `gorm:"column:cnt" json:"count"`
+		TotalAmount float64 `gorm:"column:total_amount" json:"total_amount"`
+	}
+	var topSchemes []schemeRow
+	schemeQ := applyClaimFilters(DB.Model(&models.GroupSchemeClaim{}), f)
+	if err := schemeQ.Select("scheme_name, COUNT(*) AS cnt, COALESCE(SUM(claim_amount),0) AS total_amount").
+		Where("TRIM(scheme_name) <> ''").
+		Group("scheme_name").
+		Order("cnt DESC").
+		Limit(5).
+		Scan(&topSchemes).Error; err != nil {
+		return nil, fmt.Errorf("top_schemes: %w", err)
+	}
+	// Round total amounts for the response
+	topSchemesOut := make([]map[string]interface{}, 0, len(topSchemes))
+	for _, s := range topSchemes {
+		topSchemesOut = append(topSchemesOut, map[string]interface{}{
+			"scheme_name":  s.SchemeName,
+			"count":        s.Cnt,
+			"total_amount": utils.FloatPrecision(s.TotalAmount, AccountingPrecision),
+		})
+	}
+
+	// Finance rejection rate = finance_rejected / (approved + paid)
+	var financeRejectedCount int64
+	frQ := applyClaimFilters(DB.Model(&models.GroupSchemeClaim{}), f)
+	if err := frQ.Where("finance_rejected_at IS NOT NULL").Count(&financeRejectedCount).Error; err != nil {
+		return nil, fmt.Errorf("finance_rejection_rate: %w", err)
+	}
+	var financeRejectionRate float64
+	if approvedOrPaid > 0 {
+		financeRejectionRate = float64(financeRejectedCount) / float64(approvedOrPaid)
+	}
+
+	// Reopen count: distinct claim_ids whose audits show old_status terminal -> new_status non-terminal,
+	// scoped to the claims in the current filter window. Done in two steps to keep the SQL
+	// portable across MySQL / PostgreSQL / SQL Server (avoids subquery + Distinct + Count combo).
+	var reopenCount int64
+	var inScopeIDs []int
+	if err := applyClaimFilters(DB.Model(&models.GroupSchemeClaim{}), f).
+		Pluck("id", &inScopeIDs).Error; err != nil {
+		return nil, fmt.Errorf("reopen scope ids: %w", err)
+	}
+	if len(inScopeIDs) > 0 {
+		var reopenIDs []int
+		if err := DB.Model(&models.GroupSchemeClaimStatusAudit{}).
+			Where("claim_id IN ?", inScopeIDs).
+			Where("LOWER(old_status) IN ?", []string{"approved", "declined", "paid"}).
+			Where("LOWER(new_status) NOT IN ?", []string{"approved", "declined", "paid"}).
+			Distinct().
+			Pluck("claim_id", &reopenIDs).Error; err != nil {
+			return nil, fmt.Errorf("reopen count: %w", err)
+		}
+		reopenCount = int64(len(reopenIDs))
+	}
+
 	result := map[string]interface{}{
 		"total_claims":              totalClaims,
 		"total_paid_amount":         utils.FloatPrecision(totalPaid, AccountingPrecision),
+		"avg_claim_amount":          utils.FloatPrecision(avgClaimAmount, AccountingPrecision),
+		"total_exposure":            utils.FloatPrecision(totalExposure, AccountingPrecision),
 		"avg_processing_days":       avgProcessingDays,
 		"approval_rate":             utils.FloatPrecision(approvalRate, 4),
 		"decline_rate":              utils.FloatPrecision(declineRate, 4),
+		"finance_rejection_rate":    utils.FloatPrecision(financeRejectionRate, 4),
+		"large_claims_count":        largeClaimsCount,
+		"large_claim_threshold":     largeThreshold,
+		"reopen_count":              reopenCount,
 		"by_status":                 byStatus,
 		"by_benefit":                byBenefit,
+		"by_cause_type":             byCauseType,
+		"by_member_type":            byMemberType,
+		"aging_buckets":             agingBuckets,
 		"top_claims":                topClaims,
+		"top_schemes":               topSchemesOut,
 		"top_assessors":             topAssessors,
 		"topDeclineReasons":         topDeclineReasons,
 		"processing_efficiency":     processingEfficiency,
@@ -18811,7 +19033,7 @@ func GetQuoteMemberGenderSplit(quoteID int) (QuoteMemberGenderSplit, error) {
 			var ifRows []genderRow
 			if err := DB.Table("g_pricing_member_data_in_forces").
 				Select("gender, COUNT(*) AS n").
-				Where("scheme_id = ?", quote.SchemeID).
+				Where("scheme_id = ? AND status <> ?", quote.SchemeID, models.BulkEnrollmentMemberDraftStatus).
 				Group("gender").
 				Scan(&ifRows).Error; err != nil {
 				return split, err
@@ -20480,4 +20702,313 @@ func computeMemberOfficePremium(riskPremium float64, quote *models.GroupPricingQ
 		return 0
 	}
 	return riskPremium / denom
+}
+
+// RegularIncomeClaimRow is the flat row returned by the Regular Income Claims
+// list endpoint. It joins claim, latest member-in-force snapshot, and the
+// scheme-category benefit rules for PHI/TTD into a single payload tuned for
+// the claims-admin grid and the actuarial export.
+type RegularIncomeClaimRow struct {
+	ID                      int     `json:"id"`
+	ClaimNumber             string  `json:"claim_number"`
+	MemberName              string  `json:"member_name"`
+	MemberIDNumber          string  `json:"member_id_number"`
+	Gender                  string  `json:"gender"`
+	DateOfBirth             string  `json:"date_of_birth"`
+	DateOfEvent             string  `json:"date_of_event"`
+	DateNotified            string  `json:"date_notified"`
+	TerminationDate         string  `json:"termination_date"`
+	DeferredPeriod          int     `json:"deferred_period"`
+	DurationInForceMonths   int     `json:"duration_in_force_months"`
+	DisplayStatus           string  `json:"display_status"`
+	PersistedStatus         string  `json:"persisted_status"`
+	EscalationOption        string  `json:"escalation_option"`
+	NormalRetirementAge     int     `json:"normal_retirement_age"`
+	TieredIncomeReplacement string  `json:"tiered_income_replacement"`
+	BenefitEscalationMonth  string  `json:"benefit_escalation_month"`
+	BenefitType             string  `json:"benefit_type"`
+	Region                  string  `json:"region"`
+	OccupationalClass       string  `json:"occupational_class"`
+	SchemeID                int     `json:"scheme_id"`
+	SchemeName              string  `json:"scheme_name"`
+	ClaimAmount             float64 `json:"claim_amount"`
+}
+
+// RegularIncomeClaimsFilters narrows the Regular Income Claims list. Region,
+// OccupationalClass and DisplayStatus are applied in-app after the join
+// because they reference fields computed at read time.
+type RegularIncomeClaimsFilters struct {
+	SchemeID          *int
+	Region            string
+	OccupationalClass string
+	DisplayStatus     string
+}
+
+// regularIncomeStatuses is the set of persisted statuses surfaced on the
+// Regular Income Claims view. Lump-sum terminal states (paid, declined,
+// cancelled, finance_rejected) are deliberately excluded — those are not
+// part of the lifecycle this view covers.
+var regularIncomeStatuses = []string{
+	"draft", "pending_assessment", "under_assessment", "approved", ClaimStatusOmbudClaim,
+}
+
+// regularIncomeBenefitAliases is the set of benefit aliases that produce
+// regular monthly payments and so behave like income protection. Other
+// benefits (GLA, SGLA, CI, PTD, GFF) are lump-sum and excluded.
+var regularIncomeBenefitAliases = []string{"PHI", "TTD"}
+
+// GetRegularIncomeClaims fetches PHI/TTD claims in the regular-income
+// lifecycle and joins them to the latest member-in-force snapshot and the
+// scheme-category rules so the row carries demographic + benefit-rule
+// context without the caller having to make follow-up joins.
+//
+// Display status is derived from the persisted status plus the deferred
+// period elapsed since date_of_event — see computeRegularIncomeDisplayStatus.
+func GetRegularIncomeClaims(f RegularIncomeClaimsFilters) ([]RegularIncomeClaimRow, error) {
+	var claims []models.GroupSchemeClaim
+	q := DB.Model(&models.GroupSchemeClaim{}).
+		Where("benefit_alias IN ?", regularIncomeBenefitAliases).
+		Where("LOWER(status) IN ?", regularIncomeStatuses)
+	if f.SchemeID != nil {
+		q = q.Where("scheme_id = ?", *f.SchemeID)
+	}
+	if err := q.Find(&claims).Error; err != nil {
+		return nil, err
+	}
+	if len(claims) == 0 {
+		return []RegularIncomeClaimRow{}, nil
+	}
+
+	type memberKey struct {
+		SchemeID       int
+		MemberIDNumber string
+	}
+	schemeSet := map[int]struct{}{}
+	memberSet := map[string]struct{}{}
+	for _, c := range claims {
+		schemeSet[c.SchemeId] = struct{}{}
+		if c.MemberIDNumber != "" {
+			memberSet[c.MemberIDNumber] = struct{}{}
+		}
+	}
+	schemeList := make([]int, 0, len(schemeSet))
+	for id := range schemeSet {
+		schemeList = append(schemeList, id)
+	}
+	memberList := make([]string, 0, len(memberSet))
+	for id := range memberSet {
+		memberList = append(memberList, id)
+	}
+
+	latestMember := map[memberKey]models.GPricingMemberDataInForce{}
+	if len(memberList) > 0 {
+		var members []models.GPricingMemberDataInForce
+		if err := DB.Where("scheme_id IN ? AND member_id_number IN ?", schemeList, memberList).
+			Order("year DESC").Find(&members).Error; err != nil {
+			return nil, err
+		}
+		for _, m := range members {
+			k := memberKey{m.SchemeId, m.MemberIdNumber}
+			if _, ok := latestMember[k]; !ok {
+				latestMember[k] = m
+			}
+		}
+	}
+
+	quoteIDByScheme := map[int]int{}
+	if len(schemeList) > 0 {
+		var schemes []models.GroupScheme
+		if err := DB.Where("id IN ?", schemeList).Find(&schemes).Error; err != nil {
+			return nil, err
+		}
+		for _, s := range schemes {
+			quoteIDByScheme[s.ID] = s.QuoteId
+		}
+	}
+
+	type catKey struct {
+		QuoteID  int
+		Category string
+	}
+	catByKey := map[catKey]models.SchemeCategory{}
+	quoteSet := map[int]struct{}{}
+	for _, qid := range quoteIDByScheme {
+		if qid != 0 {
+			quoteSet[qid] = struct{}{}
+		}
+	}
+	if len(quoteSet) > 0 {
+		quoteIDs := make([]int, 0, len(quoteSet))
+		for id := range quoteSet {
+			quoteIDs = append(quoteIDs, id)
+		}
+		var categories []models.SchemeCategory
+		if err := DB.Where("quote_id IN ?", quoteIDs).Find(&categories).Error; err != nil {
+			return nil, err
+		}
+		for _, c := range categories {
+			catByKey[catKey{c.QuoteId, c.SchemeCategory}] = c
+		}
+	}
+
+	now := time.Now()
+	rows := make([]RegularIncomeClaimRow, 0, len(claims))
+	for _, c := range claims {
+		member, hasMember := latestMember[memberKey{c.SchemeId, c.MemberIDNumber}]
+		var cat models.SchemeCategory
+		if hasMember {
+			if qid, ok := quoteIDByScheme[c.SchemeId]; ok && qid != 0 {
+				cat = catByKey[catKey{qid, member.SchemeCategory}]
+			}
+		}
+
+		deferredMonths := 0
+		escalationOption := ""
+		tieredIR := ""
+		switch strings.ToUpper(strings.TrimSpace(c.BenefitAlias)) {
+		case "PHI":
+			deferredMonths = cat.PhiDeferredPeriod
+			escalationOption = cat.PhiBenefitEscalation
+			tieredIR = cat.PhiTieredIncomeReplacementType
+		case "TTD":
+			deferredMonths = cat.TtdDeferredPeriod
+			escalationOption = cat.TtdBenefitEscalation
+			tieredIR = cat.TtdTieredIncomeReplacementType
+		}
+
+		displayStatus := computeRegularIncomeDisplayStatus(c.Status, c.DateOfEvent, deferredMonths, now)
+		if f.DisplayStatus != "" && !strings.EqualFold(displayStatus, f.DisplayStatus) {
+			continue
+		}
+
+		region := cat.Region
+		if f.Region != "" && !strings.EqualFold(region, f.Region) {
+			continue
+		}
+		occ := ""
+		if hasMember {
+			occ = member.OccupationalClass
+		}
+		if f.OccupationalClass != "" && !strings.EqualFold(occ, f.OccupationalClass) {
+			continue
+		}
+
+		escalationMonth := ""
+		if doe := parseClaimDate(c.DateOfEvent); !doe.IsZero() {
+			firstPayment := doe.AddDate(0, deferredMonths, 0)
+			escalationMonth = firstPayment.Month().String()
+		}
+
+		// Duration in force: whole months from date_notified to now. Used by
+		// the claims-admin view to spot long-running regular-income claims.
+		durationMonths := 0
+		if dn := parseClaimDate(c.DateNotified); !dn.IsZero() && !now.Before(dn) {
+			months := (now.Year()-dn.Year())*12 + int(now.Month()-dn.Month())
+			if now.Day() < dn.Day() {
+				months--
+			}
+			if months < 0 {
+				months = 0
+			}
+			durationMonths = months
+		}
+
+		gender := ""
+		dob := ""
+		termination := ""
+		if hasMember {
+			gender = member.Gender
+			if !member.DateOfBirth.IsZero() {
+				dob = member.DateOfBirth.Format("2006-01-02")
+			}
+			if member.EffectiveExitDate != nil && !member.EffectiveExitDate.IsZero() {
+				termination = member.EffectiveExitDate.Format("2006-01-02")
+			}
+		}
+
+		rows = append(rows, RegularIncomeClaimRow{
+			ID:                      c.ID,
+			ClaimNumber:             c.ClaimNumber,
+			MemberName:              c.MemberName,
+			MemberIDNumber:          c.MemberIDNumber,
+			Gender:                  gender,
+			DateOfBirth:             dob,
+			DateOfEvent:             c.DateOfEvent,
+			DateNotified:            c.DateNotified,
+			TerminationDate:         termination,
+			DeferredPeriod:          deferredMonths,
+			DurationInForceMonths:   durationMonths,
+			DisplayStatus:           displayStatus,
+			PersistedStatus:         c.Status,
+			EscalationOption:        escalationOption,
+			NormalRetirementAge:     cat.PhiNormalRetirementAge,
+			TieredIncomeReplacement: tieredIR,
+			BenefitEscalationMonth:  escalationMonth,
+			BenefitType:             c.BenefitAlias,
+			Region:                  region,
+			OccupationalClass:       occ,
+			SchemeID:                c.SchemeId,
+			SchemeName:              c.SchemeName,
+			ClaimAmount:             c.ClaimAmount,
+		})
+	}
+
+	return rows, nil
+}
+
+// computeRegularIncomeDisplayStatus folds the persisted claim status plus the
+// deferred-period boundary into one of four display states used by the
+// Regular Income Claims grid: notified, pending, in_payment, ombud_claim.
+func computeRegularIncomeDisplayStatus(status, dateOfEvent string, deferredMonths int, now time.Time) string {
+	s := strings.ToLower(strings.TrimSpace(status))
+	switch s {
+	case "draft", "pending_assessment", "under_assessment":
+		return "notified"
+	case "approved":
+		doe := parseClaimDate(dateOfEvent)
+		if doe.IsZero() {
+			return "pending"
+		}
+		firstPayment := doe.AddDate(0, deferredMonths, 0)
+		if now.Before(firstPayment) {
+			return "pending"
+		}
+		return "in_payment"
+	case ClaimStatusOmbudClaim:
+		return "ombud_claim"
+	}
+	return s
+}
+
+// GetRegularIncomeClaimsMetrics aggregates the same rows that GetRegularIncomeClaims
+// would return, by region, occupation class and display status. generated_at
+// is the moment the snapshot was taken so the UI can show "Last updated HH:mm".
+func GetRegularIncomeClaimsMetrics(f RegularIncomeClaimsFilters) (map[string]interface{}, error) {
+	rows, err := GetRegularIncomeClaims(f)
+	if err != nil {
+		return nil, err
+	}
+	byRegion := map[string]int{}
+	byOccupation := map[string]int{}
+	byDisplay := map[string]int{}
+	for _, r := range rows {
+		rg := r.Region
+		if rg == "" {
+			rg = "Unspecified"
+		}
+		byRegion[rg]++
+		oc := r.OccupationalClass
+		if oc == "" {
+			oc = "Unspecified"
+		}
+		byOccupation[oc]++
+		byDisplay[r.DisplayStatus]++
+	}
+	return map[string]interface{}{
+		"total":               len(rows),
+		"by_region":           byRegion,
+		"by_occupation_class": byOccupation,
+		"by_display_status":   byDisplay,
+		"generated_at":        time.Now().UTC(),
+	}, nil
 }

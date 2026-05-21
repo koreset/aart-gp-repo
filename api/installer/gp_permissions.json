@@ -248,6 +248,15 @@
     "parent_slug": "navigation:manage_members",
     "display_order": 65
   },
+  {
+    "slug": "navigation:approve_bulk_enrollment",
+    "name": "Approve Bulk Member Enrollment",
+    "description": "Can review and approve or reject bulk member enrollment batches.",
+    "category": "Members",
+    "tier": "special",
+    "parent_slug": "navigation:manage_members",
+    "display_order": 66
+  },
 
   {
     "slug": "navigation:view_claims",
@@ -373,6 +382,24 @@
     "category": "Claims",
     "tier": "special",
     "parent_slug": "navigation:view_claims_analytics",
+    "display_order": 83
+  },
+  {
+    "slug": "claims:view_regular_income",
+    "name": "View Regular Income Claims",
+    "description": "Can view the Regular Income Claims (PHI/TTD) list and metrics.",
+    "category": "Claims",
+    "tier": "special",
+    "parent_slug": "navigation:manage_claims",
+    "display_order": 83
+  },
+  {
+    "slug": "claims:manage_cpi_indices",
+    "name": "Manage CPI Indices",
+    "description": "Can add, edit and bulk-upload CPI index rows used by Regular Income Claims and actuarial extracts.",
+    "category": "Claims",
+    "tier": "special",
+    "parent_slug": "navigation:manage_claims",
     "display_order": 83
   },
   {
@@ -1207,5 +1234,158 @@
     "display_order": 999,
     "disabled": true,
     "disabled_reason": "Not relevant for group risk"
+  },
+  {
+    "slug": "navigation:finance",
+    "name": "Finance",
+    "description": "Can navigate to the operational General Ledger.",
+    "category": "Finance",
+    "tier": "baseline",
+    "parent_slug": "",
+    "display_order": 100
+  },
+  {
+    "slug": "gl:view",
+    "name": "View General Ledger",
+    "description": "Read chart of accounts, posted journals, trial balance, and account ledgers.",
+    "category": "Finance",
+    "tier": "special",
+    "parent_slug": "navigation:finance",
+    "display_order": 110
+  },
+  {
+    "slug": "gl:manage_accounts",
+    "name": "Manage Chart of Accounts",
+    "description": "Create, edit, and deactivate GL accounts, accounting periods, and bank accounts.",
+    "category": "Finance",
+    "tier": "special",
+    "parent_slug": "navigation:finance",
+    "display_order": 111
+  },
+  {
+    "slug": "gl:draft_journal",
+    "name": "Draft & Submit Manual Journal",
+    "description": "Draft balanced multi-line journal entries and submit them for approval. Cannot post without a second user approving.",
+    "category": "Finance",
+    "tier": "special",
+    "parent_slug": "navigation:finance",
+    "display_order": 112
+  },
+  {
+    "slug": "gl:approve_journal",
+    "name": "Approve Manual Journal",
+    "description": "Approve a submitted manual journal entry. The approver must be a different user from the submitter.",
+    "category": "Finance",
+    "tier": "special",
+    "parent_slug": "navigation:finance",
+    "display_order": 112.1
+  },
+  {
+    "slug": "gl:post_journal",
+    "name": "Post Approved Journal",
+    "description": "Commit an approved manual journal to the trial balance.",
+    "category": "Finance",
+    "tier": "special",
+    "parent_slug": "navigation:finance",
+    "display_order": 112.2
+  },
+  {
+    "slug": "gl:reverse",
+    "name": "Request Reversal",
+    "description": "Request reversal of a previously posted journal entry. Requires a second user to approve before the reversal posts.",
+    "category": "Finance",
+    "tier": "special",
+    "parent_slug": "navigation:finance",
+    "display_order": 113
+  },
+  {
+    "slug": "gl:approve_reverse",
+    "name": "Approve Journal Reversal",
+    "description": "Approve a pending reversal request. The approver must be a different user from the requester.",
+    "category": "Finance",
+    "tier": "special",
+    "parent_slug": "navigation:finance",
+    "display_order": 113.1
+  },
+  {
+    "slug": "gl:request_close_period",
+    "name": "Request Period Close",
+    "description": "Request closure of an accounting period. A different user must approve via Close Accounting Period.",
+    "category": "Finance",
+    "tier": "special",
+    "parent_slug": "navigation:finance",
+    "display_order": 114
+  },
+  {
+    "slug": "gl:close_period",
+    "name": "Close Accounting Period",
+    "description": "Approve and commit a period-close request. The closer must be a different user from the requester.",
+    "category": "Finance",
+    "tier": "special",
+    "parent_slug": "navigation:finance",
+    "display_order": 114.1
+  },
+  {
+    "slug": "gl:approve_account",
+    "name": "Approve Chart of Accounts Change",
+    "description": "Approve pending create/edit/deactivate requests on GL accounts. Approver must differ from requester.",
+    "category": "Finance",
+    "tier": "special",
+    "parent_slug": "navigation:finance",
+    "display_order": 114.2
+  },
+  {
+    "slug": "gl:manage_rules",
+    "name": "Manage Posting Rules",
+    "description": "Edit the event-to-account mappings used by automatic GL postings.",
+    "category": "Finance",
+    "tier": "special",
+    "parent_slug": "navigation:finance",
+    "display_order": 115
+  },
+  {
+    "slug": "gl:approve_rule",
+    "name": "Approve Posting Rule Change",
+    "description": "Approve pending create/edit/delete requests on automatic GL posting rules.",
+    "category": "Finance",
+    "tier": "special",
+    "parent_slug": "navigation:finance",
+    "display_order": 115.1
+  },
+  {
+    "slug": "gl:bank_rec",
+    "name": "Bank Reconciliation",
+    "description": "Import bank statements and match (or ignore) statement lines against posted journal lines.",
+    "category": "Finance",
+    "tier": "special",
+    "parent_slug": "navigation:finance",
+    "display_order": 116
+  },
+  {
+    "slug": "gl:review_reconciliation",
+    "name": "Review Bank Reconciliation",
+    "description": "Sign off on (or reject) a match/ignore action performed by another user. Reviewer must differ from matcher.",
+    "category": "Finance",
+    "tier": "special",
+    "parent_slug": "navigation:finance",
+    "display_order": 116.1
+  },
+  {
+    "slug": "gl:approve_bank_account",
+    "name": "Approve Bank Account Change",
+    "description": "Approve pending create/edit/deactivate requests on bank accounts. Guards against payment-fraud rerouting.",
+    "category": "Finance",
+    "tier": "special",
+    "parent_slug": "navigation:finance",
+    "display_order": 116.2
+  },
+  {
+    "slug": "gl:view_audit",
+    "name": "View GL Audit Log",
+    "description": "Read the operational General Ledger audit trail (every journal, period, account, rule, bank account, and reconciliation event).",
+    "category": "Finance",
+    "tier": "special",
+    "parent_slug": "navigation:finance",
+    "display_order": 117
   }
 ]

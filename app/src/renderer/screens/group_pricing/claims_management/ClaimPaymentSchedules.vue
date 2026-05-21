@@ -159,7 +159,9 @@
                     <div class="workflow-stepper__label">
                       {{ step.label }}
                     </div>
-                    <div class="workflow-stepper__owner d-flex align-center ga-1">
+                    <div
+                      class="workflow-stepper__owner d-flex align-center ga-1"
+                    >
                       <v-icon
                         :icon="
                           step.owner === 'claims'
@@ -648,7 +650,12 @@ const serviceTypeOptions = [
 const workflowSteps = [
   { label: 'Draft', sub: 'Created', tone: 'muted', owner: 'claims' },
   { label: 'Submitted', sub: 'For payment', tone: 'muted', owner: 'claims' },
-  { label: 'ACB Generated', sub: 'Sent to bank', tone: 'accent', owner: 'finance' },
+  {
+    label: 'ACB Generated',
+    sub: 'Sent to bank',
+    tone: 'accent',
+    owner: 'finance'
+  },
   { label: 'Reconciled', sub: 'Bank response', tone: 'info', owner: 'finance' },
   { label: 'Paid', sub: 'Confirmed', tone: 'success', owner: 'finance' }
 ]

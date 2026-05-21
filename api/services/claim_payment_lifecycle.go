@@ -178,6 +178,11 @@ func VerifyLineItem(scheduleID, itemID int, user models.AppUser) (models.ClaimPa
 // AcknowledgeFinanceRejection endpoint.
 const ClaimStatusFinanceRejected = "finance_rejected"
 
+// ClaimStatusOmbudClaim is applied to a claim that was previously declined
+// and has been re-opened following an Ombudsman engagement. Used to surface
+// these claims on the Regular Income Claims view so they get re-assessed.
+const ClaimStatusOmbudClaim = "ombud_claim"
+
 func QueryLineItem(scheduleID, itemID int, req QueryRequest, user models.AppUser) error {
 	return removeLineItem(scheduleID, itemID, "queried", req, user)
 }

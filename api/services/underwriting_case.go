@@ -12,6 +12,7 @@ import (
 
 	"gorm.io/gorm"
 
+	appLog "api/log"
 	"api/models"
 )
 
@@ -61,18 +62,49 @@ type UnderwritingCaseFilter struct {
 	AssignedUnderwriterEmail string
 }
 
+// SkipReasonIndicativeQuote is set on CreateCasesResult.SkipReason when the
+// quote is in indicative-data mode. Indicative quotes operate on aggregate
+// member statistics, not per-member ratings, so there is no per-member
+// underwriting identification to perform.
+const SkipReasonIndicativeQuote = "indicative data quote — underwriting case identification skipped"
+
+// CreateCasesResult is the structured outcome of CreateCasesForQuote. Either
+// Skipped is true (with SkipReason explaining why no cases were created) or
+// Cases holds the cases created / refreshed for the quote.
+type CreateCasesResult struct {
+	Skipped    bool                       `json:"skipped"`
+	SkipReason string                     `json:"skip_reason,omitempty"`
+	Cases      []models.UnderwritingCase  `json:"cases"`
+}
+
 // CreateCasesForQuote creates one underwriting case for every member on the
 // quote with UnderwritingTier >= 1 (short-form or full-UW). It is idempotent:
 // if a case already exists for (QuoteID + member identity) the snapshot
 // fields are refreshed but decisions / events / attachments are preserved.
 //
+// Indicative-data quotes are skipped: there are no per-member ratings to
+// drive case identification, so the result is returned with Skipped=true and
+// SkipReason=SkipReasonIndicativeQuote.
+//
 // `actor` is recorded on the audit event as the system or user that triggered
 // the create. Callers from a controller pass the active user's email; the
 // quote-calc-completion hook passes the calc trigger's email.
-func CreateCasesForQuote(quoteID int, actor string) ([]models.UnderwritingCase, error) {
+func CreateCasesForQuote(quoteID int, actor string) (CreateCasesResult, error) {
+	var quote models.GroupPricingQuote
+	if err := DB.Where("id = ?", quoteID).First(&quote).Error; err != nil {
+		return CreateCasesResult{}, fmt.Errorf("load quote: %w", err)
+	}
+	if quote.MemberIndicativeData {
+		return CreateCasesResult{
+			Skipped:    true,
+			SkipReason: SkipReasonIndicativeQuote,
+			Cases:      []models.UnderwritingCase{},
+		}, nil
+	}
+
 	var ratings []models.MemberRatingResult
 	if err := DB.Where("quote_id = ?", quoteID).Find(&ratings).Error; err != nil {
-		return nil, fmt.Errorf("load ratings: %w", err)
+		return CreateCasesResult{}, fmt.Errorf("load ratings: %w", err)
 	}
 
 	idLookup := buildMemberIDLookup(quoteID)
@@ -82,7 +114,7 @@ func CreateCasesForQuote(quoteID int, actor string) ([]models.UnderwritingCase, 
 		memberID := idLookup[memberLookupKey(r.MemberName, r.Category)]
 		c, created, err := upsertCaseForMember(quoteID, memberID, r, actor)
 		if err != nil {
-			return nil, err
+			return CreateCasesResult{}, err
 		}
 		if c == nil {
 			continue
@@ -92,7 +124,7 @@ func CreateCasesForQuote(quoteID int, actor string) ([]models.UnderwritingCase, 
 			emitCaseCreatedNotification(*c, actor)
 		}
 	}
-	return out, nil
+	return CreateCasesResult{Cases: out}, nil
 }
 
 // upsertCaseForMember either refreshes the snapshot on an existing case or
@@ -537,4 +569,67 @@ func emitCaseCreatedNotification(c models.UnderwritingCase, actor string) {
 		ObjectType:     "underwriting_case",
 		ObjectID:       c.ID,
 	})
+}
+
+// DeleteUnderwritingCasesForQuote hard-deletes all underwriting cases for the
+// given quote, plus their decisions, events, and attachments (DB rows + the
+// attachment files on disk). Pass a *gorm.DB transaction to participate in an
+// outer transaction; pass nil to open a local one.
+//
+// Called from quote deletion and from the Data Management member-data
+// delete/re-upload paths, where the previous member set no longer reflects the
+// cases' snapshots.
+func DeleteUnderwritingCasesForQuote(tx *gorm.DB, quoteID int) error {
+	run := func(tx *gorm.DB) error {
+		var caseIDs []int
+		if err := tx.Model(&models.UnderwritingCase{}).
+			Where("quote_id = ?", quoteID).
+			Pluck("id", &caseIDs).Error; err != nil {
+			return fmt.Errorf("load underwriting case ids: %w", err)
+		}
+		if len(caseIDs) == 0 {
+			return nil
+		}
+
+		var attachments []models.UnderwritingCaseAttachment
+		if err := tx.Where("case_id IN ?", caseIDs).Find(&attachments).Error; err != nil {
+			return fmt.Errorf("load underwriting case attachments: %w", err)
+		}
+
+		if err := tx.Where("case_id IN ?", caseIDs).Delete(&models.UnderwritingCaseAttachment{}).Error; err != nil {
+			return fmt.Errorf("delete underwriting case attachments: %w", err)
+		}
+		if err := tx.Where("case_id IN ?", caseIDs).Delete(&models.UnderwritingCaseEvent{}).Error; err != nil {
+			return fmt.Errorf("delete underwriting case events: %w", err)
+		}
+		if err := tx.Where("case_id IN ?", caseIDs).Delete(&models.UnderwritingDecision{}).Error; err != nil {
+			return fmt.Errorf("delete underwriting decisions: %w", err)
+		}
+		if err := tx.Where("quote_id = ?", quoteID).Delete(&models.UnderwritingCase{}).Error; err != nil {
+			return fmt.Errorf("delete underwriting cases: %w", err)
+		}
+
+		// Best-effort: clear the on-disk files after the DB rows are gone.
+		// Failures here would otherwise roll back the transaction over orphaned
+		// blobs, which is the wrong trade-off — the canonical record is the DB.
+		for _, att := range attachments {
+			if att.StoragePath == "" {
+				continue
+			}
+			if err := os.Remove(att.StoragePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+				appLog.Warn("remove underwriting case attachment file: ", err.Error())
+			}
+		}
+		// Remove the per-case directories if they are now empty.
+		for _, caseID := range caseIDs {
+			dir := filepath.Join(uwCaseAttachmentDir, fmt.Sprintf("case_%d", caseID))
+			_ = os.Remove(dir)
+		}
+		return nil
+	}
+
+	if tx != nil {
+		return run(tx)
+	}
+	return DB.Transaction(run)
 }

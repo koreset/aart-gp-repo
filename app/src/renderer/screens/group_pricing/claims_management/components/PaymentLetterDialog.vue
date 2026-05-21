@@ -23,7 +23,8 @@
             class="ml-2"
             color="primary"
             variant="flat"
-          >{{ history.length }}</v-chip>
+            >{{ history.length }}</v-chip
+          >
         </v-tab>
         <v-tab value="send">Send</v-tab>
       </v-tabs>
@@ -49,13 +50,15 @@
               variant="tonal"
               density="compact"
               class="mb-3"
-            >{{ generateError }}</v-alert>
+              >{{ generateError }}</v-alert
+            >
             <v-btn
               color="primary"
               :loading="generating"
               prepend-icon="mdi-download"
               @click="generate"
-            >Generate &amp; Download</v-btn>
+              >Generate &amp; Download</v-btn
+            >
           </v-card-text>
         </v-window-item>
 
@@ -70,7 +73,8 @@
               type="info"
               variant="tonal"
               density="compact"
-            >No letters generated yet for this claim.</v-alert>
+              >No letters generated yet for this claim.</v-alert
+            >
             <v-table v-else density="compact">
               <thead>
                 <tr>
@@ -129,7 +133,8 @@
               variant="tonal"
               density="compact"
               class="mb-3"
-            >Generate a letter first before sending.</v-alert>
+              >Generate a letter first before sending.</v-alert
+            >
             <template v-else>
               <v-select
                 v-model="sendLetterId"
@@ -168,8 +173,8 @@
                 density="compact"
                 class="mb-3"
               >
-                The claim has no {{ channel }} on file. Update the claim
-                record or fill in the field above to override.
+                The claim has no {{ channel }} on file. Update the claim record
+                or fill in the field above to override.
               </v-alert>
               <v-alert
                 v-if="sendError"
@@ -177,14 +182,18 @@
                 variant="tonal"
                 density="compact"
                 class="mb-3"
-              >{{ sendError }}</v-alert>
+                >{{ sendError }}</v-alert
+              >
               <v-btn
                 color="primary"
                 :loading="sending"
-                :disabled="!sendLetterId || !channel || channelDisabled(channel)"
+                :disabled="
+                  !sendLetterId || !channel || channelDisabled(channel)
+                "
                 prepend-icon="mdi-send"
                 @click="send"
-              >Send to claimant</v-btn>
+                >Send to claimant</v-btn
+              >
             </template>
           </v-card-text>
         </v-window-item>
@@ -284,7 +293,10 @@ const recipientHint = computed(() => {
 const recipientMissing = computed(() => {
   if (recipient.value) return false
   if (channel.value === 'email' && !props.claimantEmail) return true
-  if ((channel.value === 'sms' || channel.value === 'whatsapp') && !props.claimantPhone)
+  if (
+    (channel.value === 'sms' || channel.value === 'whatsapp') &&
+    !props.claimantPhone
+  )
     return true
   return false
 })
@@ -367,7 +379,11 @@ async function redownload(row: LetterRow) {
         ? GroupPricingService.getClaimPaymentLetterPdf
         : GroupPricingService.getClaimPaymentLetterDocx
     const res = await call(props.claimId)
-    downloadBlob(res.data, row.filename || `letter.${row.format}`, mimeFor(row.format))
+    downloadBlob(
+      res.data,
+      row.filename || `letter.${row.format}`,
+      mimeFor(row.format)
+    )
     await loadHistory()
   } catch (err: any) {
     generateError.value = extractError(err)

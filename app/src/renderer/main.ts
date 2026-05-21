@@ -1,5 +1,12 @@
 /* eslint-disable vue/one-component-per-file */
-import { createApp, h, ref, onMounted, defineComponent } from 'vue'
+import {
+  createApp,
+  h,
+  ref,
+  onMounted,
+  defineComponent,
+  defineAsyncComponent
+} from 'vue'
 import { createPinia } from 'pinia'
 
 import App from '@/renderer/App.vue'
@@ -12,6 +19,9 @@ import vuetify from '@/renderer/plugins/vuetify'
 import i18n from '@/renderer/plugins/i18n'
 import Vuelidate from 'vuelidate'
 import { LicenseManager } from 'ag-grid-enterprise'
+// AG Charts Enterprise — activates the chart context menu, range selectors,
+// and other enterprise features. The side-effect import is sufficient.
+import 'ag-charts-enterprise'
 import upperFirst from 'lodash/upperFirst'
 import camelCase from 'lodash/camelCase'
 
@@ -154,6 +164,10 @@ const Bootstrap = defineComponent({
 
 const app = createApp(Bootstrap)
 
+// Vue 3 requires dynamic-import factories to be wrapped in
+// defineAsyncComponent — otherwise the returned Promise renders as
+// the literal string "[object Promise]" in templates that use the
+// component via its kebab-case global tag without an explicit import.
 const comps = import.meta.glob('./components/**/*.vue')
 for (const path in comps) {
   let name = upperFirst(
@@ -166,7 +180,10 @@ for (const path in comps) {
     .replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2')
     .replace(/^-/, '')
     .toLowerCase()
-  app.component(name, comps[path])
+  app.component(
+    name,
+    defineAsyncComponent(comps[path] as () => Promise<any>)
+  )
 }
 
 app.use(createPinia()).use(vuetify).use(Vuelidate).use(i18n).use(router)

@@ -14,7 +14,9 @@
                   size="small"
                   variant="outlined"
                   prepend-icon="mdi-file-upload"
-                  @click="bulkEnrollmentDialog = true"
+                  @click="
+                    $router.push({ name: 'group-pricing-bulk-enrollment' })
+                  "
                 >
                   Bulk Enrollment
                 </v-btn>
@@ -32,178 +34,205 @@
             </div>
           </template>
           <template #default>
-            <!-- Empty state when no members loaded -->
-            <v-row
-              v-if="!loading && members.length === 0 && !hasSearched"
-              class="mb-4"
-            >
-              <v-col cols="12" class="text-center py-8">
-                <v-icon size="64" color="grey-lighten-1" class="mb-4"
-                  >mdi-account-search</v-icon
-                >
-                <h3 class="text-h6 text-grey-darken-1 mb-2"
-                  >No Members Loaded</h3
-                >
-                <p class="text-body-1 text-grey mb-4">
-                  Use the search and filters above, then click "Search Members"
-                  to load member data.
-                  <br />
-                  <small
-                    >This prevents loading potentially large datasets
-                    automatically.</small
-                  >
-                </p>
-              </v-col>
-            </v-row>
-
-            <!-- Loading Progress Bar -->
-            <v-row v-if="loading" class="mb-4">
-              <v-col cols="12">
-                <v-card variant="outlined" class="pa-4">
-                  <div class="d-flex justify-space-between align-center mb-2">
-                    <span>{{ loadingMessage }}</span>
-                    <v-btn
-                      size="small"
-                      color="error"
-                      variant="outlined"
-                      @click="cancelLoading"
-                    >
-                      Cancel
-                    </v-btn>
-                  </div>
-                  <v-progress-linear
-                    :model-value="loadingProgress"
-                    color="primary"
-                    height="8"
-                    rounded
-                  />
-                </v-card>
-              </v-col>
-            </v-row>
-
-            <!-- Search and Filter Bar -->
-            <v-row class="mb-4">
-              <v-col cols="12" md="3">
-                <v-text-field
-                  v-model="searchQuery"
-                  label="Search Members"
-                  prepend-inner-icon="mdi-magnify"
-                  variant="outlined"
-                  density="compact"
-                  clearable
-                  @input="searchMembers"
-                />
-              </v-col>
-              <v-col cols="12" md="3">
-                <v-select
-                  v-model="selectedScheme"
-                  :items="schemes"
-                  label="Filter by Scheme"
-                  item-title="name"
-                  item-value="id"
-                  variant="outlined"
-                  density="compact"
-                  clearable
-                  @update:model-value="filterByScheme"
-                />
-              </v-col>
-              <v-col cols="12" md="3">
-                <v-select
-                  v-model="selectedStatus"
-                  :items="memberStatuses"
-                  label="Filter by Status"
-                  variant="outlined"
-                  density="compact"
-                  clearable
-                  @update:model-value="filterByStatus"
-                />
-              </v-col>
-              <v-col cols="12" md="3" class="d-flex gap-2">
-                <v-btn
-                  class="mr-2 mt-1"
-                  rounded
-                  size="small"
-                  color="primary"
-                  variant="outlined"
-                  :loading="loading"
-                  @click="reloadMembers"
-                >
-                  Search Members
-                </v-btn>
-                <v-btn
-                  class="mt-1"
-                  rounded
-                  size="small"
-                  color="info"
-                  variant="outlined"
-                  @click="exportMembers"
-                >
-                  Export
-                </v-btn>
-              </v-col>
-            </v-row>
-
-            <!-- Members Data Grid -->
-            <v-row>
-              <v-col>
-                <div :style="{ height: gridHeight, width: '100%' }">
-                  <data-grid
-                    :columnDefs="memberColumnDefs"
-                    :rowData="filteredMembers"
-                    :pagination="false"
-                    :loading="loading"
-                    style="height: 100%; width: 100%"
-                    @row-double-clicked="handleRowClick"
-                  />
-                </div>
-              </v-col>
-            </v-row>
-
-            <!-- Pagination Controls -->
-            <v-row class="mt-4">
-              <v-col cols="12" md="6">
-                <v-card variant="outlined" class="pa-3">
-                  <div class="text-body-2 text-medium-emphasis">
-                    Showing {{ paginationInfo.displayedMembers }} of
-                    {{ paginationInfo.totalMembers }} members
-                    <span v-if="paginationInfo.hasMore"
-                      >({{
-                        paginationInfo.totalMembers -
-                        paginationInfo.displayedMembers
-                      }}
-                      more available)</span
-                    >
-                  </div>
-                </v-card>
-              </v-col>
-              <v-col cols="12" md="6" class="d-flex justify-end">
-                <v-btn
-                  v-if="paginationInfo.hasMore"
-                  rounded
-                  size="small"
-                  :loading="loading"
-                  :disabled="loading"
-                  color="primary"
-                  variant="outlined"
-                  @click="loadMoreMembers"
-                >
-                  Load More Members
-                </v-btn>
-                <v-btn
-                  v-if="members.length > 0"
-                  rounded
-                  size="small"
-                  :loading="loading"
-                  :disabled="loading"
-                  color="info"
-                  variant="outlined"
+            <v-tabs v-model="activeTab" color="primary" density="compact">
+              <v-tab value="members">Members</v-tab>
+              <v-tab value="pending">
+                Pending Approvals
+                <v-badge
+                  v-if="pendingBatchesCount > 0"
+                  :content="pendingBatchesCount"
+                  color="error"
+                  inline
                   class="ml-2"
-                  @click="reloadMembers"
+                />
+              </v-tab>
+            </v-tabs>
+
+            <v-window v-model="activeTab" class="mt-4">
+              <v-window-item value="pending">
+                <pending-bulk-enrollment-batches
+                  status="pending_approval"
+                  @count-changed="pendingBatchesCount = $event"
+                />
+              </v-window-item>
+
+              <v-window-item value="members">
+                <!-- Empty state when no members loaded -->
+                <v-row
+                  v-if="!loading && members.length === 0 && !hasSearched"
+                  class="mb-4"
                 >
-                  Refresh
-                </v-btn>
-              </v-col>
-            </v-row>
+                  <v-col cols="12" class="text-center py-8">
+                    <v-icon size="64" color="grey-lighten-1" class="mb-4"
+                      >mdi-account-search</v-icon
+                    >
+                    <h3 class="text-h6 text-grey-darken-1 mb-2"
+                      >No Members Loaded</h3
+                    >
+                    <p class="text-body-1 text-grey mb-4">
+                      Use the search and filters above, then click "Search
+                      Members" to load member data.
+                      <br />
+                      <small
+                        >This prevents loading potentially large datasets
+                        automatically.</small
+                      >
+                    </p>
+                  </v-col>
+                </v-row>
+
+                <!-- Loading Progress Bar -->
+                <v-row v-if="loading" class="mb-4">
+                  <v-col cols="12">
+                    <v-card variant="outlined" class="pa-4">
+                      <div
+                        class="d-flex justify-space-between align-center mb-2"
+                      >
+                        <span>{{ loadingMessage }}</span>
+                        <v-btn
+                          size="small"
+                          color="error"
+                          variant="outlined"
+                          @click="cancelLoading"
+                        >
+                          Cancel
+                        </v-btn>
+                      </div>
+                      <v-progress-linear
+                        :model-value="loadingProgress"
+                        color="primary"
+                        height="8"
+                        rounded
+                      />
+                    </v-card>
+                  </v-col>
+                </v-row>
+
+                <!-- Search and Filter Bar -->
+                <v-row class="mb-4">
+                  <v-col cols="12" md="3">
+                    <v-text-field
+                      v-model="searchQuery"
+                      label="Search Members"
+                      prepend-inner-icon="mdi-magnify"
+                      variant="outlined"
+                      density="compact"
+                      clearable
+                      @input="searchMembers"
+                    />
+                  </v-col>
+                  <v-col cols="12" md="3">
+                    <v-select
+                      v-model="selectedScheme"
+                      :items="schemes"
+                      label="Filter by Scheme"
+                      item-title="name"
+                      item-value="id"
+                      variant="outlined"
+                      density="compact"
+                      clearable
+                      @update:model-value="filterByScheme"
+                    />
+                  </v-col>
+                  <v-col cols="12" md="3">
+                    <v-select
+                      v-model="selectedStatus"
+                      :items="memberStatuses"
+                      label="Filter by Status"
+                      variant="outlined"
+                      density="compact"
+                      clearable
+                      @update:model-value="filterByStatus"
+                    />
+                  </v-col>
+                  <v-col cols="12" md="3" class="d-flex gap-2">
+                    <v-btn
+                      class="mr-2 mt-1"
+                      rounded
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                      :loading="loading"
+                      @click="reloadMembers"
+                    >
+                      Search Members
+                    </v-btn>
+                    <v-btn
+                      class="mt-1"
+                      rounded
+                      size="small"
+                      color="info"
+                      variant="outlined"
+                      @click="exportMembers"
+                    >
+                      Export
+                    </v-btn>
+                  </v-col>
+                </v-row>
+
+                <!-- Members Data Grid -->
+                <v-row>
+                  <v-col>
+                    <div :style="{ height: gridHeight, width: '100%' }">
+                      <data-grid
+                        :columnDefs="memberColumnDefs"
+                        :rowData="filteredMembers"
+                        :pagination="false"
+                        :loading="loading"
+                        style="height: 100%; width: 100%"
+                        @row-double-clicked="handleRowClick"
+                      />
+                    </div>
+                  </v-col>
+                </v-row>
+
+                <!-- Pagination Controls -->
+                <v-row class="mt-4">
+                  <v-col cols="12" md="6">
+                    <v-card variant="outlined" class="pa-3">
+                      <div class="text-body-2 text-medium-emphasis">
+                        Showing {{ paginationInfo.displayedMembers }} of
+                        {{ paginationInfo.totalMembers }} members
+                        <span v-if="paginationInfo.hasMore"
+                          >({{
+                            paginationInfo.totalMembers -
+                            paginationInfo.displayedMembers
+                          }}
+                          more available)</span
+                        >
+                      </div>
+                    </v-card>
+                  </v-col>
+                  <v-col cols="12" md="6" class="d-flex justify-end">
+                    <v-btn
+                      v-if="paginationInfo.hasMore"
+                      rounded
+                      size="small"
+                      :loading="loading"
+                      :disabled="loading"
+                      color="primary"
+                      variant="outlined"
+                      @click="loadMoreMembers"
+                    >
+                      Load More Members
+                    </v-btn>
+                    <v-btn
+                      v-if="members.length > 0"
+                      rounded
+                      size="small"
+                      :loading="loading"
+                      :disabled="loading"
+                      color="info"
+                      variant="outlined"
+                      class="ml-2"
+                      @click="reloadMembers"
+                    >
+                      Refresh
+                    </v-btn>
+                  </v-col>
+                </v-row>
+              </v-window-item>
+            </v-window>
           </template>
         </base-card>
       </v-col>
@@ -230,22 +259,6 @@
       </base-card>
     </v-dialog>
 
-    <!-- Bulk Enrollment Dialog -->
-    <v-dialog v-model="bulkEnrollmentDialog" persistent max-width="800px">
-      <base-card>
-        <template #header>
-          <span class="headline">Bulk Member Enrollment</span>
-        </template>
-        <template #default>
-          <bulk-member-enrollment
-            :schemes="schemes"
-            @upload-complete="handleBulkUploadComplete"
-            @cancel="bulkEnrollmentDialog = false"
-          />
-        </template>
-      </base-card>
-    </v-dialog>
-
     <!-- Snackbar for notifications -->
     <v-snackbar v-model="snackbar" :timeout="4000" :color="snackbarColor">
       {{ snackbarMessage }}
@@ -259,7 +272,7 @@ import { useRouter, useRoute } from 'vue-router'
 import BaseCard from '@/renderer/components/BaseCard.vue'
 import DataGrid from '@/renderer/components/tables/DataGrid.vue'
 import MemberEnrollmentForm from './components/MemberEnrollmentForm.vue'
-import BulkMemberEnrollment from './components/BulkMemberEnrollment.vue'
+import PendingBulkEnrollmentBatches from './components/PendingBulkEnrollmentBatches.vue'
 import GroupPricingService from '@/renderer/api/GroupPricingService'
 import formatValues from '@/renderer/utils/format_values'
 import { statusCellRenderer } from '@/renderer/utils/statusCellRenderer'
@@ -360,8 +373,11 @@ const serverFilters = ref({
 
 // Dialog states
 const addMemberDialog = ref(false)
-const bulkEnrollmentDialog = ref(false)
 const isEditMode = ref(false)
+
+// Tabs + Pending Approvals badge
+const activeTab = ref<'members' | 'pending'>('members')
+const pendingBatchesCount = ref(0)
 
 // Snackbar
 const snackbar = ref(false)
@@ -510,9 +526,12 @@ const loadMembers = async (append: boolean = false) => {
   loadingMessage.value = 'Loading schemes...'
 
   try {
-    // Load schemes first (lightweight operation)
+    // Load schemes first (lightweight operation). Use the v2 endpoint so the
+    // filter only shows schemes whose status is currently in_force — member
+    // management is about active membership, so historical (lapsed/expired)
+    // schemes don't belong here.
     if (schemes.value.length === 0) {
-      const schemesResponse = await GroupPricingService.getSchemesInforce()
+      const schemesResponse = await GroupPricingService.getSchemesInforcev2()
       schemes.value = schemesResponse.data
       loadingProgress.value = 10
     }
@@ -706,24 +725,6 @@ const closeAddMemberDialog = () => {
   selectedMember.value = null
 }
 
-const handleBulkUploadComplete = (result: any) => {
-  showSnackbar(
-    `Bulk upload complete. Success: ${result.success}, Failed: ${result.failed}`,
-    result.failed > 0 ? 'warning' : 'success'
-  )
-
-  if (result.failed > 0) {
-    setTimeout(() => {
-      result.errors.forEach((error) => {
-        showSnackbar(error.message, 'error')
-      })
-    }, 5000)
-  }
-
-  bulkEnrollmentDialog.value = false
-  loadMembers()
-}
-
 // Debounced search to avoid too many API calls
 let searchTimeout: ReturnType<typeof setTimeout> | null = null
 const searchMembers = () => {
@@ -804,9 +805,10 @@ watch([totalMembers, schemes], () => {
 
 // Lifecycle
 onMounted(async () => {
-  // Load schemes first for the filter dropdown
+  // Load schemes first for the filter dropdown. v2 endpoint = currently
+  // in-force schemes only — member management is about active membership.
   try {
-    const schemesResponse = await GroupPricingService.getSchemesInforce()
+    const schemesResponse = await GroupPricingService.getSchemesInforcev2()
     schemes.value = schemesResponse.data
     console.log('loaded schemes:', schemes.value)
 
