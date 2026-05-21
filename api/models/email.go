@@ -2,17 +2,25 @@ package models
 
 import "time"
 
-// EmailSettings holds per-license SMTP configuration used by the email outbox
-// worker. Exactly one row exists per license. AuthPasswordEncrypted stores the
-// SMTP password after AES-GCM encryption (see api/services/crypto).
+// EmailSettings holds per-license email configuration used by the outbox
+// worker. Exactly one row exists per license. Provider selects the delivery
+// transport: "smtp" uses Host/Port/TlsMode/AuthUser/AuthPasswordEncrypted;
+// "microsoft_graph" uses the GraphTenantId/GraphClientId/GraphClientSecretEncrypted
+// fields. AuthPasswordEncrypted and GraphClientSecretEncrypted store their
+// secrets after AES-GCM encryption (see api/services/crypto). FromAddress,
+// FromName and ReplyTo are shared across providers.
 type EmailSettings struct {
 	ID                     int       `json:"id" gorm:"primary_key"`
 	LicenseId              string    `json:"license_id" gorm:"type:varchar(191);uniqueIndex"`
+	Provider               string    `json:"provider" gorm:"type:varchar(32);default:smtp"` // smtp | microsoft_graph
 	Host                   string    `json:"host"`
 	Port                   int       `json:"port"`
 	TlsMode                string    `json:"tls_mode" gorm:"type:varchar(16)"` // starttls | tls | none
 	AuthUser               string    `json:"auth_user"`
 	AuthPasswordEncrypted  string    `json:"-" gorm:"type:text"`
+	GraphTenantId          string    `json:"graph_tenant_id" gorm:"type:varchar(191)"`
+	GraphClientId          string    `json:"graph_client_id" gorm:"type:varchar(191)"`
+	GraphClientSecretEncrypted string `json:"-" gorm:"type:text"`
 	FromAddress            string    `json:"from_address"`
 	FromName               string    `json:"from_name"`
 	ReplyTo                string    `json:"reply_to"`
@@ -84,6 +92,12 @@ const (
 	EmailTLSModeNone     = "none"
 	EmailTLSModeSTARTTLS = "starttls"
 	EmailTLSModeTLS      = "tls"
+)
+
+// Provider constants for EmailSettings. Selects the delivery transport.
+const (
+	EmailProviderSMTP  = "smtp"
+	EmailProviderGraph = "microsoft_graph"
 )
 
 // Template status constants.

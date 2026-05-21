@@ -13,31 +13,43 @@ import (
 	"gorm.io/gorm"
 )
 
-// emailSettingsResponse is the shape returned to clients. The encrypted
-// password is never surfaced; the client gets a has_password boolean.
+// emailSettingsResponse is the shape returned to clients. Encrypted secrets are
+// never surfaced; the client gets has_password / has_graph_secret booleans.
 type emailSettingsResponse struct {
-	Host         string `json:"host"`
-	Port         int    `json:"port"`
-	TlsMode      string `json:"tls_mode"`
-	AuthUser     string `json:"auth_user"`
-	HasPassword  bool   `json:"has_password"`
-	FromAddress  string `json:"from_address"`
-	FromName     string `json:"from_name"`
-	ReplyTo      string `json:"reply_to"`
-	UpdatedBy    string `json:"updated_by"`
+	Provider       string `json:"provider"`
+	Host           string `json:"host"`
+	Port           int    `json:"port"`
+	TlsMode        string `json:"tls_mode"`
+	AuthUser       string `json:"auth_user"`
+	HasPassword    bool   `json:"has_password"`
+	GraphTenantId  string `json:"graph_tenant_id"`
+	GraphClientId  string `json:"graph_client_id"`
+	HasGraphSecret bool   `json:"has_graph_secret"`
+	FromAddress    string `json:"from_address"`
+	FromName       string `json:"from_name"`
+	ReplyTo        string `json:"reply_to"`
+	UpdatedBy      string `json:"updated_by"`
 }
 
 func toEmailSettingsResponse(s models.EmailSettings) emailSettingsResponse {
+	provider := s.Provider
+	if provider == "" {
+		provider = models.EmailProviderSMTP
+	}
 	return emailSettingsResponse{
-		Host:        s.Host,
-		Port:        s.Port,
-		TlsMode:     s.TlsMode,
-		AuthUser:    s.AuthUser,
-		HasPassword: s.AuthPasswordEncrypted != "",
-		FromAddress: s.FromAddress,
-		FromName:    s.FromName,
-		ReplyTo:     s.ReplyTo,
-		UpdatedBy:   s.UpdatedBy,
+		Provider:       provider,
+		Host:           s.Host,
+		Port:           s.Port,
+		TlsMode:        s.TlsMode,
+		AuthUser:       s.AuthUser,
+		HasPassword:    s.AuthPasswordEncrypted != "",
+		GraphTenantId:  s.GraphTenantId,
+		GraphClientId:  s.GraphClientId,
+		HasGraphSecret: s.GraphClientSecretEncrypted != "",
+		FromAddress:    s.FromAddress,
+		FromName:       s.FromName,
+		ReplyTo:        s.ReplyTo,
+		UpdatedBy:      s.UpdatedBy,
 	}
 }
 
